@@ -9,9 +9,17 @@ Erster Durchstich der Backend-API gegen `contracts/api-spec.yaml` und
 > ersetzt (neue Tabelle `folders`, `messages.folder_id` als FK). Details
 > siehe Abschnitt "Ordner (benutzerdefiniert)" unten.
 
+> **Contract-Update (2026-09-08, WEB_INBOX.md "Neue Spam-Unterkategorie"):**
+> `message_security.spam_subcategory` (`adult`/`gambling`/`generic`/`marketing`,
+> nur gesetzt bei `classification = 'spam'`) hinzugekommen. `adult`/`gambling`
+> lösen einen neuen Auto-Delete-Pfad aus (siehe Abschnitt
+> "Auto-Delete: adult/gambling-Spam" unten), `generic`/`marketing` verhalten
+> sich wie bisheriger Spam. `phishing` ist von dieser Regel unberührt.
+
 ```
 Mail-Adapter (Gmail/IMAP/Fixture) -> Sync-Pipeline -> Mock-KI-Analyse
-  -> Ordner-Zuordnung + ggf. Auto-Quarantäne -> API (GET/POST wie im Contract)
+  -> Ordner-Zuordnung + ggf. Auto-Quarantäne (phishing) / Auto-Delete
+     (adult/gambling-Spam) -> API (GET/POST wie im Contract)
 ```
 
 Node/TypeScript + Express. Kein produktionsreifer Code, sondern ein
@@ -28,9 +36,11 @@ npm run build && npm start
 ```
 
 Ohne jede Konfiguration synct der Server beim Start automatisch ein
-Demo-Konto gegen den **Fixture-Mail-Adapter** (4 Beispiel-Mails: normale
-Mail, Phishing-Versuch, Spam-Newsletter, Vertragsmail) und läuft sofort
-end-to-end durch — kein Postgres, kein Google/IMAP-Setup nötig.
+Demo-Konto gegen den **Fixture-Mail-Adapter** (5 Beispiel-Mails: normale
+Mail, Phishing-Versuch, Spam-Newsletter [marketing], Vertragsmail,
+Glücksspiel-Spam [wird sofort automatisch gelöscht, siehe unten]) und
+läuft sofort end-to-end durch — kein Postgres, kein Google/IMAP-Setup
+nötig.
 
 - API-Basis (Contract, `servers[0].url` in `api-spec.yaml` ist
   `/v1`-relativ): `http://localhost:3000/v1`
@@ -53,7 +63,11 @@ Umbenennung/Löschung bei System-Ordnern), `/v1/messages` (inkl.
 `/v1/messages/:id/quarantine`, `/v1/contracts`,
 `/v1/contracts/:id/confirm`, `/v1/capability-check`. Bricht mit
 Fehlermeldung ab, sobald eine Response nicht zum erwarteten Contract-Format
-passt.
+passt. Prüft zusätzlich direkt gegen `store` (kein HTTP-Endpunkt dafür,
+siehe oben): den Auto-Delete-Pfad (adult/gambling-Spam-Fixture wird nicht
+persistiert, hinterlässt genau einen `security_audit_log`-Eintrag, ein
+zweiter Sync-Lauf dedupliziert korrekt und erzeugt keinen weiteren
+Eintrag).
 
 Manuell durchprobieren z.B. mit:
 
@@ -81,7 +95,9 @@ curl -X POST http://localhost:3000/v1/capability-check \
 - Sync-Pipeline (`src/mail/sync.ts`): Dedupe über
   `(mail_account_id, message_id_header)` wie im Schema (`UNIQUE`-Constraint
   auf `messages`), Ordner-Zuordnung, Auto-Quarantäne bei
-  `classification === "phishing"`.
+  `classification === "phishing"`, Auto-Delete bei `classification ===
+  "spam"` + `spamSubcategory` `adult`/`gambling` (siehe eigener Abschnitt
+  unten).
 - Ordner-Verwaltung (`src/routes/folders.ts`): System-Ordner + eigene
   Ordner, siehe Abschnitt "Ordner (benutzerdefiniert)" unten.
 
@@ -100,6 +116,61 @@ curl -X POST http://localhost:3000/v1/capability-check \
   Postgres, siehe "Annahmen".
 - **Auth**: keine — kein Login/Session/Token-Handling in diesem
   Durchstich, ein fester "Demo-User" wird beim Start angelegt.
+
+## Auto-Delete: adult/gambling-Spam
+
+Seit dem Contract-Update vom 08.09. (`WEB_INBOX.md` "Neue
+Spam-Unterkategorie fuer aggressives Auto-Loeschen", `spam_subcategory` auf
+`message_security`) gilt in der Sync-Pipeline (`src/mail/sync.ts`) zusätzlich
+zur Auto-Quarantäne bei Phishing eine zweite automatische Regel:
+
+- `classification === "spam"` **und** `spamSubcategory` ist `"adult"` oder
+  `"gambling"` -> die Nachricht wird **nicht persistiert**: keine Zeile in
+  `messages`, keine `message_security`-Zeile, kein `quarantine`-Eintrag,
+  keine Aufbewahrungsfrist, kein Undo.
+- `spamSubcategory` `"generic"`/`"marketing"` -> unverändertes Verhalten
+  (normaler Spam-Ordner, normale Aufbewahrung über `data_retention_policy`).
+- `classification === "phishing"` ist von dieser Regel komplett unberührt
+  und bleibt immer im bestehenden Quarantäne-Pfad.
+
+**Design-Entscheidung (2026-09-08):** "gar nicht erst persistieren" statt
+"persistieren + sofort wieder löschen". Beide Varianten wären laut Auftrag
+vertretbar gewesen; diese Umsetzung landet nie im Store, auch nicht
+kurzzeitig, weil (a) der Auftrag explizit "kein 30-Tage-Aufheben, kein
+Undo" verlangt — ein real angelegter (wenn auch sofort gelöschter)
+Datensatz hätte einen Undo-Pfad nahegelegt, den es hier bewusst nicht gibt
+—, und (b) so nie potenziell heikler Inhalt (Erotik/Glücksspiel) im Store
+liegt, und sei es nur für einen Tick. Nachteil: ohne eine echte
+`messages`-Zeile kann das normale Dedupe (`UNIQUE (mail_account_id,
+message_id_header)`) diese Mails nicht wiedererkennen — ein erneuter Sync
+(z.B. wiederholtes `POST /internal/sync`) hätte sie sonst bei jedem Lauf
+erneut "entdeckt". Behelf dafür: `store.autoDeletedHeaders`
+(In-Memory-`Set<mailAccountId:messageIdHeader>`, kein Mail-Inhalt) in
+`src/db/store.ts` — reines Prozess-Gedächtnis, geht bei Neustart verloren;
+für eine echte Postgres-Anbindung müsste das durch eine leichtgewichtige,
+inhaltslose Tabelle (nur Header-Hash) ersetzt werden.
+
+**Audit-Log:** jeder Auto-Delete schreibt einen Eintrag in
+`security_audit_log` (`action = 'auto_deleted_adult_gambling_spam'`,
+`message_id = null`, da nie eine `messages`-Zeile existiert) — Transparenz
+für den User, warum eine erwartete Mail fehlen könnte, auch wenn die Mail
+selbst nicht bleibt. `security_audit_log` hat laut Schema kein Freitextfeld
+für Betreff/Absender; dieser Log-Eintrag verrät also bewusst nichts über
+den Inhalt der gelöschten Mail. `store.logSecurityAudit()` (neue
+Store-Methode) ist aktuell der einzige Schreiber; es gibt (wie schon vor
+diesem Feature, siehe "Annahmen" unten) keinen `GET`-Endpunkt dafür, da
+`api-spec.yaml` keinen vorsieht.
+
+`syncAccount()` gibt zusätzlich `autoDeleted: number` zurück (neben
+`imported`), sichtbar auch in der `POST /internal/sync`-Antwort.
+
+**Mock-Erkennung:** `src/ai/mockAdapter.ts` liefert `spamSubcategory` über
+eine simple Keyword-Heuristik (z.B. "casino"/"jackpot" -> `gambling`),
+NICHT echte Klassifikation — analog zum bisherigen Spam/Phishing-Mock.
+Track B baut die echte Erkennungslogik; der Austausch betrifft weiterhin
+nur `src/ai/index.ts` (siehe oben "Was ist echt, was ist Mock/Stub").
+Integration mit Track B (echte `spamSubcategory`-Werte statt Mock) ist ein
+separater, noch offener Schritt.
 
 ## Ordner (benutzerdefiniert)
 
@@ -162,10 +233,13 @@ Enum-Strings auf `messages.folder`:
   (`src/routes/internal.ts`, **kein** Contract-Bestandteil, nur
   Betriebs-/Testhilfe für diesen Durchstich).
 - `unsubscribe_actions`, `message_links`, `reminders`, `signatures`,
-  `security_audit_log`, `ai_provider_config` existieren in
-  `db-schema.sql`, haben aber (noch) keine Entsprechung in
-  `api-spec.yaml`. Nicht in diesem Durchstich implementiert — siehe
-  "Offene Fragen" in `SYNC.md`.
+  `ai_provider_config` existieren in `db-schema.sql`, haben aber (noch)
+  keine Entsprechung in `api-spec.yaml`. Nicht in diesem Durchstich
+  implementiert — siehe "Offene Fragen" in `SYNC.md`.
+- `security_audit_log` existiert seit dem Auto-Delete-Feature (siehe
+  Abschnitt "Auto-Delete: adult/gambling-Spam" oben) teilweise: Write-Pfad
+  über `store.logSecurityAudit()` ist da, aber weiterhin **kein**
+  `GET`-Endpunkt, da `api-spec.yaml` keinen vorsieht.
 
 ## Struktur
 

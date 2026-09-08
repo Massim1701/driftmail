@@ -16,9 +16,24 @@ const PHISHING_KEYWORDS = ["passwort bestätigen", "konto gesperrt", "klicken si
 const SPAM_KEYWORDS = ["gewinnspiel", "gratis", "jetzt kaufen", "einmalige chance", "% rabatt"];
 const CONTRACT_KEYWORDS = ["vertrag", "abonnement", "kündigungsfrist", "laufzeit", "vertragsende"];
 
+// Spam-Unterkategorie (WEB_INBOX.md 08.09., siehe SYNC.md): "adult"/"gambling"
+// loesen in der Sync-Pipeline sofortiges Loeschen aus, "generic"/"marketing"
+// verhalten sich wie bisheriger Spam. Simple Keyword-Heuristik, NICHT echte
+// Klassifikation -- Track B ersetzt das (siehe README "Was ist echt/Mock").
+const ADULT_KEYWORDS = ["xxx video", "erotik-cam", "live sex chat"];
+const GAMBLING_KEYWORDS = ["casino", "jackpot", "sportwetten", "spielautomaten"];
+const MARKETING_KEYWORDS = ["% rabatt", "jetzt kaufen"];
+
 function containsAny(haystack: string, needles: string[]): boolean {
   const lower = haystack.toLowerCase();
   return needles.some((n) => lower.includes(n));
+}
+
+function resolveSpamSubcategory(rawText: string): SecurityResult["spamSubcategory"] {
+  if (containsAny(rawText, ADULT_KEYWORDS)) return "adult";
+  if (containsAny(rawText, GAMBLING_KEYWORDS)) return "gambling";
+  if (containsAny(rawText, MARKETING_KEYWORDS)) return "marketing";
+  return "generic";
 }
 
 export class MockAiAdapter implements AiAdapter {
@@ -44,6 +59,7 @@ export class MockAiAdapter implements AiAdapter {
       urgencyLanguageScore: looksPhishing ? 0.85 : looksSpam ? 0.5 : 0.05,
       containsNewIban: rawText.toLowerCase().includes("iban"),
       classification,
+      spamSubcategory: looksSpam ? resolveSpamSubcategory(rawText) : null,
       confidenceScore: looksPhishing ? 0.88 : looksSpam ? 0.7 : 0.95,
     };
   }

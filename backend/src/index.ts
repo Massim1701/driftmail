@@ -11,8 +11,10 @@ async function main() {
   // Initialer Sync beim Start, damit GET /v1/messages sofort Daten liefert
   // (Fixture-Adapter, solange keine echten Zugangsdaten konfiguriert sind).
   try {
-    const { imported } = await syncAccount(account, aiAdapter);
-    console.log(`[startup] Initialer Sync: ${imported} Nachricht(en) importiert (Konto ${account.emailAddress}).`);
+    const { imported, autoDeleted } = await syncAccount(account, aiAdapter);
+    console.log(
+      `[startup] Initialer Sync: ${imported} Nachricht(en) importiert, ${autoDeleted} automatisch geloescht (adult/gambling-Spam) (Konto ${account.emailAddress}).`,
+    );
   } catch (err) {
     console.error("[startup] Initialer Sync fehlgeschlagen:", err);
   }

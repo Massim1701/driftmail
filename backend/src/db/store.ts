@@ -17,6 +17,7 @@ import type {
   MessageRecord,
   MessageSecurityRecord,
   QuarantineRecord,
+  SecurityAuditLogRecord,
   SystemFolderKey,
   User,
   UserAiCapabilityRecord,
@@ -29,6 +30,14 @@ class Store {
   messages: MessageRecord[] = [];
   messageSecurity: Map<string, MessageSecurityRecord> = new Map(); // key: messageId
   quarantine: QuarantineRecord[] = [];
+  securityAuditLog: SecurityAuditLogRecord[] = [];
+  // Dedupe-Fingerprint für den Auto-Delete-Pfad (adult/gambling-Spam, siehe
+  // src/mail/sync.ts): da diese Mails NIE eine messages-Zeile bekommen, kann
+  // findMessageByHeader() sie nicht wiedererkennen. Ohne diesen Set würde ein
+  // erneuter Sync (z.B. wiederholtes POST /internal/sync) dieselbe Mail bei
+  // jedem Lauf erneut "entdecken" und einen weiteren Audit-Log-Eintrag
+  // schreiben. Hält nur `mailAccountId:messageIdHeader`, keinen Inhalt.
+  autoDeletedHeaders: Set<string> = new Set();
   contracts: ContractRecord[] = [];
   messageAiSummary: Map<string, MessageAiSummaryRecord> = new Map(); // key: messageId
   userAiCapability: Map<string, UserAiCapabilityRecord> = new Map(); // key: userId:platform
@@ -101,6 +110,15 @@ class Store {
     return this.messages.find((m) => m.mailAccountId === mailAccountId && m.messageIdHeader === messageIdHeader);
   }
 
+  /** Dedupe für den Auto-Delete-Pfad (siehe `autoDeletedHeaders`-Kommentar). */
+  wasAutoDeleted(mailAccountId: string, messageIdHeader: string): boolean {
+    return this.autoDeletedHeaders.has(`${mailAccountId}:${messageIdHeader}`);
+  }
+
+  markAutoDeleted(mailAccountId: string, messageIdHeader: string): void {
+    this.autoDeletedHeaders.add(`${mailAccountId}:${messageIdHeader}`);
+  }
+
   insertMessage(input: Omit<MessageRecord, "id">): MessageRecord {
     const record: MessageRecord = { id: randomUUID(), ...input };
     this.messages.push(record);
@@ -157,6 +175,17 @@ class Store {
     const quarantaeneFolder = account ? this.getSystemFolder(account.userId, "quarantaene") : undefined;
     if (quarantaeneFolder) this.moveMessage(messageId, quarantaeneFolder.id);
 
+    return record;
+  }
+
+  // ----- Sicherheits-Audit-Log -----
+  // `security_audit_log` (db-schema.sql). Write-only in diesem Durchstich --
+  // kein GET-Endpunkt, weil `api-spec.yaml` dafür (noch) keinen vorsieht
+  // (siehe README "Annahmen"). Aktuell einziger Schreiber: der
+  // Auto-Delete-Pfad in src/mail/sync.ts (adult/gambling-Spam).
+  logSecurityAudit(input: Omit<SecurityAuditLogRecord, "id" | "timestamp">): SecurityAuditLogRecord {
+    const record: SecurityAuditLogRecord = { id: randomUUID(), timestamp: new Date().toISOString(), ...input };
+    this.securityAuditLog.push(record);
     return record;
   }
 

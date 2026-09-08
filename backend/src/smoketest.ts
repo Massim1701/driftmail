@@ -3,7 +3,7 @@
 // gegen contracts/api-spec.yaml. `npm test` führt das aus.
 
 import { createApp } from "./app";
-import { ensureDemoUser } from "./db/store";
+import { ensureDemoUser, store } from "./db/store";
 import { syncAccount } from "./mail/sync";
 import { aiAdapter } from "./ai";
 import type { Server } from "node:http";
@@ -14,8 +14,31 @@ function assert(cond: unknown, msg: string): asserts cond {
 
 async function main() {
   const { account } = ensureDemoUser();
-  const { imported } = await syncAccount(account, aiAdapter);
+  const { imported, autoDeleted } = await syncAccount(account, aiAdapter);
   assert(imported > 0, "Fixture-Sync sollte Nachrichten importieren");
+
+  // Auto-Delete-Pfad (WEB_INBOX.md 08.09., siehe mail/sync.ts): Fixture 5
+  // ist eindeutiger Glücksspiel-Spam und darf NICHT als Nachricht landen.
+  assert(autoDeleted === 1, "genau 1 adult/gambling-Spam-Mail sollte automatisch gelöscht worden sein (Fixture 5)");
+  assert(
+    store.findMessageByHeader(account.id, "<fixture-5@casino-bonus-express.example>") === undefined,
+    "auto-gelöschte Mail darf keine messages-Zeile bekommen",
+  );
+  assert(
+    store.securityAuditLog.some(
+      (e) => e.action === "auto_deleted_adult_gambling_spam" && e.userId === account.userId && e.messageId === null,
+    ),
+    "Auto-Delete sollte einen security_audit_log-Eintrag hinterlassen (messageId=null, da nie angelegt)",
+  );
+
+  // Erneuter Sync darf dieselbe Mail nicht nochmal löschen/loggen (Dedupe
+  // über store.autoDeletedHeaders, siehe store.ts-Kommentar).
+  const second = await syncAccount(account, aiAdapter);
+  assert(second.autoDeleted === 0, "wiederholter Sync sollte dieselbe auto-gelöschte Mail nicht erneut zählen");
+  assert(
+    store.securityAuditLog.filter((e) => e.action === "auto_deleted_adult_gambling_spam").length === 1,
+    "wiederholter Sync sollte keinen zweiten Audit-Log-Eintrag für dieselbe Mail erzeugen",
+  );
 
   const app = createApp();
   const server: Server = app.listen(0);

@@ -18,6 +18,10 @@ export interface SecurityResult {
   urgencyLanguageScore: number | null;
   containsNewIban: boolean;
   classification: Classification;
+  // Nur gesetzt wenn classification === "spam". "adult"/"gambling" loesen
+  // sofortiges Loeschen aus (kein Quarantaene-Pfad, kein 30-Tage-Aufheben,
+  // kein Undo) -- siehe WEB_INBOX.md 08.09. Betrifft NICHT "phishing".
+  spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | null;
   confidenceScore: number;
 }
 

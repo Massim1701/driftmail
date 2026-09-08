@@ -37,6 +37,7 @@ export function toApiSecurityResult(s: MessageSecurityRecord): ApiSecurityResult
     urgencyLanguageScore: s.urgencyLanguageScore,
     containsNewIban: s.containsNewIban,
     classification: s.classification,
+    spamSubcategory: s.spamSubcategory,
     confidenceScore: s.confidenceScore,
   };
 }

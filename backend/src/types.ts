@@ -74,6 +74,8 @@ export interface MessageSecurityRecord {
   urgencyLanguageScore: number | null;
   containsNewIban: boolean;
   classification: Classification;
+  // Nur gesetzt wenn classification === "spam", siehe ai/types.ts.
+  spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | null;
   confidenceScore: number | null;
   analyzedAt: string;
 }
@@ -94,6 +96,17 @@ export interface QuarantineRecord {
   reason: string;
   autoDeleteAt: string;
   userReviewed: boolean;
+}
+
+// Audit-Log (`security_audit_log` in db-schema.sql). `messageId` ist
+// nullable, weil der Auto-Delete-Pfad (adult/gambling-Spam) bewusst NIE
+// eine messages-Zeile anlegt -- siehe src/mail/sync.ts und README.
+export interface SecurityAuditLogRecord {
+  id: string;
+  userId: string;
+  messageId: string | null;
+  action: string;
+  timestamp: string;
 }
 
 export interface ContractRecord {
@@ -168,6 +181,7 @@ export interface ApiSecurityResult {
   urgencyLanguageScore: number | null;
   containsNewIban: boolean;
   classification: Classification;
+  spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | null;
   confidenceScore: number | null;
 }
 

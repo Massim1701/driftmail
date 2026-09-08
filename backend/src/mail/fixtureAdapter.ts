@@ -55,6 +55,22 @@ const FIXTURES: FetchedMail[] = [
     receivedAt: daysAgo(0),
     rawHeaders: { "Received-SPF": "pass", "Content-Type": "text/plain" },
   },
+  {
+    // Auto-Delete-Pfad (WEB_INBOX.md 08.09.): eindeutiger Glücksspiel-Spam
+    // -> classification "spam" + spamSubcategory "gambling" (Mock-Heuristik,
+    // siehe ai/mockAdapter.ts) -> wird von der Sync-Pipeline NICHT
+    // persistiert, siehe mail/sync.ts.
+    messageIdHeader: "<fixture-5@casino-bonus-express.example>",
+    fromAddress: "bonus@casino-bonus-express.example",
+    fromDisplayName: "Casino Bonus Express",
+    replyToAddress: null,
+    subject: "Jackpot wartet: Jetzt gratis Casino-Bonus sichern!",
+    bodyText:
+      "Spielen Sie jetzt im Online-Casino und sichern Sie sich Ihren Jackpot-Bonus — " +
+      "einmalige Chance, jetzt kaufen!",
+    receivedAt: daysAgo(3),
+    rawHeaders: { "Content-Type": "text/plain" },
+  },
 ];
 
 export class FixtureMailAdapter implements MailAdapter {

@@ -1,5 +1,7 @@
-// Sync-Pipeline: Mail-Adapter -> Store, inkl. Security-Analyse (Mock-KI) und
-// automatischer Quarantäne bei classification === "phishing".
+// Sync-Pipeline: Mail-Adapter -> Store, inkl. Security-Analyse (Mock-KI),
+// automatischer Quarantäne bei classification === "phishing" und
+// Auto-Delete bei classification === "spam" mit spamSubcategory
+// "adult"/"gambling" (siehe WEB_INBOX.md 08.09. / SYNC.md).
 //
 // In diesem ersten Durchstich wird pro mail_account synchron beim
 // Serverstart und über POST /internal/sync (siehe routes) synchronisiert.
@@ -57,18 +59,44 @@ function resolveFolderId(classification: string, userId: string): string {
   return folder.id;
 }
 
-export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, limit = 20): Promise<{ imported: number }> {
+export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, limit = 20): Promise<{ imported: number; autoDeleted: number }> {
   const adapter = adapterForAccount(account);
   account.syncStatus = "syncing";
 
   let imported = 0;
+  let autoDeleted = 0;
   try {
     const fetched = await adapter.fetchRecentMessages(limit);
 
     for (const mail of fetched) {
       if (store.findMessageByHeader(account.id, mail.messageIdHeader)) continue; // dedupe, siehe UNIQUE-Constraint im Schema
+      if (store.wasAutoDeleted(account.id, mail.messageIdHeader)) continue; // dedupe für den Auto-Delete-Pfad, siehe store.ts
 
       const security = await ai.analyzeMail(mail.bodyText ?? "", mail.rawHeaders);
+
+      // Auto-Delete-Pfad (WEB_INBOX.md 08.09., siehe SYNC.md): eindeutiger
+      // Erotik-/Glücksspiel-Spam wird NIE persistiert -- weder als
+      // messages-Zeile noch als Quarantäne-Eintrag. Anders als der normale
+      // Spam-/Phishing-Pfad gibt es hier keine data_retention_policy-Frist
+      // und kein Undo. Design-Entscheidung (2026-09-08): "gar nicht erst
+      // speichern" statt "speichern + sofort wieder löschen", weil (a) der
+      // Inhalt (Erotik/Glücksspiel) so nie im Klartext im Store landet, auch
+      // nicht kurzzeitig, und (b) es keinen Undo-Pfad geben soll -- ein
+      // real existierender, wenn auch sofort gelöschter Datensatz hätte das
+      // nahegelegt. Nachvollziehbarkeit für den User trotzdem über
+      // `security_audit_log` (action 'auto_deleted_adult_gambling_spam'),
+      // ohne Message-Referenz (messageId=null, da nie angelegt).
+      if (security.classification === "spam" && (security.spamSubcategory === "adult" || security.spamSubcategory === "gambling")) {
+        store.logSecurityAudit({
+          userId: account.userId,
+          messageId: null,
+          action: "auto_deleted_adult_gambling_spam",
+        });
+        store.markAutoDeleted(account.id, mail.messageIdHeader);
+        autoDeleted++;
+        continue;
+      }
+
       const folderId = resolveFolderId(security.classification, account.userId);
 
       const message = store.insertMessage({
@@ -120,5 +148,5 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
     throw err;
   }
 
-  return { imported };
+  return { imported, autoDeleted };
 }

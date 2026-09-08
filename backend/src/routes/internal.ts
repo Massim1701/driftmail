@@ -28,8 +28,8 @@ internalRouter.post("/internal/sync", async (req, res) => {
   const results = [];
   for (const account of accounts) {
     try {
-      const { imported } = await syncAccount(account, aiAdapter);
-      results.push({ accountId: account.id, imported, syncStatus: account.syncStatus });
+      const { imported, autoDeleted } = await syncAccount(account, aiAdapter);
+      results.push({ accountId: account.id, imported, autoDeleted, syncStatus: account.syncStatus });
     } catch (err) {
       results.push({ accountId: account.id, error: String(err), syncStatus: account.syncStatus });
     }
