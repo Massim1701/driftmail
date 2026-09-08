@@ -20,6 +20,29 @@ CREATE TABLE mail_accounts (
     last_synced_at TIMESTAMPTZ
   );
 
+-- ===== Ordner (frei anlegbar, siehe SYNC.md "Contract-Aenderungen" 08.09.) =====
+--
+-- Ersetzt den vorherigen festen folder-Enum auf messages. Jeder User bekommt
+-- bei Account-Anlage die 5 System-Ordner als Zeilen hier angelegt (Anwendungs-
+-- logik, kein DB-Trigger) -- is_system=true schuetzt sie vor dem Loeschen,
+-- system_key bleibt stabil fuer Code, das gezielt z.B. "quarantaene" braucht,
+-- auch wenn der User den Ordner umbenennt. quarantaene/spam sind NICHT
+-- umbenennbar (siehe design-tokens.json systemFolders.defaults), das wird
+-- app-seitig durchgesetzt, nicht per Constraint.
+
+CREATE TABLE folders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    icon TEXT NOT NULL DEFAULT 'inbox',
+    is_system BOOLEAN NOT NULL DEFAULT false,
+    system_key TEXT CHECK (system_key IN ('wichtig', 'sonstiges', 'rechnungen', 'quarantaene', 'spam')),
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (user_id, system_key)
+  );
+
+CREATE INDEX idx_folders_user ON folders (user_id);
+
 -- ===== Messages =====
 
 CREATE TABLE messages (
@@ -32,12 +55,12 @@ CREATE TABLE messages (
     subject TEXT,
     body_text TEXT,
     received_at TIMESTAMPTZ NOT NULL,
-    folder TEXT NOT NULL DEFAULT 'sonstiges' CHECK (folder IN ('wichtig', 'sonstiges', 'rechnungen', 'quarantaene', 'spam')),
+    folder_id UUID NOT NULL REFERENCES folders(id),
     raw_headers JSONB,
     UNIQUE (mail_account_id, message_id_header)
   );
 
-CREATE INDEX idx_messages_account_folder ON messages (mail_account_id, folder);
+CREATE INDEX idx_messages_account_folder ON messages (mail_account_id, folder_id);
 
 -- ===== Security-Analyse (1:1 zu messages) =====
 
