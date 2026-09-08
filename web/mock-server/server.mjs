@@ -10,8 +10,13 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import {
   accounts,
+  folders,
   messages,
   contracts,
+  folderSummary,
+  folderById,
+  folderBySystemKey,
+  isRenamable,
   messageSummary,
   messageDetail,
   contractSummary,
@@ -29,14 +34,31 @@ function send(res, status, body) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   });
   res.end(json);
 }
 
+function sendNoContent(res) {
+  res.writeHead(204, {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  });
+  res.end();
+}
+
 function notFound(res) {
   send(res, 404, { error: "not_found" });
+}
+
+function badRequest(res, message) {
+  send(res, 400, { error: "bad_request", message });
+}
+
+function forbidden(res, message) {
+  send(res, 403, { error: "forbidden", message });
 }
 
 async function readJsonBody(req) {
@@ -66,11 +88,94 @@ const server = createServer(async (req, res) => {
     return send(res, 200, accounts);
   }
 
-  // GET /messages?folder=&accountId=
+  // GET /folders
+  if (req.method === "GET" && parts.length === 1 && parts[0] === "folders") {
+    return send(
+      res,
+      200,
+      folders
+        .slice()
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map(folderSummary)
+    );
+  }
+
+  // POST /folders
+  if (req.method === "POST" && parts.length === 1 && parts[0] === "folders") {
+    const body = await readJsonBody(req);
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
+    if (!name) return badRequest(res, "name ist erforderlich");
+    const icon = typeof body?.icon === "string" && body.icon.trim() ? body.icon.trim() : "folder";
+    const maxSort = folders.reduce((m, f) => Math.max(m, f.sort_order), -1);
+    const folder = {
+      id: randomUUID(),
+      name,
+      icon,
+      is_system: false,
+      system_key: null,
+      sort_order: maxSort + 1,
+    };
+    folders.push(folder);
+    return send(res, 201, folderSummary(folder));
+  }
+
+  // /folders/{folderId}
+  if (parts[0] === "folders" && parts.length === 2) {
+    const folderId = parts[1];
+    const folder = folderById(folderId);
+
+    // PATCH /folders/{folderId}
+    if (req.method === "PATCH") {
+      if (!folder) return notFound(res);
+      const body = await readJsonBody(req);
+      if (!body) return badRequest(res, "leerer Body");
+
+      const wantsRename = typeof body.name === "string" || typeof body.icon === "string";
+      if (wantsRename && !isRenamable(folder)) {
+        return forbidden(res, "Dieser System-Ordner kann nicht umbenannt werden");
+      }
+
+      if (typeof body.name === "string") {
+        const name = body.name.trim();
+        if (!name) return badRequest(res, "name darf nicht leer sein");
+        folder.name = name;
+      }
+      if (typeof body.icon === "string" && body.icon.trim()) {
+        folder.icon = body.icon.trim();
+      }
+      if (typeof body.sortOrder === "number") {
+        folder.sort_order = body.sortOrder;
+      }
+      return send(res, 200, folderSummary(folder));
+    }
+
+    // DELETE /folders/{folderId}
+    if (req.method === "DELETE") {
+      if (!folder) return notFound(res);
+      if (folder.is_system) {
+        return forbidden(res, "System-Ordner können nicht gelöscht werden");
+      }
+      // Design-Entscheidung (08.09., Track F): api-spec.yaml sagt nichts darüber,
+      // was mit enthaltenen Nachrichten beim Löschen eines Ordners passiert.
+      // Statt sie zu verlieren, verschieben wir sie in "Sonstiges" (Fallback-Inbox),
+      // analog zum Verhalten vieler Mail-Clients beim Löschen eines Ordners.
+      const fallback = folderBySystemKey("sonstiges");
+      for (const msg of messages) {
+        if (msg.folderId === folder.id) {
+          msg.folderId = fallback.id;
+        }
+      }
+      const idx = folders.findIndex((f) => f.id === folder.id);
+      folders.splice(idx, 1);
+      return sendNoContent(res);
+    }
+  }
+
+  // GET /messages?folderId=&accountId=
   if (req.method === "GET" && parts.length === 1 && parts[0] === "messages") {
-    const folder = url.searchParams.get("folder");
+    const folderId = url.searchParams.get("folderId");
     let result = messages;
-    if (folder) result = result.filter((m) => m.folder === folder);
+    if (folderId) result = result.filter((m) => m.folderId === folderId);
     return send(
       res,
       200,
@@ -95,7 +200,7 @@ const server = createServer(async (req, res) => {
     // POST /messages/{id}/quarantine
     if (req.method === "POST" && parts.length === 3 && parts[2] === "quarantine") {
       if (!msg) return notFound(res);
-      msg.folder = "quarantaene";
+      msg.folderId = folderBySystemKey("quarantaene").id;
       const entry = {
         id: randomUUID(),
         messageId: msg.id,
@@ -106,6 +211,18 @@ const server = createServer(async (req, res) => {
       };
       quarantineLog.push(entry);
       return send(res, 200, entry);
+    }
+
+    // POST /messages/{id}/move
+    if (req.method === "POST" && parts.length === 3 && parts[2] === "move") {
+      if (!msg) return notFound(res);
+      const body = await readJsonBody(req);
+      const folderId = body?.folderId;
+      if (typeof folderId !== "string" || !folderId) return badRequest(res, "folderId ist erforderlich");
+      const target = folderById(folderId);
+      if (!target) return badRequest(res, "unbekannter Ziel-Ordner");
+      msg.folderId = target.id;
+      return send(res, 200, messageSummary(msg));
     }
 
     // GET /messages/{id}/summary
@@ -155,5 +272,5 @@ function buildDraft(msg) {
 
 server.listen(PORT, () => {
   console.log(`driftmail mock-server läuft auf http://localhost:${PORT}`);
-  console.log(`Beispiel: http://localhost:${PORT}/messages?folder=wichtig`);
+  console.log(`Beispiel: http://localhost:${PORT}/messages?folderId=${folderBySystemKey("wichtig").id}`);
 });

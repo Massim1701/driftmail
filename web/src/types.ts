@@ -3,7 +3,20 @@
 // Gespiegelt aus contracts/api-spec.yaml und contracts/ai-adapter-interface.ts.
 // Bei Contract-Änderungen bitte hier synchron halten (siehe SYNC.md).
 
-export type Folder = "wichtig" | "sonstiges" | "rechnungen" | "quarantaene" | "spam";
+// Systemordner-Schlüssel (folders.system_key in db-schema.sql). Ordner selbst
+// sind jetzt benutzerdefinierte Objekte (siehe Folder unten) — dies ist nur
+// noch der optionale Marker, welcher der 5 Standard-Ordner ein Folder-Objekt
+// ist (null bei eigenen Ordnern).
+export type SystemFolderKey = "wichtig" | "sonstiges" | "rechnungen" | "quarantaene" | "spam";
+
+export interface Folder {
+  id: string;
+  name: string;
+  icon: string;
+  isSystem: boolean;
+  systemKey: SystemFolderKey | null;
+  sortOrder: number;
+}
 
 export type Classification = "safe" | "spam" | "phishing" | "unclear";
 
@@ -22,7 +35,7 @@ export interface Message {
   fromDisplayName: string;
   subject: string;
   receivedAt: string;
-  folder: Folder;
+  folderId: string;
   classification: Classification;
 }
 

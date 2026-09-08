@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { MailSummary, MessageDetail } from "../types";
+import type { Folder, MailSummary, MessageDetail } from "../types";
 import { api } from "../api";
 import { SecurityBadge, SecurityDetails } from "./SecurityBadge";
 import "./MessageDetailPane.css";
@@ -17,17 +17,24 @@ function formatDateTime(iso: string): string {
 export function MessageDetailPane({
   message,
   loading,
+  folders,
+  quarantaeneFolderId,
   onQuarantined,
+  onMoved,
 }: {
   message: MessageDetail | null;
   loading: boolean;
+  folders: Folder[];
+  quarantaeneFolderId: string | null;
   onQuarantined: (id: string) => void;
+  onMoved: (id: string, folderId: string) => void;
 }) {
   const [summary, setSummary] = useState<MailSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [draft, setDraft] = useState<string | null>(null);
   const [draftLoading, setDraftLoading] = useState(false);
   const [quarantining, setQuarantining] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
   // Beim Wechsel der Nachricht abgeleiteten Zustand zurücksetzen
@@ -44,7 +51,7 @@ export function MessageDetailPane({
     return <div className="detail-pane detail-empty">Wähle eine Nachricht aus der Liste.</div>;
   }
 
-  const isQuarantined = message.folder === "quarantaene";
+  const isQuarantined = quarantaeneFolderId !== null && message.folderId === quarantaeneFolderId;
 
   async function loadSummary() {
     if (!message) return;
@@ -75,6 +82,17 @@ export function MessageDetailPane({
       onQuarantined(message.id);
     } finally {
       setQuarantining(false);
+    }
+  }
+
+  async function handleMove(folderId: string) {
+    if (!message || !folderId) return;
+    setMoving(true);
+    try {
+      await api.moveMessage(message.id, folderId);
+      onMoved(message.id, folderId);
+    } finally {
+      setMoving(false);
     }
   }
 
@@ -119,6 +137,25 @@ export function MessageDetailPane({
         <button type="button" className="btn btn-secondary" onClick={loadDraft} disabled={draftLoading}>
           {draftLoading ? "Erstelle Entwurf…" : "Antwortentwurf erstellen"}
         </button>
+        <select
+          className="move-select"
+          value=""
+          disabled={moving}
+          onChange={(e) => {
+            if (e.target.value) handleMove(e.target.value);
+            e.target.value = "";
+          }}
+          aria-label="In anderen Ordner verschieben"
+        >
+          <option value="">{moving ? "Verschiebe…" : "In Ordner verschieben…"}</option>
+          {folders
+            .filter((f) => f.id !== message.folderId)
+            .map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+        </select>
       </section>
 
       {summary && (

@@ -48,12 +48,22 @@
   width: 100%;
   display: flex;
   align-items: center;
+  gap: 2px;
+  border-radius: var(--radius-control);
+  color: var(--color-text-secondary);
+}
+
+.folder-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm);
   border-radius: var(--radius-control);
   border: none;
   background: transparent;
-  color: var(--color-text-secondary);
+  color: inherit;
   font-family: var(--font-family);
   font-size: var(--font-size-body);
   cursor: pointer;
@@ -82,6 +92,9 @@
 
 .folder-label {
   flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .folder-count {
@@ -93,6 +106,81 @@
 
 .folder-item.active .folder-count {
   color: inherit;
+}
+
+.folder-action {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-control);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.folder-item:hover .folder-action,
+.folder-action:focus-visible {
+  opacity: 1;
+}
+
+.folder-action:hover {
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+}
+
+.folder-action-danger:hover {
+  color: var(--color-danger-text);
+}
+
+.folder-rename-input {
+  width: 100%;
+  padding: var(--space-sm);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-accent);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+}
+
+.folder-create {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.folder-create input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-sm);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-page);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+}
+
+.folder-create button {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  border-radius: var(--radius-control);
+  border: none;
+  background: var(--color-accent);
+  color: white;
+  cursor: pointer;
+}
+
+.folder-create button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .theme-switch {

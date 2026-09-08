@@ -7,6 +7,13 @@
   overflow: hidden;
 }
 
+.app-loading {
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+}
+
 .message-column {
   width: 320px;
   flex-shrink: 0;

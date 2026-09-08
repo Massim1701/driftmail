@@ -118,6 +118,23 @@
   color: white;
 }
 
+.move-select {
+  font-family: var(--font-family);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.move-select:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .detail-card {
   display: flex;
   flex-direction: column;
