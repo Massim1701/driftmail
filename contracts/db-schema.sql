@@ -36,7 +36,7 @@ CREATE TABLE folders (
     name TEXT NOT NULL,
     icon TEXT NOT NULL DEFAULT 'inbox',
     is_system BOOLEAN NOT NULL DEFAULT false,
-    system_key TEXT CHECK (system_key IN ('wichtig', 'sonstiges', 'rechnungen', 'quarantaene', 'spam')),
+    system_key TEXT CHECK (system_key IN ('wichtig', 'sonstiges', 'rechnungen', 'quarantaene', 'spam', 'papierkorb')),
     sort_order INTEGER NOT NULL DEFAULT 0,
     UNIQUE (user_id, system_key)
   );
