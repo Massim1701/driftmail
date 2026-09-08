@@ -174,3 +174,14 @@ Vorschlag: draft/phishing-check Response um folgende Felder erweitern:
 design-tokens.json: Farbrolle fuer sofortige Link-Markierung ergaenzen (nutzt vorhandenes danger-Rot, kein neues Farbschema noetig) — bitte kurze Notiz in Track F/C aufnehmen, dass Link-Markierung CSS-seitig sofort beim Rendern passiert, nicht erst nach Server-Antwort (optimistische UI, Server-Check laeuft parallel nach).
 
 Kein Blocker. Betrifft Track A (Recipient-Reputation-Logik, PII-Pattern-Erkennung) und alle Compose-/Anzeige-UI-Tracks (C/F).
+
+
+[2026-09-08] [offen] [PRIORITAET - bitte zuerst] [an Track B, dann A] — Massimo moechte, dass die Warteschlange jetzt konkret abgearbeitet wird, nicht weiter wachsen. Bitte in dieser Reihenfolge:
+
+1. ZUERST: main in alle 6 Track-Branches mergen (falls noch nicht geschehen — Branches waren zuletzt 11 Commits hinter main, u.a. wegen Ordner-Umbau folder_id statt folder-Enum, user_ai_preference, spam_subcategory, Botnetz-Signale). Ohne das bauen alle Tracks gegen veraltete Contracts.
+
+2. Track B: die drei bisher offenen Sicherheits-Eintraege in dieser Datei umsetzen (spam_subcategory + Auto-Loeschregel, Botnetz-Erkennungssignale, Bot/Human-Missbrauchserkennung beim Versand, Phishing-Check-Endpoint inkl. sensible-Daten/Empfaenger-Reputation/Link-Markierung-Erweiterung). Jeweils nach der Qualitaets-Checkliste in SYNC.md fertigstellen (Grenzen benennen, Annahmen dokumentieren, Tests, klare Uebergabe).
+
+3. Danach Track A wie zuvor besprochen: Backend nach aktueller api-spec.yaml (inkl. aller Erweiterungen aus dieser Datei).
+
+Kein neuer Scope, nur Abarbeitung des bereits Vereinbarten. Bitte Status je erledigtem Punkt hier und in SYNC.md aktualisieren, damit der Fortschritt sichtbar ist.
