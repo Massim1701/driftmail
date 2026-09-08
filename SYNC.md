@@ -25,6 +25,8 @@ Status-Werte: offen · in arbeit · fertig · blockiert
 
 [2026-09-08] [web] [0] — Contracts angelegt: db-schema.sql, api-spec.yaml, ai-adapter-interface.ts, design-tokens.json. Alle Tracks können starten.
 
+[2026-09-08] [web] [0] — `db-schema.sql` um sechs Sicherheits-Tabellen ergänzt (vollständige Lücken-Analyse): `message_attachments` (Anhang-Scan), `user_privacy_settings` (Tracking-Pixel/Remote-Bilder blocken), `user_security_settings` + `user_sessions` (2FA + Remote-Logout für den driftmail-Account selbst), `fraud_alerts` (dedizierte CEO-Fraud-Warnung), `data_retention_policy` (DSGVO-Aufbewahrung). Betrifft Track A (Backend-Logik), Track B (Anhang-Scan-Implementierung), alle UI-Tracks (Einstellungen-Screens).
+
 [2026-09-08] [terminal] [0] — Contract-Review: zwei Lücken zwischen den Contract-Dateien gefunden, siehe "Offene Fragen" unten. Kein Code geändert, nur geprüft.
 
 
