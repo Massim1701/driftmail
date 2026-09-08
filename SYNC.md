@@ -2,6 +2,8 @@
 
 Regel: Wer etwas ändert, trägt hier ein, was und warum — direkt commiten. Niemand muss auf eine Antwort warten, um weiterzuarbeiten; nur bei einem Eintrag unter "Blocker" sollte der jeweils andere reagieren, bevor der betroffene Track weitermacht.
 
+**Kein Mensch als Vermittler:** Web-Claude prüft `SYNC.md` (main + alle Track-Branches) eigenständig und regelmäßig auf offene Fragen und Blocker und beantwortet/entscheidet direkt dort im jeweiligen Branch — ohne dass Massimo Inhalte zwischen den Chats kopieren muss. Terminal liest entsprechend vor jedem Start den aktuellen Stand aus `SYNC.md` im eigenen Branch.
+
 Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 
 ## Status je Track
