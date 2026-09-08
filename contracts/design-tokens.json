@@ -52,11 +52,17 @@
     "lg": 16,
     "xl": 20
   },
-  "folders": [
-    { "key": "wichtig", "label": "Wichtig", "icon": "star" },
-    { "key": "sonstiges", "label": "Sonstiges", "icon": "inbox" },
-    { "key": "rechnungen", "label": "Rechnungen", "icon": "receipt" },
-    { "key": "quarantaene", "label": "Quarantäne", "icon": "shield-exclamation", "colorRole": "danger" },
-    { "key": "spam", "label": "Spam", "icon": "trash", "muted": true }
-  ]
+  "systemFolders": {
+    "note": "Default-Namen fuer die 5 System-Ordner (folders.system_key in db-schema.sql). Alle bis auf quarantaene/spam sind vom User umbenennbar -- deshalb 'defaultLabel' statt 'label': das ist der Name bei Anlage, nicht zwingend der aktuelle.",
+    "defaults": [
+      { "systemKey": "wichtig", "defaultLabel": "Wichtig", "icon": "star", "renamable": true },
+      { "systemKey": "sonstiges", "defaultLabel": "Sonstiges", "icon": "inbox", "renamable": true },
+      { "systemKey": "rechnungen", "defaultLabel": "Rechnungen", "icon": "receipt", "renamable": true },
+      { "systemKey": "quarantaene", "defaultLabel": "Quarantäne", "icon": "shield-exclamation", "colorRole": "danger", "renamable": false },
+      { "systemKey": "spam", "defaultLabel": "Spam", "icon": "trash", "muted": true, "renamable": false }
+    ]
+  },
+  "customFolder": {
+    "defaultIcon": "folder"
+  }
 }
