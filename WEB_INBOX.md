@@ -187,7 +187,7 @@ Kein Blocker. Betrifft Track A (Recipient-Reputation-Logik, PII-Pattern-Erkennun
 Kein neuer Scope, nur Abarbeitung des bereits Vereinbarten. Bitte Status je erledigtem Punkt hier und in SYNC.md aktualisieren, damit der Fortschritt sichtbar ist.
 
 
-[2026-09-08] [offen] [contracts/db-schema.sql] — Nachlieferung: vollstaendige CREATE TABLE send_abuse_flags Definition (wurde im Bot/Human-Missbrauchserkennungs-Eintrag nur per ALTER TABLE referenziert, aber die eigentliche CREATE TABLE fehlte — danke fuers Nachfragen statt Raten). Zusammen mit outgoing_send_log, wie urspruenglich gemeint:
+[2026-09-08] [erledigt: a5432e6] [contracts/db-schema.sql] — Nachlieferung: vollstaendige CREATE TABLE send_abuse_flags Definition (wurde im Bot/Human-Missbrauchserkennungs-Eintrag nur per ALTER TABLE referenziert, aber die eigentliche CREATE TABLE fehlte — danke fuers Nachfragen statt Raten). Zusammen mit outgoing_send_log, wie urspruenglich gemeint:
 
 ```sql
 CREATE TABLE outgoing_send_log (
