@@ -3,6 +3,7 @@ import { classify } from "./classification.js";
 import { detectHomoglyphs } from "./homoglyph.js";
 import { detectNewIban } from "./ibanDetection.js";
 import { detectLinkMismatch } from "./linkMismatch.js";
+import { detectSpamSubcategory } from "./spamSubcategory.js";
 import type { SecurityResult } from "./types.js";
 import { scoreUrgencyLanguage } from "./urgencyLanguage.js";
 
@@ -23,6 +24,9 @@ import { scoreUrgencyLanguage } from "./urgencyLanguage.js";
  *    dieses Modul erkennt nur "IBAN in der Mail vorhanden" als Proxy.
  *  - urgencyLanguageScore & classification/confidenceScore: aktuell
  *    regelbasierte Platzhalter, kein echtes NLP/ML.
+ *  - spamSubcategory: ebenfalls Keyword-Heuristik (siehe spamSubcategory.ts),
+ *    bewusst konservativ kalibriert, weil "adult"/"gambling" im Aufrufer
+ *    (Track A) sofortiges Löschen ohne Quarantäne auslösen.
  */
 export async function analyzeMail(
   rawText: string,
@@ -44,6 +48,11 @@ export async function analyzeMail(
     containsNewIban,
   });
 
+  // Hart aus dem Contract: NUR bei classification === "spam" gesetzt, sonst
+  // immer null -- explizit auch bei "phishing" (siehe types.ts-Kommentar
+  // und WEB_INBOX.md 08.09.).
+  const spamSubcategory = classification === "spam" ? detectSpamSubcategory(rawText) : null;
+
   return {
     spfStatus,
     dkimStatus,
@@ -55,11 +64,12 @@ export async function analyzeMail(
     urgencyLanguageScore,
     containsNewIban,
     classification,
+    spamSubcategory,
     confidenceScore,
   };
 }
 
-export type { AuthStatus, Classification, SecurityResult } from "./types.js";
+export type { AuthStatus, Classification, SecurityResult, SpamSubcategory } from "./types.js";
 export { parseAuthHeaders } from "./authHeaders.js";
 export type { AuthHeaderResult } from "./authHeaders.js";
 export { classify } from "./classification.js";
@@ -68,4 +78,5 @@ export { CONFUSABLES, containsConfusableChar, detectHomoglyphs, extractDomains, 
 export { detectNewIban, extractIbans } from "./ibanDetection.js";
 export { detectLinkMismatch, extractLinks } from "./linkMismatch.js";
 export type { ExtractedLink } from "./linkMismatch.js";
+export { detectSpamSubcategory } from "./spamSubcategory.js";
 export { scoreUrgencyLanguage } from "./urgencyLanguage.js";

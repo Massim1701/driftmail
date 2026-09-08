@@ -24,6 +24,7 @@ describe("analyzeMail (integration)", () => {
       urgencyLanguageScore: 0,
       containsNewIban: false,
       classification: "safe",
+      spamSubcategory: null,
       confidenceScore: expect.any(Number),
     });
   });
@@ -75,8 +76,81 @@ describe("analyzeMail (integration)", () => {
         "urgencyLanguageScore",
         "containsNewIban",
         "classification",
+        "spamSubcategory",
         "confidenceScore",
       ].sort(),
     );
+  });
+
+  describe("spamSubcategory", () => {
+    // Auth-Fail allein reicht in der aktuellen classify()-Heuristik für
+    // phishingScore=0.3, was in den "spam"-Bereich (0.25-0.5) fällt --
+    // genug, um hier gezielt "spam" (nicht "phishing") zu erzeugen, ohne
+    // Homoglyph/Link-Mismatch/IBAN mit ins Spiel zu bringen.
+    const spamHeaders = {
+      "Authentication-Results": "mx.example.com; spf=fail; dkim=none; dmarc=none",
+    };
+
+    it("sets spamSubcategory 'adult' for spam with explicit adult content", async () => {
+      const rawText = "Sieh dir jetzt heiße XXX Videos an, kostenlos und ohne Anmeldung!";
+      const result = await analyzeMail(rawText, spamHeaders);
+      expect(result.classification).toBe("spam");
+      expect(result.spamSubcategory).toBe("adult");
+    });
+
+    it("sets spamSubcategory 'gambling' for spam with explicit gambling content", async () => {
+      const rawText = "Riesiger Casino Bonus ohne Einzahlung wartet auf dich, jetzt Freispiele sichern!";
+      const result = await analyzeMail(rawText, spamHeaders);
+      expect(result.classification).toBe("spam");
+      expect(result.spamSubcategory).toBe("gambling");
+    });
+
+    it("sets spamSubcategory 'marketing' for spam with discount/promo content", async () => {
+      const rawText = "50% Rabatt nur heute! Gutscheincode: SUMMER50. Jetzt bestellen.";
+      const result = await analyzeMail(rawText, spamHeaders);
+      expect(result.classification).toBe("spam");
+      expect(result.spamSubcategory).toBe("marketing");
+    });
+
+    it("sets spamSubcategory 'generic' for spam with no specific content signal", async () => {
+      const rawText = "Wir haben ein neues Angebot für Sie, schauen Sie mal vorbei.";
+      const result = await analyzeMail(rawText, spamHeaders);
+      expect(result.classification).toBe("spam");
+      expect(result.spamSubcategory).toBe("generic");
+    });
+
+    it("always returns spamSubcategory null for phishing, even with adult/gambling keywords present (hard contract rule)", async () => {
+      const rawText = `
+        <p>DRINGEND: Ihr Konto wurde gesperrt! Bestätigen Sie sofort Ihre Daten,
+        sonst wird Ihr Konto endgültig gesperrt!!! Casino Bonus ohne Einzahlung, XXX Videos gratis.</p>
+        <p>Bitte loggen Sie sich hier ein:
+        <a href="https://login-verify.example-evil.ru/x">www.paypal.com</a></p>
+        <p>Alternativ überweisen Sie direkt an unsere neue Bankverbindung:
+        DE89 3704 0044 0532 0130 00</p>
+      `;
+      const headers = {
+        From: "PayPal Support <support@pаypal.com>", // Cyrillic а in "paypal"
+        "Authentication-Results": "mx.example.com; spf=fail; dkim=fail; dmarc=fail",
+      };
+
+      const result = await analyzeMail(rawText, headers);
+
+      expect(result.classification).toBe("phishing");
+      expect(result.spamSubcategory).toBeNull();
+    });
+
+    it("returns spamSubcategory null for a safe mail", async () => {
+      const result = await analyzeMail("Hallo, anbei die Unterlagen zu unserem Gespräch.", {
+        "Authentication-Results": "mx.example.com; spf=pass; dkim=pass; dmarc=pass",
+      });
+      expect(result.classification).toBe("safe");
+      expect(result.spamSubcategory).toBeNull();
+    });
+
+    it("returns spamSubcategory null for an unclear mail", async () => {
+      const result = await analyzeMail("Hallo Welt", {});
+      expect(result.classification).toBe("unclear");
+      expect(result.spamSubcategory).toBeNull();
+    });
   });
 });
