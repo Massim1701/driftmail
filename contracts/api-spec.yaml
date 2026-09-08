@@ -205,8 +205,12 @@ components:
         spfStatus: { type: string, enum: [pass, fail, none] }
         dkimStatus: { type: string, enum: [pass, fail, none] }
         dmarcStatus: { type: string, enum: [pass, fail, none] }
+        senderDomainAgeDays: { type: integer, nullable: true }
+        domainReputationScore: { type: number, format: float, nullable: true }
         homoglyphDetected: { type: boolean }
         linkMismatchDetected: { type: boolean }
+        urgencyLanguageScore: { type: number, format: float, nullable: true }
+        containsNewIban: { type: boolean }
         classification: { type: string, enum: [safe, spam, phishing, unclear] }
         confidenceScore: { type: number, format: float }
 
@@ -224,10 +228,12 @@ components:
       properties:
         id: { type: string, format: uuid }
         providerName: { type: string }
+        contractStart: { type: string, format: date, nullable: true }
         contractEnd: { type: string, format: date }
         cancellationDeadline: { type: string, format: date }
         cancellationPeriodDays: { type: integer }
         status: { type: string, enum: [active, cancelled, expired, needs_review] }
+        extractedConfidence: { type: number, format: float }
 
     UserAiCapability:
       type: object

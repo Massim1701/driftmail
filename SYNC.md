@@ -26,6 +26,8 @@ Status-Werte: offen · in arbeit · fertig · blockiert
 
 [2026-09-08] [terminal] [0] — Push nach main scheitert mit 403 "Permission denied" (authentifiziert als Massim1701, aber ohne Schreibrecht). Kein Keychain-Problem: `git credential fill` liefert denselben fine-grained PAT wie `gh auth token`. `gh api repos/.../driftmail -q .permissions` zeigt zwar `push:true`, das spiegelt aber die Owner-Rolle des Accounts wider, nicht die eigene Berechtigungsliste des eingeschränkten Tokens — irreführend, nicht verlässlich zur Diagnose nutzen. Workaround-Versuch mit `git -c http.extraHeader="Authorization: Bearer $TOKEN" push` hat NICHT geholfen (anderer Fehler: "invalid credentials"). Tatsächliche Ursache: Token hat für `driftmail` (noch) keine "Contents: Read and write"-Berechtigung gesetzt/gespeichert. Fix liegt bei Massimo in den GitHub-Token-Settings, nicht im Code.
 
+[2026-09-08] [terminal] [0] — Blocker erledigt: Massimo hat einen klassischen PAT mit vollem `repo`-Scope erzeugt, damit erfolgreich nach main gepusht (Commits `1903164`, `263af99`). Der fine-grained PAT bleibt weiter ungeklärt (nicht mehr nachverfolgt, da Workaround funktioniert) -- fuer zukuenftige Pushes wird ggf. wieder ein Token gebraucht, siehe Hinweis in der naechsten Session.
+
 ## Contract-Änderungen (wichtig — bricht ggf. andere Tracks)
 
 Jede Änderung an einer Datei in contracts/ kommt hier rein, auch klein. Andere Tracks prüfen bei jedem Pull kurz diesen Abschnitt.
@@ -36,11 +38,11 @@ Jede Änderung an einer Datei in contracts/ kommt hier rein, auch klein. Andere 
 
 Fragen, die ein Track nicht selbst entscheiden kann, weil sie einen Contract oder eine plattformübergreifende Entscheidung betreffen.
 
-- **api-spec.yaml `SecurityResult` unvollständig gegenüber `ai-adapter-interface.ts`/`db-schema.sql`.** Das TS-Interface und die DB-Tabelle `message_security` haben 11 Felder, die YAML-Schema (Zeile ~202-211) nur 7 — es fehlen `senderDomainAgeDays`, `domainReputationScore`, `urgencyLanguageScore`, `containsNewIban`. Wenn Track A sich strikt an die YAML hält, fehlen der App diese Signale in der API-Antwort. Betrifft Track A (Backend) und Track B (liefert diese Felder). Frage: YAML nachziehen, oder war das Kürzen absichtlich (z.B. weil diese Felder intern bleiben sollen)?
-- **api-spec.yaml `Contract`-Schema fehlt `contractStart` und `extractedConfidence`.** Letzteres ist laut `ai-adapter-interface.ts` (Kommentar bei `ContractData.extractedConfidence`) genau das Feld, das entscheidet, ob die UI einen Review-Schritt zeigen muss ("niedrig -> User muss bestätigen"). Ohne das Feld in der API-Antwort kann Track C/F diese Logik nicht umsetzen. Betrifft Track A, C, D, F. Frage: Feld in YAML ergänzen?
+- ~~api-spec.yaml `SecurityResult` unvollständig gegenüber `ai-adapter-interface.ts`/`db-schema.sql`.~~ **Beantwortet (Web, 08.09.):** kein Kürzen, war Absicht/Versehen — YAML wurde nachgezogen, alle 11 Felder jetzt drin.
+- ~~api-spec.yaml `Contract`-Schema fehlt `contractStart` und `extractedConfidence`.~~ **Beantwortet (Web, 08.09.):** beide Felder in der YAML ergänzt.
 
 ## Blocker
 
 Nur eintragen, wenn ein Track wirklich nicht weiterkommt, ohne dass jemand anders etwas ändert. Bitte mit betroffenem Track markieren.
 
-- **[Track 0]** Claude Codes fine-grained PAT hat für `driftmail` noch keine "Contents: Read and write"-Berechtigung — Push nach main scheitert mit 403. Contracts liegen lokal committed bereit (SYNC.md + contracts/*), können aber nicht ins Repo. Braucht Massimo: Token-Berechtigung in den GitHub-Settings setzen und speichern.
+(keine — Push-Blocker vom 08.09. ist erledigt, siehe Änderungsprotokoll)
