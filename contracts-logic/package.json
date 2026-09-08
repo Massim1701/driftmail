@@ -1,0 +1,26 @@
+{
+  "name": "@driftmail/contracts-logic",
+  "version": "0.1.0",
+  "description": "Track D — Vertragserkennung (extractContract) und Reminder-Scheduler-Job für driftmail",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "scheduler:once": "tsx src/schedulerCli.ts --once",
+    "scheduler:daemon": "tsx src/schedulerCli.ts --daemon"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.3.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.7.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
+  }
+}
