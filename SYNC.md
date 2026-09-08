@@ -48,6 +48,8 @@ Jede Änderung an einer Datei in contracts/ kommt hier rein, auch klein. Andere 
    
     - **Betrifft alle Tracks, die schon gegen die alte Folder-Enum gebaut haben** (insbesondere A/Backend, C/iOS, F/Web — bitte prüfen und anpassen). Kein Blocker, aber bitte vor dem nächsten Merge nach main berücksichtigen.
 
+**[2026-09-08] [terminal] [0] — Umgesetzt** (Commit `734781e`): Die oben angekündigte Ordner-Umstellung war Stunden lang nur angekündigt, nicht in den Contract-Dateien. Jetzt tatsächlich umgesetzt in `db-schema.sql`/`api-spec.yaml`/`design-tokens.json` wie beschrieben. Track A/C/F werden jetzt entsprechend angepasst (laufende Arbeit, siehe Track-Branches).
+
 ## Offene Fragen
 
 Fragen, die ein Track nicht selbst entscheiden kann, weil sie einen Contract oder eine plattformübergreifende Entscheidung betreffen.
