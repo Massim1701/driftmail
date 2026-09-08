@@ -211,3 +211,41 @@ CREATE TABLE send_abuse_flags (
 ```
 
 Hinweis: 'phishing_content' ist hier direkt mit drin (nicht per separatem ALTER TABLE nachtraeglich), also keine weitere ALTER-TABLE-Migration noetig fuer den Phishing-Check-Eintrag von vorhin — die dortige "DROP CONSTRAINT / ADD CONSTRAINT"-Migration kann entfallen, wenn diese CREATE TABLE-Version direkt verwendet wird (z.B. falls die Migration noch nicht ausgefuehrt wurde). Falls send_abuse_flags bei euch schon ohne 'phishing_content' angelegt wurde, dann bitte die vorherige ALTER-TABLE-Migration wie spezifiziert nachziehen. Verhalten (warnen vs. blocken) wie in den beiden vorherigen Eintraegen beschrieben: bei flag_reason = 'phishing_content' immer action_taken = 'send_blocked', bei allen anderen Gruenden zunaechst 'warned'/'rate_limited'. Kein Blocker.
+
+
+[2026-09-08] [offen] [contracts/api-spec.yaml + contracts/db-schema.sql + Track A/C/F] — Fehlende Basis-Funktion entdeckt: manuelles Loeschen einer Mail durch den User gibt es noch nicht im Contract (nur Quarantaene, Verschieben, automatische Loeschregeln fuer Spam/Phishing). Nachtrag, analog zu Gmail-Verhalten: Loeschen = in Papierkorb verschieben (soft delete), kein sofortiges Hard-Delete.
+
+1. Neuer System-Ordner "Papierkorb" in design-tokens.json systemFolders.defaults ergaenzen (system_key = 'papierkorb', analog zu quarantaene/spam -- ebenfalls nicht umbenennbar/loeschbar wie die anderen System-Ordner).
+
+2. Neuer Endpoint in api-spec.yaml:
+```yaml
+  /messages/{messageId}:
+    delete:
+      summary: Mail in den Papierkorb verschieben (soft delete)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: In Papierkorb verschoben
+
+  /messages/{messageId}/permanent:
+    delete:
+      summary: Mail endgueltig loeschen (nur aus dem Papierkorb heraus moeglich)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Endgueltig geloescht
+```
+
+3. Verhalten (Track A): DELETE /messages/{messageId} setzt folder_id auf den Papierkorb-Ordner (wie POST /messages/{messageId}/move, kein neuer Mechanismus). Serverseitig zusaetzlich ueber die Provider-API spiegeln (Gmail API messages.trash bzw. IMAP \\Deleted-Flag), analog zur bereits beschlossenen Regel bei automatisch geloeschtem Spam -- lokales Verschieben ohne Server-Spiegelung waere inkonsistent mit dem, was der User in Gmail/seinem Mail-Client direkt sieht. DELETE /messages/{messageId}/permanent entfernt den DB-Eintrag endgueltig UND loest die endgueltige Loeschung beim Provider aus (Gmail API messages.delete bzw. IMAP Expunge).
+
+4. Papierkorb-Ordner braucht KEINE eigene Retention-Tabelle wie quarantine -- Standard-Verhalten wie bei Gmail (User leert manuell oder es bleibt liegen) reicht fuer diesen Auftrag, keine automatische 30-Tage-Frist noetig (anders als bei message quarantine/phishing).
+
+Kein Blocker, reine Ergaenzung fehlender Basis-Funktionalitaet, keine grosse Contract-Aenderung im Sinne der Ankuendigungsregel.
