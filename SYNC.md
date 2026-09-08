@@ -14,7 +14,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | C — iOS App | ios/ | offen | — |
 | D — Vertrag & Reminder | contracts-logic/ | offen | — |
 | E — Antwort & Signatur | mail-actions/ | offen | — |
-| F — Web-Fallback-UI | web/ | offen | — |
+| F — Web-Fallback-UI | web/ | in Arbeit | 2026-09-08 |
 
 Status-Werte: offen · in arbeit · fertig · blockiert
 
