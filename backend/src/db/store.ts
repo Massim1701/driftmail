@@ -11,11 +11,13 @@
 import { randomUUID } from "node:crypto";
 import type {
   ContractRecord,
+  FolderRecord,
   MailAccountRecord,
   MessageAiSummaryRecord,
   MessageRecord,
   MessageSecurityRecord,
   QuarantineRecord,
+  SystemFolderKey,
   User,
   UserAiCapabilityRecord,
 } from "../types";
@@ -23,6 +25,7 @@ import type {
 class Store {
   users: User[] = [];
   mailAccounts: MailAccountRecord[] = [];
+  folders: FolderRecord[] = [];
   messages: MessageRecord[] = [];
   messageSecurity: Map<string, MessageSecurityRecord> = new Map(); // key: messageId
   quarantine: QuarantineRecord[] = [];
@@ -52,6 +55,46 @@ class Store {
     return this.mailAccounts.find((a) => a.id === id);
   }
 
+  // ----- Ordner -----
+  // CONTRACT-ÄNDERUNG (SYNC.md, Commit 734781e): benutzerdefinierte Ordner
+  // statt festem Enum. Jeder User bekommt 5 System-Ordner (is_system=true,
+  // system_key gesetzt, siehe ensureDemoUser) und kann beliebig eigene
+  // Ordner (is_system=false, system_key=null) anlegen.
+
+  createFolder(input: Omit<FolderRecord, "id">): FolderRecord {
+    const record: FolderRecord = { id: randomUUID(), ...input };
+    this.folders.push(record);
+    return record;
+  }
+
+  listFolders(userId: string): FolderRecord[] {
+    return this.folders.filter((f) => f.userId === userId).sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  getFolder(id: string): FolderRecord | undefined {
+    return this.folders.find((f) => f.id === id);
+  }
+
+  getSystemFolder(userId: string, systemKey: SystemFolderKey): FolderRecord | undefined {
+    return this.folders.find((f) => f.userId === userId && f.systemKey === systemKey);
+  }
+
+  updateFolder(id: string, patch: Partial<Pick<FolderRecord, "name" | "icon" | "sortOrder">>): FolderRecord | undefined {
+    const folder = this.getFolder(id);
+    if (!folder) return undefined;
+    if (patch.name !== undefined) folder.name = patch.name;
+    if (patch.icon !== undefined) folder.icon = patch.icon;
+    if (patch.sortOrder !== undefined) folder.sortOrder = patch.sortOrder;
+    return folder;
+  }
+
+  deleteFolder(id: string): boolean {
+    const idx = this.folders.findIndex((f) => f.id === id);
+    if (idx === -1) return false;
+    this.folders.splice(idx, 1);
+    return true;
+  }
+
   // ----- Messages -----
 
   findMessageByHeader(mailAccountId: string, messageIdHeader: string): MessageRecord | undefined {
@@ -64,9 +107,9 @@ class Store {
     return record;
   }
 
-  listMessages(filter: { folder?: string; accountId?: string }): MessageRecord[] {
+  listMessages(filter: { folderId?: string; accountId?: string }): MessageRecord[] {
     return this.messages
-      .filter((m) => (filter.folder ? m.folder === filter.folder : true))
+      .filter((m) => (filter.folderId ? m.folderId === filter.folderId : true))
       .filter((m) => (filter.accountId ? m.mailAccountId === filter.accountId : true))
       .sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
   }
@@ -75,9 +118,11 @@ class Store {
     return this.messages.find((m) => m.id === id);
   }
 
-  updateMessageFolder(id: string, folder: MessageRecord["folder"]): void {
+  /** Verschiebt eine Nachricht in einen anderen Ordner (POST /messages/:id/move). */
+  moveMessage(id: string, folderId: string): MessageRecord | undefined {
     const m = this.getMessage(id);
-    if (m) m.folder = folder;
+    if (m) m.folderId = folderId;
+    return m;
   }
 
   // ----- Security -----
@@ -102,7 +147,16 @@ class Store {
       userReviewed: false,
     };
     this.quarantine.push(record);
-    this.updateMessageFolder(messageId, "quarantaene");
+
+    // Ordner-Umstellung (SYNC.md, Commit 734781e): der Quarantäne-"Ordner"
+    // ist jetzt eine echte folders-Zeile pro User, kein fester String mehr.
+    // Der User wird über die mail_account der Nachricht ermittelt (kein
+    // eigenes userId-Feld auf messages, siehe db-schema.sql).
+    const message = this.getMessage(messageId);
+    const account = message ? this.getMailAccount(message.mailAccountId) : undefined;
+    const quarantaeneFolder = account ? this.getSystemFolder(account.userId, "quarantaene") : undefined;
+    if (quarantaeneFolder) this.moveMessage(messageId, quarantaeneFolder.id);
+
     return record;
   }
 
@@ -141,8 +195,20 @@ class Store {
 
 export const store = new Store();
 
-/** Legt einen Demo-User + Demo-Konto an, falls noch keiner existiert. Wird
- * beim Serverstart aufgerufen, damit die API sofort ohne Setup nutzbar ist. */
+// Default-Namen/Icons/Reihenfolge der 5 System-Ordner — gespiegelt aus
+// contracts/design-tokens.json ("systemFolders.defaults"). quarantaene und
+// spam sind laut Contract nicht umbenennbar (siehe routes/folders.ts).
+const SYSTEM_FOLDER_DEFAULTS: Array<{ systemKey: SystemFolderKey; name: string; icon: string }> = [
+  { systemKey: "wichtig", name: "Wichtig", icon: "star" },
+  { systemKey: "sonstiges", name: "Sonstiges", icon: "inbox" },
+  { systemKey: "rechnungen", name: "Rechnungen", icon: "receipt" },
+  { systemKey: "quarantaene", name: "Quarantäne", icon: "shield-exclamation" },
+  { systemKey: "spam", name: "Spam", icon: "trash" },
+];
+
+/** Legt einen Demo-User + Demo-Konto + die 5 System-Ordner an, falls noch
+ * keine existieren. Wird beim Serverstart aufgerufen, damit die API sofort
+ * ohne Setup nutzbar ist. */
 export function ensureDemoUser(): { user: User; account: MailAccountRecord } {
   let user = store.users[0];
   if (!user) user = store.createUser("demo@driftmail.local");
@@ -159,5 +225,19 @@ export function ensureDemoUser(): { user: User; account: MailAccountRecord } {
       lastSyncedAt: null,
     });
   }
+
+  if (store.listFolders(user.id).length === 0) {
+    SYSTEM_FOLDER_DEFAULTS.forEach((def, index) => {
+      store.createFolder({
+        userId: user.id,
+        name: def.name,
+        icon: def.icon,
+        isSystem: true,
+        systemKey: def.systemKey,
+        sortOrder: index,
+      });
+    });
+  }
+
   return { user, account };
 }

@@ -7,7 +7,12 @@
 
 export type Provider = "gmail" | "imap";
 export type SyncStatus = "pending" | "syncing" | "ok" | "error";
-export type Folder = "wichtig" | "sonstiges" | "rechnungen" | "quarantaene" | "spam";
+// CONTRACT-ÄNDERUNG (SYNC.md, Commit 734781e): fester Folder-Enum ersetzt
+// durch benutzerdefinierte Ordner (Tabelle `folders`). SystemFolderKey
+// bleibt als Enum bestehen, aber nur noch für die 5 mitgelieferten
+// System-Ordner (folders.system_key) — Nachrichten zeigen jetzt per
+// folder_id auf eine echte Ordner-Zeile statt auf diesen String.
+export type SystemFolderKey = "wichtig" | "sonstiges" | "rechnungen" | "quarantaene" | "spam";
 export type Classification = "safe" | "spam" | "phishing" | "unclear";
 export type ContractStatus = "active" | "cancelled" | "expired" | "needs_review";
 export type AiSource = "on_device" | "cloud_fallback";
@@ -33,6 +38,16 @@ export interface MailAccountRecord {
   lastSyncedAt: string | null;
 }
 
+export interface FolderRecord {
+  id: string;
+  userId: string;
+  name: string;
+  icon: string;
+  isSystem: boolean;
+  systemKey: SystemFolderKey | null;
+  sortOrder: number;
+}
+
 export interface MessageRecord {
   id: string;
   mailAccountId: string;
@@ -43,7 +58,7 @@ export interface MessageRecord {
   subject: string | null;
   bodyText: string | null;
   receivedAt: string;
-  folder: Folder;
+  folderId: string;
   rawHeaders: Record<string, string> | null;
 }
 
@@ -123,13 +138,22 @@ export interface ApiMailAccount {
   syncStatus: SyncStatus;
 }
 
+export interface ApiFolder {
+  id: string;
+  name: string;
+  icon: string;
+  isSystem: boolean;
+  systemKey: SystemFolderKey | null;
+  sortOrder: number;
+}
+
 export interface ApiMessage {
   id: string;
   fromAddress: string;
   fromDisplayName: string | null;
   subject: string | null;
   receivedAt: string;
-  folder: Folder;
+  folderId: string;
   classification: Classification;
 }
 

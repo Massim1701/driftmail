@@ -6,7 +6,7 @@
 // Ein echter Hintergrund-Job/Webhook (Gmail Push, IMAP IDLE) ist bewusst
 // nicht Teil dieses Skeletons — siehe README "Annahmen".
 
-import type { MailAccountRecord, Folder } from "../types";
+import type { MailAccountRecord, SystemFolderKey } from "../types";
 import type { MailAdapter } from "./types";
 import { FixtureMailAdapter } from "./fixtureAdapter";
 import { GmailAdapter } from "./gmailAdapter";
@@ -42,9 +42,19 @@ export function adapterForAccount(account: MailAccountRecord): MailAdapter {
   return new FixtureMailAdapter();
 }
 
-function classificationToFolder(classification: string, currentFallback: Folder): Folder {
-  if (classification === "phishing" || classification === "spam") return "spam";
-  return currentFallback;
+/** Ermittelt die Ziel-Ordner-ID für eine frisch importierte Nachricht anhand
+ * der Mock-Klassifikation. Löst gegen die System-Ordner des Kontobesitzers
+ * auf (folders.system_key, siehe ensureDemoUser) statt gegen einen festen
+ * Enum-String — Contract-Änderung, siehe SYNC.md Commit 734781e. */
+function resolveFolderId(classification: string, userId: string): string {
+  const key: SystemFolderKey = classification === "phishing" || classification === "spam" ? "spam" : "sonstiges";
+  const folder = store.getSystemFolder(userId, key);
+  if (!folder) {
+    throw new Error(
+      `Systemordner '${key}' fehlt für User ${userId} — ensureDemoUser() muss vor dem ersten Sync gelaufen sein.`,
+    );
+  }
+  return folder.id;
 }
 
 export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, limit = 20): Promise<{ imported: number }> {
@@ -59,7 +69,7 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
       if (store.findMessageByHeader(account.id, mail.messageIdHeader)) continue; // dedupe, siehe UNIQUE-Constraint im Schema
 
       const security = await ai.analyzeMail(mail.bodyText ?? "", mail.rawHeaders);
-      const folder = classificationToFolder(security.classification, "sonstiges");
+      const folderId = resolveFolderId(security.classification, account.userId);
 
       const message = store.insertMessage({
         mailAccountId: account.id,
@@ -70,7 +80,7 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         subject: mail.subject,
         bodyText: mail.bodyText,
         receivedAt: mail.receivedAt,
-        folder,
+        folderId,
         rawHeaders: mail.rawHeaders,
       });
 

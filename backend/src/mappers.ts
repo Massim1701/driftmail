@@ -3,12 +3,14 @@
 
 import type {
   ApiContract,
+  ApiFolder,
   ApiMailAccount,
   ApiMailSummary,
   ApiMessage,
   ApiMessageDetail,
   ApiSecurityResult,
   ContractRecord,
+  FolderRecord,
   MailAccountRecord,
   MessageAiSummaryRecord,
   MessageRecord,
@@ -17,6 +19,10 @@ import type {
 
 export function toApiMailAccount(a: MailAccountRecord): ApiMailAccount {
   return { id: a.id, provider: a.provider, emailAddress: a.emailAddress, syncStatus: a.syncStatus };
+}
+
+export function toApiFolder(f: FolderRecord): ApiFolder {
+  return { id: f.id, name: f.name, icon: f.icon, isSystem: f.isSystem, systemKey: f.systemKey, sortOrder: f.sortOrder };
 }
 
 export function toApiSecurityResult(s: MessageSecurityRecord): ApiSecurityResult {
@@ -42,7 +48,7 @@ export function toApiMessage(m: MessageRecord, security: MessageSecurityRecord |
     fromDisplayName: m.fromDisplayName,
     subject: m.subject,
     receivedAt: m.receivedAt,
-    folder: m.folder,
+    folderId: m.folderId,
     classification: security?.classification ?? "unclear",
   };
 }

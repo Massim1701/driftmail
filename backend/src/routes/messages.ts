@@ -2,22 +2,22 @@ import { Router } from "express";
 import { store } from "../db/store";
 import { toApiMessage, toApiMessageDetail, toApiMailSummary } from "../mappers";
 import { aiAdapter } from "../ai";
-import type { AiSource, Folder } from "../types";
+import type { AiSource } from "../types";
 
 export const messagesRouter = Router();
 
-const VALID_FOLDERS: Folder[] = ["wichtig", "sonstiges", "rechnungen", "quarantaene", "spam"];
-
-// GET /messages?folder=&accountId= — siehe api-spec.yaml
+// GET /messages?folderId=&accountId= — siehe api-spec.yaml
+// CONTRACT-ÄNDERUNG (SYNC.md, Commit 734781e): Query-Param `folder` (Enum)
+// -> `folderId` (UUID, verweist auf eine Zeile in folders).
 messagesRouter.get("/messages", (req, res) => {
-  const folder = typeof req.query.folder === "string" ? req.query.folder : undefined;
+  const folderId = typeof req.query.folderId === "string" ? req.query.folderId : undefined;
   const accountId = typeof req.query.accountId === "string" ? req.query.accountId : undefined;
 
-  if (folder && !VALID_FOLDERS.includes(folder as Folder)) {
-    return res.status(400).json({ error: `ungültiger folder-Wert: ${folder}` });
+  if (folderId && !store.getFolder(folderId)) {
+    return res.status(400).json({ error: `ungültiger folderId-Wert: ${folderId}` });
   }
 
-  const messages = store.listMessages({ folder, accountId });
+  const messages = store.listMessages({ folderId, accountId });
   res.json(messages.map((m) => toApiMessage(m, store.getMessageSecurity(m.id))));
 });
 
@@ -36,6 +36,24 @@ messagesRouter.post("/messages/:messageId/quarantine", (req, res) => {
 
   const record = store.quarantineMessage(message.id, "manuell durch User");
   res.json(record);
+});
+
+// POST /messages/:messageId/move — siehe api-spec.yaml (neu durch die
+// Ordner-Contract-Änderung, SYNC.md Commit 734781e)
+messagesRouter.post("/messages/:messageId/move", (req, res) => {
+  const message = store.getMessage(req.params.messageId);
+  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+
+  const folderId = req.body?.folderId;
+  if (typeof folderId !== "string" || !folderId) {
+    return res.status(400).json({ error: "folderId ist erforderlich" });
+  }
+  if (!store.getFolder(folderId)) {
+    return res.status(400).json({ error: `Ordner nicht gefunden: ${folderId}` });
+  }
+
+  const updated = store.moveMessage(message.id, folderId)!;
+  res.json(toApiMessage(updated, store.getMessageSecurity(updated.id)));
 });
 
 // GET /messages/:messageId/summary — siehe api-spec.yaml

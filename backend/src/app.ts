@@ -1,5 +1,6 @@
 import express from "express";
 import { accountsRouter } from "./routes/accounts";
+import { foldersRouter } from "./routes/folders";
 import { messagesRouter } from "./routes/messages";
 import { contractsRouter } from "./routes/contracts";
 import { capabilityRouter } from "./routes/capability";
@@ -13,6 +14,7 @@ export function createApp() {
   // -> alle Contract-Routen unter /v1 gemountet.
   const v1 = express.Router();
   v1.use(accountsRouter);
+  v1.use(foldersRouter);
   v1.use(messagesRouter);
   v1.use(contractsRouter);
   v1.use(capabilityRouter);

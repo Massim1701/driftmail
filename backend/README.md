@@ -3,6 +3,12 @@
 Erster Durchstich der Backend-API gegen `contracts/api-spec.yaml` und
 `contracts/db-schema.sql`. Zeigt den Kernfluss end-to-end:
 
+> **Contract-Update (2026-09-08, SYNC.md Commit `734781e`):** der feste
+> Folder-Enum (`wichtig`/`sonstiges`/`rechnungen`/`quarantaene`/`spam` als
+> String auf `messages.folder`) wurde durch benutzerdefinierte Ordner
+> ersetzt (neue Tabelle `folders`, `messages.folder_id` als FK). Details
+> siehe Abschnitt "Ordner (benutzerdefiniert)" unten.
+
 ```
 Mail-Adapter (Gmail/IMAP/Fixture) -> Sync-Pipeline -> Mock-KI-Analyse
   -> Ordner-Zuordnung + ggf. Auto-Quarantäne -> API (GET/POST wie im Contract)
@@ -40,7 +46,9 @@ npm test
 Das ist ein End-to-End-Smoketest ohne Testframework
 (`src/smoketest.ts`): startet die App in-process, synct das Fixture-Konto
 und durchläuft den kompletten Kernfluss über echte HTTP-Requests —
-`/v1/accounts`, `/v1/messages` (inkl. `folder`-Filter), `/v1/messages/:id`,
+`/v1/accounts`, `/v1/folders` (GET/POST/PATCH/DELETE, inkl. Ablehnung von
+Umbenennung/Löschung bei System-Ordnern), `/v1/messages` (inkl.
+`folderId`-Filter), `/v1/messages/:id`, `/v1/messages/:id/move`,
 `/v1/messages/:id/summary`, `/v1/messages/:id/reply-draft`,
 `/v1/messages/:id/quarantine`, `/v1/contracts`,
 `/v1/contracts/:id/confirm`, `/v1/capability-check`. Bricht mit
@@ -50,8 +58,10 @@ passt.
 Manuell durchprobieren z.B. mit:
 
 ```bash
+curl http://localhost:3000/v1/folders | jq
 curl http://localhost:3000/v1/messages | jq
-curl http://localhost:3000/v1/messages?folder=spam | jq
+# folderId eines Ordners aus obigem GET /v1/folders einsetzen:
+curl "http://localhost:3000/v1/messages?folderId=<uuid>" | jq
 curl -X POST http://localhost:3000/v1/capability-check \
   -H 'Content-Type: application/json' \
   -d '{"platform":"web","onDeviceSupported":false,"activeMode":"cloud_fallback"}'
@@ -72,6 +82,8 @@ curl -X POST http://localhost:3000/v1/capability-check \
   `(mail_account_id, message_id_header)` wie im Schema (`UNIQUE`-Constraint
   auf `messages`), Ordner-Zuordnung, Auto-Quarantäne bei
   `classification === "phishing"`.
+- Ordner-Verwaltung (`src/routes/folders.ts`): System-Ordner + eigene
+  Ordner, siehe Abschnitt "Ordner (benutzerdefiniert)" unten.
 
 **Mock/Stub (bewusst, siehe Auftrag):**
 - **KI-Logik** (`src/ai/mockAdapter.ts`): implementiert
@@ -88,6 +100,45 @@ curl -X POST http://localhost:3000/v1/capability-check \
   Postgres, siehe "Annahmen".
 - **Auth**: keine — kein Login/Session/Token-Handling in diesem
   Durchstich, ein fester "Demo-User" wird beim Start angelegt.
+
+## Ordner (benutzerdefiniert)
+
+Seit dem Contract-Update vom 08.09. (SYNC.md, Commit `734781e`) sind
+Ordner eigene Datensätze (Tabelle `folders`) statt eines festen
+Enum-Strings auf `messages.folder`:
+
+- Jeder User bekommt beim Anlegen (`ensureDemoUser()` in `src/db/store.ts`)
+  automatisch 5 System-Ordner (`is_system=true`), Namen/Icons/Reihenfolge
+  1:1 aus `contracts/design-tokens.json` (`systemFolders.defaults`):
+  `wichtig` (star), `sonstiges` (inbox), `rechnungen` (receipt),
+  `quarantaene` (shield-exclamation), `spam` (trash).
+- Eigene Ordner (`POST /folders`) haben `is_system=false`,
+  `system_key=null` und als Default-Icon `folder`
+  (`contracts/design-tokens.json` → `customFolder.defaultIcon`).
+- `PATCH /folders/:folderId`: Name/Icon/Reihenfolge änderbar. Ausnahme:
+  `quarantaene` und `spam` sind laut Design-Token (`renamable: false`)
+  **nicht umbenennbar** — ein `PATCH` mit `name` auf diese beiden liefert
+  `400`. Icon/Reihenfolge bleiben bei diesen beiden änderbar, da der
+  Contract dazu nichts einschränkt.
+- `DELETE /folders/:folderId`: System-Ordner (`is_system=true`) sind nicht
+  löschbar (`400`).
+- **Design-Entscheidung (nicht im Contract geregelt), 2026-09-08:**
+  `messages.folder_id` ist laut Schema `NOT NULL`/FK und darf nie ins
+  Leere zeigen. Beim Löschen eines eigenen Ordners werden dessen
+  Nachrichten deshalb vorher automatisch in den System-Ordner "sonstiges"
+  verschoben (`src/routes/folders.ts`, `DELETE`-Handler). Alternative wäre
+  gewesen, das Löschen bei nicht-leeren Ordnern ganz abzulehnen — aus
+  Sicht des Skeletons wirkte "nach sonstiges verschieben" nutzerfreundlicher
+  und ist mit dem Schema vereinbar; sollte aber mit UI/Product nochmal
+  bestätigt werden, falls das nicht das gewünschte Verhalten ist.
+- `POST /messages/:messageId/move`: verschiebt eine Nachricht in einen
+  beliebigen existierenden Ordner (System- oder eigenen), `400` falls
+  `folderId` fehlt oder nicht existiert.
+- Kein Multi-User: da dieses Skeleton nur den einen Demo-User kennt
+  (siehe "Annahmen" unten), sind `folders`/`GET /folders` etc. nicht nach
+  `userId` aus dem Request gefiltert, sondern greifen intern immer auf
+  `ensureDemoUser()` zu — analog zum bestehenden Muster in
+  `src/routes/capability.ts`.
 
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
@@ -124,7 +175,7 @@ src/
   index.ts             Serverstart + initialer Sync
   types.ts             interne Modelle + API-Shapes (Spiegel von db-schema.sql / api-spec.yaml)
   mappers.ts            interne Records -> API-Response-Shapes
-  routes/               ein Router-Modul je api-spec.yaml-Ressource + internal.ts (Health/Sync/Seed)
+  routes/               ein Router-Modul je api-spec.yaml-Ressource (inkl. folders.ts) + internal.ts (Health/Sync/Seed)
   db/store.ts           In-Memory-Repository (siehe "Annahmen")
   mail/                 MailAdapter-Interface + Gmail/IMAP/Fixture-Implementierungen + Sync-Pipeline
   ai/                   AiAdapter-Interface (Spiegel von ai-adapter-interface.ts) + Mock-Implementierung

@@ -29,15 +29,74 @@ async function main() {
     const accounts = await accountsRes.json();
     assert(Array.isArray(accounts) && accounts.length > 0, "mind. 1 Konto erwartet");
 
+    // Ordner: 5 System-Ordner müssen für den Demo-User existieren
+    // (Contract-Änderung "benutzerdefinierte Ordner", SYNC.md Commit 734781e).
+    const foldersRes = await fetch(`${base}/v1/folders`);
+    assert(foldersRes.status === 200, "GET /v1/folders sollte 200 liefern");
+    const folders = (await foldersRes.json()) as Array<Record<string, unknown>>;
+    assert(Array.isArray(folders) && folders.length === 5, "genau 5 System-Ordner erwartet");
+    const spamFolder = folders.find((f) => f.systemKey === "spam");
+    const sonstigesFolder = folders.find((f) => f.systemKey === "sonstiges");
+    assert(!!spamFolder && !!sonstigesFolder, "System-Ordner 'spam' und 'sonstiges' erwartet");
+
     const messagesRes = await fetch(`${base}/v1/messages`);
     const messages = await messagesRes.json();
     assert(Array.isArray(messages) && messages.length >= imported, "Nachrichtenliste erwartet");
 
-    const spamRes = await fetch(`${base}/v1/messages?folder=spam`);
+    const spamRes = await fetch(`${base}/v1/messages?folderId=${(spamFolder as Record<string, unknown>).id}`);
     const spamMessages = await spamRes.json();
     assert(Array.isArray(spamMessages) && spamMessages.length > 0, "mind. 1 Mock-Phishing/Spam-Mail erwartet (Fixtures)");
 
+    // Eigenen Ordner anlegen, umbenennen, Nachricht dorthin verschieben,
+    // dann wieder löschen (Nachricht muss dabei zurück nach "sonstiges" fallen).
+    const createFolderRes = await fetch(`${base}/v1/folders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Test-Ordner" }),
+    });
+    assert(createFolderRes.status === 201, "POST /v1/folders sollte 201 liefern");
+    const customFolder = (await createFolderRes.json()) as Record<string, unknown>;
+    assert(customFolder.isSystem === false, "eigener Ordner sollte isSystem=false haben");
+
+    const renameRes = await fetch(`${base}/v1/folders/${customFolder.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Umbenannt" }),
+    });
+    assert(renameRes.status === 200, "PATCH /v1/folders/:id sollte 200 liefern");
+
+    const renameSpamRes = await fetch(`${base}/v1/folders/${(spamFolder as Record<string, unknown>).id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Nicht erlaubt" }),
+    });
+    assert(renameSpamRes.status === 400, "Umbenennen von 'spam' sollte 400 liefern");
+
     const first = messages[0];
+
+    const moveRes = await fetch(`${base}/v1/messages/${first.id}/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderId: customFolder.id }),
+    });
+    assert(moveRes.status === 200, "POST /v1/messages/:id/move sollte 200 liefern");
+    const moved = (await moveRes.json()) as Record<string, unknown>;
+    assert(moved.folderId === customFolder.id, "Nachricht sollte im Zielordner sein");
+
+    const deleteFolderRes = await fetch(`${base}/v1/folders/${customFolder.id}`, { method: "DELETE" });
+    assert(deleteFolderRes.status === 204, "DELETE /v1/folders/:id sollte 204 liefern");
+
+    const movedDetailRes = await fetch(`${base}/v1/messages/${first.id}`);
+    const movedDetail = (await movedDetailRes.json()) as Record<string, unknown>;
+    assert(
+      movedDetail.folderId === (sonstigesFolder as Record<string, unknown>).id,
+      "Nachricht sollte nach Löschen des Ordners zurück in 'sonstiges' sein",
+    );
+
+    const deleteSystemFolderRes = await fetch(`${base}/v1/folders/${(sonstigesFolder as Record<string, unknown>).id}`, {
+      method: "DELETE",
+    });
+    assert(deleteSystemFolderRes.status === 400, "Löschen eines System-Ordners sollte 400 liefern");
     const detailRes = await fetch(`${base}/v1/messages/${first.id}`);
     assert(detailRes.status === 200, "GET /v1/messages/:id sollte 200 liefern");
     const detail = (await detailRes.json()) as Record<string, unknown>;
