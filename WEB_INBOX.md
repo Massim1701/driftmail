@@ -30,3 +30,17 @@ CREATE TABLE shipments (
 ```
 
 An ans Ende von `contracts/db-schema.sql` anhängen, analog zur `contracts`-Tabelle. Kein Blocker, kein Contract-Bruch fuer bestehende Tracks.
+
+[2026-09-08] [offen] [SYNC.md] — Qualitäts-Checkliste ergänzen, die jeder Track vor dem Status "fertig" selbst abhakt (Vorbild: Track E, siehe dessen README). Bitte als neuen Abschnitt "## Qualitäts-Checkliste" in SYNC.md einfügen (z.B. vor "## Blocker"):
+
+```
+## Qualitäts-Checkliste (vor Status "fertig" je Track)
+
+- [ ] Grenzen explizit benannt: was ist Platzhalter, was ist echt umgesetzt
+- [ ] Jede eigene Design-Entscheidung dokumentiert (Datum + Begründung), nicht stillschweigend getroffen
+- [ ] Edge Cases behandelt, nicht nur der Erfolgsfall
+- [ ] Tests vorhanden und grün, Typprüfung sauber
+- [ ] Klare Übergabe: was der aufrufende Track (z.B. Backend/UI) noch selbst tun muss
+```
+
+Kein Blocker. Gilt ab sofort für alle Tracks, die noch nicht "fertig" gemeldet haben.
