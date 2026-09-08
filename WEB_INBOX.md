@@ -68,7 +68,7 @@ Erkennung laeuft im selben Klassifikations-Layer wie Spam/Phishing (Content-Scan
 [2026-09-08] [terminal] [Track A] — Auto-Delete-Pfad in `backend/src/mail/sync.ts` umgesetzt (Commit `881354a` auf `track-a-backend`): `classification === 'spam'` + `spamSubcategory` in `['adult','gambling']` -> Nachricht wird gar nicht erst persistiert (kein `messages`-/`message_security`-/`quarantine`-Eintrag, kein 30-Tage-Aufheben, kein Undo); `generic`/`marketing` und `phishing` unveraendert. `spamSubcategory` bis zur Integration mit Track B weiterhin nur ueber simple Keyword-Heuristik im Mock-KI-Adapter (`ai/mockAdapter.ts`) befuellt. Details/Design-Entscheidung (nicht persistieren statt persistieren+loeschen, Audit-Log ohne Inhalt, Dedupe-Behelf ohne DB) in `backend/README.md` Abschnitt "Auto-Delete: adult/gambling-Spam" und `SYNC.md`-Aenderungsprotokoll. Offen: Integration der echten Track-B-Erkennung anstelle des Mocks.
 
 
-[2026-09-08] [offen] [contracts/db-schema.sql + Track B] — Ergaenzung zum Spam-Subcategory-Eintrag von eben: Botnetz-Erkennungssignale, da Botnetz-Spam KEINEN stabilen Absender hat (IP/Domain wechseln staendig, Absender oft gefaelscht/gekaperte Accounts). Erkennung muss auf Infrastruktur-Verhalten zielen, nicht auf Absender-Blocklisten.
+[2026-09-08] [erledigt: e9c74dc (Contract), Track B fuer Erkennung folgt] [contracts/db-schema.sql + Track B] — Ergaenzung zum Spam-Subcategory-Eintrag von eben: Botnetz-Erkennungssignale, da Botnetz-Spam KEINEN stabilen Absender hat (IP/Domain wechseln staendig, Absender oft gefaelscht/gekaperte Accounts). Erkennung muss auf Infrastruktur-Verhalten zielen, nicht auf Absender-Blocklisten.
 
 ```sql
 ALTER TABLE message_security ADD COLUMN ip_reputation_flag TEXT
@@ -87,7 +87,7 @@ Zusaetzlich pruefenswert (kein eigenes Feld noetig, kann in der Klassifikationsl
 Verknuepfung mit der Auto-Loesch-Regel von eben: kein einzelnes Signal reicht allein aus, aber ip_reputation_flag = 'known_botnet' UND helo_mismatch UND hoher image_to_text_ratio zusammen ist ein starkes Muster fuer classification = 'spam' + spam_subcategory IN ('adult','gambling') -> sofort loeschen. Kein Blocker.
 
 
-[2026-09-08] [offen] [Track A + Infra/DNS, nicht akut] — Ausgehende Mail-Authentifizierung ("erkennbar als echte Mail" fuer fremde Mailserver). Zwei getrennte Faelle, WICHTIG nicht verwechseln:
+[2026-09-08] [zur Kenntnis genommen, keine Aktion noetig -- Track A baut aktuell keinen eigenen Versand-Pfad] [Track A + Infra/DNS, nicht akut] — Ausgehende Mail-Authentifizierung ("erkennbar als echte Mail" fuer fremde Mailserver). Zwei getrennte Faelle, WICHTIG nicht verwechseln:
 
 Fall 1 — Versand ueber Nutzer-eigenes Gmail/IMAP-Konto (aktueller Stand):
 Braucht KEINE eigene Massnahme. Wenn driftmail ueber die offizielle Gmail API sendet, signiert Google selbst per DKIM — fremde Server sehen "kommt von Google, legitim". Wichtig ist nur: Versand MUSS ueber die offizielle Provider-API laufen (Gmail API / Provider-SMTP mit Auth), nicht ueber einen selbstgebauten SMTP-Client mit gefaelschtem From-Header.
