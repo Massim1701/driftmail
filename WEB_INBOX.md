@@ -101,7 +101,7 @@ Das ist reine DNS-Konfiguration bei der Domain, KEIN UI-Feature im Compose-Fenst
 Kein Blocker jetzt, da Fall 2 noch nicht akut ist (kein eigener Versand-Server aktiv). Bitte trotzdem vormerken: sobald Track A einen eigenen Mail-Versand-Pfad baut (nicht nur Weiterleitung an Provider-APIs), hier nochmal anfragen bevor das live geht — DKIM-Key-Erzeugung und DNS-Eintraege muessen VOR dem ersten eigenen Versand stehen, sonst landet alles automatisch im Spam der Empfaenger.
 
 
-[2026-09-08] [offen] [contracts/api-spec.yaml + contracts/db-schema.sql + Track A/B] — Ausgehender Phishing-Check im Composer: erkennt der Composer, dass ein Mail-ENTWURF Phishing-Merkmale hat, darf er NICHT gesendet werden (harter Block, kein Warnen-und-trotzdem-erlauben wie bei den anderen Abuse-Flags aus dem vorherigen Eintrag). Schuetzt driftmail selbst davor, als Phishing-Versandweg missbraucht zu werden (z.B. durch kompromittiertes Geraet/Konto).
+[2026-09-08] [teilweise erledigt: b6b3eb2 (nur api-spec.yaml-Endpoint, send_abuse_flags-Teil fehlt -- siehe TERMINAL_INBOX.md), Track A/B Erkennungslogik folgt] [contracts/api-spec.yaml + contracts/db-schema.sql + Track A/B] — Ausgehender Phishing-Check im Composer: erkennt der Composer, dass ein Mail-ENTWURF Phishing-Merkmale hat, darf er NICHT gesendet werden (harter Block, kein Warnen-und-trotzdem-erlauben wie bei den anderen Abuse-Flags aus dem vorherigen Eintrag). Schuetzt driftmail selbst davor, als Phishing-Versandweg missbraucht zu werden (z.B. durch kompromittiertes Geraet/Konto).
 
 Erkennung nutzt dieselbe Logik wie beim Empfang (siehe SecurityResult/analyzeMail in ai-adapter-interface.ts), nur angewendet auf den eigenen Entwurf statt auf eingehende Mails: Link-Mismatch (Anzeigetext vs. Ziel-URL), Homoglyph-Domains in Links, Kombination aus Dringlichkeits-Sprache + Zugangsdaten-/Zahlungsdaten-Anfrage.
 
@@ -146,7 +146,7 @@ ALTER TABLE send_abuse_flags ADD CONSTRAINT send_abuse_flags_flag_reason_check
 WICHTIG: bei flag_reason = 'phishing_content' ist action_taken immer zwingend 'send_blocked', NIE 'warned' oder 'rate_limited' — anders als bei den uebrigen Gruenden. UI/Backend muss das als Ausnahme von der sonstigen "erst warnen"-Logik behandeln. Kein Blocker, aber bitte vor Fertigstellung des Compose/Send-Flows (Track A + jeweiliger UI-Track) beruecksichtigen.
 
 
-[2026-09-08] [offen] [Erweiterung des Phishing-Check-Eintrags von eben, contracts/api-spec.yaml + Track A/UI] — Drei zusaetzliche Signale fuer denselben "Check vor dem Senden"-Moment (POST /messages/draft/phishing-check), NICHT als harter Block wie Phishing, sondern als nicht-blockierender Warnhinweis (Sprechblase/Tooltip nahe der betroffenen Textstelle):
+[2026-09-08] [erledigt: b6b3eb2 (Contract-Felder in api-spec.yaml), Track A/UI Logik folgt] [Erweiterung des Phishing-Check-Eintrags von eben, contracts/api-spec.yaml + Track A/UI] — Drei zusaetzliche Signale fuer denselben "Check vor dem Senden"-Moment (POST /messages/draft/phishing-check), NICHT als harter Block wie Phishing, sondern als nicht-blockierender Warnhinweis (Sprechblase/Tooltip nahe der betroffenen Textstelle):
 
 1. Eigene sensible Daten im Entwurf erkannt (Kontonummer/IBAN-Muster, Kreditkarten-Muster, evtl. Sozialversicherungsnummer-Muster). Ist NICHT per se falsch (z.B. eigene IBAN fuer eine Ueberweisung mitteilen) — deshalb Warnhinweis, kein Blockieren. Sprechblase z.B.: "Diese Mail enthaelt eine Kontonummer. Pruef kurz, ob der Empfaenger vertrauenswuerdig ist."
 
@@ -185,3 +185,67 @@ Kein Blocker. Betrifft Track A (Recipient-Reputation-Logik, PII-Pattern-Erkennun
 3. Danach Track A wie zuvor besprochen: Backend nach aktueller api-spec.yaml (inkl. aller Erweiterungen aus dieser Datei).
 
 Kein neuer Scope, nur Abarbeitung des bereits Vereinbarten. Bitte Status je erledigtem Punkt hier und in SYNC.md aktualisieren, damit der Fortschritt sichtbar ist.
+
+
+[2026-09-08] [erledigt: a5432e6] [contracts/db-schema.sql] — Nachlieferung: vollstaendige CREATE TABLE send_abuse_flags Definition (wurde im Bot/Human-Missbrauchserkennungs-Eintrag nur per ALTER TABLE referenziert, aber die eigentliche CREATE TABLE fehlte — danke fuers Nachfragen statt Raten). Zusammen mit outgoing_send_log, wie urspruenglich gemeint:
+
+```sql
+CREATE TABLE outgoing_send_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_address TEXT NOT NULL,
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  time_since_draft_shown_ms INTEGER,
+  was_new_recipient BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE TABLE send_abuse_flags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  flag_reason TEXT NOT NULL CHECK (flag_reason IN
+    ('rate_burst', 'many_new_recipients', 'duplicate_content', 'no_read_before_reply', 'phishing_content')),
+  triggered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  action_taken TEXT NOT NULL DEFAULT 'warned' CHECK (action_taken IN ('warned', 'rate_limited', 'send_blocked')),
+  resolved BOOLEAN NOT NULL DEFAULT false
+);
+```
+
+Hinweis: 'phishing_content' ist hier direkt mit drin (nicht per separatem ALTER TABLE nachtraeglich), also keine weitere ALTER-TABLE-Migration noetig fuer den Phishing-Check-Eintrag von vorhin — die dortige "DROP CONSTRAINT / ADD CONSTRAINT"-Migration kann entfallen, wenn diese CREATE TABLE-Version direkt verwendet wird (z.B. falls die Migration noch nicht ausgefuehrt wurde). Falls send_abuse_flags bei euch schon ohne 'phishing_content' angelegt wurde, dann bitte die vorherige ALTER-TABLE-Migration wie spezifiziert nachziehen. Verhalten (warnen vs. blocken) wie in den beiden vorherigen Eintraegen beschrieben: bei flag_reason = 'phishing_content' immer action_taken = 'send_blocked', bei allen anderen Gruenden zunaechst 'warned'/'rate_limited'. Kein Blocker.
+
+
+[2026-09-08] [erledigt: 156f0fd (Contract), Track A/C/F Umsetzung folgt] [contracts/api-spec.yaml + contracts/db-schema.sql + Track A/C/F] — Fehlende Basis-Funktion entdeckt: manuelles Loeschen einer Mail durch den User gibt es noch nicht im Contract (nur Quarantaene, Verschieben, automatische Loeschregeln fuer Spam/Phishing). Nachtrag, analog zu Gmail-Verhalten: Loeschen = in Papierkorb verschieben (soft delete), kein sofortiges Hard-Delete.
+
+1. Neuer System-Ordner "Papierkorb" in design-tokens.json systemFolders.defaults ergaenzen (system_key = 'papierkorb', analog zu quarantaene/spam -- ebenfalls nicht umbenennbar/loeschbar wie die anderen System-Ordner).
+
+2. Neuer Endpoint in api-spec.yaml:
+```yaml
+  /messages/{messageId}:
+    delete:
+      summary: Mail in den Papierkorb verschieben (soft delete)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: In Papierkorb verschoben
+
+  /messages/{messageId}/permanent:
+    delete:
+      summary: Mail endgueltig loeschen (nur aus dem Papierkorb heraus moeglich)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Endgueltig geloescht
+```
+
+3. Verhalten (Track A): DELETE /messages/{messageId} setzt folder_id auf den Papierkorb-Ordner (wie POST /messages/{messageId}/move, kein neuer Mechanismus). Serverseitig zusaetzlich ueber die Provider-API spiegeln (Gmail API messages.trash bzw. IMAP \\Deleted-Flag), analog zur bereits beschlossenen Regel bei automatisch geloeschtem Spam -- lokales Verschieben ohne Server-Spiegelung waere inkonsistent mit dem, was der User in Gmail/seinem Mail-Client direkt sieht. DELETE /messages/{messageId}/permanent entfernt den DB-Eintrag endgueltig UND loest die endgueltige Loeschung beim Provider aus (Gmail API messages.delete bzw. IMAP Expunge).
+
+4. Papierkorb-Ordner braucht KEINE eigene Retention-Tabelle wie quarantine -- Standard-Verhalten wie bei Gmail (User leert manuell oder es bleibt liegen) reicht fuer diesen Auftrag, keine automatische 30-Tage-Frist noetig (anders als bei message quarantine/phishing).
+
+Kein Blocker, reine Ergaenzung fehlender Basis-Funktionalitaet, keine grosse Contract-Aenderung im Sinne der Ankuendigungsregel.
