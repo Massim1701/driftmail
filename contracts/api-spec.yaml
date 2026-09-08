@@ -317,6 +317,16 @@ components:
         urgencyLanguageScore: { type: number, format: float, nullable: true }
         containsNewIban: { type: boolean }
         classification: { type: string, enum: [safe, spam, phishing, unclear] }
+        spamSubcategory:
+          type: string
+          nullable: true
+          enum: [adult, gambling, generic, marketing]
+        ipReputationFlag:
+          type: string
+          nullable: true
+          enum: [clean, known_botnet, unknown]
+        heloMismatch: { type: boolean }
+        imageToTextRatio: { type: number, format: float, nullable: true }
         confidenceScore: { type: number, format: float }
 
     MailSummary:
