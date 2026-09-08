@@ -163,3 +163,15 @@ CREATE TABLE user_ai_capability (
   checked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, platform)
 );
+
+-- User-Wahl: kostenloser Standard-Pfad vs. eigener (bezahlter) KI-Zugang.
+-- Wird beim Onboarding und in den Einstellungen gesetzt. Routing-Logik
+-- prueft dies VOR der ai_provider_config-Kaskade: bei 'byok' geht der
+-- Call an den eigenen Schluessel des Users statt On-Device/Free-Tier.
+CREATE TABLE user_ai_preference (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    mode TEXT NOT NULL DEFAULT 'free' CHECK (mode IN ('free', 'byok')),
+    byok_provider TEXT CHECK (byok_provider IN ('anthropic', 'openai', 'google', 'other')),
+    encrypted_api_key TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
