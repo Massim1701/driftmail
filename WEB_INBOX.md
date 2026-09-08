@@ -99,3 +99,48 @@ Das ist reine DNS-Konfiguration bei der Domain, KEIN UI-Feature im Compose-Fenst
 - DMARC-Policy (TXT-Record _dmarc.driftware.online): sagt fremden Servern, was bei SPF/DKIM-Fail passieren soll (reject/quarantine/none), plus Reporting-Adresse.
 
 Kein Blocker jetzt, da Fall 2 noch nicht akut ist (kein eigener Versand-Server aktiv). Bitte trotzdem vormerken: sobald Track A einen eigenen Mail-Versand-Pfad baut (nicht nur Weiterleitung an Provider-APIs), hier nochmal anfragen bevor das live geht — DKIM-Key-Erzeugung und DNS-Eintraege muessen VOR dem ersten eigenen Versand stehen, sonst landet alles automatisch im Spam der Empfaenger.
+
+
+[2026-09-08] [offen] [contracts/api-spec.yaml + contracts/db-schema.sql + Track A/B] — Ausgehender Phishing-Check im Composer: erkennt der Composer, dass ein Mail-ENTWURF Phishing-Merkmale hat, darf er NICHT gesendet werden (harter Block, kein Warnen-und-trotzdem-erlauben wie bei den anderen Abuse-Flags aus dem vorherigen Eintrag). Schuetzt driftmail selbst davor, als Phishing-Versandweg missbraucht zu werden (z.B. durch kompromittiertes Geraet/Konto).
+
+Erkennung nutzt dieselbe Logik wie beim Empfang (siehe SecurityResult/analyzeMail in ai-adapter-interface.ts), nur angewendet auf den eigenen Entwurf statt auf eingehende Mails: Link-Mismatch (Anzeigetext vs. Ziel-URL), Homoglyph-Domains in Links, Kombination aus Dringlichkeits-Sprache + Zugangsdaten-/Zahlungsdaten-Anfrage.
+
+Vorschlag API-Spec-Ergaenzung (neuer Endpoint, wird VOR dem eigentlichen Sende-Call aufgerufen bzw. blockiert send-draft):
+```yaml
+  /messages/draft/phishing-check:
+    post:
+      summary: Prueft einen Mail-Entwurf auf Phishing-Merkmale vor dem Versand
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bodyText: { type: string }
+                links:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      displayText: { type: string }
+                      actualUrl: { type: string }
+      responses:
+        "200":
+          description: Ergebnis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocked: { type: boolean }
+                  reason: { type: string, nullable: true }
+```
+
+send_abuse_flags.flag_reason (siehe vorheriger Eintrag) um 'phishing_content' erweitern:
+```sql
+ALTER TABLE send_abuse_flags DROP CONSTRAINT IF EXISTS send_abuse_flags_flag_reason_check;
+ALTER TABLE send_abuse_flags ADD CONSTRAINT send_abuse_flags_flag_reason_check
+  CHECK (flag_reason IN ('rate_burst', 'many_new_recipients', 'duplicate_content', 'no_read_before_reply', 'phishing_content'));
+```
+
+WICHTIG: bei flag_reason = 'phishing_content' ist action_taken immer zwingend 'send_blocked', NIE 'warned' oder 'rate_limited' — anders als bei den uebrigen Gruenden. UI/Backend muss das als Ausnahme von der sonstigen "erst warnen"-Logik behandeln. Kein Blocker, aber bitte vor Fertigstellung des Compose/Send-Flows (Track A + jeweiliger UI-Track) beruecksichtigen.
