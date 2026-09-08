@@ -58,6 +58,17 @@ export const folders = [
     system_key: "spam",
     sort_order: 4,
   },
+  // Nachtrag 08.09. (WEB_INBOX.md "Fehlende Basis-Funktion entdeckt", Contract-Commit
+  // 156f0fd): 6. System-Ordner für manuelles Löschen (soft delete), analog zu Gmail --
+  // nicht umbenennbar/löschbar wie quarantaene/spam.
+  {
+    id: "f1000000-0000-0000-0000-000000000006",
+    name: "Papierkorb",
+    icon: "trash-2",
+    is_system: true,
+    system_key: "papierkorb",
+    sort_order: 5,
+  },
   // Beispiel für einen benutzerdefinierten Ordner (icon = customFolder.defaultIcon
   // aus design-tokens.json, weil der User beim Anlegen kein eigenes Icon gewählt hat).
   {
@@ -66,7 +77,7 @@ export const folders = [
     icon: "folder",
     is_system: false,
     system_key: null,
-    sort_order: 5,
+    sort_order: 6,
   },
 ];
 
@@ -91,7 +102,7 @@ export function folderBySystemKey(key) {
 
 // System-Ordner, bei denen Umbenennen/Icon-Ändern/Löschen serverseitig
 // abgelehnt wird (1:1 "renamable": false in design-tokens.json "systemFolders.defaults").
-const NOT_RENAMABLE_SYSTEM_KEYS = new Set(["quarantaene", "spam"]);
+const NOT_RENAMABLE_SYSTEM_KEYS = new Set(["quarantaene", "spam", "papierkorb"]);
 
 export function isRenamable(folder) {
   if (!folder.is_system) return true;
@@ -167,6 +178,7 @@ const SONSTIGES = folderBySystemKey("sonstiges").id;
 const RECHNUNGEN = folderBySystemKey("rechnungen").id;
 const QUARANTAENE = folderBySystemKey("quarantaene").id;
 const SPAM = folderBySystemKey("spam").id;
+const PAPIERKORB = folderBySystemKey("papierkorb").id;
 const FAMILIE = "f2000000-0000-0000-0000-000000000001";
 
 // message: { id, fromAddress, fromDisplayName, subject, receivedAt, folderId, classification, bodyText, security }
@@ -339,6 +351,28 @@ export const messages = [
     folderId: SPAM,
     security: securitySpam(),
     bodyText: "Senden Sie uns Bitcoin und erhalten Sie garantiert das Doppelte zurück.",
+  },
+
+  // ---- papierkorb (Beispiele für manuell gelöschte Mails, soft delete) ----
+  {
+    id: "b7000000-0000-0000-0000-000000000001",
+    fromAddress: "newsletter@altes-abo.de",
+    fromDisplayName: "Altes Abo Newsletter",
+    subject: "Unser Angebot der Woche",
+    receivedAt: "2026-09-02T09:10:00Z",
+    folderId: PAPIERKORB,
+    security: securityOk(),
+    bodyText: "Diese Woche mit dabei: neue Produkte im Sortiment. Diese Mail wurde vom User manuell gelöscht.",
+  },
+  {
+    id: "b7000000-0000-0000-0000-000000000002",
+    fromAddress: "kontakt@alter-kontakt.de",
+    fromDisplayName: "Alter Kontakt",
+    subject: "Re: Kurze Frage",
+    receivedAt: "2026-08-30T15:45:00Z",
+    folderId: PAPIERKORB,
+    security: securityOk(),
+    bodyText: "Danke für die schnelle Antwort, hat sich erledigt. Diese Mail wurde vom User manuell gelöscht.",
   },
 
   // ---- Familie (Beispiel für einen benutzerdefinierten Ordner) ----

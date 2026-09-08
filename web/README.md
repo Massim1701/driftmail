@@ -64,12 +64,13 @@ npm run lint       # oxlint
 
 - **Backend komplett gemockt.** `mock-server/server.mjs` implementiert alle
   Endpunkte aus `contracts/api-spec.yaml` (`/accounts`, `/folders`,
-  `/folders/{folderId}`, `/messages`, `/messages/{id}`,
-  `/messages/{id}/quarantine`, `/messages/{id}/move`, `/messages/{id}/summary`,
+  `/folders/{folderId}`, `/messages`, `/messages/{id}` (GET + DELETE),
+  `/messages/{id}/permanent` (DELETE), `/messages/{id}/quarantine`,
+  `/messages/{id}/move`, `/messages/{id}/summary`,
   `/messages/{id}/reply-draft`, `/contracts`, `/contracts/{id}/confirm`,
   `/capability-check`) gegen statische Beispieldaten in `mock-server/data.mjs`.
-  Mutationen (Ordner anlegen/umbenennen/löschen, Nachricht verschieben/in
-  Quarantäne setzen, Contract bestätigen) wirken nur im Prozessspeicher und
+  Mutationen (Ordner anlegen/umbenennen/löschen, Nachricht verschieben/löschen/
+  in Quarantäne setzen, Contract bestätigen) wirken nur im Prozessspeicher und
   gehen beim Neustart verloren.
 - **KI-Quelle ist immer `cloud_fallback`.** Laut Auftrag nutzt Web keine
   On-Device-KI (kein Browser-seitiges Modell). Der Mock-Server liefert in
@@ -116,7 +117,8 @@ npm run lint       # oxlint
   Domain-Alter, Reputation, Homoglyph-Erkennung, Link-Mismatch,
   Dringlichkeits-Sprache, neue IBAN, Konfidenz — alle 11 Felder aus
   `SecurityResult`), Body-Text sowie Aktionen ("In Quarantäne
-  verschieben", ein Dropdown "In Ordner verschieben…" (`POST
+  verschieben", "Löschen" → `DELETE /messages/{id}` (soft delete, siehe
+  Abschnitt "Papierkorb" unten), ein Dropdown "In Ordner verschieben…" (`POST
   /messages/{id}/move`, zeigt alle Ordner außer dem aktuellen), "Was
   wollen die von mir?" → `MailSummary`, "Antwortentwurf erstellen" →
   `draftText`).
@@ -126,17 +128,34 @@ npm run lint       # oxlint
   Security-Badge + die Sicherheits-Details transparent, warum eine
   Nachricht dort liegt (z. B. SPF/DKIM/DMARC fail, Homoglyph-Domain, neue
   IBAN im Text).
+- **Papierkorb (Nachtrag 08.09., WEB_INBOX.md "Fehlende Basis-Funktion
+  entdeckt", Contract-Commit `156f0fd`):** 6. System-Ordner
+  (`systemKey: "papierkorb"`, Icon `trash-2`, nicht umbenennbar/löschbar
+  wie Quarantäne/Spam). "Löschen" in der Detailansicht ruft `DELETE
+  /messages/{id}` auf (soft delete, verschiebt die Nachricht dorthin — kein
+  neuer Mechanismus, serverseitig wie `move` mit fest verdrahtetem
+  Ziel-Ordner). Liegt die angezeigte Nachricht bereits im Papierkorb, zeigt
+  die Detailansicht stattdessen einen Hinweis-Banner und den Button
+  "Endgültig löschen" (mit Bestätigungsdialog) → `DELETE
+  /messages/{id}/permanent`, entfernt die Nachricht unwiderruflich aus dem
+  Mock-Datensatz. Zurückholen aus dem Papierkorb funktioniert über das
+  vorhandene Dropdown "In Ordner verschieben…". Anders als bei Quarantäne
+  gibt es laut Contract keine automatische Frist/Retention-Tabelle für den
+  Papierkorb — Nachrichten bleiben liegen, bis der User sie verschiebt oder
+  endgültig löscht.
 
 ### Ordner (Contract-Update 08.09.)
 
 - `Folder` ist jetzt ein Objekt (`{id, name, icon, isSystem, systemKey,
   sortOrder}`), keine feste String-Enum mehr. `Message.folderId` verweist
   per UUID auf einen `Folder` statt eines Enum-Werts.
-- Mock-Daten: 5 System-Ordner (`is_system: true`, `system_key` wie zuvor
-  die Enum-Werte: wichtig/sonstiges/rechnungen/quarantaene/spam) plus ein
-  Beispiel-Ordner "Familie" (`is_system: false`, `system_key: null`) mit
-  einer eigenen Beispiel-Nachricht, um zu zeigen, dass eigene Ordner
-  vollwertig funktionieren.
+- Mock-Daten: 6 System-Ordner (`is_system: true`, `system_key`:
+  wichtig/sonstiges/rechnungen/quarantaene/spam/papierkorb, letzterer seit
+  dem Papierkorb-Nachtrag 08.09.) plus ein Beispiel-Ordner "Familie"
+  (`is_system: false`, `system_key: null`) mit einer eigenen
+  Beispiel-Nachricht, um zu zeigen, dass eigene Ordner vollwertig
+  funktionieren. Der Papierkorb-Ordner enthält zwei Beispielnachrichten,
+  die bereits (soft-)gelöscht sind.
 - **Design-Entscheidung (08.09., Track F, nicht im Contract vorgegeben):**
   was passiert mit Nachrichten in einem gelöschten Ordner? `api-spec.yaml`
   sagt dazu nichts. Der Mock-Server verschiebt sie beim `DELETE

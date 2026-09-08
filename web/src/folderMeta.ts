@@ -22,6 +22,7 @@ export const SYSTEM_FOLDER_META: Record<SystemFolderKey, SystemFolderMeta> = {
   rechnungen: { renamable: true },
   quarantaene: { colorRole: "danger", renamable: false },
   spam: { muted: true, renamable: false },
+  papierkorb: { muted: true, renamable: false },
 };
 
 // contracts/design-tokens.json "customFolder.defaultIcon"

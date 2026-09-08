@@ -46,6 +46,14 @@ export const api = {
   quarantineMessage: (id: string) =>
     request<unknown>(`/messages/${id}/quarantine`, { method: "POST" }),
 
+  // Soft delete: verschiebt die Nachricht in den Papierkorb (analog moveMessage,
+  // nur mit fest verdrahtetem Ziel-Ordner serverseitig statt frei wählbarem folderId).
+  deleteMessage: (id: string) => request<Message>(`/messages/${id}`, { method: "DELETE" }),
+
+  // Endgültiges Löschen — nur sinnvoll für Nachrichten, die bereits im Papierkorb liegen.
+  permanentlyDeleteMessage: (id: string) =>
+    request<unknown>(`/messages/${id}/permanent`, { method: "DELETE" }),
+
   getSummary: (id: string) => request<MailSummary>(`/messages/${id}/summary`),
 
   createReplyDraft: (id: string) =>

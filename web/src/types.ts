@@ -7,7 +7,7 @@
 // sind jetzt benutzerdefinierte Objekte (siehe Folder unten) — dies ist nur
 // noch der optionale Marker, welcher der 5 Standard-Ordner ein Folder-Objekt
 // ist (null bei eigenen Ordnern).
-export type SystemFolderKey = "wichtig" | "sonstiges" | "rechnungen" | "quarantaene" | "spam";
+export type SystemFolderKey = "wichtig" | "sonstiges" | "rechnungen" | "quarantaene" | "spam" | "papierkorb";
 
 export interface Folder {
   id: string;

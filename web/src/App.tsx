@@ -71,6 +71,7 @@ export default function App() {
   }, [folders, messagesByFolder]);
 
   const quarantaeneFolder = useMemo(() => folders.find((f) => f.systemKey === "quarantaene"), [folders]);
+  const papierkorbFolder = useMemo(() => folders.find((f) => f.systemKey === "papierkorb"), [folders]);
   const sonstigesFolder = useMemo(() => folders.find((f) => f.systemKey === "sonstiges"), [folders]);
 
   function handleSelectFolder(folderId: string) {
@@ -111,6 +112,32 @@ export default function App() {
       }));
     }
     loadFolder(newFolderId);
+    setSelectedId(null);
+    setSelectedDetail(null);
+  }
+
+  function handleDeleted(id: string) {
+    // Soft delete: Nachricht ist jetzt im Papierkorb (analog handleQuarantined/-Moved)
+    if (activeFolder) {
+      setMessagesByFolder((prev) => ({
+        ...prev,
+        [activeFolder]: (prev[activeFolder] ?? []).filter((m) => m.id !== id),
+      }));
+    }
+    if (papierkorbFolder) loadFolder(papierkorbFolder.id);
+    setSelectedId(null);
+    setSelectedDetail(null);
+  }
+
+  function handlePermanentlyDeleted(id: string) {
+    // Endgültig gelöscht: nur noch aus dem aktuellen (Papierkorb-)Ordner entfernen,
+    // kein Zielordner zum Neuladen.
+    if (activeFolder) {
+      setMessagesByFolder((prev) => ({
+        ...prev,
+        [activeFolder]: (prev[activeFolder] ?? []).filter((m) => m.id !== id),
+      }));
+    }
     setSelectedId(null);
     setSelectedDetail(null);
   }
@@ -160,6 +187,7 @@ export default function App() {
 
   const activeFolderDef = folders.find((f) => f.id === activeFolder) ?? null;
   const isQuarantineFolder = activeFolderDef?.systemKey === "quarantaene";
+  const isPapierkorbFolder = activeFolderDef?.systemKey === "papierkorb";
 
   if (foldersLoading) {
     return <div className="app-shell app-loading">Lade…</div>;
@@ -191,7 +219,13 @@ export default function App() {
           selectedId={selectedId}
           onSelect={handleSelectMessage}
           loading={listLoading && currentMessages.length === 0}
-          emptyLabel={isQuarantineFolder ? "Keine Nachrichten in Quarantäne." : "Keine Nachrichten in diesem Ordner."}
+          emptyLabel={
+            isQuarantineFolder
+              ? "Keine Nachrichten in Quarantäne."
+              : isPapierkorbFolder
+                ? "Papierkorb ist leer."
+                : "Keine Nachrichten in diesem Ordner."
+          }
         />
       </div>
 
@@ -200,8 +234,11 @@ export default function App() {
         loading={detailLoading}
         folders={folders}
         quarantaeneFolderId={quarantaeneFolder?.id ?? null}
+        papierkorbFolderId={papierkorbFolder?.id ?? null}
         onQuarantined={handleQuarantined}
         onMoved={handleMoved}
+        onDeleted={handleDeleted}
+        onPermanentlyDeleted={handlePermanentlyDeleted}
       />
     </div>
   );

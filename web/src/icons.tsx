@@ -66,6 +66,16 @@ export function TrashIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function Trash2Icon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M2.5 7h1M20.5 7h1" />
+    </Svg>
+  );
+}
+
 export function FolderIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Svg {...props}>
@@ -92,7 +102,7 @@ export function PlusIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 // FOLDER_ICONS: Icon-Keys aus contracts/design-tokens.json "systemFolders.defaults[].icon"
-// (star/inbox/receipt/shield-exclamation/trash) plus "folder" aus
+// (star/inbox/receipt/shield-exclamation/trash/trash-2) plus "folder" aus
 // "customFolder.defaultIcon" für benutzerdefinierte Ordner ohne eigenes Icon.
 export const FOLDER_ICONS: Record<string, (p: SVGProps<SVGSVGElement>) => ReactElement> = {
   star: StarIcon,
@@ -100,6 +110,7 @@ export const FOLDER_ICONS: Record<string, (p: SVGProps<SVGSVGElement>) => ReactE
   receipt: ReceiptIcon,
   "shield-exclamation": ShieldExclamationIcon,
   trash: TrashIcon,
+  "trash-2": Trash2Icon,
   folder: FolderIcon,
 };
 

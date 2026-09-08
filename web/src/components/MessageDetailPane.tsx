@@ -19,15 +19,21 @@ export function MessageDetailPane({
   loading,
   folders,
   quarantaeneFolderId,
+  papierkorbFolderId,
   onQuarantined,
   onMoved,
+  onDeleted,
+  onPermanentlyDeleted,
 }: {
   message: MessageDetail | null;
   loading: boolean;
   folders: Folder[];
   quarantaeneFolderId: string | null;
+  papierkorbFolderId: string | null;
   onQuarantined: (id: string) => void;
   onMoved: (id: string, folderId: string) => void;
+  onDeleted: (id: string) => void;
+  onPermanentlyDeleted: (id: string) => void;
 }) {
   const [summary, setSummary] = useState<MailSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -35,6 +41,8 @@ export function MessageDetailPane({
   const [draftLoading, setDraftLoading] = useState(false);
   const [quarantining, setQuarantining] = useState(false);
   const [moving, setMoving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [permanentlyDeleting, setPermanentlyDeleting] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
   // Beim Wechsel der Nachricht abgeleiteten Zustand zurücksetzen
@@ -52,6 +60,7 @@ export function MessageDetailPane({
   }
 
   const isQuarantined = quarantaeneFolderId !== null && message.folderId === quarantaeneFolderId;
+  const isInTrash = papierkorbFolderId !== null && message.folderId === papierkorbFolderId;
 
   async function loadSummary() {
     if (!message) return;
@@ -96,6 +105,31 @@ export function MessageDetailPane({
     }
   }
 
+  async function handleDelete() {
+    if (!message) return;
+    setDeleting(true);
+    try {
+      await api.deleteMessage(message.id);
+      onDeleted(message.id);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handlePermanentDelete() {
+    if (!message) return;
+    if (!window.confirm("Diese Nachricht endgültig löschen? Das kann nicht rückgängig gemacht werden.")) {
+      return;
+    }
+    setPermanentlyDeleting(true);
+    try {
+      await api.permanentlyDeleteMessage(message.id);
+      onPermanentlyDeleted(message.id);
+    } finally {
+      setPermanentlyDeleting(false);
+    }
+  }
+
   return (
     <div className="detail-pane">
       <header className="detail-header">
@@ -118,6 +152,13 @@ export function MessageDetailPane({
         </div>
       )}
 
+      {isInTrash && (
+        <div className="trash-notice">
+          Diese Nachricht liegt im Papierkorb. Verschiebe sie über „In Ordner verschieben…“ zurück
+          oder lösche sie endgültig — anders als bei Quarantäne gibt es hier keine automatische Frist.
+        </div>
+      )}
+
       <section className="detail-section">
         <button type="button" className="link-button" onClick={() => setShowDetails((v) => !v)}>
           {showDetails ? "Sicherheits-Details ausblenden" : "Sicherheits-Details anzeigen"}
@@ -126,9 +167,24 @@ export function MessageDetailPane({
       </section>
 
       <section className="detail-actions">
-        {!isQuarantined && (
+        {!isQuarantined && !isInTrash && (
           <button type="button" className="btn btn-danger-outline" onClick={handleQuarantine} disabled={quarantining}>
             {quarantining ? "Verschiebe…" : "In Quarantäne verschieben"}
+          </button>
+        )}
+        {!isInTrash && (
+          <button type="button" className="btn btn-danger-outline" onClick={handleDelete} disabled={deleting}>
+            {deleting ? "Verschiebe…" : "Löschen"}
+          </button>
+        )}
+        {isInTrash && (
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={handlePermanentDelete}
+            disabled={permanentlyDeleting}
+          >
+            {permanentlyDeleting ? "Lösche…" : "Endgültig löschen"}
           </button>
         )}
         <button type="button" className="btn btn-secondary" onClick={loadSummary} disabled={summaryLoading}>

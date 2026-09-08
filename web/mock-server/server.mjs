@@ -197,6 +197,25 @@ const server = createServer(async (req, res) => {
       return send(res, 200, messageDetail(msg));
     }
 
+    // DELETE /messages/{id} (soft delete -> Papierkorb, siehe WEB_INBOX.md
+    // "Fehlende Basis-Funktion entdeckt" / Contract-Commit 156f0fd). Kein
+    // eigener Mechanismus, verhält sich wie POST /messages/{id}/move mit
+    // fest verdrahtetem Ziel-Ordner "papierkorb".
+    if (req.method === "DELETE" && parts.length === 2) {
+      if (!msg) return notFound(res);
+      msg.folderId = folderBySystemKey("papierkorb").id;
+      return send(res, 200, messageSummary(msg));
+    }
+
+    // DELETE /messages/{id}/permanent (endgültiges Löschen, entfernt den
+    // Mock-Datensatz komplett — kein Undo).
+    if (req.method === "DELETE" && parts.length === 3 && parts[2] === "permanent") {
+      if (!msg) return notFound(res);
+      const idx = messages.findIndex((m) => m.id === msg.id);
+      messages.splice(idx, 1);
+      return send(res, 200, { id, deleted: true });
+    }
+
     // POST /messages/{id}/quarantine
     if (req.method === "POST" && parts.length === 3 && parts[2] === "quarantine") {
       if (!msg) return notFound(res);
