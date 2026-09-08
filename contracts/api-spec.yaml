@@ -135,6 +135,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageDetail"
+    delete:
+      summary: Mail in den Papierkorb verschieben (soft delete)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: In Papierkorb verschoben
+
+  /messages/{messageId}/permanent:
+    delete:
+      summary: Mail endgueltig loeschen (nur aus dem Papierkorb heraus moeglich)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Endgueltig geloescht
 
   /messages/{messageId}/quarantine:
     post:
@@ -321,7 +347,7 @@ components:
         systemKey:
           type: string
           nullable: true
-          enum: [wichtig, sonstiges, rechnungen, quarantaene, spam]
+          enum: [wichtig, sonstiges, rechnungen, quarantaene, spam, papierkorb]
         sortOrder: { type: integer }
 
     MailAccount:
