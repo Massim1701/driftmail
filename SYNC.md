@@ -10,7 +10,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 |---|---|---|---|
 | 0 — Contracts | contracts/ | fertig | 2026-09-08 |
 | A — Backend | backend/ | offen | — |
-| B — Sicherheits-Klassifikation | security-classification/ | in Arbeit | 2026-09-08 |
+| B — Sicherheits-Klassifikation | security-classification/ | fertig | 2026-09-08 |
 | C — iOS App | ios/ | offen | — |
 | D — Vertrag & Reminder | contracts-logic/ | offen | — |
 | E — Antwort & Signatur | mail-actions/ | offen | — |
@@ -30,6 +30,8 @@ Status-Werte: offen · in arbeit · fertig · blockiert
 
 [2026-09-08] [terminal] [B] — Track B gestartet: Skeleton für security-classification/ (analyzeMail-Implementierung: SPF/DKIM/DMARC-Header-Parsing, Homoglyph-Erkennung, Link-Mismatch, Dringlichkeitssprache-Heuristik, IBAN-Erkennung) auf Branch track-b-security.
 
+[2026-09-08] [terminal] [B] — Track B fertig (erster Durchstich): `security-classification/` implementiert `analyzeMail(rawText, headers): Promise<SecurityResult>` aus dem Contract vollständig, alle 11 Felder befüllt. Echte, deterministische Logik für SPF/DKIM/DMARC-Parsing (Authentication-Results-Header), Homoglyph-Erkennung (Mixed-Script + Unicode-Konfusionstabelle), Link-Mismatch (Anzeigetext- vs. href-Domain) und IBAN-Erkennung (inkl. ISO-13616-Mod-97-Prüfsumme). `urgencyLanguageScore` und `classification`/`confidenceScore` sind bewusst als regelbasierte Platzhalter markiert (Kommentar "PLATZHALTER" im Code) für spätere echte NLP/ML-Klassifikation über den on-device/cloud-fallback-KI-Adapter. 41 Tests (vitest), Typecheck und Build laufen grün (`npm install && npm test` in `security-classification/`). Details, bekannte Lücken und Annahmen in `security-classification/README.md`. Zwei offene Fragen unten eingetragen (domainAge/reputation-Lookup, "neue" IBAN braucht Absender-Historie). Kein Zugriff auf Backend nötig gehabt, nicht auf Track A gewartet.
+
 ## Contract-Änderungen (wichtig — bricht ggf. andere Tracks)
 
 Jede Änderung an einer Datei in contracts/ kommt hier rein, auch klein. Andere Tracks prüfen bei jedem Pull kurz diesen Abschnitt.
@@ -42,6 +44,8 @@ Fragen, die ein Track nicht selbst entscheiden kann, weil sie einen Contract ode
 
 - ~~api-spec.yaml `SecurityResult` unvollständig gegenüber `ai-adapter-interface.ts`/`db-schema.sql`.~~ **Beantwortet (Web, 08.09.):** kein Kürzen, war Absicht/Versehen — YAML wurde nachgezogen, alle 11 Felder jetzt drin.
 - ~~api-spec.yaml `Contract`-Schema fehlt `contractStart` und `extractedConfidence`.~~ **Beantwortet (Web, 08.09.):** beide Felder in der YAML ergänzt.
+- **[B] `senderDomainAgeDays` / `domainReputationScore` brauchen einen externen Dienst** (WHOIS-Abfrage bzw. Domain-Reputationsdatenbank) und damit Netzwerkzugriff. `security-classification/` bekommt laut Auftrag nur rawText+headers rein (kein Netzwerk), liefert beide Felder deshalb immer als `null`. Wer befüllt das — Track A nach dem Aufruf von `analyzeMail()`, oder braucht das Interface einen zusätzlichen (optionalen) Lookup-Schritt/Adapter? Nicht selbst entscheidbar, da plattform-/architekturübergreifend.
+- **[B] `containsNewIban` — was heißt "neu"?** Der Feldname impliziert einen Abgleich gegen zuvor vom selben Absender gesehene IBANs. `security-classification/` ist zustandslos (kein DB-Zugriff) und kann nur erkennen, ob überhaupt eine gültige IBAN in der Mail vorkommt (`detectNewIban()` in `security-classification/src/ibanDetection.ts`, dort ausführlich kommentiert). Echte Neuheitsprüfung gegen die IBAN-Historie eines Absenders müsste Track A (Backend/DB) übernehmen. Bitte klären, wo dieser Abgleich passieren soll.
 
 ## Blocker
 
