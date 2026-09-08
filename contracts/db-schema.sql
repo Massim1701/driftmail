@@ -1,0 +1,165 @@
+-- driftmail — DB-Schema (Track 0 Contract)
+-- Alle Tracks arbeiten gegen dieses Schema. Änderungen nur über Track 0.
+
+-- ===== Users & Accounts =====
+
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE mail_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL CHECK (provider IN ('gmail', 'imap')),
+  email_address TEXT NOT NULL,
+  encrypted_oauth_token TEXT,
+  encrypted_imap_credentials TEXT,
+  sync_status TEXT NOT NULL DEFAULT 'pending' CHECK (sync_status IN ('pending', 'syncing', 'ok', 'error')),
+  last_synced_at TIMESTAMPTZ
+);
+
+-- ===== Messages =====
+
+CREATE TABLE messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  mail_account_id UUID NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
+  message_id_header TEXT NOT NULL,
+  from_address TEXT NOT NULL,
+  from_display_name TEXT,
+  reply_to_address TEXT,
+  subject TEXT,
+  body_text TEXT,
+  received_at TIMESTAMPTZ NOT NULL,
+  folder TEXT NOT NULL DEFAULT 'sonstiges' CHECK (folder IN ('wichtig', 'sonstiges', 'rechnungen', 'quarantaene', 'spam')),
+  raw_headers JSONB,
+  UNIQUE (mail_account_id, message_id_header)
+);
+
+CREATE INDEX idx_messages_account_folder ON messages (mail_account_id, folder);
+
+-- ===== Security-Analyse (1:1 zu messages) =====
+
+CREATE TABLE message_security (
+  message_id UUID PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+  spf_status TEXT CHECK (spf_status IN ('pass', 'fail', 'none')),
+  dkim_status TEXT CHECK (dkim_status IN ('pass', 'fail', 'none')),
+  dmarc_status TEXT CHECK (dmarc_status IN ('pass', 'fail', 'none')),
+  sender_domain_age_days INTEGER,
+  domain_reputation_score NUMERIC(3,2),
+  homoglyph_detected BOOLEAN NOT NULL DEFAULT false,
+  link_mismatch_detected BOOLEAN NOT NULL DEFAULT false,
+  urgency_language_score NUMERIC(3,2),
+  contains_new_iban BOOLEAN NOT NULL DEFAULT false,
+  classification TEXT NOT NULL DEFAULT 'unclear' CHECK (classification IN ('safe', 'spam', 'phishing', 'unclear')),
+  confidence_score NUMERIC(3,2),
+  analyzed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE message_links (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  display_text TEXT,
+  actual_url TEXT NOT NULL,
+  domain_matches_display BOOLEAN NOT NULL DEFAULT true,
+  is_known_malicious BOOLEAN NOT NULL DEFAULT false
+);
+
+-- ===== Unsubscribe (nur RFC 8058, nie Body-Link) =====
+
+CREATE TABLE unsubscribe_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  method TEXT NOT NULL CHECK (method IN ('list_unsubscribe_header', 'manual')),
+  list_unsubscribe_header_value TEXT,
+  status TEXT NOT NULL DEFAULT 'pending_confirmation' CHECK (status IN ('pending_confirmation', 'confirmed', 'rejected')),
+  user_confirmed_at TIMESTAMPTZ
+);
+
+-- ===== Quarantäne =====
+
+CREATE TABLE quarantine (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  quarantined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reason TEXT NOT NULL,
+  auto_delete_at TIMESTAMPTZ NOT NULL,
+  user_reviewed BOOLEAN NOT NULL DEFAULT false
+);
+
+-- ===== Audit-Log =====
+
+CREATE TABLE security_audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+  action TEXT NOT NULL, -- 'auto_quarantined' | 'user_unsubscribed' | 'user_overrode_warning' | ...
+  timestamp TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ===== Verträge & Reminder =====
+
+CREATE TABLE contracts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  provider_name TEXT NOT NULL,
+  contract_start DATE,
+  contract_end DATE,
+  cancellation_deadline DATE,
+  cancellation_period_days INTEGER,
+  status TEXT NOT NULL DEFAULT 'needs_review' CHECK (status IN ('active', 'cancelled', 'expired', 'needs_review')),
+  extracted_confidence NUMERIC(3,2)
+);
+
+CREATE TABLE reminders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  contract_id UUID NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+  remind_at TIMESTAMPTZ NOT NULL,
+  sent BOOLEAN NOT NULL DEFAULT false,
+  snoozed_until TIMESTAMPTZ
+);
+
+-- ===== Signaturen =====
+
+CREATE TABLE signatures (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  mail_account_id UUID NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
+  content_html TEXT NOT NULL,
+  is_default BOOLEAN NOT NULL DEFAULT false,
+  apply_to_new BOOLEAN NOT NULL DEFAULT true,
+  apply_to_replies BOOLEAN NOT NULL DEFAULT false
+);
+
+-- ===== KI: Zusammenfassungen & Provider-Konfiguration =====
+
+CREATE TABLE message_ai_summary (
+  message_id UUID PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+  summary_text TEXT,
+  action_required BOOLEAN NOT NULL DEFAULT false,
+  action_description TEXT,
+  deadline DATE,
+  source TEXT NOT NULL CHECK (source IN ('on_device', 'cloud_fallback')),
+  generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE ai_provider_config (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_type TEXT NOT NULL CHECK (task_type IN ('classification', 'extraction', 'summary', 'reply_draft')),
+  primary_provider TEXT NOT NULL, -- 'on_device' | 'groq' | 'gemini' | 'openrouter'
+  fallback_provider TEXT,
+  daily_quota_used INTEGER NOT NULL DEFAULT 0,
+  quota_reset_at TIMESTAMPTZ
+);
+
+CREATE TABLE user_ai_capability (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  platform TEXT NOT NULL CHECK (platform IN ('ios', 'android', 'windows', 'web')),
+  device_model TEXT,
+  os_version TEXT,
+  on_device_supported BOOLEAN NOT NULL DEFAULT false,
+  active_mode TEXT NOT NULL CHECK (active_mode IN ('on_device', 'cloud_fallback')),
+  checked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, platform)
+);

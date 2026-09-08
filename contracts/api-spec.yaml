@@ -1,0 +1,239 @@
+openapi: 3.0.3
+info:
+  title: driftmail API
+  version: 0.1.0
+  description: >
+    Track 0 Contract. Track A implementiert diese Spec real.
+    Track C und F bauen zunächst gegen einen Mock-Server, der exakt
+    diese Response-Formate zurückgibt.
+
+servers:
+  - url: https://api.driftware.online/v1
+
+paths:
+  /accounts:
+    get:
+      summary: Verbundene Mail-Konten des Users auflisten
+      responses:
+        "200":
+          description: Liste der Mail-Konten
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MailAccount"
+
+  /messages:
+    get:
+      summary: Nachrichten eines Ordners abrufen
+      parameters:
+        - name: folder
+          in: query
+          schema:
+            $ref: "#/components/schemas/Folder"
+        - name: accountId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Liste der Nachrichten
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+
+  /messages/{messageId}:
+    get:
+      summary: Einzelne Nachricht inkl. Security-Analyse
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Nachricht mit Analyse
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDetail"
+
+  /messages/{messageId}/quarantine:
+    post:
+      summary: Nachricht manuell in Quarantäne verschieben
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Quarantäne-Eintrag erstellt
+
+  /messages/{messageId}/summary:
+    get:
+      summary: KI-Zusammenfassung ("Was wollen die von mir")
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Zusammenfassung
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MailSummary"
+
+  /messages/{messageId}/reply-draft:
+    post:
+      summary: Antwortentwurf generieren lassen
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Entwurf
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  draftText:
+                    type: string
+
+  /contracts:
+    get:
+      summary: Erkannte Verträge auflisten
+      responses:
+        "200":
+          description: Liste der Verträge
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contract"
+
+  /contracts/{contractId}/confirm:
+    post:
+      summary: Erkannte Vertragsdaten bestätigen oder korrigieren
+      parameters:
+        - name: contractId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Contract"
+      responses:
+        "200":
+          description: Bestätigt
+
+  /capability-check:
+    post:
+      summary: Ergebnis des On-Device-KI-Checks an Backend melden
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserAiCapability"
+      responses:
+        "200":
+          description: Gespeichert
+
+components:
+  schemas:
+    Folder:
+      type: string
+      enum: [wichtig, sonstiges, rechnungen, quarantaene, spam]
+
+    MailAccount:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        provider: { type: string, enum: [gmail, imap] }
+        emailAddress: { type: string }
+        syncStatus: { type: string, enum: [pending, syncing, ok, error] }
+
+    Message:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fromAddress: { type: string }
+        fromDisplayName: { type: string }
+        subject: { type: string }
+        receivedAt: { type: string, format: date-time }
+        folder:
+          $ref: "#/components/schemas/Folder"
+        classification:
+          type: string
+          enum: [safe, spam, phishing, unclear]
+
+    MessageDetail:
+      allOf:
+        - $ref: "#/components/schemas/Message"
+        - type: object
+          properties:
+            bodyText: { type: string }
+            security:
+              $ref: "#/components/schemas/SecurityResult"
+
+    SecurityResult:
+      type: object
+      properties:
+        spfStatus: { type: string, enum: [pass, fail, none] }
+        dkimStatus: { type: string, enum: [pass, fail, none] }
+        dmarcStatus: { type: string, enum: [pass, fail, none] }
+        homoglyphDetected: { type: boolean }
+        linkMismatchDetected: { type: boolean }
+        classification: { type: string, enum: [safe, spam, phishing, unclear] }
+        confidenceScore: { type: number, format: float }
+
+    MailSummary:
+      type: object
+      properties:
+        summaryText: { type: string }
+        actionRequired: { type: boolean }
+        actionDescription: { type: string }
+        deadline: { type: string, format: date, nullable: true }
+        source: { type: string, enum: [on_device, cloud_fallback] }
+
+    Contract:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        providerName: { type: string }
+        contractEnd: { type: string, format: date }
+        cancellationDeadline: { type: string, format: date }
+        cancellationPeriodDays: { type: integer }
+        status: { type: string, enum: [active, cancelled, expired, needs_review] }
+
+    UserAiCapability:
+      type: object
+      properties:
+        platform: { type: string, enum: [ios, android, windows, web] }
+        deviceModel: { type: string }
+        osVersion: { type: string }
+        onDeviceSupported: { type: boolean }
+        activeMode: { type: string, enum: [on_device, cloud_fallback] }

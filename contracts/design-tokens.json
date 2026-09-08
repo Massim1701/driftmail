@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "note": "Track 0 Contract. Alle Plattformen (iOS/Android/Windows/Web) referenzieren diese Werte, damit die App überall gleich aussieht. Standard-Theme ist hell; dunkel und system folgen demselben Schema.",
+    "themes": ["hell", "dunkel", "system"]
+  },
+  "color": {
+    "accent": "#1D9E75",
+    "danger": "#D85A30",
+    "dangerText": "#993C1D",
+    "warning": "#EF9F27",
+    "success": "#1D9E75",
+    "light": {
+      "surfacePage": "#FAFAF8",
+      "surfaceCard": "#FFFFFF",
+      "textPrimary": "#141414",
+      "textSecondary": "#6B6B66",
+      "textMuted": "#9A9A94",
+      "border": "#EAEAE6"
+    },
+    "dark": {
+      "surfacePage": "#141414",
+      "surfaceCard": "#1E1E1E",
+      "textPrimary": "#FAFAF8",
+      "textSecondary": "rgba(255,255,255,0.75)",
+      "textMuted": "rgba(255,255,255,0.4)",
+      "border": "#2A2A2A"
+    }
+  },
+  "typography": {
+    "fontFamily": "system-ui",
+    "sizes": {
+      "caption": 11,
+      "small": 12,
+      "body": 13,
+      "bodyLarge": 14,
+      "heading": 15
+    },
+    "weights": {
+      "regular": 400,
+      "medium": 500
+    }
+  },
+  "radius": {
+    "control": 8,
+    "card": 12,
+    "pill": 20
+  },
+  "spacing": {
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 20
+  },
+  "folders": [
+    { "key": "wichtig", "label": "Wichtig", "icon": "star" },
+    { "key": "sonstiges", "label": "Sonstiges", "icon": "inbox" },
+    { "key": "rechnungen", "label": "Rechnungen", "icon": "receipt" },
+    { "key": "quarantaene", "label": "Quarantäne", "icon": "shield-exclamation", "colorRole": "danger" },
+    { "key": "spam", "label": "Spam", "icon": "trash", "muted": true }
+  ]
+}
