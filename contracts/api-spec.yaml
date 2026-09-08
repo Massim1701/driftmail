@@ -394,9 +394,9 @@ components:
         id: { type: string, format: uuid }
         providerName: { type: string }
         contractStart: { type: string, format: date, nullable: true }
-        contractEnd: { type: string, format: date }
-        cancellationDeadline: { type: string, format: date }
-        cancellationPeriodDays: { type: integer }
+        contractEnd: { type: string, format: date, nullable: true }
+        cancellationDeadline: { type: string, format: date, nullable: true }
+        cancellationPeriodDays: { type: integer, nullable: true }
         status: { type: string, enum: [active, cancelled, expired, needs_review] }
         extractedConfidence: { type: number, format: float }
 
