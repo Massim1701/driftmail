@@ -76,6 +76,20 @@ CREATE TABLE message_security (
     urgency_language_score NUMERIC(3,2),
     contains_new_iban BOOLEAN NOT NULL DEFAULT false,
     classification TEXT NOT NULL DEFAULT 'unclear' CHECK (classification IN ('safe', 'spam', 'phishing', 'unclear')),
+    -- Nur gesetzt wenn classification = 'spam'. 'adult'/'gambling' loesen
+    -- sofortiges Loeschen aus (kein Quarantaene-Pfad, kein 30-Tage-Aufheben,
+    -- kein Undo) -- siehe WEB_INBOX.md 08.09. Betrifft NICHT 'phishing',
+    -- das bleibt immer im Quarantaene-Pfad.
+    spam_subcategory TEXT CHECK (spam_subcategory IN ('adult', 'gambling', 'generic', 'marketing')),
+    -- Botnetz-Erkennung (WEB_INBOX.md 08.09.). ip_reputation_flag braucht
+    -- einen externen Blocklist-Abgleich (z.B. Spamhaus XBL/CBL) -- das kann
+    -- ein zustandsloses Text+Header-Modul (Track B) nicht selbst liefern,
+    -- siehe SYNC.md "Offene Fragen" (dasselbe Problem wie bei
+    -- domain_reputation_score). helo_mismatch ist aus dem Received-Header
+    -- ableitbar, aber ohne echten Reverse-DNS-Abgleich nur eine Annaeherung.
+    ip_reputation_flag TEXT CHECK (ip_reputation_flag IN ('clean', 'known_botnet', 'unknown')),
+    helo_mismatch BOOLEAN DEFAULT false,
+    image_to_text_ratio NUMERIC(3,2),
     confidence_score NUMERIC(3,2),
     analyzed_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );

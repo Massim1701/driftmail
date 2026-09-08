@@ -22,6 +22,16 @@ export interface SecurityResult {
   urgencyLanguageScore: number | null; // 0.0 - 1.0
   containsNewIban: boolean;
   classification: Classification;
+  // Nur gesetzt wenn classification === "spam". "adult"/"gambling" loesen
+  // sofortiges Loeschen aus (kein Quarantaene-Pfad, kein 30-Tage-Aufheben,
+  // kein Undo) -- siehe WEB_INBOX.md 08.09. Betrifft NICHT "phishing".
+  spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | null;
+  // Botnetz-Erkennung (WEB_INBOX.md 08.09.). ipReputationFlag braucht einen
+  // externen Blocklist-Abgleich -- ein zustandsloses Text+Header-Modul kann
+  // das nicht selbst liefern (offene Frage, analog domainReputationScore).
+  ipReputationFlag: "clean" | "known_botnet" | "unknown" | null;
+  heloMismatch: boolean;
+  imageToTextRatio: number | null; // 0.0 - 1.0
   confidenceScore: number; // 0.0 - 1.0
 }
 
