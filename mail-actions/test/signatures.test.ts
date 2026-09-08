@@ -24,12 +24,29 @@ function sig(overrides: Partial<SignatureRecord>): SignatureRecord {
 }
 
 describe("selectSignatureForContext (reine Auswahl-Regel)", () => {
-  it("liefert null, wenn keine Signatur für den Kontext freigeschaltet ist", () => {
+  it("faellt auf die Default-Signatur zurueck, wenn keine fuer den Kontext freigeschaltet ist", () => {
+    // Entscheidung Web/Massimo 08.09. (SYNC.md): Default wird immer als
+    // Fallback angehaengt, auch wenn ihr apply_to_new/apply_to_replies-Flag
+    // fuer den Kontext nicht gesetzt ist.
+    const defaultSig = sig({ id: "a", apply_to_new: false, apply_to_replies: false, is_default: true });
+    const signatures = [defaultSig];
+    expect(selectSignatureForNewMail(signatures, ACCOUNT_A)).toEqual(defaultSig);
+    expect(selectSignatureForReply(signatures, ACCOUNT_A)).toEqual(defaultSig);
+  });
+
+  it("liefert null, wenn weder Kontext-Flag noch Default-Signatur vorhanden ist", () => {
     const signatures = [
-      sig({ id: "a", apply_to_new: false, apply_to_replies: false, is_default: true }),
+      sig({ id: "a", apply_to_new: false, apply_to_replies: false, is_default: false }),
     ];
     expect(selectSignatureForNewMail(signatures, ACCOUNT_A)).toBeNull();
     expect(selectSignatureForReply(signatures, ACCOUNT_A)).toBeNull();
+  });
+
+  it("Default-Fallback gilt nur fuer Signaturen des angegebenen Accounts", () => {
+    const signatures = [
+      sig({ id: "a", mail_account_id: ACCOUNT_B, is_default: true }),
+    ];
+    expect(selectSignatureForNewMail(signatures, ACCOUNT_A)).toBeNull();
   });
 
   it("liefert die einzige passende Signatur für 'new'", () => {

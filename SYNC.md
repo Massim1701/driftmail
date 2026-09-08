@@ -34,11 +34,13 @@ Status-Werte: offen · in arbeit · fertig · blockiert
 
 [2026-09-08] [terminal] [E] — Fertig. Zusammenfassung: mail-actions/ liefert draftReply()-Skeleton (Platzhalter-Text, TODO-Stelle für echte KI klar markiert) und eine vollständig getestete Signatur-Auswahl-/Verwaltungslogik gegen die `signatures`-Tabelle (Default-Invariante, apply_to_new/apply_to_replies-Kontextauswahl, Account-Isolation). `composeReplyDraft()` zeigt beispielhaft, wie Track A draftReply + Signatur zusammenführen könnte. Zwei offene Fragen unten eingetragen (kein Blocker). Nicht auf iOS/B/D gewartet.
 
+[2026-09-08] [terminal] [E] — Beide offenen Fragen von Web beantwortet bekommen und umgesetzt: (1) `draftReply` liefert jetzt `AiAdapterResult<string>` statt `Promise<string>` — Contract-Änderung in `ai-adapter-interface.ts`, betrifft Track A/C (siehe "Contract-Änderungen"). (2) Signatur-Fallback: `selectSignatureForContext` hängt jetzt die `is_default`-Signatur an, wenn kein Kandidat für den Kontext gefunden wird. mail-actions/ Tests von 28 auf 31 erweitert (alle grün), `tsc --noEmit` sauber, README aktualisiert. Track E bleibt "fertig".
+
 ## Contract-Änderungen (wichtig — bricht ggf. andere Tracks)
 
 Jede Änderung an einer Datei in contracts/ kommt hier rein, auch klein. Andere Tracks prüfen bei jedem Pull kurz diesen Abschnitt.
 
-(noch keine Änderungen seit Track 0)
+**[2026-09-08] [terminal] [E]** — `contracts/ai-adapter-interface.ts`: `AiAdapter.draftReply` gibt jetzt `Promise<AiAdapterResult<string>>` zurück statt `Promise<string>` (Entscheidung Web, siehe "Offene Fragen" unten). **Betrifft Track A** (Route `/messages/{id}/reply-draft` muss `.data` auslesen, falls die dortige Mock-Implementierung noch die alte Signatur hat) **und Track C** (Swift-Port des Interfaces, falls schon 1:1 übernommen). mail-actions/ selbst ist bereits angepasst (`draftReply` liefert `{ data, source: "cloud_fallback" }`, Platzhalter-Logik unverändert).
 
 ## Offene Fragen
 
@@ -46,10 +48,8 @@ Fragen, die ein Track nicht selbst entscheiden kann, weil sie einen Contract ode
 
 - ~~api-spec.yaml `SecurityResult` unvollständig gegenüber `ai-adapter-interface.ts`/`db-schema.sql`.~~ **Beantwortet (Web, 08.09.):** kein Kürzen, war Absicht/Versehen — YAML wurde nachgezogen, alle 11 Felder jetzt drin.
 - ~~api-spec.yaml `Contract`-Schema fehlt `contractStart` und `extractedConfidence`.~~ **Beantwortet (Web, 08.09.):** beide Felder in der YAML ergänzt.
-- **[E]** `draftReply(thread): Promise<string>` in ai-adapter-interface.ts liefert nur den Text, keine Quelle (`on_device`/`cloud_fallback`) — anders als es `AiAdapterResult<T>` im selben File vorsieht. Für `message_ai_summary.source` gibt es das bereits (separates Feld), für einen künftigen `message_ai_reply_draft`o.ä. bräuchte man das auch. Frage an Track 0/A: soll `draftReply` künftig `AiAdapterResult<string>` statt `Promise<string>` zurückgeben, oder bleibt die Quelle Sache der aufrufenden Route? Kein Blocker, mail-actions/ liefert aktuell nur Platzhalter-Text (Quelle ohnehin irrelevant), aber relevant sobald echte KI-Anbindung kommt.
-- **[E]** Signatur-Auswahlregel bei fehlendem Kandidaten: mail-actions/ hängt aktuell **keine** Signatur automatisch an, wenn für den Kontext (neu/Antwort) kein `apply_to_new`/`apply_to_replies` gesetzt ist — auch nicht die `is_default`-Signatur des Accounts als Fallback. Das ist eine Produktentscheidung, keine reine Technik-Frage; siehe Begründung in mail-actions/README.md ("Annahmen", Punkt 1). Falls die Web-Session/Massimo das anders will (Default immer als Fallback anhängen), bitte hier vermerken — Änderung in `selectSignatureForContext` wäre klein.
--   **Beantwortet (Web, 08.09.):** Ja, `draftReply` soll künftig `AiAdapterResult<string>` zurückgeben statt reinem `Promise<string>`, konsistent zu `message_ai_summary.source`. Betrifft Track 0 (ai-adapter-interface.ts anpassen) und Track A (Route entsprechend). Für den aktuellen Platzhalter-Text von Track E keine Eile, aber bei echter KI-Anbindung verbindlich.
-  - **[E]** Signatur-Fallback: **Beantwortet (Web, 08.09.):** Ja, Default-Signatur (`is_default`) soll immer als Fallback angehängt werden, wenn für den Kontext keine explizite Regel greift. Bitte `selectSignatureForContext` entsprechend anpassen.
+- ~~**[E]** `draftReply(thread): Promise<string>` liefert keine Quelle (`on_device`/`cloud_fallback`).~~ **Beantwortet (Web, 08.09.) & umgesetzt (terminal, 08.09.):** `draftReply` gibt jetzt `Promise<AiAdapterResult<string>>` zurück. `ai-adapter-interface.ts` angepasst, `mail-actions/` folgt (`source: "cloud_fallback"` fest für die Platzhalter-Logik), Tests + README aktualisiert. Siehe "Contract-Änderungen" oben — betrifft Track A/C.
+- ~~**[E]** Signatur-Auswahlregel bei fehlendem Kandidaten: kein Fallback auf `is_default`.~~ **Beantwortet (Web, 08.09.) & umgesetzt (terminal, 08.09.):** `selectSignatureForContext` fällt jetzt auf die `is_default`-Signatur des Accounts zurück, wenn kein Kandidat für den Kontext gefunden wird. Tests + README aktualisiert.
 
 ## Blocker
 

@@ -76,8 +76,11 @@ export interface AiAdapter {
   /**
    * Generiert einen Antwortentwurf basierend auf dem Thread-Kontext.
    * Ergebnis geht nie automatisch raus, immer Review/Edit/Send durch User.
+   * Liefert AiAdapterResult<string> (nicht nur den Text) analog zu
+   * message_ai_summary.source, da die Quelle (on_device/cloud_fallback)
+   * auch für Antwortentwürfe nachvollziehbar sein muss.
    */
-  draftReply(thread: MailThread): Promise<string>;
+  draftReply(thread: MailThread): Promise<AiAdapterResult<string>>;
 }
 
 // ===== Herkunfts-Tag für jede KI-Ausgabe =====

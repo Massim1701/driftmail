@@ -23,9 +23,12 @@ export type { SignatureRecord } from "./types";
  *    verhindert werden) -> der mit is_default = true gewinnt; bei mehreren
  *    oder keinem Default wird deterministisch der erste in Array-Reihenfolge
  *    genommen.
- * 5. Kein Kandidat -> null. Kein automatisches Anhängen, auch wenn der
- *    Account eine Default-Signatur hat, die für diesen Kontext nicht
- *    freigeschaltet ist (siehe README "Annahmen").
+ * 5. Kein Kandidat -> Fallback auf die Default-Signatur (is_default) des
+ *    Accounts, auch wenn deren apply_to_new/apply_to_replies-Flag für
+ *    diesen Kontext nicht gesetzt ist. Entscheidung von Web/Massimo am
+ *    08.09. (SYNC.md "Offene Fragen"): Default wird IMMER als Fallback
+ *    angehängt, nicht nur bei explizit passendem Flag. Hat der Account
+ *    auch keine Default-Signatur -> null, kein automatisches Anhängen.
  */
 export function selectSignatureForContext(
   signatures: readonly SignatureRecord[],
@@ -39,7 +42,12 @@ export function selectSignatureForContext(
     (s) => s.mail_account_id === mailAccountId && s[flag] === true
   );
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) {
+    const accountDefault = signatures.find(
+      (s) => s.mail_account_id === mailAccountId && s.is_default
+    );
+    return accountDefault ?? null;
+  }
   if (candidates.length === 1) return candidates[0]!;
 
   const defaults = candidates.filter((s) => s.is_default);

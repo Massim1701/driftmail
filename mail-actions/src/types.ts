@@ -4,7 +4,7 @@
 // contracts/ai-adapter-interface.ts). Wir importieren statt kopieren, wo es
 // geht, damit dieses Modul nicht stillschweigend vom Contract abweicht.
 
-export type { MailThread, AiSource } from "../../contracts/ai-adapter-interface";
+export type { MailThread, AiSource, AiAdapterResult } from "../../contracts/ai-adapter-interface";
 
 /**
  * Spiegelt die Tabelle `signatures` aus contracts/db-schema.sql 1:1.

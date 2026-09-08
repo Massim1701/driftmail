@@ -10,7 +10,7 @@ function thread(messages: MailThread["messages"]): MailThread {
 }
 
 describe("draftReply (Platzhalter-Template)", () => {
-  it("erzeugt einen nicht-leeren String-Entwurf (Promise<string> laut Contract)", async () => {
+  it("erzeugt ein AiAdapterResult<string> mit nicht-leerem Text (Contract seit 08.09.)", async () => {
     const t = thread([
       {
         fromAddress: "jane.doe@example.com",
@@ -20,9 +20,10 @@ describe("draftReply (Platzhalter-Template)", () => {
       },
     ]);
 
-    const draft = await draftReply(t);
-    expect(typeof draft).toBe("string");
-    expect(draft.length).toBeGreaterThan(0);
+    const result = await draftReply(t);
+    expect(typeof result.data).toBe("string");
+    expect(result.data.length).toBeGreaterThan(0);
+    expect(result.source).toBe("cloud_fallback");
   });
 
   it("greift den Betreff der letzten Nachricht im Thread auf", async () => {
@@ -41,7 +42,7 @@ describe("draftReply (Platzhalter-Template)", () => {
       },
     ]);
 
-    const draft = await draftReply(t);
+    const { data: draft } = await draftReply(t);
     expect(draft).toContain("Zweite Nachricht - das Thema");
     expect(draft).not.toContain("Erste Nachricht");
   });
@@ -56,7 +57,7 @@ describe("draftReply (Platzhalter-Template)", () => {
       },
     ]);
 
-    const draft = await draftReply(t);
+    const { data: draft } = await draftReply(t);
     expect(draft).toContain("Hallo Max Mustermann,");
   });
 
@@ -70,12 +71,12 @@ describe("draftReply (Platzhalter-Template)", () => {
       },
     ]);
 
-    const draft = await draftReply(t);
+    const { data: draft } = await draftReply(t);
     expect(draft.startsWith("Hallo,")).toBe(true);
   });
 
   it("liefert einen sinnvollen Fallback-Text für einen leeren Thread, statt zu werfen", async () => {
-    const draft = await draftReply(thread([]));
+    const { data: draft } = await draftReply(thread([]));
     expect(typeof draft).toBe("string");
     expect(draft.length).toBeGreaterThan(0);
   });
@@ -89,7 +90,7 @@ describe("draftReply (Platzhalter-Template)", () => {
         receivedAt: "2026-09-08T10:00:00Z",
       },
     ]);
-    const draft = await draftReply(t);
+    const { data: draft } = await draftReply(t);
     expect(draft).toContain("Platzhalter-Entwurf");
   });
 });
@@ -119,16 +120,33 @@ describe("composeReplyDraft (draftReply + Signatur-Anhang, Integrations-Helfer)"
     expect(result).toContain(replySig.content_html);
   });
 
-  it("hängt keine Signatur an, wenn keine für Antworten freigeschaltet ist", async () => {
+  it("hängt keine Signatur an, wenn keine für Antworten freigeschaltet ist UND keine Default existiert", async () => {
     const store = new SignatureStore();
     store.create({
       mail_account_id: ACCOUNT_A,
       content_html: "<p>Nur für neue Mails</p>",
       apply_to_new: true,
       apply_to_replies: false,
+      is_default: false,
     });
 
     const result = await composeReplyDraft(t, ACCOUNT_A, store.list(ACCOUNT_A));
     expect(result).not.toContain("Nur für neue Mails");
+  });
+
+  it("haengt die Default-Signatur als Fallback an, wenn keine explizit fuer Antworten freigeschaltet ist", async () => {
+    // Entscheidung Web/Massimo 08.09. (SYNC.md): Default-Signatur wird
+    // immer als Fallback angehaengt, auch ohne passendes apply_to_*-Flag.
+    const store = new SignatureStore();
+    const defaultSig = store.create({
+      mail_account_id: ACCOUNT_A,
+      content_html: "<p>Standard-Signatur</p>",
+      apply_to_new: true,
+      apply_to_replies: false,
+      is_default: true,
+    });
+
+    const result = await composeReplyDraft(t, ACCOUNT_A, store.list(ACCOUNT_A));
+    expect(result).toContain(defaultSig.content_html);
   });
 });

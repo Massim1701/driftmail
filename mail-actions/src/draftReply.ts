@@ -5,7 +5,7 @@
 // immer Review/Edit/Send durch den User. Das ist UI-seitig durchzusetzen
 // (nicht Teil dieses Moduls) — hier liefern wir nur den Text.
 
-import type { MailThread } from "./types";
+import type { AiAdapterResult, MailThread } from "./types";
 import {
   appendSignature,
   selectSignatureForReply,
@@ -51,9 +51,9 @@ function guessNameFromAddress(fromAddress: string): string | null {
  *    task_type = 'reply_draft' (siehe db-schema.sql),
  *  - den ganzen Thread (nicht nur die letzte Nachricht) als Kontext
  *    übergeben, inkl. Tonalität/Sprache der bisherigen Konversation,
- *  - AiAdapterResult<string> mit korrektem `source` zurückgeben (das
- *    draftReply()-Signatur laut Contract aktuell nicht transportiert —
- *    siehe SYNC.md "Offene Fragen").
+ *  - AiAdapterResult<string> mit korrektem `source` zurückgeben (die
+ *    Signatur transportiert das jetzt, siehe unten — Contract wurde am
+ *    08.09. auf Wunsch von Web angepasst, siehe SYNC.md).
  *
  * Für den Erst-Durchstich hier: einfaches, deterministisches Template
  * basierend auf Betreff + grob geratenem Absendernamen der letzten
@@ -96,9 +96,15 @@ function generateReplyDraftText(thread: MailThread): string {
  * draftReply(thread) — Contract-Implementierung.
  * Promise-Signatur bewusst beibehalten (async), obwohl die aktuelle
  * Platzhalter-Logik synchron ist: eine echte AI-Anbindung braucht await.
+ *
+ * `source` ist hier immer "cloud_fallback": die Platzhalter-Logik läuft
+ * nicht on-device (kein Modell, kein user_ai_capability-Check), daher ist
+ * "cloud_fallback" die ehrlichere der beiden erlaubten Werte, auch wenn
+ * de facto kein Netzwerk-Call passiert. Sobald echte KI-Anbindung kommt,
+ * muss `source` das tatsächlich verwendete Verfahren widerspiegeln.
  */
-export async function draftReply(thread: MailThread): Promise<string> {
-  return generateReplyDraftText(thread);
+export async function draftReply(thread: MailThread): Promise<AiAdapterResult<string>> {
+  return { data: generateReplyDraftText(thread), source: "cloud_fallback" };
 }
 
 /**
@@ -113,7 +119,7 @@ export async function composeReplyDraft(
   mailAccountId: string,
   accountSignatures: readonly SignatureRecord[]
 ): Promise<string> {
-  const draftText = await draftReply(thread);
+  const { data: draftText } = await draftReply(thread);
   const signature = selectSignatureForReply(accountSignatures, mailAccountId);
   return appendSignature(draftText, signature);
 }
