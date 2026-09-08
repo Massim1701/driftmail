@@ -24,6 +24,8 @@ Status-Werte: offen · in arbeit · fertig · blockiert
 
 [2026-09-08] [terminal] [0] — Contract-Review: zwei Lücken zwischen den Contract-Dateien gefunden, siehe "Offene Fragen" unten. Kein Code geändert, nur geprüft.
 
+[2026-09-08] [terminal] [0] — Push nach main scheitert mit 403 "Permission denied" (authentifiziert als Massim1701, aber ohne Schreibrecht). Kein Keychain-Problem: `git credential fill` liefert denselben fine-grained PAT wie `gh auth token`. `gh api repos/.../driftmail -q .permissions` zeigt zwar `push:true`, das spiegelt aber die Owner-Rolle des Accounts wider, nicht die eigene Berechtigungsliste des eingeschränkten Tokens — irreführend, nicht verlässlich zur Diagnose nutzen. Workaround-Versuch mit `git -c http.extraHeader="Authorization: Bearer $TOKEN" push` hat NICHT geholfen (anderer Fehler: "invalid credentials"). Tatsächliche Ursache: Token hat für `driftmail` (noch) keine "Contents: Read and write"-Berechtigung gesetzt/gespeichert. Fix liegt bei Massimo in den GitHub-Token-Settings, nicht im Code.
+
 ## Contract-Änderungen (wichtig — bricht ggf. andere Tracks)
 
 Jede Änderung an einer Datei in contracts/ kommt hier rein, auch klein. Andere Tracks prüfen bei jedem Pull kurz diesen Abschnitt.
@@ -41,4 +43,4 @@ Fragen, die ein Track nicht selbst entscheiden kann, weil sie einen Contract ode
 
 Nur eintragen, wenn ein Track wirklich nicht weiterkommt, ohne dass jemand anders etwas ändert. Bitte mit betroffenem Track markieren.
 
-(keine)
+- **[Track 0]** Claude Codes fine-grained PAT hat für `driftmail` noch keine "Contents: Read and write"-Berechtigung — Push nach main scheitert mit 403. Contracts liegen lokal committed bereit (SYNC.md + contracts/*), können aber nicht ins Repo. Braucht Massimo: Token-Berechtigung in den GitHub-Settings setzen und speichern.
