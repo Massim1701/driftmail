@@ -132,6 +132,31 @@ actor MockAPIClient: APIClient {
         return updated.asMessage
     }
 
+    /// `DELETE /messages/{messageId}`, soft delete: verschiebt die
+    /// Nachricht in den Papierkorb-Ordner, genau wie `moveMessage` — kein
+    /// neuer Mechanismus, siehe WEB_INBOX.md 08.09. Ein echtes Backend
+    /// würde hier zusätzlich Gmail `messages.trash`/IMAP `\Deleted`
+    /// spiegeln; das ist außerhalb dessen, was der Mock simuliert.
+    func deleteMessage(id: String) async throws {
+        await delay()
+        guard let papierkorbFolder = db.folders.first(where: { $0.systemKey == .papierkorb }) else {
+            throw APIError.notFound
+        }
+        _ = try await moveMessage(id: id, toFolderId: papierkorbFolder.id)
+    }
+
+    /// `DELETE /messages/{messageId}/permanent`: entfernt die Nachricht
+    /// vollständig aus der Mock-DB (kein Undo). Ein echtes Backend löscht
+    /// zusätzlich beim Provider (Gmail `messages.delete`/IMAP Expunge).
+    func permanentlyDeleteMessage(id: String) async throws {
+        await delay()
+        guard db.messages.contains(where: { $0.id == id }) else {
+            throw APIError.notFound
+        }
+        db.messages.removeAll { $0.id == id }
+        db.summaries.removeValue(forKey: id)
+    }
+
     func fetchSummary(messageId: String) async throws -> MailSummary {
         await delay()
         if let cached = db.summaries[messageId] {

@@ -61,6 +61,16 @@ struct RemoteAPIClient: APIClient {
         return try await post("/messages/\(id)/move", body: Body(folderId: toFolderId))
     }
 
+    /// `DELETE /messages/{messageId}` — soft delete in den Papierkorb.
+    func deleteMessage(id: String) async throws {
+        try await delete("/messages/\(id)")
+    }
+
+    /// `DELETE /messages/{messageId}/permanent` — endgültiges Löschen.
+    func permanentlyDeleteMessage(id: String) async throws {
+        try await delete("/messages/\(id)/permanent")
+    }
+
     func fetchSummary(messageId: String) async throws -> MailSummary {
         try await get("/messages/\(messageId)/summary")
     }

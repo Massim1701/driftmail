@@ -10,6 +10,7 @@ import SwiftUI
 struct MessageDetailView: View {
     let messageId: String
 
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var environment: AppEnvironment
     @State private var detail: MessageDetail?
     @State private var summary: MailSummary?
@@ -18,6 +19,9 @@ struct MessageDetailView: View {
     @State private var isLoadingDraft = false
     @State private var isQuarantining = false
     @State private var isMoving = false
+    @State private var isDeleting = false
+    @State private var isPermanentlyDeleting = false
+    @State private var showPermanentDeleteConfirm = false
     @State private var errorMessage: String?
 
     /// The folder the message currently sits in, looked up from
@@ -81,6 +85,18 @@ struct MessageDetailView: View {
         .task {
             await environment.loadFolders()
             await loadDetail()
+        }
+        .confirmationDialog(
+            "Endgültig löschen?",
+            isPresented: $showPermanentDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Endgültig löschen", role: .destructive) {
+                Task { await permanentlyDelete() }
+            }
+            Button("Abbrechen", role: .cancel) {}
+        } message: {
+            Text("Diese Nachricht wird unwiderruflich gelöscht und kann nicht wiederhergestellt werden.")
         }
     }
 
@@ -150,6 +166,34 @@ struct MessageDetailView: View {
                 .buttonStyle(.bordered)
                 .tint(DesignTokens.Color.danger)
                 .disabled(isQuarantining)
+            }
+
+            // [2026-09-08] Löschen: analog zum "Verschieben nach…"-Menü,
+            // aber als eigener Button, da Löschen (in den Papierkorb) die
+            // häufigere Aktion ist als ein beliebiges Zielordner-Menü.
+            // Siehe WEB_INBOX.md "Fehlende Basis-Funktion entdeckt".
+            if currentFolder?.isTrash == true {
+                Button(role: .destructive) {
+                    showPermanentDeleteConfirm = true
+                } label: {
+                    Label("Endgültig löschen", systemImage: "trash.slash")
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Color.danger)
+                .disabled(isPermanentlyDeleting)
+            } else {
+                Button(role: .destructive) {
+                    Task { await delete() }
+                } label: {
+                    Label("Löschen", systemImage: "trash")
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(DesignTokens.Color.danger)
+                .disabled(isDeleting)
             }
         }
     }
@@ -248,6 +292,36 @@ struct MessageDetailView: View {
             await loadDetail()
         } catch {
             errorMessage = "Verschieben nach \"\(target.name)\" fehlgeschlagen."
+        }
+    }
+
+    /// `DELETE /messages/{messageId}` — Nachricht in den Papierkorb
+    /// verschieben (soft delete). Bleibt auf der Detailansicht (analog
+    /// `quarantine()`/`move(to:)`), da die Nachricht weiterhin existiert,
+    /// nur in einem anderen Ordner.
+    private func delete() async {
+        isDeleting = true
+        defer { isDeleting = false }
+        do {
+            try await environment.apiClient.deleteMessage(id: messageId)
+            await loadDetail()
+        } catch {
+            errorMessage = "Löschen fehlgeschlagen."
+        }
+    }
+
+    /// `DELETE /messages/{messageId}/permanent` — endgültiges Löschen,
+    /// nur aus dem Papierkorb heraus angeboten (siehe `currentFolder?.isTrash`
+    /// in `actions(for:)`). Die Nachricht existiert danach nicht mehr, also
+    /// die Detailansicht verlassen statt neu zu laden.
+    private func permanentlyDelete() async {
+        isPermanentlyDeleting = true
+        defer { isPermanentlyDeleting = false }
+        do {
+            try await environment.apiClient.permanentlyDeleteMessage(id: messageId)
+            dismiss()
+        } catch {
+            errorMessage = "Endgültiges Löschen fehlgeschlagen."
         }
     }
 }

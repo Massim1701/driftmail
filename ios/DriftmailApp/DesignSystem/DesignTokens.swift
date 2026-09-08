@@ -97,6 +97,12 @@ enum DesignTokens {
             SystemDefault(systemKey: .rechnungen, defaultLabel: "Rechnungen", icon: "receipt", usesDangerColor: false, isMuted: false, renamable: true),
             SystemDefault(systemKey: .quarantaene, defaultLabel: "Quarantäne", icon: "shield-exclamation", usesDangerColor: true, isMuted: false, renamable: false),
             SystemDefault(systemKey: .spam, defaultLabel: "Spam", icon: "trash", usesDangerColor: false, isMuted: true, renamable: false),
+            // [2026-09-08] Neu: Papierkorb (soft-delete-Ziel), siehe
+            // WEB_INBOX.md "Fehlende Basis-Funktion entdeckt" / Contract-
+            // Commit 156f0fd. Weder umbenennbar noch löschbar, wie
+            // quarantaene/spam, aber ohne eigene Farbrolle/muted-Flag laut
+            // design-tokens.json.
+            SystemDefault(systemKey: .papierkorb, defaultLabel: "Papierkorb", icon: "trash-2", usesDangerColor: false, isMuted: false, renamable: false),
         ]
     }
 

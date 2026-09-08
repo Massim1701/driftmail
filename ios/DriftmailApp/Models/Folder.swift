@@ -11,6 +11,11 @@ enum SystemFolderKey: String, Codable, CaseIterable, Hashable {
     case rechnungen
     case quarantaene
     case spam
+    /// [2026-09-08] Neu (WEB_INBOX.md "Fehlende Basis-Funktion entdeckt",
+    /// Contract-Teil Commit 156f0fd): Ziel-Ordner für manuelles Löschen
+    /// (soft delete, analog Gmail). Nicht umbenennbar/löschbar wie
+    /// quarantaene/spam.
+    case papierkorb
 }
 
 /// Mirrors `components/schemas/Folder` in contracts/api-spec.yaml.
@@ -31,10 +36,11 @@ struct Folder: Codable, Identifiable, Hashable {
     var sortOrder: Int
 
     /// SF Symbol standing in for the design-tokens.json icon keys
-    /// ("star", "inbox", "receipt", "shield-exclamation", "trash") plus
-    /// `customFolder.defaultIcon` ("folder") for user-created folders.
-    /// Falls back to the folder glyph for any icon key this build doesn't
-    /// know yet (e.g. a newer icon added server-side).
+    /// ("star", "inbox", "receipt", "shield-exclamation", "trash",
+    /// "trash-2" für Papierkorb) plus `customFolder.defaultIcon` ("folder")
+    /// for user-created folders. Falls back to the folder glyph for any
+    /// icon key this build doesn't know yet (e.g. a newer icon added
+    /// server-side).
     var systemImage: String {
         switch icon {
         case "star": return "star.fill"
@@ -42,6 +48,7 @@ struct Folder: Codable, Identifiable, Hashable {
         case "receipt": return "doc.text.fill"
         case "shield-exclamation": return "exclamationmark.shield.fill"
         case "trash": return "trash.fill"
+        case "trash-2": return "trash.slash.fill"
         default: return "folder.fill"
         }
     }
@@ -54,12 +61,17 @@ struct Folder: Codable, Identifiable, Hashable {
     var isMuted: Bool { systemKey == .spam }
 
     /// design-tokens.json `systemFolders.defaults[].renamable`: every
-    /// folder can be renamed except quarantaene/spam (custom folders are
-    /// always renamable, they just don't carry `renamable` in the token
-    /// file since it's implied).
-    var isRenamable: Bool { systemKey != .quarantaene && systemKey != .spam }
+    /// folder can be renamed except quarantaene/spam/papierkorb (custom
+    /// folders are always renamable, they just don't carry `renamable` in
+    /// the token file since it's implied).
+    var isRenamable: Bool { systemKey != .quarantaene && systemKey != .spam && systemKey != .papierkorb }
 
     /// api-spec.yaml `DELETE /folders/{folderId}`: "System-Ordner nicht
     /// löschbar" — only user-created folders can be removed.
     var isDeletable: Bool { !isSystem }
+
+    /// Der Papierkorb-Ordner selbst (soft-delete-Ziel, WEB_INBOX.md
+    /// 08.09. "Fehlende Basis-Funktion entdeckt"). Zeigt an, wo zusätzlich
+    /// "Endgültig löschen" angeboten wird.
+    var isTrash: Bool { systemKey == .papierkorb }
 }

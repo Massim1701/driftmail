@@ -49,12 +49,20 @@
       "sortOrder": 4
     },
     {
+      "id": "folder-papierkorb",
+      "name": "Papierkorb",
+      "icon": "trash-2",
+      "isSystem": true,
+      "systemKey": "papierkorb",
+      "sortOrder": 5
+    },
+    {
       "id": "folder-familie",
       "name": "Familie",
       "icon": "folder",
       "isSystem": false,
       "systemKey": null,
-      "sortOrder": 5
+      "sortOrder": 6
     }
   ],
   "messages": [
@@ -309,6 +317,52 @@
         "containsNewIban": false,
         "classification": "safe",
         "confidenceScore": 0.99
+      }
+    },
+    {
+      "id": "msg-012",
+      "fromAddress": "kontakt@altes-fitnessstudio.example",
+      "fromDisplayName": "Fitnessstudio Altstadt",
+      "subject": "Deine Kündigung wurde bestätigt",
+      "receivedAt": "2026-09-01T11:20:00Z",
+      "folderId": "folder-papierkorb",
+      "classification": "safe",
+      "bodyText": "Hiermit bestätigen wir die Kündigung deiner Mitgliedschaft zum Monatsende. Schade, dass du gehst!",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "pass",
+        "senderDomainAgeDays": 3000,
+        "domainReputationScore": 0.9,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.0,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.94
+      }
+    },
+    {
+      "id": "msg-013",
+      "fromAddress": "newsletter@alte-zeitung.example",
+      "fromDisplayName": "Alte Zeitung Wochendigest",
+      "subject": "Dein Wochenrückblick",
+      "receivedAt": "2026-08-30T07:00:00Z",
+      "folderId": "folder-papierkorb",
+      "classification": "safe",
+      "bodyText": "Die wichtigsten Nachrichten der Woche kompakt zusammengefasst.",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "none",
+        "senderDomainAgeDays": 1200,
+        "domainReputationScore": 0.6,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.0,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.75
       }
     }
   ],

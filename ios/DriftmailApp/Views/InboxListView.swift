@@ -12,6 +12,7 @@ struct InboxListView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var messages: [Message] = []
     @State private var isLoading = true
+    @State private var messagePendingPermanentDelete: Message?
 
     var body: some View {
         List {
@@ -36,6 +37,26 @@ struct InboxListView: View {
                     MessageRowView(message: message)
                 }
                 .listRowBackground(DesignTokens.Color.surfaceCard)
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    // [2026-09-08] Löschen per Swipe, analog zum
+                    // "Verschieben nach…"-Menü in der Detailansicht — im
+                    // Papierkorb selbst ist der Swipe "Endgültig löschen"
+                    // statt nochmal "in den Papierkorb verschieben", siehe
+                    // WEB_INBOX.md "Fehlende Basis-Funktion entdeckt".
+                    if folder.isTrash {
+                        Button(role: .destructive) {
+                            messagePendingPermanentDelete = message
+                        } label: {
+                            Label("Endgültig löschen", systemImage: "trash.slash")
+                        }
+                    } else {
+                        Button(role: .destructive) {
+                            Task { await delete(message) }
+                        } label: {
+                            Label("Löschen", systemImage: "trash")
+                        }
+                    }
+                }
             }
         }
         .listStyle(.plain)
@@ -56,6 +77,25 @@ struct InboxListView: View {
         .refreshable {
             await load()
         }
+        .confirmationDialog(
+            "Endgültig löschen?",
+            isPresented: Binding(
+                get: { messagePendingPermanentDelete != nil },
+                set: { if !$0 { messagePendingPermanentDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Endgültig löschen", role: .destructive) {
+                if let message = messagePendingPermanentDelete {
+                    Task { await permanentlyDelete(message) }
+                }
+            }
+            Button("Abbrechen", role: .cancel) {
+                messagePendingPermanentDelete = nil
+            }
+        } message: {
+            Text("Diese Nachricht wird unwiderruflich gelöscht und kann nicht wiederhergestellt werden.")
+        }
     }
 
     private func load() async {
@@ -65,6 +105,28 @@ struct InboxListView: View {
             messages = try await environment.apiClient.fetchMessages(folderId: folder.id, accountId: nil)
         } catch {
             messages = []
+        }
+    }
+
+    /// `DELETE /messages/{messageId}` — soft delete in den Papierkorb.
+    private func delete(_ message: Message) async {
+        do {
+            try await environment.apiClient.deleteMessage(id: message.id)
+            messages.removeAll { $0.id == message.id }
+        } catch {
+            await load()
+        }
+    }
+
+    /// `DELETE /messages/{messageId}/permanent` — nur im Papierkorb
+    /// angeboten (siehe `folder.isTrash` in den swipeActions oben).
+    private func permanentlyDelete(_ message: Message) async {
+        messagePendingPermanentDelete = nil
+        do {
+            try await environment.apiClient.permanentlyDeleteMessage(id: message.id)
+            messages.removeAll { $0.id == message.id }
+        } catch {
+            await load()
         }
     }
 }

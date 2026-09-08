@@ -22,6 +22,19 @@ protocol APIClient {
     /// `POST /messages/{messageId}/move` — Nachricht in einen anderen
     /// (System- oder eigenen) Ordner verschieben.
     func moveMessage(id: String, toFolderId: String) async throws -> Message
+    /// `DELETE /messages/{messageId}` — Nachricht in den Papierkorb
+    /// verschieben (soft delete, analog Gmail). [2026-09-08]
+    /// WEB_INBOX.md "Fehlende Basis-Funktion entdeckt" / Contract-Commit
+    /// 156f0fd. Verhält sich wie `moveMessage(id:toFolderId:)` in den
+    /// Papierkorb-Ordner, ist aber ein eigener Endpunkt, damit ein echtes
+    /// Backend zusätzlich die Provider-API spiegeln kann (Gmail
+    /// `messages.trash` / IMAP `\Deleted`).
+    func deleteMessage(id: String) async throws
+    /// `DELETE /messages/{messageId}/permanent` — Nachricht endgültig
+    /// löschen (laut Contract nur aus dem Papierkorb heraus sinnvoll; das
+    /// UI bietet den Button entsprechend nur dort an, der Endpunkt selbst
+    /// prüft das serverseitig).
+    func permanentlyDeleteMessage(id: String) async throws
     func fetchSummary(messageId: String) async throws -> MailSummary
     func requestReplyDraft(messageId: String) async throws -> String
     func fetchContracts() async throws -> [Contract]

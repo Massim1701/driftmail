@@ -17,6 +17,46 @@ weiterhin, sind aber Daten vom Server, keine App-Konstante mehr. Die App
 wurde entsprechend angepasst — Details im Änderungsprotokoll unten unter
 "Was sich mit der Ordner-Contract-Änderung geändert hat".
 
+## [2026-09-08] Nachtrag: Papierkorb / manuelles Löschen (soft delete)
+
+Contract-Nachtrag "Fehlende Basis-Funktion entdeckt" (WEB_INBOX.md 08.09.,
+Contract-Teil Commit `156f0fd`): manuelles Löschen einer Nachricht gab es
+bisher nicht (nur Quarantäne, Verschieben, automatische Spam/Phishing-
+Löschregeln). Umgesetzt analog Gmail: Löschen = in einen neuen
+System-Ordner "Papierkorb" verschieben (soft delete), erst von dort aus
+ist "Endgültig löschen" (hard delete) möglich.
+
+- **Neuer 6. System-Ordner** `papierkorb` (`systemKey: .papierkorb`, Icon
+  `trash-2` → SF Symbol `trash.slash.fill`), analog zu den bestehenden 5:
+  `Models/Folder.swift` (`SystemFolderKey`, `isRenamable`/`isTrash`),
+  `DesignSystem/DesignTokens.swift` (`SystemFolders.defaults`),
+  `Networking/MockData/MockDatabase.json` (Ordner + 2 Beispielnachrichten
+  `msg-012`/`msg-013`). Weder umbenennbar noch löschbar, wie
+  `quarantaene`/`spam`.
+- **`APIClient` um zwei Endpunkte ergänzt**
+  (`Networking/APIClient.swift`): `deleteMessage(id:)` →
+  `DELETE /messages/{messageId}` (soft delete, verschiebt in den
+  Papierkorb) und `permanentlyDeleteMessage(id:)` →
+  `DELETE /messages/{messageId}/permanent` (hard delete). `MockAPIClient`
+  implementiert beide (`deleteMessage` ruft intern `moveMessage` auf den
+  Papierkorb-Ordner auf, genau wie die Quarantäne-Kurzform;
+  `permanentlyDeleteMessage` entfernt den Eintrag endgültig aus der
+  Mock-DB). `RemoteAPIClient` verdrahtet beide Pfade als Skelett
+  (ungetestet gegen einen echten Server, wie die übrigen Endpunkte).
+- **UI**: `InboxListView` bekommt eine Swipe-Action ("Löschen" bzw. im
+  Papierkorb selbst "Endgültig löschen" mit Bestätigungsdialog);
+  `MessageDetailView` bekommt einen zusätzlichen destruktiven Button in
+  der Aktionsleiste (ebenfalls "Löschen"/"Endgültig löschen" je nach
+  aktuellem Ordner), analog zum bestehenden "Verschieben nach…"-Menü.
+- **Nicht umgesetzt** (Server-seitig, nicht Track C): das serverseitige
+  Spiegeln auf die Provider-API (Gmail `messages.trash`/`messages.delete`
+  bzw. IMAP `\Deleted`/Expunge) laut WEB_INBOX.md-Vorgabe — das ist
+  Track A, die App ruft nur den Contract-Endpunkt auf. Keine
+  Undo-/Snackbar-Funktion nach dem Löschen (Gmail-typisch, aber nicht im
+  Contract gefordert). Keine automatische Papierkorb-Leerung (laut
+  WEB_INBOX.md explizit nicht gefordert — Standard-Verhalten wie Gmail,
+  User leert manuell oder es bleibt liegen).
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine
@@ -97,14 +137,18 @@ ios/
    (`POST /messages/{id}/reply-draft`), ein "Verschieben nach…"-Menü über
    alle Ordner (`POST /messages/{id}/move`), sowie — außer im
    Quarantäne-Ordner selbst — "In Quarantäne verschieben"
-   (`POST /messages/{id}/quarantine`).
+   (`POST /messages/{id}/quarantine`); dazu "Löschen"
+   (`DELETE /messages/{id}`, verschiebt in den Papierkorb) bzw. im
+   Papierkorb selbst "Endgültig löschen"
+   (`DELETE /messages/{id}/permanent`, mit Bestätigungsdialog).
 
 ## Was ist gemockt / stubbed
 
 - **Backend**: `Networking/MockAPIClient.swift` lädt
-  `Networking/MockData/MockDatabase.json` (5 System-Ordner + 1 eigener
-  Beispiel-Ordner "Familie", 11 Nachrichten verteilt über alle 6 Ordner,
-  2 Verträge, 3 vorberechnete Zusammenfassungen, 1 Mail-Account) und
+  `Networking/MockData/MockDatabase.json` (6 System-Ordner inkl.
+  Papierkorb + 1 eigener Beispiel-Ordner "Familie", 13 Nachrichten
+  verteilt über alle 7 Ordner, 2 Verträge, 3 vorberechnete
+  Zusammenfassungen, 1 Mail-Account) und
   bedient daraus alle Endpunkte aus `api-spec.yaml`, inklusive
   simulierter Netzwerklatenz und einfacher In-Memory-Validierung für die
   Ordner-Endpunkte (Umbenennen von `quarantaene`/`spam` wird abgelehnt
@@ -219,3 +263,5 @@ ios/
 - `RemoteAPIClient` gegen echtes Track-A-Backend verifizieren, sobald
   vorhanden.
 - App-Icon, Launch-Screen-Design nach `design-tokens.json`.
+- Undo/Snackbar nach "Löschen" (in den Papierkorb), analog Gmail — bisher
+  nicht Teil des Contracts.
