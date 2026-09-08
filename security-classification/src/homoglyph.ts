@@ -78,6 +78,25 @@ export function containsConfusableChar(label: string): boolean {
 }
 
 /**
+ * Prüft eine einzelne Domain (z.B. "аpple.com") auf Homoglyph-Merkmale:
+ * Mixed-Script-Label ODER ein Label, das komplett aus Konfusionszeichen
+ * besteht (siehe Kommentar bei `detectHomoglyphs` unten für die Begründung
+ * beider Checks). Wird sowohl von `detectHomoglyphs` (Mails) als auch von
+ * `draftPhishingCheck.ts` (Composer-Entwürfe, Link-Domains einzeln geprüft)
+ * verwendet, statt die Logik zu duplizieren.
+ *
+ * Bekannte Grenze: kein Punycode-Decoding von "xn--"-Domains, siehe unten.
+ */
+export function isHomoglyphDomain(domain: string): boolean {
+  const labels = domain.split(".");
+  for (const label of labels) {
+    if (isMixedScriptLabel(label)) return true;
+    if (containsConfusableChar(label)) return true;
+  }
+  return false;
+}
+
+/**
  * Sucht nach Homoglyph-Angriffen in Absenderadresse, Headern und Body-Text:
  *
  * 1. Mixed-Script-Labels: ein Domain-Label, das Zeichen aus mehr als einem
@@ -104,11 +123,7 @@ export function detectHomoglyphs(rawText: string, headers: Record<string, string
   ]);
 
   for (const domain of domainsToCheck) {
-    const labels = domain.split(".");
-    for (const label of labels) {
-      if (isMixedScriptLabel(label)) return true;
-      if (containsConfusableChar(label)) return true;
-    }
+    if (isHomoglyphDomain(domain)) return true;
   }
   return false;
 }

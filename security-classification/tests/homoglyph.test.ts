@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { detectHomoglyphs, isMixedScriptLabel, containsConfusableChar, extractDomains } from "../src/homoglyph.js";
+import {
+  containsConfusableChar,
+  detectHomoglyphs,
+  extractDomains,
+  isHomoglyphDomain,
+  isMixedScriptLabel,
+} from "../src/homoglyph.js";
 
 describe("extractDomains", () => {
   it("finds domain-like tokens in free text", () => {
@@ -47,5 +53,19 @@ describe("detectHomoglyphs", () => {
     const rawText = "Ihre Rechnung für September liegt bei. Grüße, das Team.";
     const headers = { From: "Rechnung <rechnung@example.com>" };
     expect(detectHomoglyphs(rawText, headers)).toBe(false);
+  });
+});
+
+describe("isHomoglyphDomain (single domain, used by draftPhishingCheck.ts)", () => {
+  it("flags a single domain with a mixed-script label", () => {
+    expect(isHomoglyphDomain("аpple.com")).toBe(true); // Cyrillic а
+  });
+
+  it("flags a single domain built entirely from confusable characters", () => {
+    expect(isHomoglyphDomain("аррle.com")).toBe(true);
+  });
+
+  it("does not flag a plain ASCII domain", () => {
+    expect(isHomoglyphDomain("apple.com")).toBe(false);
   });
 });

@@ -17,7 +17,7 @@ eingehängt.
 ```bash
 cd security-classification
 npm install
-npm test          # vitest, 79 Tests
+npm test          # vitest, 110 Tests
 npm run typecheck # tsc --noEmit
 npm run build     # -> dist/
 ```
@@ -36,6 +36,9 @@ npm run build     # -> dist/
 | `src/heloMismatch.ts` | HELO/EHLO-Hostname aus `Received` vs. Absenderdomain aus `From` — Näherung, kein echter Reverse-DNS-Check |
 | `src/imageToTextRatio.ts` | Bild-zu-Text-Anteil aus `<img>`-Tags vs. sichtbarer Textmenge in HTML-Mails |
 | `src/ipReputation.ts` | Liefert immer `"unknown"` — braucht externen Blocklist-Abgleich, den dieses Modul nicht machen kann |
+| `src/creditCardDetection.ts` | Kreditkarten-Erkennung per Regex + Luhn-Prüfsumme (analog zu `ibanDetection.ts`) |
+| `src/credentialRequestLanguage.ts` | Keyword-Heuristik für explizite Zugangs-/Zahlungsdaten-Anfragen ("Passwort bestätigen", "Konto verifizieren", ...) |
+| `src/draftPhishingCheck.ts` | `checkDraftForPhishing()` — Phishing-Check für ausgehende Mail-Entwürfe (`POST /messages/draft/phishing-check`) |
 | `src/index.ts` | `analyzeMail()` — verdrahtet alles zu einem `SecurityResult` |
 
 Jede Einzelfunktion ist auch separat exportiert und getestet (`tests/*.test.ts`),
@@ -54,6 +57,9 @@ nicht nur über `analyzeMail()`.
 - `imageToTextRatio`: echte Zählung von `<img>`-Tags gegen sichtbare
   Textmenge in HTML-Mails (siehe Abschnitt "Botnetz-Erkennungssignale"
   unten für die genaue Formel und ihre Grenzen)
+- Kreditkarten-Erkennung inkl. echter Luhn-Prüfsummenvalidierung
+  (`src/creditCardDetection.ts`, siehe Abschnitt "Ausgehender
+  Phishing-Check" unten)
 
 **Klar markierte Platzhalter, die später echte KI/ML brauchen** (siehe
 `PLATZHALTER`-Kommentare im Code):
@@ -87,6 +93,11 @@ gebaut", sondern architektonisch außerhalb des Scopes):**
   einen externen Netzwerk-Lookup (Botnetz-Blocklist), den ein
   zustandsloses Text+Header-Modul per Definition nicht hat. Siehe
   Abschnitt "Botnetz-Erkennungssignale" und SYNC.md "Offene Fragen".
+- `recipientReputation` in `checkDraftForPhishing()`
+  (`src/draftPhishingCheck.ts`): immer `"unknown"`. Braucht einen Abgleich
+  gegen `fraud_alerts`/Empfänger-Historie in der DB, den ein zustandsloses
+  Modul (nur `bodyText` + `links` rein) nicht machen kann. Siehe Abschnitt
+  "Ausgehender Phishing-Check" und SYNC.md "Offene Fragen".
 
 ## Botnetz-Erkennungssignale (`ipReputationFlag` / `heloMismatch` / `imageToTextRatio`)
 
@@ -129,6 +140,78 @@ Laut WEB_INBOX.md 08.09. reicht "kein einzelnes Signal allein aus" --
 Verknüpfung/Entscheidungslogik ist bewusst NICHT Teil dieses Moduls
 (gehört in den Aufrufer/`classification.ts`-Layer, falls gewünscht -- hier
 noch nicht verdrahtet).
+
+## Ausgehender Phishing-Check (`checkDraftForPhishing`)
+
+Contract-Zusatz aus WEB_INBOX.md 08.09. ("Ausgehender Phishing-Check im
+Composer") und `contracts/api-spec.yaml` (`POST
+/messages/draft/phishing-check`, Commit `b6b3eb2`). Prüft einen
+Mail-**Entwurf** (`bodyText` + bereits vom Composer extrahierte `links:
+Array<{displayText, actualUrl}>`) vor dem Versand -- schützt driftmail
+selbst davor, als Phishing-Versandweg missbraucht zu werden (z.B. über ein
+kompromittiertes Gerät/Konto). Implementiert in
+`src/draftPhishingCheck.ts`, exportiert als `checkDraftForPhishing()`.
+
+**Bewusst wiederverwendet statt dupliziert:** die Erkennungslogik für
+eingehende Mails (`analyzeMail`) wurde dafür an den passenden Stellen
+refaktoriert, statt eine zweite Kopie zu schreiben:
+
+- `linkMismatch.ts`: `detectLinkMismatch(rawText)` (Mails) extrahiert jetzt
+  selbst Links und ruft für jeden das neu exportierte `isLinkMismatch(link)`
+  auf -- genau diese Funktion nutzt `checkDraftForPhishing` direkt für die
+  vom Composer bereits strukturiert übergebenen Links.
+- `homoglyph.ts`: `detectHomoglyphs(rawText, headers)` (Mails) ruft jetzt
+  pro gefundener Domain das neu exportierte `isHomoglyphDomain(domain)` auf
+  -- dieselbe Funktion prüft in `checkDraftForPhishing` die Ziel- und
+  Anzeigetext-Domain jedes Entwurfs-Links.
+- `urgencyLanguage.ts` (`scoreUrgencyLanguage`) und `ibanDetection.ts`
+  (`extractIbans`) werden unverändert wiederverwendet.
+
+**Neu für diesen Endpoint (nicht Teil von `analyzeMail`/`SecurityResult`):**
+
+- `src/creditCardDetection.ts` -- echte Kreditkarten-Erkennung per Regex +
+  Luhn-Prüfsumme (ISO/IEC 7812), exakt analog zu `ibanDetection.ts`s
+  Mod-97-Prüfsumme.
+- `src/credentialRequestLanguage.ts` -- PLATZHALTER-Keyword-Heuristik für
+  explizite Zugangs-/Zahlungsdaten-Anfragen ("Passwort bestätigen", "Konto
+  verifizieren", "Zahlungsdaten aktualisieren", ...). Wird NIE alleine für
+  `blocked` verwendet, siehe unten.
+
+**`blocked` -- bewusst konservative Schwelle (harter Block, siehe
+`src/draftPhishingCheck.ts` für die ausführliche Begründung im Code):**
+lieber ein false negative als ein false positive, weil `blocked` den
+Versand komplett verhindert (kein "Warnen-und-trotzdem-erlauben" wie bei
+den übrigen Feldern hier). Drei Wege zu `blocked = true`:
+
+1. `isLinkMismatch` auf irgendeinen Link (Anzeigetext behauptet eine
+   Domain, das Ziel ist eine andere).
+2. `isHomoglyphDomain` auf eine Link-Domain (Ziel-URL ODER Anzeigetext).
+3. `scoreUrgencyLanguage(bodyText) >= 0.5` **UND**
+   `detectsCredentialOrPaymentRequest(bodyText)` -- absichtlich eine
+   UND-Verknüpfung. Dringlichkeits-Sprache allein kommt auch in legitimen
+   Mails vor ("bitte dringend bis Freitag antworten"), eine
+   Zugangsdaten-Anfrage allein ebenfalls (z.B. eine interne
+   IT-Support-Mail). Erst die Kombination ist der klassische Phishing-Move.
+   Die Schwelle `0.5` übernimmt bewusst den Wert, den `classification.ts`
+   auf der Empfangsseite bereits als Relevanz-Schwelle für
+   `urgencyLanguageScore` nutzt (`> 0.5` dort), statt eine neue,
+   unkalibrierte Zahl zu erfinden.
+
+`containsSensitiveData` und `riskyLinks` sind laut Contract **nicht**
+blockierend, nur Warnhinweise für den Nutzer -- eigene sensible Daten
+mitzuteilen ist nicht per se falsch (z.B. eigene IBAN für eine Überweisung
+nennen). Sie werden unabhängig vom `blocked`-Ergebnis befüllt.
+
+`containsSensitiveData: "other"` ist bewusst **nicht** implementiert (z.B.
+Sozialversicherungsnummer-Muster wären möglich gewesen): anders als bei
+IBAN (Mod-97) oder Kreditkarte (Luhn) gibt es dafür kein einheitliches,
+prüfsummenvalidierbares Format über Länder hinweg -- ein reiner
+Regex-/Längen-Rateversuch ohne Prüfsumme wäre deutlich fehleranfälliger
+als die beiden anderen Kategorien, deshalb weggelassen statt eines
+unehrlichen Rateversuchs.
+
+`recipientReputation` ist immer `"unknown"` -- siehe "Was ist echte Logik,
+was ist Platzhalter" oben und "Übergabe an Track A" unten.
 
 ## Design-Entscheidungen
 
@@ -176,6 +259,41 @@ noch nicht verdrahtet).
   selbst ableiten, nur aus einem externen Abgleich. Ein geratener Wert
   (z.B. "clean" als Default) wäre vorgetäuschte Sicherheit und schlimmer
   als ehrliches `"unknown"`.
+- **`blocked`-Schwelle im ausgehenden Phishing-Check bewusst konservativ,
+  UND statt ODER bei Dringlichkeit+Zugangsdatenanfrage (08.09.):** Anders
+  als `classify()` auf der Empfangsseite (dort gibt es keinen harten Block,
+  nur eine Klassifikation, die Track A/UI in Quarantäne/Warnhinweis
+  übersetzt) verhindert `blocked = true` hier den Versand komplett. Ein
+  falsch-positiver Block wäre ein Produktvertrauensbruch (Nutzer kann eine
+  legitime Mail nicht senden); ein falsch-negativer Fall ist "nur" ein
+  verpasster Fang. Deshalb nur die drei stärksten, praktisch
+  eindeutigen Signale (siehe Abschnitt "Ausgehender Phishing-Check" oben),
+  und Dringlichkeit + Zugangsdatenanfrage bewusst als UND statt ODER
+  verknüpft, weil jedes der beiden Signale allein auch in legitimen Mails
+  vorkommt.
+- **`isLinkMismatch`/`isHomoglyphDomain` aus `linkMismatch.ts`/
+  `homoglyph.ts` extrahiert statt eigene Kopie in
+  `draftPhishingCheck.ts` (08.09.):** Der Auftrag verlangte explizit
+  Wiederverwendung der bestehenden Logik statt Duplikation. Die
+  Mail-Erkennung (`detectLinkMismatch`/`detectHomoglyphs`) wurde dafür
+  minimal refaktoriert (Extraktion + Delegation an die neue Pro-Element-
+  Funktion), ihr beobachtbares Verhalten/ihre Tests sind unverändert.
+- **Kreditkarten-Regex/Luhn statt reinem Keyword-Scan (08.09.):** analog
+  zur bestehenden Design-Entscheidung bei `ibanDetection.ts` (Mod-97 statt
+  reinem Ziffern-Pattern) -- eine Prüfsumme reduziert falsch-positive
+  Treffer auf zufällige 13-19-stellige Zahlenfolgen (z.B. lange
+  Bestellnummern) erheblich, ist aber kein Ersatz für einen echten
+  Issuer-BIN-Abgleich. Da `containsSensitiveData` nicht blockierend ist
+  (siehe oben), ist das verbleibende Restrisiko falsch-positiver
+  Warnhinweise hier unkritisch.
+- **`detectsCredentialOrPaymentRequest` reine Substring-Keyword-Liste,
+  Wortreihenfolge relevant (08.09.):** z.B. "Passwort bestätigen" matcht,
+  "bestätigen Sie Ihr Passwort" (umgestellte Wortreihenfolge) NICHT. Das
+  ist eine bekannte Schwäche reiner Substring-Heuristiken (siehe auch
+  `spamSubcategory.ts`/`urgencyLanguage.ts` oben) und bewusst in Kauf
+  genommen, weil diese Funktion NIE allein `blocked` auslöst -- immer nur
+  in Kombination mit hoher Dringlichkeits-Sprache. Ein echter NLP-Ersatz
+  gehört wie bei den anderen Platzhaltern in den KI-Adapter.
 - **`spamSubcategory` wird NICHT für `classify()`s Entscheidung selbst
   verwendet:** Ob eine Mail überhaupt als "spam" (statt phishing/safe/
   unclear) gilt, entscheidet weiterhin ausschließlich `classification.ts`
@@ -252,6 +370,25 @@ noch nicht verdrahtet).
   statt tatsächlicher Bildfläche (Bilder werden nicht geladen — kein
   Netzwerkzugriff). Jedes `<img>`-Tag zählt gleich viel, unabhängig von
   Größe (ein 1x1-Tracking-Pixel zählt wie ein bildschirmfüllendes Banner).
+- **`recipientReputation`** (`checkDraftForPhishing`): bleibt immer
+  `"unknown"`. Braucht einen Abgleich der Empfänger-Adresse gegen
+  `fraud_alerts`/Empfänger-Historie in der DB — außerhalb des Scopes
+  "bodyText+links rein, Ergebnis raus", exakt dieselbe Kategorie
+  Einschränkung wie bei `senderDomainAgeDays`/`domainReputationScore`/
+  `ipReputationFlag` oben. Siehe "Übergabe an Track A" unten.
+- **Kreditkarten-Erkennung ohne Issuer-BIN-Abgleich**: eine zufällige,
+  aber Luhn-gültige 13-19-stellige Ziffernfolge (z.B. manche
+  Bestellnummern) kann theoretisch fälschlich als Kreditkarte erkannt
+  werden. Unkritisch, da `containsSensitiveData` nur ein nicht-blockierender
+  Warnhinweis ist (siehe "Ausgehender Phishing-Check" oben).
+- **`detectsCredentialOrPaymentRequest` ist wortreihenfolge-sensitiv**
+  (reine Substring-Suche, keine Umschreibungen/Wortumstellungen erkannt).
+  Siehe Design-Entscheidung oben, warum das hier bewusst in Kauf genommen
+  wird (nie alleinige Blockierungs-Grundlage).
+- **`containsSensitiveData: "other"` nicht implementiert** (z.B.
+  Sozialversicherungsnummer-Muster) — kein länderübergreifend
+  einheitliches, prüfsummenvalidierbares Format verfügbar, siehe
+  "Ausgehender Phishing-Check" oben.
 
 ## Contract-Sync
 
@@ -263,6 +400,13 @@ inkl. `spamSubcategory` (08.09., siehe WEB_INBOX.md "Neue
 Spam-Unterkategorie fuer aggressives Auto-Loeschen") sowie
 `ipReputationFlag`/`heloMismatch`/`imageToTextRatio` (08.09., siehe
 WEB_INBOX.md "Botnetz-Erkennungssignale").
+
+Der ausgehende Phishing-Check (`src/draftPhishingCheck.ts`,
+`DraftPhishingCheckResult`) ist NICHT Teil von `SecurityResult` -- eigener
+Response-Typ, der `POST /messages/draft/phishing-check` aus
+`contracts/api-spec.yaml` (Commit `b6b3eb2`) spiegelt. Gleiche
+Sync-Pflicht: bei Änderungen an diesem Endpoint-Schema muss
+`src/draftPhishingCheck.ts` manuell nachgezogen werden.
 
 ## Übergabe an Track A (spamSubcategory / Auto-Löschen)
 
@@ -291,3 +435,25 @@ dem `analyzeMail()`-Aufruf durchführt und das Feld nachträglich befüllt
 (vermutlich Track A, da das Backend Netzwerkzugriff hat), ist als offene
 Frage in SYNC.md "Offene Fragen" eingetragen -- nicht selbst entscheidbar,
 da plattform-/architekturübergreifend.
+
+## Übergabe an Track A (`recipientReputation`, ausgehender Phishing-Check)
+
+`checkDraftForPhishing()` liefert `recipientReputation` immer als
+`"unknown"` (siehe "Ausgehender Phishing-Check" oben) -- ein echter
+Abgleich der Empfänger-Adresse gegen `fraud_alerts`/Empfänger-Historie
+braucht DB-Zugriff, den dieses zustandslose Modul (nur `bodyText` + `links`
+rein) nicht hat. Genau dieselbe Kategorie Einschränkung wie bei
+`ipReputationFlag`/`senderDomainAgeDays`/`domainReputationScore` oben.
+
+Wer den Lookup nach dem `checkDraftForPhishing()`-Aufruf durchführt und das
+Feld nachträglich befüllt (vermutlich Track A, da das Backend DB-Zugriff
+hat), ist als neue offene Frage in SYNC.md "Offene Fragen" eingetragen --
+nicht selbst entscheidbar, da plattform-/architekturübergreifend. Laut
+WEB_INBOX.md 08.09. soll bei der Kombination "sensible Daten im Text" +
+"Empfänger mit schlechter Reputation" der UI-Warnhinweis deutlich
+schärfer formuliert werden (rote statt gelbe Sprechblase) -- das ist
+UI-Logik im aufrufenden Track (C/F), nicht Teil dieses Moduls.
+
+`blocked`/`riskyLinks`/`containsSensitiveData` sind unabhängig von
+`recipientReputation` bereits vollständig nutzbar -- nur die
+Reputationsabfrage selbst fehlt.

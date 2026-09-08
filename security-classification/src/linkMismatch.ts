@@ -64,19 +64,28 @@ function domainsAreRelated(a: string, b: string): boolean {
  * verglichen -- ein Link mit Anzeigetext "Hier klicken" liefert keine
  * vergleichbare Domain und wird übersprungen (kein Fehlalarm, aber auch
  * kein Signal).
+ *
+ * Prüft ein einzelnes, bereits extrahiertes Link-Paar (Anzeigetext +
+ * tatsächliches Ziel) statt selbst aus Rohtext zu extrahieren -- wird von
+ * `detectLinkMismatch` unten für Mails verwendet UND von
+ * `draftPhishingCheck.ts` für Composer-Entwürfe, die ihre Links bereits als
+ * strukturierte `{displayText, actualUrl}`-Paare mitschicken (siehe
+ * `POST /messages/draft/phishing-check` im Contract).
  */
-export function detectLinkMismatch(rawText: string): boolean {
-  const links = extractLinks(rawText);
-  for (const link of links) {
-    const actualHost = hostnameOf(link.actualUrl);
-    if (!actualHost) continue;
+export function isLinkMismatch(link: ExtractedLink): boolean {
+  const actualHost = hostnameOf(link.actualUrl);
+  if (!actualHost) return false;
 
-    const displayDomains = extractDomainLikeTokens(link.displayText);
-    for (const displayDomain of displayDomains) {
-      if (!domainsAreRelated(displayDomain, actualHost)) {
-        return true;
-      }
+  const displayDomains = extractDomainLikeTokens(link.displayText);
+  for (const displayDomain of displayDomains) {
+    if (!domainsAreRelated(displayDomain, actualHost)) {
+      return true;
     }
   }
   return false;
+}
+
+/** Extrahiert Links aus Rohtext und prüft jeden auf Anzeigetext-vs-Ziel-Mismatch. */
+export function detectLinkMismatch(rawText: string): boolean {
+  return extractLinks(rawText).some(isLinkMismatch);
 }

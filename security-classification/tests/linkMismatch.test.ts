@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectLinkMismatch, extractLinks } from "../src/linkMismatch.js";
+import { detectLinkMismatch, extractLinks, isLinkMismatch } from "../src/linkMismatch.js";
 
 describe("extractLinks", () => {
   it("extracts an HTML anchor's href and display text", () => {
@@ -40,5 +40,19 @@ describe("detectLinkMismatch", () => {
 
   it("returns false when there are no links at all", () => {
     expect(detectLinkMismatch("Hallo, wie geht es Ihnen?")).toBe(false);
+  });
+});
+
+describe("isLinkMismatch (single already-extracted link, used by draftPhishingCheck.ts)", () => {
+  it("flags a single link whose display domain differs from the href domain", () => {
+    expect(
+      isLinkMismatch({ displayText: "www.paypal.com", actualUrl: "https://evil.example.ru/login" }),
+    ).toBe(true);
+  });
+
+  it("does not flag a single link where display and href domain match", () => {
+    expect(
+      isLinkMismatch({ displayText: "www.paypal.com", actualUrl: "https://www.paypal.com/login" }),
+    ).toBe(false);
   });
 });
