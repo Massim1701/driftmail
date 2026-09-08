@@ -215,6 +215,56 @@ paths:
                   draftText:
                     type: string
 
+  /messages/draft/phishing-check:
+    post:
+      summary: >
+        Prueft einen Mail-Entwurf vor dem Versand auf Phishing-Merkmale
+        (harter Block, siehe blocked) sowie nicht-blockierende Warnsignale
+        (sensible Daten, Empfaenger-Reputation, riskante Links). Nutzt
+        dieselben Signale wie SecurityResult/analyzeMail, angewendet auf den
+        eigenen Entwurf statt auf eingehende Mails (siehe WEB_INBOX.md 08.09.).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bodyText: { type: string }
+                links:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      displayText: { type: string }
+                      actualUrl: { type: string }
+      responses:
+        "200":
+          description: Ergebnis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocked:
+                    type: boolean
+                    description: >
+                      true = Phishing-Merkmale erkannt, Versand MUSS verhindert
+                      werden (kein Warnen-und-trotzdem-erlauben).
+                  reason: { type: string, nullable: true }
+                  containsSensitiveData:
+                    type: array
+                    items: { type: string, enum: [iban, credit_card, other] }
+                  recipientReputation:
+                    type: string
+                    enum: [safe, unknown, flagged]
+                  riskyLinks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        url: { type: string }
+                        reason: { type: string }
+
   /contracts:
     get:
       summary: Erkannte Verträge auflisten
