@@ -16,6 +16,18 @@ Erster Durchstich der Backend-API gegen `contracts/api-spec.yaml` und
 > "Auto-Delete: adult/gambling-Spam" unten), `generic`/`marketing` verhalten
 > sich wie bisheriger Spam. `phishing` ist von dieser Regel unberührt.
 
+> **Contract-Update (2026-09-08, WEB_INBOX.md "Botnetz-Erkennungssignale"):**
+> `SecurityResult` um `ipReputationFlag`/`heloMismatch`/`imageToTextRatio`
+> ergänzt (Commit `5bb9531`). Mock-Adapter liefert `ipReputationFlag` immer
+> `"unknown"` (kein echter Blocklist-Abgleich möglich), `heloMismatch`/
+> `imageToTextRatio` einfache Platzhalterwerte (`false`/`null`) — echte
+> Erkennung baut Track B.
+
+> **Contract-Update (2026-09-08, WEB_INBOX.md "Ausgehender Phishing-Check im
+> Composer" + Erweiterung, Commit `b6b3eb2`):** neuer Endpoint `POST
+> /messages/draft/phishing-check` hinzugekommen. Mock-Implementierung siehe
+> Abschnitt "Ausgehender Phishing-Check (Composer, Mock)" unten.
+
 ```
 Mail-Adapter (Gmail/IMAP/Fixture) -> Sync-Pipeline -> Mock-KI-Analyse
   -> Ordner-Zuordnung + ggf. Auto-Quarantäne (phishing) / Auto-Delete
@@ -116,6 +128,13 @@ curl -X POST http://localhost:3000/v1/capability-check \
   Postgres, siehe "Annahmen".
 - **Auth**: keine — kein Login/Session/Token-Handling in diesem
   Durchstich, ein fester "Demo-User" wird beim Start angelegt.
+- **Ausgehender Phishing-Check** (`src/ai/draftPhishingCheckMock.ts`,
+  Endpoint `POST /messages/draft/phishing-check`): simple, ehrliche
+  Mock-Heuristik (Link-Mismatch, einfache Regex-Erkennung für IBAN/
+  Kreditkarte, `recipientReputation` immer `"unknown"`) — NICHT die echte
+  Erkennungslogik. Track B hat diese bereits gebaut
+  (`security-classification/src/draftPhishingCheck.ts`), siehe eigener
+  Abschnitt unten.
 
 ## Auto-Delete: adult/gambling-Spam
 
@@ -211,6 +230,66 @@ Enum-Strings auf `messages.folder`:
   `ensureDemoUser()` zu — analog zum bestehenden Muster in
   `src/routes/capability.ts`.
 
+## Ausgehender Phishing-Check (Composer, Mock)
+
+Seit dem Contract-Update vom 08.09. (`WEB_INBOX.md` "Ausgehender
+Phishing-Check im Composer" + Erweiterung, Commit `b6b3eb2`) gibt es
+`POST /messages/draft/phishing-check`: prüft einen Mail-ENTWURF (`bodyText`
++ `links`) vor dem Versand, bevor er den Composer verlässt.
+
+**Implementierung:** `src/ai/draftPhishingCheckMock.ts`
+(`checkDraftForPhishingMock()`), verdrahtet in `src/routes/messages.ts`.
+
+**Grenze — bewusst Mock, kein `AiAdapter`-Austausch wie sonst:** Track B
+(Sicherheits-Klassifikation, Branch `track-b-security`) hat die ECHTE
+Erkennungslogik dafür bereits gebaut
+(`security-classification/src/draftPhishingCheck.ts`,
+`checkDraftForPhishing()`) — inkl. Homoglyph-Domain-Erkennung, Mod-97
+validierter IBAN- und Luhn-validierter Kreditkarten-Erkennung. Track A
+(`backend/`) und Track B (`security-classification/`) sind aktuell zwei
+getrennte npm-Packages ohne formale Abhängigkeit zueinander — `backend/`
+hat keine Dependency auf `security-classification/`. Die echte Integration
+(dieses Mock-Modul durch einen Aufruf von Track B's Funktion ersetzen, z.B.
+über eine Workspace-Dependency oder einen internen Aufruf) ist ein
+separater, noch **nicht gestarteter** Integrations-Schritt — bewusst außen
+vor gelassen (siehe Auftrag), analog zur "Was ist echt/Mock"-Trennung beim
+`AiAdapter` oben.
+
+Diese Mock-Implementierung folgt derselben Grund-Logik wie Track B, aber
+vereinfacht:
+- **Link-Mismatch:** simple Heuristik — Domain aus dem tatsächlichen
+  Link-Ziel (`actualUrl`) und aus dem Anzeigetext (`displayText`, falls der
+  selbst wie eine Domain/URL aussieht) extrahieren und vergleichen; kein
+  Homoglyph-Check (anders als Track B), keine Subdomain-Sonderbehandlung.
+- **`blocked` (harter Block, siehe api-spec.yaml-Kommentar):** `true`, wenn
+  ein Link-Mismatch gefunden wurde ODER Dringlichkeits-Sprache UND eine
+  Zugangs-/Zahlungsdaten-Anfrage gleichzeitig im Text vorkommen (simple
+  Keyword-Listen, gleiches Muster wie `src/ai/mockAdapter.ts`s
+  `PHISHING_KEYWORDS`) — bewusst eine UND-Verknüpfung wie bei Track B, weil
+  jedes Signal allein auch in legitimen Mails vorkommt.
+- **`containsSensitiveData` (IBAN/Kreditkarte):** simple Regex-Kandidaten,
+  **ohne** Prüfsumme (kein Mod-97 für IBAN, kein Luhn für Kreditkarten) —
+  Auftrag sagt explizit "IBAN-Erkennung simple Regex reicht". Mehr false
+  positives/negatives als Track B's validierte Version. `"other"` (z.B.
+  Sozialversicherungsnummer) bewusst nicht implementiert, gleiche
+  Begründung wie bei Track B (kein einheitliches, per Regex sauber
+  erkennbares Format über Länder hinweg).
+- **`recipientReputation`:** immer `"unknown"`, genau wie bei Track B
+  dokumentiert. Bei Track B, weil das Paket zustandslos ist (kein
+  DB-Zugriff). Hier im Backend absichtlich **genauso** gehalten, obwohl
+  `backend/` grundsätzlich DB-Zugriff hätte: die dafür nötige
+  `fraud_alerts`-Tabelle (`contracts/db-schema.sql`) ist in diesem Skeleton
+  noch nicht modelliert (kein Record-Typ in `src/types.ts`, kein
+  Store-Zugriff) — ein echter Empfänger-Reputations-Lookup ist wie die
+  Track-B-Integration ein separater, noch offener Schritt (siehe SYNC.md
+  "Offene Fragen").
+
+**Tests:** `src/smoketest.ts` deckt einen Block-Fall (Link-Mismatch,
+`blocked === true` + `reason` gesetzt + genau 1 `riskyLink`) und einen
+Nicht-Block-Fall mit sensiblen Daten ab (eigene IBAN im Text —
+`blocked === false`, `containsSensitiveData` enthält `"iban"`,
+`recipientReputation === "unknown"`).
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - `contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war nicht
@@ -240,6 +319,18 @@ Enum-Strings auf `messages.folder`:
   Abschnitt "Auto-Delete: adult/gambling-Spam" oben) teilweise: Write-Pfad
   über `store.logSecurityAudit()` ist da, aber weiterhin **kein**
   `GET`-Endpunkt, da `api-spec.yaml` keinen vorsieht.
+- `fraud_alerts` (`contracts/db-schema.sql`) ist ebenfalls noch nicht in
+  `src/types.ts`/`src/db/store.ts` modelliert — deshalb liefert
+  `recipientReputation` in `POST /messages/draft/phishing-check` immer
+  `"unknown"` statt eines echten Lookups, siehe Abschnitt "Ausgehender
+  Phishing-Check (Composer, Mock)" oben.
+- `send_abuse_flags` (Bot/Human-Missbrauchserkennung beim Versand,
+  WEB_INBOX.md 08.09. "Ausgehender Phishing-Check im Composer") existiert
+  bisher **weder** in `contracts/db-schema.sql` noch in
+  `contracts/api-spec.yaml` — nur als SQL-Vorschlag in `WEB_INBOX.md`
+  dokumentiert. Kein eigener Versand-Pfad in diesem Durchstich (siehe
+  oben, "Kein Hintergrund-Job"), daher hier nicht mitgebaut; siehe
+  SYNC.md "Offene Fragen".
 
 ## Struktur
 
@@ -252,6 +343,6 @@ src/
   routes/               ein Router-Modul je api-spec.yaml-Ressource (inkl. folders.ts) + internal.ts (Health/Sync/Seed)
   db/store.ts           In-Memory-Repository (siehe "Annahmen")
   mail/                 MailAdapter-Interface + Gmail/IMAP/Fixture-Implementierungen + Sync-Pipeline
-  ai/                   AiAdapter-Interface (Spiegel von ai-adapter-interface.ts) + Mock-Implementierung
+  ai/                   AiAdapter-Interface (Spiegel von ai-adapter-interface.ts) + Mock-Implementierung + draftPhishingCheckMock.ts (Composer-Phishing-Check-Mock)
   smoketest.ts           End-to-End-Test (npm test)
 ```

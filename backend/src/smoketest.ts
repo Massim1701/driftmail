@@ -158,7 +158,44 @@ async function main() {
     });
     assert(capRes.status === 200, "POST /v1/capability-check sollte 200 liefern");
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Contracts -> Capability) end-to-end grün.");
+    // POST /messages/draft/phishing-check (WEB_INBOX.md 08.09., Mock-Logik
+    // siehe src/ai/draftPhishingCheckMock.ts) — Block-Fall: Link-Mismatch
+    // (Anzeigetext behauptet paypal.com, Ziel zeigt auf andere Domain).
+    const blockedCheckRes = await fetch(`${base}/v1/messages/draft/phishing-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bodyText: "Bitte bestätigen Sie Ihre Daten.",
+        links: [{ displayText: "www.paypal.com", actualUrl: "https://paypal-secure-login.example.net/confirm" }],
+      }),
+    });
+    assert(blockedCheckRes.status === 200, "POST .../draft/phishing-check sollte 200 liefern");
+    const blockedCheck = (await blockedCheckRes.json()) as Record<string, unknown>;
+    assert(blockedCheck.blocked === true, "Link-Mismatch sollte blocked=true liefern");
+    assert(typeof blockedCheck.reason === "string" && (blockedCheck.reason as string).length > 0, "blocked sollte einen reason liefern");
+    assert(Array.isArray(blockedCheck.riskyLinks) && (blockedCheck.riskyLinks as unknown[]).length === 1, "genau 1 riskyLink erwartet");
+
+    // Nicht-Block-Fall: eigene IBAN mitteilen ist NICHT per se Phishing
+    // (siehe WEB_INBOX.md 08.09.) — nur ein nicht-blockierender Warnhinweis
+    // über containsSensitiveData, blocked bleibt false.
+    const sensitiveCheckRes = await fetch(`${base}/v1/messages/draft/phishing-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bodyText: "Bitte überweisen Sie den Betrag auf meine IBAN DE89 3704 0044 0532 0130 00. Danke!",
+        links: [],
+      }),
+    });
+    assert(sensitiveCheckRes.status === 200, "POST .../draft/phishing-check (sensible Daten) sollte 200 liefern");
+    const sensitiveCheck = (await sensitiveCheckRes.json()) as Record<string, unknown>;
+    assert(sensitiveCheck.blocked === false, "eigene IBAN allein darf NICHT blockieren");
+    assert(
+      Array.isArray(sensitiveCheck.containsSensitiveData) && (sensitiveCheck.containsSensitiveData as string[]).includes("iban"),
+      "containsSensitiveData sollte 'iban' enthalten",
+    );
+    assert(sensitiveCheck.recipientReputation === "unknown", "recipientReputation sollte immer 'unknown' sein (Mock, siehe Kommentar in draftPhishingCheckMock.ts)");
+
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Contracts -> Capability -> Draft-Phishing-Check) end-to-end grün.");
   } finally {
     server.close();
   }

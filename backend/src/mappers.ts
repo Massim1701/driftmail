@@ -38,6 +38,9 @@ export function toApiSecurityResult(s: MessageSecurityRecord): ApiSecurityResult
     containsNewIban: s.containsNewIban,
     classification: s.classification,
     spamSubcategory: s.spamSubcategory,
+    ipReputationFlag: s.ipReputationFlag,
+    heloMismatch: s.heloMismatch,
+    imageToTextRatio: s.imageToTextRatio,
     confidenceScore: s.confidenceScore,
   };
 }

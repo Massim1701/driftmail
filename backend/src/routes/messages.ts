@@ -2,9 +2,35 @@ import { Router } from "express";
 import { store } from "../db/store";
 import { toApiMessage, toApiMessageDetail, toApiMailSummary } from "../mappers";
 import { aiAdapter } from "../ai";
-import type { AiSource } from "../types";
+import { checkDraftForPhishingMock } from "../ai/draftPhishingCheckMock";
+import type { AiSource, ApiDraftPhishingCheckLink } from "../types";
 
 export const messagesRouter = Router();
+
+// POST /messages/draft/phishing-check — siehe api-spec.yaml (neu seit Commit
+// b6b3eb2, WEB_INBOX.md 08.09. "Ausgehender Phishing-Check im Composer" +
+// Erweiterung). Registriert VOR den `/:messageId`-Routen unten aus Klarheit
+// (funktional egal, da HTTP-Methode + letztes Pfadsegment ohnehin nicht mit
+// `/messages/:messageId/quarantine` o.ä. kollidieren). Nutzt eine simple
+// Mock-Implementierung (src/ai/draftPhishingCheckMock.ts) nach demselben
+// Grundprinzip wie Track B's echte Erkennungslogik
+// (security-classification/src/draftPhishingCheck.ts) -- echte Integration
+// mit Track B ist ein separater, noch offener Schritt (siehe README/SYNC.md).
+messagesRouter.post("/messages/draft/phishing-check", (req, res) => {
+  const bodyText = typeof req.body?.bodyText === "string" ? req.body.bodyText : "";
+  const rawLinks = Array.isArray(req.body?.links) ? req.body.links : [];
+
+  const links: ApiDraftPhishingCheckLink[] = rawLinks
+    .filter((l: unknown): l is Record<string, unknown> => typeof l === "object" && l !== null)
+    .map((l: Record<string, unknown>) => ({
+      displayText: typeof l.displayText === "string" ? l.displayText : null,
+      actualUrl: typeof l.actualUrl === "string" ? l.actualUrl : "",
+    }))
+    .filter((l: ApiDraftPhishingCheckLink) => l.actualUrl.length > 0);
+
+  const result = checkDraftForPhishingMock(bodyText, links);
+  res.json(result);
+});
 
 // GET /messages?folderId=&accountId= — siehe api-spec.yaml
 // CONTRACT-ÄNDERUNG (SYNC.md, Commit 734781e): Query-Param `folder` (Enum)

@@ -60,6 +60,16 @@ export class MockAiAdapter implements AiAdapter {
       containsNewIban: rawText.toLowerCase().includes("iban"),
       classification,
       spamSubcategory: looksSpam ? resolveSpamSubcategory(rawText) : null,
+      // Botnetz-Signale (WEB_INBOX.md 08.09.): ipReputationFlag braucht einen
+      // externen Blocklist-Abgleich (Spamhaus XBL/CBL o.ä.), den dieser Mock
+      // nicht hat -- deshalb immer "unknown", NIE geraten (analog zu Track
+      // B's ipReputation.ts). heloMismatch/imageToTextRatio sind einfache
+      // Platzhalterwerte (kein echter SMTP-Handshake- bzw. Bildanalyse-Zugriff
+      // in diesem Mock) -- echte Erkennung baut Track B, Integration ist ein
+      // separater, noch offener Schritt (siehe README).
+      ipReputationFlag: "unknown",
+      heloMismatch: false,
+      imageToTextRatio: null,
       confidenceScore: looksPhishing ? 0.88 : looksSpam ? 0.7 : 0.95,
     };
   }

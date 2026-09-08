@@ -76,6 +76,10 @@ export interface MessageSecurityRecord {
   classification: Classification;
   // Nur gesetzt wenn classification === "spam", siehe ai/types.ts.
   spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | null;
+  // Botnetz-Erkennung (WEB_INBOX.md 08.09.), siehe ai/types.ts.
+  ipReputationFlag: "clean" | "known_botnet" | "unknown" | null;
+  heloMismatch: boolean;
+  imageToTextRatio: number | null;
   confidenceScore: number | null;
   analyzedAt: string;
 }
@@ -182,6 +186,9 @@ export interface ApiSecurityResult {
   containsNewIban: boolean;
   classification: Classification;
   spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | null;
+  ipReputationFlag: "clean" | "known_botnet" | "unknown" | null;
+  heloMismatch: boolean;
+  imageToTextRatio: number | null;
   confidenceScore: number | null;
 }
 
@@ -215,4 +222,34 @@ export interface ApiUserAiCapability {
   osVersion: string | null;
   onDeviceSupported: boolean;
   activeMode: ActiveMode;
+}
+
+// ===== POST /messages/draft/phishing-check (WEB_INBOX.md 08.09.,
+// "Ausgehender Phishing-Check im Composer" + Erweiterung) =====
+// Kein AiAdapter-Bestandteil (contracts/ai-adapter-interface.ts kennt diese
+// Funktion nicht) -- eigener Endpoint, siehe api-spec.yaml. Mock-Logik in
+// src/ai/draftPhishingCheckMock.ts, spiegelt grob die echte Implementierung
+// von Track B (security-classification/src/draftPhishingCheck.ts), aber
+// bewusst vereinfacht (siehe dortige Kommentare). Echte Integration mit
+// Track B ist ein separater, noch offener Schritt.
+
+export interface ApiDraftPhishingCheckLink {
+  displayText: string | null;
+  actualUrl: string;
+}
+
+export type SensitiveDataKind = "iban" | "credit_card" | "other";
+export type RecipientReputation = "safe" | "unknown" | "flagged";
+
+export interface ApiRiskyLink {
+  url: string;
+  reason: string;
+}
+
+export interface ApiDraftPhishingCheckResult {
+  blocked: boolean;
+  reason: string | null;
+  containsSensitiveData: SensitiveDataKind[];
+  recipientReputation: RecipientReputation;
+  riskyLinks: ApiRiskyLink[];
 }
