@@ -85,3 +85,17 @@ Bedeutung der Felder:
 Zusaetzlich pruefenswert (kein eigenes Feld noetig, kann in der Klassifikationslogik selbst laufen): zeitliche Haeufung strukturell aehnlicher Mails von wechselnden, vorher nie gesehenen Absendern/IPs in kurzer Zeit; algorithmisch wirkende Zufallsmuster im lokalen Teil der Absenderadresse.
 
 Verknuepfung mit der Auto-Loesch-Regel von eben: kein einzelnes Signal reicht allein aus, aber ip_reputation_flag = 'known_botnet' UND helo_mismatch UND hoher image_to_text_ratio zusammen ist ein starkes Muster fuer classification = 'spam' + spam_subcategory IN ('adult','gambling') -> sofort loeschen. Kein Blocker.
+
+
+[2026-09-08] [offen] [Track A + Infra/DNS, nicht akut] — Ausgehende Mail-Authentifizierung ("erkennbar als echte Mail" fuer fremde Mailserver). Zwei getrennte Faelle, WICHTIG nicht verwechseln:
+
+Fall 1 — Versand ueber Nutzer-eigenes Gmail/IMAP-Konto (aktueller Stand):
+Braucht KEINE eigene Massnahme. Wenn driftmail ueber die offizielle Gmail API sendet, signiert Google selbst per DKIM — fremde Server sehen "kommt von Google, legitim". Wichtig ist nur: Versand MUSS ueber die offizielle Provider-API laufen (Gmail API / Provider-SMTP mit Auth), nicht ueber einen selbstgebauten SMTP-Client mit gefaelschtem From-Header.
+
+Fall 2 — driftmail bekommt eine eigene Absender-Domain (spaeter, z.B. @driftware.online-Adressen oder System-Benachrichtigungen):
+Das ist reine DNS-Konfiguration bei der Domain, KEIN UI-Feature im Compose-Fenster, User sieht davon nichts. Noetig sobald driftmail selbst Mails im eigenen Namen verschickt:
+- SPF-Record bei driftware.online: legt fest, welche Server im Namen der Domain senden duerfen.
+- DKIM-Signierung: jede ausgehende Mail bekommt eine kryptografische Signatur (Private Key im Backend, Public Key als DNS TXT-Record).
+- DMARC-Policy (TXT-Record _dmarc.driftware.online): sagt fremden Servern, was bei SPF/DKIM-Fail passieren soll (reject/quarantine/none), plus Reporting-Adresse.
+
+Kein Blocker jetzt, da Fall 2 noch nicht akut ist (kein eigener Versand-Server aktiv). Bitte trotzdem vormerken: sobald Track A einen eigenen Mail-Versand-Pfad baut (nicht nur Weiterleitung an Provider-APIs), hier nochmal anfragen bevor das live geht — DKIM-Key-Erzeugung und DNS-Eintraege muessen VOR dem ersten eigenen Versand stehen, sonst landet alles automatisch im Spam der Empfaenger.
