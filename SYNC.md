@@ -14,7 +14,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | Track | Ordner | Status | Zuletzt geändert |
 |---|---|---|---|
 | 0 — Contracts | contracts/ | fertig | 2026-09-08 |
-| A — Backend | backend/ | fertig | 2026-09-08 |
+| A — Backend | backend/ | in arbeit | 2026-09-08 |
 | B — Sicherheits-Klassifikation | security-classification/ | offen | — |
 | C — iOS App | ios/ | offen | — |
 | D — Vertrag & Reminder | contracts-logic/ | offen | — |
