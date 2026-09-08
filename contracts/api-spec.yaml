@@ -24,14 +24,85 @@ paths:
                 items:
                   $ref: "#/components/schemas/MailAccount"
 
+  /folders:
+    get:
+      summary: Ordner des Users auflisten (System- und eigene Ordner)
+      responses:
+        "200":
+          description: Liste der Ordner
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Folder"
+    post:
+      summary: Neuen eigenen Ordner anlegen
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                icon: { type: string }
+      responses:
+        "201":
+          description: Angelegt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Folder"
+
+  /folders/{folderId}:
+    patch:
+      summary: Ordner umbenennen/Icon ändern (System-Ordner außer quarantaene/spam ebenfalls umbenennbar)
+      parameters:
+        - name: folderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                icon: { type: string }
+                sortOrder: { type: integer }
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Folder"
+    delete:
+      summary: Eigenen Ordner löschen (System-Ordner nicht löschbar)
+      parameters:
+        - name: folderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Gelöscht
+
   /messages:
     get:
       summary: Nachrichten eines Ordners abrufen
       parameters:
-        - name: folder
+        - name: folderId
           in: query
           schema:
-            $ref: "#/components/schemas/Folder"
+            type: string
+            format: uuid
         - name: accountId
           in: query
           schema:
@@ -78,6 +149,32 @@ paths:
       responses:
         "200":
           description: Quarantäne-Eintrag erstellt
+
+  /messages/{messageId}/move:
+    post:
+      summary: Nachricht in einen anderen Ordner verschieben
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [folderId]
+              properties:
+                folderId: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Verschoben
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
 
   /messages/{messageId}/summary:
     get:
@@ -165,8 +262,17 @@ paths:
 components:
   schemas:
     Folder:
-      type: string
-      enum: [wichtig, sonstiges, rechnungen, quarantaene, spam]
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        icon: { type: string }
+        isSystem: { type: boolean }
+        systemKey:
+          type: string
+          nullable: true
+          enum: [wichtig, sonstiges, rechnungen, quarantaene, spam]
+        sortOrder: { type: integer }
 
     MailAccount:
       type: object
@@ -184,8 +290,7 @@ components:
         fromDisplayName: { type: string }
         subject: { type: string }
         receivedAt: { type: string, format: date-time }
-        folder:
-          $ref: "#/components/schemas/Folder"
+        folderId: { type: string, format: uuid }
         classification:
           type: string
           enum: [safe, spam, phishing, unclear]
@@ -212,6 +317,10 @@ components:
         urgencyLanguageScore: { type: number, format: float, nullable: true }
         containsNewIban: { type: boolean }
         classification: { type: string, enum: [safe, spam, phishing, unclear] }
+        spamSubcategory:
+          type: string
+          nullable: true
+          enum: [adult, gambling, generic, marketing]
         confidenceScore: { type: number, format: float }
 
     MailSummary:
