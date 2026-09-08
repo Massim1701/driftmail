@@ -25,6 +25,9 @@ describe("analyzeMail (integration)", () => {
       containsNewIban: false,
       classification: "safe",
       spamSubcategory: null,
+      ipReputationFlag: "unknown",
+      heloMismatch: false,
+      imageToTextRatio: null, // rawText hier ist reiner Text, kein HTML
       confidenceScore: expect.any(Number),
     });
   });
@@ -54,12 +57,20 @@ describe("analyzeMail (integration)", () => {
     expect(result.containsNewIban).toBe(true);
     expect(result.classification).toBe("phishing");
     expect(result.confidenceScore).toBeGreaterThan(0.5);
+    // rawText enthält <p>-Tags (HTML), aber keine <img>-Tags -> echtes 0,
+    // nicht null (siehe imageToTextRatio.ts).
+    expect(result.imageToTextRatio).toBe(0);
   });
 
   it("always returns senderDomainAgeDays and domainReputationScore as null (out of scope for this module)", async () => {
     const result = await analyzeMail("Hallo Welt", {});
     expect(result.senderDomainAgeDays).toBeNull();
     expect(result.domainReputationScore).toBeNull();
+  });
+
+  it("always returns ipReputationFlag as 'unknown' (needs external blocklist lookup, out of scope for this module)", async () => {
+    const result = await analyzeMail("Hallo Welt", {});
+    expect(result.ipReputationFlag).toBe("unknown");
   });
 
   it("returns a result matching the SecurityResult shape from contracts/ai-adapter-interface.ts", async () => {
@@ -77,6 +88,9 @@ describe("analyzeMail (integration)", () => {
         "containsNewIban",
         "classification",
         "spamSubcategory",
+        "ipReputationFlag",
+        "heloMismatch",
+        "imageToTextRatio",
         "confidenceScore",
       ].sort(),
     );

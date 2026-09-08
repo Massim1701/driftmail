@@ -1,7 +1,10 @@
 import { parseAuthHeaders } from "./authHeaders.js";
 import { classify } from "./classification.js";
+import { detectHeloMismatch } from "./heloMismatch.js";
 import { detectHomoglyphs } from "./homoglyph.js";
 import { detectNewIban } from "./ibanDetection.js";
+import { computeImageToTextRatio } from "./imageToTextRatio.js";
+import { detectIpReputation } from "./ipReputation.js";
 import { detectLinkMismatch } from "./linkMismatch.js";
 import { detectSpamSubcategory } from "./spamSubcategory.js";
 import type { SecurityResult } from "./types.js";
@@ -27,6 +30,14 @@ import { scoreUrgencyLanguage } from "./urgencyLanguage.js";
  *  - spamSubcategory: ebenfalls Keyword-Heuristik (siehe spamSubcategory.ts),
  *    bewusst konservativ kalibriert, weil "adult"/"gambling" im Aufrufer
  *    (Track A) sofortiges Löschen ohne Quarantäne auslösen.
+ *  - ipReputationFlag: braucht einen externen Botnetz-Blocklist-Abgleich
+ *    (Netzwerkzugriff), bleibt hier immer `"unknown"` (siehe
+ *    ipReputation.ts).
+ *  - heloMismatch: nur eine grobe String-Heuristik ohne echten
+ *    Reverse-DNS-Abgleich (siehe heloMismatch.ts).
+ *  - imageToTextRatio: echte Berechnung aus HTML (`<img>`-Tags vs.
+ *    sichtbarer Textmenge), aber `null` ohne erkennbares HTML (siehe
+ *    imageToTextRatio.ts).
  */
 export async function analyzeMail(
   rawText: string,
@@ -37,6 +48,9 @@ export async function analyzeMail(
   const linkMismatchDetected = detectLinkMismatch(rawText);
   const urgencyLanguageScore = scoreUrgencyLanguage(rawText);
   const containsNewIban = detectNewIban(rawText);
+  const heloMismatch = detectHeloMismatch(headers);
+  const imageToTextRatio = computeImageToTextRatio(rawText);
+  const ipReputationFlag = detectIpReputation();
 
   const { classification, confidenceScore } = classify({
     spfStatus,
@@ -65,17 +79,23 @@ export async function analyzeMail(
     containsNewIban,
     classification,
     spamSubcategory,
+    ipReputationFlag,
+    heloMismatch,
+    imageToTextRatio,
     confidenceScore,
   };
 }
 
-export type { AuthStatus, Classification, SecurityResult, SpamSubcategory } from "./types.js";
+export type { AuthStatus, Classification, IpReputationFlag, SecurityResult, SpamSubcategory } from "./types.js";
 export { parseAuthHeaders } from "./authHeaders.js";
 export type { AuthHeaderResult } from "./authHeaders.js";
 export { classify } from "./classification.js";
 export type { ClassificationInput, ClassificationOutput } from "./classification.js";
+export { detectHeloMismatch } from "./heloMismatch.js";
 export { CONFUSABLES, containsConfusableChar, detectHomoglyphs, extractDomains, isMixedScriptLabel } from "./homoglyph.js";
 export { detectNewIban, extractIbans } from "./ibanDetection.js";
+export { computeImageToTextRatio } from "./imageToTextRatio.js";
+export { detectIpReputation } from "./ipReputation.js";
 export { detectLinkMismatch, extractLinks } from "./linkMismatch.js";
 export type { ExtractedLink } from "./linkMismatch.js";
 export { detectSpamSubcategory } from "./spamSubcategory.js";
