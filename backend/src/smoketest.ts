@@ -6,6 +6,7 @@ import { createApp } from "./app";
 import { ensureDemoUser, store } from "./db/store";
 import { syncAccount } from "./mail/sync";
 import { aiAdapter } from "./ai";
+import { domainReputationLookup, extractIbanCandidates, ibanHistoryCheck } from "./lookups";
 import type { Server } from "node:http";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -193,9 +194,118 @@ async function main() {
       Array.isArray(sensitiveCheck.containsSensitiveData) && (sensitiveCheck.containsSensitiveData as string[]).includes("iban"),
       "containsSensitiveData sollte 'iban' enthalten",
     );
-    assert(sensitiveCheck.recipientReputation === "unknown", "recipientReputation sollte immer 'unknown' sein (Mock, siehe Kommentar in draftPhishingCheckMock.ts)");
+    assert(
+      sensitiveCheck.recipientReputation === "unknown",
+      "ohne recipientAddress im Request sollte recipientReputation weiterhin 'unknown' sein (siehe draftPhishingCheckMock.ts + lookups/recipientReputationMock.ts)",
+    );
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Contracts -> Capability -> Draft-Phishing-Check) end-to-end grün.");
+    // ----- Externe Lookup-Adapter (SYNC.md 08.09., Web-Antwort auf die vier
+    // "wer macht den externen Lookup"-Fragen): src/lookups/*. Jeder der vier
+    // Lookups läuft als Nachbearbeitungsschritt NACH analyzeMail() (Sync) bzw.
+    // checkDraftForPhishingMock() (Composer-Endpoint) -- geprüft wird hier,
+    // dass die entsprechenden SecurityResult-/phishing-check-Felder jetzt
+    // tatsächlich befüllt werden statt fest auf dem alten Platzhalter zu
+    // stehen (senderDomainAgeDays/domainReputationScore: vorher immer vom
+    // Mock-KI-Adapter geraten, jetzt vom Domain-Lookup; ipReputationFlag:
+    // vorher immer "unknown"; containsNewIban: vorher nur eine naive
+    // Substring-Prüfung auf "iban"; recipientReputation: vorher immer
+    // "unknown"). -----
+
+    // 1) Domain-Reputation-Lookup direkt: verdächtige TLD/Schlüsselwort ->
+    // junge Domain + niedrige Reputation, unauffällige Domain -> altes Domain
+    // + hohe Reputation (deterministische Mock-Heuristik, siehe
+    // domainReputationMock.ts).
+    const suspiciousDomainRep = await domainReputationLookup.lookup("sicherheit-konto-check.tk");
+    assert(
+      suspiciousDomainRep.senderDomainAgeDays < 100 && suspiciousDomainRep.domainReputationScore < 0.3,
+      "verdächtige Domain sollte laut Mock-Lookup ein junges Alter + niedrige Reputation liefern",
+    );
+    const trustedDomainRep = await domainReputationLookup.lookup("beispiel-versicherung.de");
+    assert(
+      trustedDomainRep.senderDomainAgeDays >= 400 && trustedDomainRep.domainReputationScore >= 0.5,
+      "unauffällige Domain sollte laut Mock-Lookup ein hohes Alter + hohe Reputation liefern",
+    );
+
+    // 2) Domain-Reputation-Lookup + IP-Reputation-Lookup + IBAN-Historie
+    // end-to-end über den Sync-Pfad (mail/sync.ts reichert MessageSecurity
+    // NACH analyzeMail() an) -- geprüft über die echte HTTP-Response von
+    // GET /messages/:id, nicht nur den direkten Lookup-Aufruf.
+    const fixture1 = store.findMessageByHeader(account.id, "<fixture-1@beispiel-versicherung.de>");
+    assert(fixture1 !== undefined, "Fixture 1 sollte importiert worden sein");
+    const fixture1Detail = (await (await fetch(`${base}/v1/messages/${fixture1!.id}`)).json()) as Record<string, unknown>;
+    const fixture1Security = fixture1Detail.security as Record<string, unknown>;
+    assert(
+      typeof fixture1Security.senderDomainAgeDays === "number" && (fixture1Security.senderDomainAgeDays as number) >= 400,
+      "Fixture 1 (unauffällige Domain) sollte laut Domain-Reputation-Lookup ein hohes Domain-Alter liefern",
+    );
+    assert(
+      fixture1Security.ipReputationFlag === "clean",
+      "Fixture 1 (Beispiel-IP außerhalb der Mock-Botnetz-Liste im X-Originating-IP-Header) sollte ipReputationFlag='clean' liefern",
+    );
+
+    const fixture2 = store.findMessageByHeader(account.id, "<fixture-2@sicherheit-konto-check.tk>");
+    assert(fixture2 !== undefined, "Fixture 2 sollte importiert worden sein");
+    const fixture2Detail = (await (await fetch(`${base}/v1/messages/${fixture2!.id}`)).json()) as Record<string, unknown>;
+    const fixture2Security = fixture2Detail.security as Record<string, unknown>;
+    assert(
+      typeof fixture2Security.domainReputationScore === "number" && (fixture2Security.domainReputationScore as number) < 0.3,
+      "Fixture 2 (verdächtige TLD) sollte laut Domain-Reputation-Lookup eine niedrige Reputation liefern",
+    );
+    assert(
+      fixture2Security.ipReputationFlag === "known_botnet",
+      "Fixture 2 (Beispiel-Botnetz-IP im Received-Header) sollte laut IP-Reputations-Lookup 'known_botnet' liefern",
+    );
+    assert(
+      fixture2Security.containsNewIban === true,
+      "erste eingehende IBAN dieses Absenders sollte containsNewIban=true liefern (IBAN-Historie-Check)",
+    );
+
+    const fixture4 = store.findMessageByHeader(account.id, "<fixture-4@kollegin.example.com>");
+    assert(fixture4 !== undefined, "Fixture 4 sollte importiert worden sein");
+    const fixture4Detail = (await (await fetch(`${base}/v1/messages/${fixture4!.id}`)).json()) as Record<string, unknown>;
+    const fixture4Security = fixture4Detail.security as Record<string, unknown>;
+    assert(
+      fixture4Security.ipReputationFlag === "unknown",
+      "ohne ermittelbare IP in den Headern sollte ipReputationFlag weiterhin 'unknown' sein, nie geraten",
+    );
+
+    // 3) IBAN-Historie: eine wiederholte IBAN vom selben Absender gilt NICHT
+    // mehr als neu (der Sync-Lauf oben hat die IBAN aus Fixture 2 bereits
+    // einmal gesehen/gespeichert), eine ANDERE IBAN vom selben Absender
+    // weiterhin schon.
+    const ibanFromFixture2 = store.messages.find((m) => m.id === fixture2!.id)?.bodyText ?? "";
+    const ibanCandidates = extractIbanCandidates(ibanFromFixture2);
+    assert(ibanCandidates.length > 0, "Fixture 2 sollte mind. eine IBAN-Kandidatin enthalten");
+    const repeatedIbanCheck = await ibanHistoryCheck.checkAndRecord(account.userId, fixture2!.fromAddress, ibanCandidates);
+    assert(repeatedIbanCheck === false, "eine bereits gesehene IBAN vom selben Absender sollte NICHT mehr als neu gelten");
+    const newIbanCheck = await ibanHistoryCheck.checkAndRecord(account.userId, fixture2!.fromAddress, ["DE99999999999999999999"]);
+    assert(newIbanCheck === true, "eine bisher nicht gesehene IBAN vom selben Absender sollte weiterhin als neu gelten");
+
+    // 4) Recipient-Reputation-Lookup über POST /messages/draft/phishing-check
+    // (recipientAddress, kleine Contract-Ergänzung siehe api-spec.yaml):
+    // bereits erfolgreich angeschriebener Kontakt -> "safe" (Demo-Seed in
+    // ensureDemoUser()), Empfänger-Domain die schon als Phishing-Absender
+    // aufgefallen ist -> "flagged".
+    const safeRecipientRes = await fetch(`${base}/v1/messages/draft/phishing-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bodyText: "Kurze Rückfrage zum Projekt.", links: [], recipientAddress: "kollegin@example.com" }),
+    });
+    const safeRecipient = (await safeRecipientRes.json()) as Record<string, unknown>;
+    assert(safeRecipient.recipientReputation === "safe", "bereits erfolgreich angeschriebener Empfänger sollte recipientReputation='safe' liefern");
+
+    const flaggedRecipientRes = await fetch(`${base}/v1/messages/draft/phishing-check`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bodyText: "Text ohne eigene Warnsignale.", links: [], recipientAddress: "andere-adresse@sicherheit-konto-check.tk" }),
+    });
+    const flaggedRecipient = (await flaggedRecipientRes.json()) as Record<string, unknown>;
+    assert(
+      flaggedRecipient.recipientReputation === "flagged",
+      "Empfänger-Domain, die schon als Phishing-Absender aufgefallen ist, sollte recipientReputation='flagged' liefern",
+    );
+
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Contracts -> Capability -> Draft-Phishing-Check -> Externe Lookup-Adapter) end-to-end grün.");
   } finally {
     server.close();
   }

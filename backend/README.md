@@ -18,18 +18,28 @@ Erster Durchstich der Backend-API gegen `contracts/api-spec.yaml` und
 
 > **Contract-Update (2026-09-08, WEB_INBOX.md "Botnetz-Erkennungssignale"):**
 > `SecurityResult` um `ipReputationFlag`/`heloMismatch`/`imageToTextRatio`
-> ergänzt (Commit `5bb9531`). Mock-Adapter liefert `ipReputationFlag` immer
-> `"unknown"` (kein echter Blocklist-Abgleich möglich), `heloMismatch`/
-> `imageToTextRatio` einfache Platzhalterwerte (`false`/`null`) — echte
-> Erkennung baut Track B.
+> ergänzt (Commit `5bb9531`). `ipReputationFlag` wird seit dem
+> Lookup-Adapter-Schritt unten (siehe "Externe Lookup-Adapter") befüllt,
+> `heloMismatch`/`imageToTextRatio` bleiben einfache Platzhalterwerte
+> (`false`/`null`) — echte Erkennung baut Track B.
 
 > **Contract-Update (2026-09-08, WEB_INBOX.md "Ausgehender Phishing-Check im
 > Composer" + Erweiterung, Commit `b6b3eb2`):** neuer Endpoint `POST
 > /messages/draft/phishing-check` hinzugekommen. Mock-Implementierung siehe
 > Abschnitt "Ausgehender Phishing-Check (Composer, Mock)" unten.
 
+> **Architekturentscheidung (2026-09-08, SYNC.md, Web-Antwort auf die vier
+> "wer macht den externen Lookup"-Fragen):** `security-classification/`
+> (Track B) bleibt bewusst zustandslos (kein Netzwerk, keine DB). Track A
+> macht `senderDomainAgeDays`/`domainReputationScore`, `ipReputationFlag`,
+> `containsNewIban` (nach `analyzeMail()`) und `recipientReputation` (nach
+> `checkDraftForPhishingMock()`) als eigenen Nachbearbeitungsschritt über
+> austauschbare Lookup-Adapter. Details siehe Abschnitt "Externe
+> Lookup-Adapter" unten.
+
 ```
 Mail-Adapter (Gmail/IMAP/Fixture) -> Sync-Pipeline -> Mock-KI-Analyse
+  -> externe Lookup-Adapter (Domain-/IP-Reputation, IBAN-Historie)
   -> Ordner-Zuordnung + ggf. Auto-Quarantäne (phishing) / Auto-Delete
      (adult/gambling-Spam) -> API (GET/POST wie im Contract)
 ```
@@ -131,10 +141,17 @@ curl -X POST http://localhost:3000/v1/capability-check \
 - **Ausgehender Phishing-Check** (`src/ai/draftPhishingCheckMock.ts`,
   Endpoint `POST /messages/draft/phishing-check`): simple, ehrliche
   Mock-Heuristik (Link-Mismatch, einfache Regex-Erkennung für IBAN/
-  Kreditkarte, `recipientReputation` immer `"unknown"`) — NICHT die echte
-  Erkennungslogik. Track B hat diese bereits gebaut
-  (`security-classification/src/draftPhishingCheck.ts`), siehe eigener
-  Abschnitt unten.
+  Kreditkarte) — NICHT die echte Erkennungslogik. Track B hat diese bereits
+  gebaut (`security-classification/src/draftPhishingCheck.ts`), siehe
+  eigener Abschnitt unten. `recipientReputation` wird seit dem
+  Lookup-Adapter-Schritt (siehe "Externe Lookup-Adapter" unten) als
+  Nachbearbeitungsschritt befüllt, nicht mehr fest `"unknown"`.
+- **Externe Lookup-Adapter** (`src/lookups/`): Domain-/IP-Reputation,
+  IBAN-Historie und Empfänger-Reputation sind Mock-Implementierungen mit
+  plausiblen, deterministischen Beispieldaten bzw. (IBAN-Historie,
+  Empfänger-Reputation) einer echten Prüfung gegen den bestehenden
+  In-Memory-Store — kein echter WHOIS-/Spamhaus-/Fraud-Datenbank-Zugriff.
+  Siehe eigener Abschnitt "Externe Lookup-Adapter" unten.
 
 ## Auto-Delete: adult/gambling-Spam
 
@@ -274,21 +291,97 @@ vereinfacht:
   Sozialversicherungsnummer) bewusst nicht implementiert, gleiche
   Begründung wie bei Track B (kein einheitliches, per Regex sauber
   erkennbares Format über Länder hinweg).
-- **`recipientReputation`:** immer `"unknown"`, genau wie bei Track B
-  dokumentiert. Bei Track B, weil das Paket zustandslos ist (kein
-  DB-Zugriff). Hier im Backend absichtlich **genauso** gehalten, obwohl
-  `backend/` grundsätzlich DB-Zugriff hätte: die dafür nötige
-  `fraud_alerts`-Tabelle (`contracts/db-schema.sql`) ist in diesem Skeleton
-  noch nicht modelliert (kein Record-Typ in `src/types.ts`, kein
-  Store-Zugriff) — ein echter Empfänger-Reputations-Lookup ist wie die
-  Track-B-Integration ein separater, noch offener Schritt (siehe SYNC.md
-  "Offene Fragen").
+- **`recipientReputation`:** bei Track B (`security-classification/`)
+  weiterhin immer `"unknown"` (das Paket bleibt bewusst zustandslos, siehe
+  "Architekturentscheidung" oben). Im Backend seit dem Lookup-Adapter-Schritt
+  (siehe "Externe Lookup-Adapter" unten) ein eigener Nachbearbeitungsschritt
+  NACH `checkDraftForPhishingMock()`, der `recipientAddress` (neues,
+  optionales Request-Feld, siehe `contracts/api-spec.yaml`) gegen den Store
+  prüft — bleibt `"unknown"`, wenn `recipientAddress` fehlt.
 
 **Tests:** `src/smoketest.ts` deckt einen Block-Fall (Link-Mismatch,
-`blocked === true` + `reason` gesetzt + genau 1 `riskyLink`) und einen
-Nicht-Block-Fall mit sensiblen Daten ab (eigene IBAN im Text —
-`blocked === false`, `containsSensitiveData` enthält `"iban"`,
-`recipientReputation === "unknown"`).
+`blocked === true` + `reason` gesetzt + genau 1 `riskyLink`), einen
+Nicht-Block-Fall mit sensiblen Daten (eigene IBAN im Text — `blocked ===
+false`, `containsSensitiveData` enthält `"iban"`, ohne `recipientAddress`
+bleibt `recipientReputation === "unknown"`) sowie die
+`recipientReputation`-Fälle `"safe"`/`"flagged"` über den
+Lookup-Adapter ab (siehe "Externe Lookup-Adapter" unten).
+
+## Externe Lookup-Adapter
+
+Seit der Web-Antwort auf die vier "wer macht den externen Lookup"-Fragen
+(SYNC.md 08.09.) ist geklärt: `security-classification/` (Track B) bleibt
+bewusst zustandslos (kein Netzwerk, keine DB) — Track A macht alle vier
+Lookups als eigenen Nachbearbeitungsschritt, NACH dem Aufruf von
+`aiAdapter.analyzeMail()` bzw. `checkDraftForPhishingMock()`, nicht als
+Erweiterung der Funktionssignaturen selbst. Kein Contract-Bruch: die
+Feld-Typen in `SecurityResult`/der phishing-check-Response bleiben
+unverändert, nur **wer** sie befüllt ändert sich.
+
+**Muster:** ein Interface pro externem Dienst (`src/lookups/types.ts`),
+analog zu `AiAdapter` (`src/ai/types.ts`) — austauschbar gegen eine echte
+Implementierung, ohne dass Aufrufer (Sync-Pipeline/Routen) etwas davon
+merken. `src/lookups/index.ts` ist die einzige Stelle, die die konkreten
+(Mock-)Implementierungen mit den Interfaces verdrahtet; der Austausch gegen
+eine echte Implementierung betrifft jeweils nur eine Zeile dort.
+
+| Interface | Feld(er) | Mock-Implementierung | Reale Implementierung wäre |
+|---|---|---|---|
+| `DomainReputationLookup` | `senderDomainAgeDays`, `domainReputationScore` | `domainReputationMock.ts`: deterministische Heuristik auf verdächtigen TLDs/Schlüsselwörtern im Domain-Namen (z.B. `.tk`, `"secure"`) | WHOIS-Abfrage + Reputationsdienst |
+| `IpReputationLookup` | `ipReputationFlag` | `ipReputationMock.ts`: IP wird aus `X-Originating-IP`/`Received`-Header extrahiert (`extractSendingIp()`), gegen eine frei erfundene Beispiel-Adressliste geprüft; ohne ermittelbare IP immer `"unknown"`, nie geraten | Abgleich gegen einen DNSBL-Dienst (z.B. Spamhaus XBL/CBL) |
+| `IbanHistoryCheck` | `containsNewIban` | `ibanHistoryCheck.ts`: IBAN-Kandidaten per simpler Regex extrahiert (`extractIbanCandidates()`, ohne Mod-97-Prüfsumme, gleiches Prinzip wie `draftPhishingCheckMock.ts`), gegen eine **echte** In-Memory-Historie im Store geprüft (`store.ibanHistory`, Schlüssel `userId:senderAddress`) — "neu" heißt: noch nie zuvor von diesem Absender an diesen User gesehen | dieselbe Prüfung gegen eine Postgres-Tabelle statt In-Memory |
+| `RecipientReputationLookup` | `recipientReputation` | `recipientReputationMock.ts`: `"safe"`, wenn der User laut `store.outgoingSendLog` dieser Adresse schon einmal geschrieben hat; `"flagged"`, wenn die Adresse/Domain schon als Absender einer `phishing`-klassifizierten eingehenden Mail aufgefallen ist (`store.messages`/`messageSecurity`); sonst `"unknown"` | Abgleich gegen `fraud_alerts`/`domain_reputation_score` in Postgres |
+
+**Verdrahtung:**
+- `src/mail/sync.ts`: Domain-, IP- und IBAN-Historie-Lookup laufen direkt
+  nach `ai.analyzeMail(...)`, noch bevor die Nachricht/`message_security`
+  persistiert wird — überschreiben also die vom Mock-KI-Adapter gelieferten
+  Platzhalterwerte für diese drei Felder.
+- `src/routes/messages.ts` (`POST /messages/draft/phishing-check`): der
+  Empfänger-Reputations-Lookup läuft nach `checkDraftForPhishingMock(...)`,
+  bevor die Response geschickt wird. Braucht die Ziel-Adresse — dafür neues,
+  **optionales** Request-Feld `recipientAddress` (kleine Contract-Ergänzung,
+  siehe `contracts/api-spec.yaml` + SYNC.md-Änderungsprotokoll; ohne dieses
+  Feld bleibt `recipientReputation` weiterhin `"unknown"`).
+
+**IBAN-Historie-Ablage:** `src/db/store.ts` hat dafür eine neue
+`Map<string, Set<string>>` (`ibanHistory`, Schlüssel `` `${userId}:${senderAddress}` ``)
+plus `hasSeenIban()`/`recordIban()`. Kein eigenes `db-schema.sql`-Pendant
+(Auftrag: "simple Set/Map ... in deinem bestehenden Store") — rein
+In-Memory wie der Rest des Stores, geht bei Neustart verloren.
+
+**Empfänger-Historie:** `store.outgoingSendLog` (`OutgoingSendLogRecord[]`,
+neu in `src/types.ts`) spiegelt `outgoing_send_log` (`db-schema.sql`,
+Commit `a5432e6`) — bisher nur write-/lookup-seitig genutzt (kein eigener
+`POST`-Endpoint für tatsächliches Versenden in diesem Durchstich, siehe
+"Annahmen" unten). `ensureDemoUser()` seedet einen Beispiel-Eintrag
+(`kollegin@example.com`, Fixture 4), damit der `"safe"`-Fall ohne echten
+Versand-Pfad testbar ist — reiner Beispieldaten-Seed, keine echte
+Versandhistorie.
+
+**Grenzen (bewusst Mock, siehe Auftrag):** alle vier Lookups liefern
+Mock-Daten. Domain-/IP-Reputation sind reine Heuristiken auf
+Beispiel-Listen, keine echten WHOIS-/Spamhaus-Abfragen. IBAN-/
+Empfänger-Historie prüfen zwar *echt* gegen den bestehenden Store (kein
+geratener Wert), aber gegen In-Memory-Daten statt einer echten
+Postgres-Tabelle mit echter Nutzungshistorie. Die echte Anbindung an
+WHOIS/Spamhaus/einen Reputationsdienst bzw. eine echte `fraud_alerts`-Query
+ist ein separater, noch nicht gestarteter Schritt — betrifft dann nur
+`src/lookups/index.ts`.
+
+**Tests:** `src/smoketest.ts` prüft je Lookup mind. einen Fall, in dem das
+Feld jetzt tatsächlich befüllt wird (statt fest auf dem alten Platzhalter zu
+stehen) — Domain-Reputation direkt (`domainReputationLookup.lookup(...)`,
+verdächtige vs. unauffällige Domain) und end-to-end über
+`GET /messages/:id` nach dem Sync (Fixture 1: unauffällige Domain +
+`ipReputationFlag === "clean"`; Fixture 2: verdächtige Domain +
+`ipReputationFlag === "known_botnet"` + `containsNewIban === true`;
+Fixture 4: keine IP im Header -> `ipReputationFlag === "unknown"`),
+außerdem: eine wiederholte IBAN vom selben Absender gilt **nicht** mehr als
+neu (`ibanHistoryCheck.checkAndRecord(...)` zweimal mit derselben IBAN),
+eine andere IBAN vom selben Absender weiterhin schon; `recipientReputation`
+über `POST /messages/draft/phishing-check` für `"safe"` (bekannter Kontakt)
+und `"flagged"` (Empfänger-Domain bereits als Phishing-Absender aufgefallen).
 
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
@@ -319,18 +412,25 @@ Nicht-Block-Fall mit sensiblen Daten ab (eigene IBAN im Text —
   Abschnitt "Auto-Delete: adult/gambling-Spam" oben) teilweise: Write-Pfad
   über `store.logSecurityAudit()` ist da, aber weiterhin **kein**
   `GET`-Endpunkt, da `api-spec.yaml` keinen vorsieht.
-- `fraud_alerts` (`contracts/db-schema.sql`) ist ebenfalls noch nicht in
-  `src/types.ts`/`src/db/store.ts` modelliert — deshalb liefert
-  `recipientReputation` in `POST /messages/draft/phishing-check` immer
-  `"unknown"` statt eines echten Lookups, siehe Abschnitt "Ausgehender
-  Phishing-Check (Composer, Mock)" oben.
+- `fraud_alerts` (`contracts/db-schema.sql`) ist weiterhin nicht in
+  `src/types.ts`/`src/db/store.ts` modelliert (an `messages`, nicht an
+  Empfänger-Adressen geknüpft). `recipientReputation` in `POST
+  /messages/draft/phishing-check` wird stattdessen seit dem
+  Lookup-Adapter-Schritt (siehe "Externe Lookup-Adapter" oben) gegen
+  `outgoing_send_log`/`messages`+`message_security` geprüft — ein
+  plausibles, aber nicht 1:1 `fraud_alerts`-Äquivalent. Echte
+  `fraud_alerts`-Anbindung wäre ein separater, noch offener Schritt.
 - `send_abuse_flags` (Bot/Human-Missbrauchserkennung beim Versand,
   WEB_INBOX.md 08.09. "Ausgehender Phishing-Check im Composer") existiert
-  bisher **weder** in `contracts/db-schema.sql` noch in
-  `contracts/api-spec.yaml` — nur als SQL-Vorschlag in `WEB_INBOX.md`
-  dokumentiert. Kein eigener Versand-Pfad in diesem Durchstich (siehe
-  oben, "Kein Hintergrund-Job"), daher hier nicht mitgebaut; siehe
-  SYNC.md "Offene Fragen".
+  seit Commit `a5432e6` als vollständige `CREATE TABLE` in
+  `contracts/db-schema.sql` (zusammen mit `outgoing_send_log`), ist aber im
+  Backend-Skeleton weiterhin nicht implementiert — `outgoing_send_log` wird
+  seit dem Lookup-Adapter-Schritt zumindest als reine Historie genutzt
+  (`store.outgoingSendLog`, siehe "Externe Lookup-Adapter" oben), aber ohne
+  eigenen `POST`-Endpunkt zum tatsächlichen Versenden und ohne
+  `send_abuse_flags`-Logik selbst. Kein eigener Versand-Pfad in diesem
+  Durchstich (siehe oben, "Kein Hintergrund-Job"); siehe SYNC.md "Offene
+  Fragen".
 
 ## Struktur
 
@@ -344,5 +444,6 @@ src/
   db/store.ts           In-Memory-Repository (siehe "Annahmen")
   mail/                 MailAdapter-Interface + Gmail/IMAP/Fixture-Implementierungen + Sync-Pipeline
   ai/                   AiAdapter-Interface (Spiegel von ai-adapter-interface.ts) + Mock-Implementierung + draftPhishingCheckMock.ts (Composer-Phishing-Check-Mock)
+  lookups/               vier externe Lookup-Adapter (Domain-/IP-Reputation, IBAN-Historie, Empfänger-Reputation), Mock-Implementierungen, siehe "Externe Lookup-Adapter"
   smoketest.ts           End-to-End-Test (npm test)
 ```

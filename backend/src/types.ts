@@ -146,6 +146,19 @@ export interface UserAiCapabilityRecord {
   checkedAt: string;
 }
 
+// `outgoing_send_log` (db-schema.sql, WEB_INBOX.md 08.09. "Bot/Human-
+// Missbrauchserkennung beim Versand", Commit a5432e6). Bisher nur write-seitig
+// als reine Historie genutzt (kein eigener Endpoint dafür) -- Grundlage für
+// den Empfänger-Reputations-Lookup, siehe src/lookups/recipientReputationMock.ts.
+export interface OutgoingSendLogRecord {
+  id: string;
+  userId: string;
+  recipientAddress: string;
+  sentAt: string;
+  timeSinceDraftShownMs: number | null;
+  wasNewRecipient: boolean;
+}
+
 // ===== API-Response-Shapes (camelCase, 1:1 zu api-spec.yaml) =====
 
 export interface ApiMailAccount {

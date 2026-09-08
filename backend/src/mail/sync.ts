@@ -15,6 +15,14 @@ import { GmailAdapter } from "./gmailAdapter";
 import { ImapAdapter } from "./imapAdapter";
 import { store } from "../db/store";
 import type { AiAdapter } from "../ai/types";
+import {
+  domainFromAddress,
+  domainReputationLookup,
+  extractIbanCandidates,
+  extractSendingIp,
+  ibanHistoryCheck,
+  ipReputationLookup,
+} from "../lookups";
 
 /** Wählt den passenden Adapter für ein Konto. Fällt auf den Fixture-Adapter
  * zurück, wenn keine echten Zugangsdaten via Env konfiguriert sind. */
@@ -73,6 +81,25 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
       if (store.wasAutoDeleted(account.id, mail.messageIdHeader)) continue; // dedupe für den Auto-Delete-Pfad, siehe store.ts
 
       const security = await ai.analyzeMail(mail.bodyText ?? "", mail.rawHeaders);
+
+      // Externe Lookups als eigener Nachbearbeitungsschritt NACH
+      // analyzeMail() (SYNC.md 08.09., Web-Antwort auf die vier "wer macht
+      // den externen Lookup"-Fragen): security-classification/ (Track B)
+      // bleibt zustandslos, Track A reichert das SecurityResult hier mit
+      // DB-/Netzwerk-abhängigen Feldern an, die der Mock-KI-Adapter zuvor
+      // fest auf "unknown"/geraten geliefert hat. Mock-Implementierungen,
+      // siehe src/lookups/*.
+      const senderDomain = domainFromAddress(mail.fromAddress);
+      if (senderDomain) {
+        const domainRep = await domainReputationLookup.lookup(senderDomain);
+        security.senderDomainAgeDays = domainRep.senderDomainAgeDays;
+        security.domainReputationScore = domainRep.domainReputationScore;
+      }
+
+      security.ipReputationFlag = await ipReputationLookup.lookup(extractSendingIp(mail.rawHeaders));
+
+      const ibanCandidates = extractIbanCandidates(mail.bodyText ?? "");
+      security.containsNewIban = await ibanHistoryCheck.checkAndRecord(account.userId, mail.fromAddress, ibanCandidates);
 
       // Auto-Delete-Pfad (WEB_INBOX.md 08.09., siehe SYNC.md): eindeutiger
       // Erotik-/Glücksspiel-Spam wird NIE persistiert -- weder als

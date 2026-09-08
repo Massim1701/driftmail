@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { store } from "../db/store";
+import { store, ensureDemoUser } from "../db/store";
 import { toApiMessage, toApiMessageDetail, toApiMailSummary } from "../mappers";
 import { aiAdapter } from "../ai";
 import { checkDraftForPhishingMock } from "../ai/draftPhishingCheckMock";
+import { recipientReputationLookup } from "../lookups";
 import type { AiSource, ApiDraftPhishingCheckLink } from "../types";
 
 export const messagesRouter = Router();
@@ -16,9 +17,14 @@ export const messagesRouter = Router();
 // Grundprinzip wie Track B's echte Erkennungslogik
 // (security-classification/src/draftPhishingCheck.ts) -- echte Integration
 // mit Track B ist ein separater, noch offener Schritt (siehe README/SYNC.md).
-messagesRouter.post("/messages/draft/phishing-check", (req, res) => {
+messagesRouter.post("/messages/draft/phishing-check", async (req, res) => {
   const bodyText = typeof req.body?.bodyText === "string" ? req.body.bodyText : "";
   const rawLinks = Array.isArray(req.body?.links) ? req.body.links : [];
+  // `recipientAddress` (optional, kleine Contract-Ergänzung, siehe
+  // api-spec.yaml + SYNC.md Änderungsprotokoll): Grundlage für den
+  // Empfänger-Reputations-Lookup unten. Ohne dieses Feld bleibt
+  // recipientReputation "unknown", wie bisher.
+  const recipientAddress = typeof req.body?.recipientAddress === "string" && req.body.recipientAddress.trim() ? req.body.recipientAddress.trim() : null;
 
   const links: ApiDraftPhishingCheckLink[] = rawLinks
     .filter((l: unknown): l is Record<string, unknown> => typeof l === "object" && l !== null)
@@ -29,6 +35,14 @@ messagesRouter.post("/messages/draft/phishing-check", (req, res) => {
     .filter((l: ApiDraftPhishingCheckLink) => l.actualUrl.length > 0);
 
   const result = checkDraftForPhishingMock(bodyText, links);
+
+  // Empfänger-Reputation als eigener Nachbearbeitungsschritt NACH
+  // checkDraftForPhishingMock() (SYNC.md 08.09., Web-Antwort), ersetzt den
+  // bisherigen festen "unknown"-Platzhalter. Mock-Implementierung, siehe
+  // src/lookups/recipientReputationMock.ts.
+  const { user } = ensureDemoUser();
+  result.recipientReputation = await recipientReputationLookup.lookup(user.id, recipientAddress);
+
   res.json(result);
 });
 

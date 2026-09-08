@@ -16,6 +16,7 @@ import type {
   MessageAiSummaryRecord,
   MessageRecord,
   MessageSecurityRecord,
+  OutgoingSendLogRecord,
   QuarantineRecord,
   SecurityAuditLogRecord,
   SystemFolderKey,
@@ -23,7 +24,7 @@ import type {
   UserAiCapabilityRecord,
 } from "../types";
 
-class Store {
+export class Store {
   users: User[] = [];
   mailAccounts: MailAccountRecord[] = [];
   folders: FolderRecord[] = [];
@@ -41,6 +42,17 @@ class Store {
   contracts: ContractRecord[] = [];
   messageAiSummary: Map<string, MessageAiSummaryRecord> = new Map(); // key: messageId
   userAiCapability: Map<string, UserAiCapabilityRecord> = new Map(); // key: userId:platform
+
+  // ----- Externe Lookup-Adapter (SYNC.md 08.09., Web-Antwort "vier externe
+  // Lookups") -----
+  // IBAN-Historie je Absender+User (Grundlage für containsNewIban, siehe
+  // src/lookups/ibanHistoryCheck.ts). Kein eigenes db-schema.sql-Pendant
+  // (Auftrag: "simple Set/Map ... in deinem bestehenden Store") -- rein
+  // In-Memory, geht bei Neustart verloren wie der Rest des Stores.
+  ibanHistory: Map<string, Set<string>> = new Map(); // key: `${userId}:${senderAddress}`
+  // `outgoing_send_log` (db-schema.sql, Commit a5432e6) -- Grundlage für den
+  // Empfänger-Reputations-Lookup (siehe src/lookups/recipientReputationMock.ts).
+  outgoingSendLog: OutgoingSendLogRecord[] = [];
 
   // ----- Users / Accounts -----
 
@@ -220,6 +232,50 @@ class Store {
   setUserAiCapability(record: UserAiCapabilityRecord): void {
     this.userAiCapability.set(`${record.userId}:${record.platform}`, record);
   }
+
+  // ----- IBAN-Historie (Grundlage für containsNewIban) -----
+  // "neu" heißt laut SYNC.md/Web-Antwort (08.09.): noch nie zuvor von diesem
+  // Absender an diesen User gesehen -- deshalb Schlüssel userId+senderAddress,
+  // nicht global.
+
+  private ibanHistoryKey(userId: string, senderAddress: string): string {
+    return `${userId}:${senderAddress.toLowerCase()}`;
+  }
+
+  hasSeenIban(userId: string, senderAddress: string, iban: string): boolean {
+    return this.ibanHistory.get(this.ibanHistoryKey(userId, senderAddress))?.has(iban) ?? false;
+  }
+
+  recordIban(userId: string, senderAddress: string, iban: string): void {
+    const key = this.ibanHistoryKey(userId, senderAddress);
+    let seen = this.ibanHistory.get(key);
+    if (!seen) {
+      seen = new Set();
+      this.ibanHistory.set(key, seen);
+    }
+    seen.add(iban);
+  }
+
+  // ----- Ausgehende Sends (Grundlage für recipientReputation) -----
+
+  hasSentTo(userId: string, recipientAddress: string): boolean {
+    const normalized = recipientAddress.toLowerCase();
+    return this.outgoingSendLog.some((e) => e.userId === userId && e.recipientAddress.toLowerCase() === normalized);
+  }
+
+  recordOutgoingSend(input: { userId: string; recipientAddress: string; timeSinceDraftShownMs?: number | null }): OutgoingSendLogRecord {
+    const wasNewRecipient = !this.hasSentTo(input.userId, input.recipientAddress);
+    const record: OutgoingSendLogRecord = {
+      id: randomUUID(),
+      userId: input.userId,
+      recipientAddress: input.recipientAddress,
+      sentAt: new Date().toISOString(),
+      timeSinceDraftShownMs: input.timeSinceDraftShownMs ?? null,
+      wasNewRecipient,
+    };
+    this.outgoingSendLog.push(record);
+    return record;
+  }
 }
 
 export const store = new Store();
@@ -266,6 +322,15 @@ export function ensureDemoUser(): { user: User; account: MailAccountRecord } {
         sortOrder: index,
       });
     });
+  }
+
+  // Demo-Seed für den Empfänger-Reputations-Lookup (src/lookups/
+  // recipientReputationMock.ts): der Demo-User hat "kollegin@example.com"
+  // (Fixture 4, harmlose Kollegin-Mail) bereits einmal erfolgreich
+  // angeschrieben -- macht den "safe"-Fall im Mock ohne echten Versand-Pfad
+  // testbar. Reiner Beispieldaten-Seed, KEINE echte Versandhistorie.
+  if (!store.hasSentTo(user.id, "kollegin@example.com")) {
+    store.recordOutgoingSend({ userId: user.id, recipientAddress: "kollegin@example.com" });
   }
 
   return { user, account };

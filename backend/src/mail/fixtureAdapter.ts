@@ -21,7 +21,11 @@ const FIXTURES: FetchedMail[] = [
       "Sehr geehrte Kundin, sehr geehrter Kunde,\n\nIhr Vertrag (Laufzeit 12 Monate) verlängert sich automatisch. " +
       "Die Kündigungsfrist beträgt 30 Tage vor Vertragsende. Bitte prüfen Sie Ihre Daten.\n\nMit freundlichen Grüßen",
     receivedAt: daysAgo(1),
-    rawHeaders: { "Received-SPF": "pass", "Content-Type": "text/plain" },
+    // "X-Originating-IP" hier nur als Beispiel für einen unauffälligen
+    // Absender gesetzt (Grundlage für den IP-Reputations-Lookup, siehe
+    // src/lookups/ipReputationMock.ts) -- kein echter Header eines echten
+    // Versanddienstes.
+    rawHeaders: { "Received-SPF": "pass", "Content-Type": "text/plain", "X-Originating-IP": "[203.0.113.10]" },
   },
   {
     messageIdHeader: "<fixture-2@sicherheit-konto-check.tk>",
@@ -33,7 +37,15 @@ const FIXTURES: FetchedMail[] = [
       "Ihr Konto wurde vorübergehend gesperrt. Klicken Sie sofort auf den Link und bestätigen Sie Ihr Passwort, " +
       "sonst wird Ihr Konto endgültig gelöscht. Neue IBAN für Rückerstattung: DE00 1234 5678 9012 3456 00.",
     receivedAt: daysAgo(0),
-    rawHeaders: { "Received-SPF": "fail", "Content-Type": "text/plain" },
+    // "Received" enthält hier absichtlich eine IP aus der Beispiel-
+    // "Botnetz"-Liste im IP-Reputations-Mock (siehe ipReputationMock.ts),
+    // damit der "known_botnet"-Fall im Smoketest ohne echten Blocklist-
+    // Zugriff durchgetestet werden kann.
+    rawHeaders: {
+      "Received-SPF": "fail",
+      "Content-Type": "text/plain",
+      Received: "from unknown (unknown [185.220.101.7]) by mx.example.com",
+    },
   },
   {
     messageIdHeader: "<fixture-3@newsletter-deals.example>",
