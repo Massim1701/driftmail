@@ -14,7 +14,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | C — iOS App | ios/ | offen | — |
 | D — Vertrag & Reminder | contracts-logic/ | offen | — |
 | E — Antwort & Signatur | mail-actions/ | offen | — |
-| F — Web-Fallback-UI | web/ | in Arbeit | 2026-09-08 |
+| F — Web-Fallback-UI | web/ | fertig | 2026-09-08 |
 
 Status-Werte: offen · in arbeit · fertig · blockiert
 
@@ -28,6 +28,10 @@ Status-Werte: offen · in arbeit · fertig · blockiert
 
 [2026-09-08] [terminal] [0] — Blocker erledigt: Massimo hat einen klassischen PAT mit vollem `repo`-Scope erzeugt, damit erfolgreich nach main gepusht (Commits `1903164`, `263af99`). Der fine-grained PAT bleibt weiter ungeklärt (nicht mehr nachverfolgt, da Workaround funktioniert) -- fuer zukuenftige Pushes wird ggf. wieder ein Token gebraucht, siehe Hinweis in der naechsten Session.
 
+[2026-09-08] [terminal] [F] — Web-App-Shell aufgesetzt: Vite + React + TypeScript in web/, dazu ein abhängigkeitsfreier Mock-Server (nur node:http) in web/mock-server/, der alle Endpunkte aus contracts/api-spec.yaml gegen Beispieldaten bedient. UI zeigt die 5 Ordner aus design-tokens.json (Wichtig/Sonstiges/Rechnungen/Quarantäne/Spam), Nachrichtenliste, Detailansicht mit Security-Badge (alle 11 SecurityResult-Felder), Aktionen für Quarantäne/Zusammenfassung/Antwortentwurf. Styling ausschließlich über CSS-Variablen aus contracts/design-tokens.json, Light/Dark/System-Theme umsetzt. MailSummary.source ist im Mock immer "cloud_fallback", wie im Auftrag vorgegeben (kein On-Device im Browser). tsc -b und vite build laufen fehlerfrei durch. Details/Start-Anleitung/Annahmen in web/README.md.
+
+[2026-09-08] [terminal] [F] — Status auf "fertig" gesetzt. Kein Contract geändert (siehe unten), eine offene Frage zu Quarantäne-Gründen eingetragen.
+
 ## Contract-Änderungen (wichtig — bricht ggf. andere Tracks)
 
 Jede Änderung an einer Datei in contracts/ kommt hier rein, auch klein. Andere Tracks prüfen bei jedem Pull kurz diesen Abschnitt.
@@ -40,6 +44,7 @@ Fragen, die ein Track nicht selbst entscheiden kann, weil sie einen Contract ode
 
 - ~~api-spec.yaml `SecurityResult` unvollständig gegenüber `ai-adapter-interface.ts`/`db-schema.sql`.~~ **Beantwortet (Web, 08.09.):** kein Kürzen, war Absicht/Versehen — YAML wurde nachgezogen, alle 11 Felder jetzt drin.
 - ~~api-spec.yaml `Contract`-Schema fehlt `contractStart` und `extractedConfidence`.~~ **Beantwortet (Web, 08.09.):** beide Felder in der YAML ergänzt.
+- (Track F, 08.09.) Die `quarantine`-Tabelle in db-schema.sql hat `reason` und `auto_delete_at`, aber api-spec.yaml exponiert dafür keinen Read-Endpoint (nur `POST /messages/{id}/quarantine` zum Erstellen). Die Web-UI zeigt in der Quarantäne-Ansicht deshalb ersatzweise die `SecurityResult`-Signale als Begründung, statt einen echten `reason`-Text. Frage an Track 0/A: soll es einen `GET`-Weg geben, um `reason`/`auto_delete_at` je Nachricht abzurufen (z. B. zusätzliches Feld auf `MessageDetail` oder eigener `/messages/{id}/quarantine`-GET)? Nicht blockierend für Track F, betrifft aber ggf. auch Track C (iOS) für dieselbe Quarantäne-Ansicht.
 
 ## Blocker
 
