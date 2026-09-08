@@ -64,3 +64,22 @@ Handlungslogik (Track B / Klassifikations-Layer):
 - classification = 'phishing' -> von dieser Regel komplett unberuehrt, Vorsicht/Quarantaene bleibt Pflicht.
 
 Erkennung laeuft im selben Klassifikations-Layer wie Spam/Phishing (Content-Scan + Keywords, ggf. Bilderkennung bei Anhaengen). Kein Blocker, betrifft primaer Track B; Track A muss ggf. den Auto-Delete-Pfad in der Message-Pipeline ergaenzen (analog zum Quarantaene-Pfad, nur ohne Aufbewahrung).
+
+
+[2026-09-08] [offen] [contracts/db-schema.sql + Track B] — Ergaenzung zum Spam-Subcategory-Eintrag von eben: Botnetz-Erkennungssignale, da Botnetz-Spam KEINEN stabilen Absender hat (IP/Domain wechseln staendig, Absender oft gefaelscht/gekaperte Accounts). Erkennung muss auf Infrastruktur-Verhalten zielen, nicht auf Absender-Blocklisten.
+
+```sql
+ALTER TABLE message_security ADD COLUMN ip_reputation_flag TEXT
+  CHECK (ip_reputation_flag IN ('clean', 'known_botnet', 'unknown'));
+ALTER TABLE message_security ADD COLUMN helo_mismatch BOOLEAN DEFAULT false;
+ALTER TABLE message_security ADD COLUMN image_to_text_ratio NUMERIC(3,2);
+```
+
+Bedeutung der Felder:
+- ip_reputation_flag: Abgleich der sendenden IP gegen Botnetz-spezifische Listen (z.B. Spamhaus XBL/CBL — anders als normale Spam-Listen, die zielen auf "IP gehoert zu kompromittiertem Geraet", nicht auf Domain-Reputation).
+- helo_mismatch: HELO/EHLO-Hostname der sendenden Verbindung passt nicht zur Reverse-DNS der IP. Klassisches Botnetz-Merkmal, echte Mailserver sind darin konsistent.
+- image_to_text_ratio: hoher Bildanteil bei wenig Fliesstext ist eine bekannte Umgehungstaktik gegen Text-Filter (Werbetext steckt im Bild).
+
+Zusaetzlich pruefenswert (kein eigenes Feld noetig, kann in der Klassifikationslogik selbst laufen): zeitliche Haeufung strukturell aehnlicher Mails von wechselnden, vorher nie gesehenen Absendern/IPs in kurzer Zeit; algorithmisch wirkende Zufallsmuster im lokalen Teil der Absenderadresse.
+
+Verknuepfung mit der Auto-Loesch-Regel von eben: kein einzelnes Signal reicht allein aus, aber ip_reputation_flag = 'known_botnet' UND helo_mismatch UND hoher image_to_text_ratio zusammen ist ein starkes Muster fuer classification = 'spam' + spam_subcategory IN ('adult','gambling') -> sofort loeschen. Kein Blocker.
