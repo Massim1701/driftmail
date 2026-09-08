@@ -59,7 +59,8 @@
       { "systemKey": "sonstiges", "defaultLabel": "Sonstiges", "icon": "inbox", "renamable": true },
       { "systemKey": "rechnungen", "defaultLabel": "Rechnungen", "icon": "receipt", "renamable": true },
       { "systemKey": "quarantaene", "defaultLabel": "Quarantäne", "icon": "shield-exclamation", "colorRole": "danger", "renamable": false },
-      { "systemKey": "spam", "defaultLabel": "Spam", "icon": "trash", "muted": true, "renamable": false }
+      { "systemKey": "spam", "defaultLabel": "Spam", "icon": "trash", "muted": true, "renamable": false },
+      { "systemKey": "papierkorb", "defaultLabel": "Papierkorb", "icon": "trash-2", "renamable": false }
     ]
   },
   "customFolder": {

@@ -10,7 +10,27 @@ info:
 servers:
   - url: https://api.driftware.online/v1
 
+security:
+  - bearerAuth: []
+
 paths:
+  /auth/session:
+    post:
+      summary: >
+        Session-Token erneuern/erstellen. Login selbst passiert implizit
+        durch den OAuth-Flow beim Verbinden eines Mail-Kontos, dieser
+        Endpoint dient nur der Token-Erneuerung.
+      security: []
+      responses:
+        "200":
+          description: Neues Token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+
   /accounts:
     get:
       summary: Verbundene Mail-Konten des Users auflisten
@@ -120,7 +140,7 @@ paths:
 
   /messages/{messageId}:
     get:
-      summary: Einzelne Nachricht inkl. Security-Analyse
+      summary: Einzelne Nachricht inkl. Security-Analyse und Links
       parameters:
         - name: messageId
           in: path
@@ -135,6 +155,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageDetail"
+    delete:
+      summary: Mail in den Papierkorb verschieben (soft delete)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: In Papierkorb verschoben
+
+  /messages/{messageId}/permanent:
+    delete:
+      summary: Mail endgueltig loeschen (nur aus dem Papierkorb heraus moeglich)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Endgueltig geloescht
 
   /messages/{messageId}/quarantine:
     post:
@@ -176,6 +222,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/Message"
 
+  /messages/{messageId}/unsubscribe:
+    post:
+      summary: >
+        Abmeldung ueber RFC-8058 List-Unsubscribe-Header anstoßen. Legt einen
+        unsubscribe_actions-Eintrag mit status='pending_confirmation' an,
+        nie automatischer Klick auf Links im Mail-Body.
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Abmeldung angestoßen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [pending_confirmation, confirmed, rejected]
+
   /messages/{messageId}/summary:
     get:
       summary: KI-Zusammenfassung ("Was wollen die von mir")
@@ -214,6 +285,160 @@ paths:
                 properties:
                   draftText:
                     type: string
+
+  /messages/draft/phishing-check:
+    post:
+      summary: >
+        Prueft einen Mail-Entwurf vor dem Versand auf Phishing-Merkmale
+        (harter Block, siehe blocked) sowie nicht-blockierende Warnsignale
+        (sensible Daten, Empfaenger-Reputation, riskante Links). Nutzt
+        dieselben Signale wie SecurityResult/analyzeMail, angewendet auf den
+        eigenen Entwurf statt auf eingehende Mails (siehe WEB_INBOX.md 08.09.).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bodyText: { type: string }
+                links:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      displayText: { type: string }
+                      actualUrl: { type: string }
+      responses:
+        "200":
+          description: Ergebnis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocked:
+                    type: boolean
+                    description: >
+                      true = Phishing-Merkmale erkannt, Versand MUSS verhindert
+                      werden (kein Warnen-und-trotzdem-erlauben).
+                  reason: { type: string, nullable: true }
+                  containsSensitiveData:
+                    type: array
+                    items: { type: string, enum: [iban, credit_card, other] }
+                  recipientReputation:
+                    type: string
+                    enum: [safe, unknown, flagged]
+                  riskyLinks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        url: { type: string }
+                        reason: { type: string }
+
+  /signatures:
+    get:
+      summary: Signaturen des Users auflisten
+      responses:
+        "200":
+          description: Liste der Signaturen
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Signature"
+    post:
+      summary: Neue Signatur anlegen
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Signature"
+      responses:
+        "201":
+          description: Angelegt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Signature"
+
+  /signatures/{signatureId}:
+    patch:
+      summary: Signatur bearbeiten
+      parameters:
+        - name: signatureId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Signature"
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Signature"
+    delete:
+      summary: Signatur löschen
+      parameters:
+        - name: signatureId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Gelöscht
+
+  /reminders:
+    get:
+      summary: >
+        Anstehende Erinnerungen auflisten (werden automatisch bei
+        POST /contracts/{contractId}/confirm angelegt, kein eigener
+        POST-Endpoint noetig).
+      responses:
+        "200":
+          description: Liste der Erinnerungen
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Reminder"
+
+  /reminders/{reminderId}:
+    patch:
+      summary: Erinnerung verschieben (snooze) oder als gesendet markieren
+      parameters:
+        - name: reminderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snoozedUntil: { type: string, format: date-time, nullable: true }
+                sent: { type: boolean }
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reminder"
 
   /contracts:
     get:
@@ -260,6 +485,15 @@ paths:
           description: Gespeichert
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Session-Token nach OAuth-Verknuepfung des Mail-Kontos. userId wird
+        serverseitig aus dem Token aufgeloest, nie aus Request-Body/Query/Pfad
+        vertraut.
+
   schemas:
     Folder:
       type: object
@@ -271,7 +505,7 @@ components:
         systemKey:
           type: string
           nullable: true
-          enum: [wichtig, sonstiges, rechnungen, quarantaene, spam]
+          enum: [wichtig, sonstiges, rechnungen, quarantaene, spam, papierkorb]
         sortOrder: { type: integer }
 
     MailAccount:
@@ -303,6 +537,18 @@ components:
             bodyText: { type: string }
             security:
               $ref: "#/components/schemas/SecurityResult"
+            links:
+              type: array
+              items:
+                $ref: "#/components/schemas/MessageLink"
+
+    MessageLink:
+      type: object
+      properties:
+        displayText: { type: string }
+        actualUrl: { type: string }
+        domainMatchesDisplay: { type: boolean }
+        isKnownMalicious: { type: boolean }
 
     SecurityResult:
       type: object
@@ -344,11 +590,30 @@ components:
         id: { type: string, format: uuid }
         providerName: { type: string }
         contractStart: { type: string, format: date, nullable: true }
-        contractEnd: { type: string, format: date }
-        cancellationDeadline: { type: string, format: date }
-        cancellationPeriodDays: { type: integer }
+        contractEnd: { type: string, format: date, nullable: true }
+        cancellationDeadline: { type: string, format: date, nullable: true }
+        cancellationPeriodDays: { type: integer, nullable: true }
         status: { type: string, enum: [active, cancelled, expired, needs_review] }
         extractedConfidence: { type: number, format: float }
+
+    Signature:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        mailAccountId: { type: string, format: uuid }
+        contentHtml: { type: string }
+        isDefault: { type: boolean }
+        applyToNew: { type: boolean }
+        applyToReplies: { type: boolean }
+
+    Reminder:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        contractId: { type: string, format: uuid }
+        remindAt: { type: string, format: date-time }
+        sent: { type: boolean }
+        snoozedUntil: { type: string, format: date-time, nullable: true }
 
     UserAiCapability:
       type: object
