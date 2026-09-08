@@ -3,7 +3,9 @@
 Regel: Wer etwas ändert, trägt hier ein, was und warum — direkt commiten. Niemand muss auf eine Antwort warten, um weiterzuarbeiten; nur bei einem Eintrag unter "Blocker" sollte der jeweils andere reagieren, bevor der betroffene Track weitermacht.
 
 
-**Kein Mensch als Vermittler:** Web-Claude prüft `SYNC.md` (main + alle Track-Branches) eigenständig und regelmäßig auf offene Fragen und Blocker und beantwortet/entscheidet direkt dort im jeweiligen Branch — ohne dass Massimo Inhalte zwischen den Chats kopieren muss. Terminal liest entsprechend vor jedem Start den aktuellen Stand aus `SYNC.md` im eigenen Branch.
+**Kein Mensch als Vermittler:** Web-Claude prüft `SYNC.md` (main + alle Track-Branches) eigenständig und regelmäßig auf offene Fragen und Blocker und beantwortet/entscheidet direkt dort im jeweiligen Branch — ohne dass Massimo Inhalte zwischen den Chats kopieren muss. Terminal liest entsprechend vor jedem Start den aktuellen Stand aus `SYNC.md` im eigenen Branch. Aufgaben in eine Richtung laufen über eigene Warteschlangen-Dateien: `WEB_INBOX.md` (Web → Terminal) und `TERMINAL_INBOX.md` (Terminal → Web), gleiches Protokoll (offen → erledigt: <hash>).
+
+**Große Contract-Änderungen vorher ankündigen:** Contract-Änderungen (`contracts/*`), die über eine reine Ergänzung hinausgehen (z.B. neue Kernfunktionalität wie frei anlegbare Ordner), bitte VOR dem Commit als `[offen]` in der jeweiligen Inbox-Datei oder als Frage in "Offene Fragen" ankündigen, nicht erst danach dokumentieren. Kleinere Ergänzungen (fehlende Felder, zusätzliche Tabellen für bereits vereinbarte Features) können weiter direkt umgesetzt und im Nachhinein dokumentiert werden. (Ergänzt 08.09. auf Vorschlag von Web, siehe WEB_INBOX.md.)
 
 Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 
