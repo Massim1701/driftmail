@@ -76,6 +76,11 @@ CREATE TABLE message_security (
     urgency_language_score NUMERIC(3,2),
     contains_new_iban BOOLEAN NOT NULL DEFAULT false,
     classification TEXT NOT NULL DEFAULT 'unclear' CHECK (classification IN ('safe', 'spam', 'phishing', 'unclear')),
+    -- Nur gesetzt wenn classification = 'spam'. 'adult'/'gambling' loesen
+    -- sofortiges Loeschen aus (kein Quarantaene-Pfad, kein 30-Tage-Aufheben,
+    -- kein Undo) -- siehe WEB_INBOX.md 08.09. Betrifft NICHT 'phishing',
+    -- das bleibt immer im Quarantaene-Pfad.
+    spam_subcategory TEXT CHECK (spam_subcategory IN ('adult', 'gambling', 'generic', 'marketing')),
     confidence_score NUMERIC(3,2),
     analyzed_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
