@@ -13,7 +13,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | B — Sicherheits-Klassifikation | security-classification/ | offen | — |
 | C — iOS App | ios/ | offen | — |
 | D — Vertrag & Reminder | contracts-logic/ | offen | — |
-| E — Antwort & Signatur | mail-actions/ | offen | — |
+| E — Antwort & Signatur | mail-actions/ | in Arbeit | 2026-09-08 |
 | F — Web-Fallback-UI | web/ | offen | — |
 
 Status-Werte: offen · in arbeit · fertig · blockiert
