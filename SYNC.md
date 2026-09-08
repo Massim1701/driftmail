@@ -32,7 +32,12 @@ Status-Werte: offen · in arbeit · fertig · blockiert
 
 Jede Änderung an einer Datei in contracts/ kommt hier rein, auch klein. Andere Tracks prüfen bei jedem Pull kurz diesen Abschnitt.
 
-(noch keine Änderungen seit Track 0)
+**[2026-09-08] [web] [0] — WICHTIGE CONTRACT-ÄNDERUNG:** Feste Ordner-Enum ersetzt durch benutzerdefinierte Ordner (User-Anforderung: Ordner anlegen/umbenennen/Mails verschieben). Änderungen:
+- **db-schema.sql:** neue Tabelle `folders` (id, user_id, name, icon, is_system, system_key, sort_order). `messages.folder` (Enum-Text) ersetzt durch `messages.folder_id` (FK auf folders.id).
+- - **api-spec.yaml:** `Folder`-Schema von Enum zu Objekt geändert ({id, name, icon, isSystem, systemKey, sortOrder}). Neue Endpunkte: `GET/POST /folders`, `PATCH/DELETE /folders/{folderId}`, `POST /messages/{messageId}/move`. `Message.folder` → `Message.folderId`. `/messages` Query-Param `folder` → `folderId`.
+  - - **design-tokens.json:** `folders`-Array ersetzt durch `systemFolders.defaults` (gleiche 5 System-Ordner als Default-Namen, aber umbenennbar außer quarantaene/spam) + `customFolder.defaultIcon` für neue User-Ordner.
+   
+    - **Betrifft alle Tracks, die schon gegen die alte Folder-Enum gebaut haben** (insbesondere A/Backend, C/iOS, F/Web — bitte prüfen und anpassen). Kein Blocker, aber bitte vor dem nächsten Merge nach main berücksichtigen.
 
 ## Offene Fragen
 
