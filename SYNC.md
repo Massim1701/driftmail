@@ -12,7 +12,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | A — Backend | backend/ | offen | — |
 | B — Sicherheits-Klassifikation | security-classification/ | offen | — |
 | C — iOS App | ios/ | offen | — |
-| D — Vertrag & Reminder | contracts-logic/ | offen | — |
+| D — Vertrag & Reminder | contracts-logic/ | in Arbeit | 2026-09-08 |
 | E — Antwort & Signatur | mail-actions/ | offen | — |
 | F — Web-Fallback-UI | web/ | offen | — |
 
