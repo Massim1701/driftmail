@@ -11,7 +11,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | 0 — Contracts | contracts/ | fertig | 2026-09-08 |
 | A — Backend | backend/ | offen | — |
 | B — Sicherheits-Klassifikation | security-classification/ | offen | — |
-| C — iOS App | ios/ | in Arbeit | 2026-09-08 |
+| C — iOS App | ios/ | fertig | 2026-09-08 |
 | D — Vertrag & Reminder | contracts-logic/ | offen | — |
 | E — Antwort & Signatur | mail-actions/ | offen | — |
 | F — Web-Fallback-UI | web/ | offen | — |
@@ -30,6 +30,8 @@ Status-Werte: offen · in arbeit · fertig · blockiert
 
 [2026-09-08] [terminal] [C] — Track C gestartet: SwiftUI-Grundgerüst gegen contracts/api-spec.yaml und design-tokens.json, Branch track-c-ios.
 
+[2026-09-08] [terminal] [C] — Track C fertig: SwiftUI-Grundgerüst (iOS 17+) mit Onboarding-Capability-Check, 5-Ordner-Inbox, Quarantäne-Warnbanner, Nachrichtendetail mit Security-Badges. Alle vier `AiAdapter`-Funktionen aus ai-adapter-interface.ts als Swift-Protokoll + Heuristik-Stub (`OnDeviceAiAdapter`) und Cloud-Fallback-Stub implementiert. `APIClient`-Protokoll deckt alle Endpunkte aus api-spec.yaml ab: `MockAPIClient` bedient sie aus einer gebündelten JSON-Datei (10 Nachrichten über alle 5 Ordner, 2 Verträge), `RemoteAPIClient` ist ein ungetestetes URLSession-Skelett für Track A. Design-Tokens 1:1 nach Swift portiert (DesignSystem/DesignTokens.swift), inkl. Light/Dark. Volle Xcode-Umgebung war in dieser Session verfügbar (nicht nur Quellcode wie im Auftrag als Fallback vorgesehen): Projekt gegen iphonesimulator gebaut (BUILD SUCCEEDED) und auf einem iPhone-17-Pro-Simulator installiert/gestartet; dabei einen echten Decoding-Bug gefunden und gefixt (api-spec.yaml mischt `format: date` und `format: date-time`, ein einzelner `.iso8601`-Decoder crashte beim Start — jetzt behoben über einen kombinierten Decoder, siehe ios/DriftmailApp/Networking/DateDecoding.swift). Alle vier Kernscreens per Screenshot verifiziert. Details, Annahmen und was ungetestet blieb: ios/README.md.
+
 ## Contract-Änderungen (wichtig — bricht ggf. andere Tracks)
 
 Jede Änderung an einer Datei in contracts/ kommt hier rein, auch klein. Andere Tracks prüfen bei jedem Pull kurz diesen Abschnitt.
@@ -42,6 +44,7 @@ Fragen, die ein Track nicht selbst entscheiden kann, weil sie einen Contract ode
 
 - ~~api-spec.yaml `SecurityResult` unvollständig gegenüber `ai-adapter-interface.ts`/`db-schema.sql`.~~ **Beantwortet (Web, 08.09.):** kein Kürzen, war Absicht/Versehen — YAML wurde nachgezogen, alle 11 Felder jetzt drin.
 - ~~api-spec.yaml `Contract`-Schema fehlt `contractStart` und `extractedConfidence`.~~ **Beantwortet (Web, 08.09.):** beide Felder in der YAML ergänzt.
+- [C, 08.09.] api-spec.yaml mischt `format: date-time` (z. B. `Message.receivedAt`) und `format: date` (z. B. `Contract.contractEnd`, `MailSummary.deadline`) im selben Dokument, ohne dass das explizit als Absicht markiert ist. Für iOS kein Blocker — `ios/DriftmailApp/Networking/DateDecoding.swift` akzeptiert defensiv beide Formate beim Decodieren. Aber: bitte bei Track A verifizieren, dass das reale Backend tatsächlich beide Formate exakt so ausgibt (volles ISO-8601 mit Zeit vs. reines `yyyy-MM-dd`), bevor der Mock gegen den echten Server getauscht wird — sonst bricht das Decoding client-seitig wieder.
 
 ## Blocker
 
