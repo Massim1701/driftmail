@@ -144,3 +144,33 @@ ALTER TABLE send_abuse_flags ADD CONSTRAINT send_abuse_flags_flag_reason_check
 ```
 
 WICHTIG: bei flag_reason = 'phishing_content' ist action_taken immer zwingend 'send_blocked', NIE 'warned' oder 'rate_limited' — anders als bei den uebrigen Gruenden. UI/Backend muss das als Ausnahme von der sonstigen "erst warnen"-Logik behandeln. Kein Blocker, aber bitte vor Fertigstellung des Compose/Send-Flows (Track A + jeweiliger UI-Track) beruecksichtigen.
+
+
+[2026-09-08] [offen] [Erweiterung des Phishing-Check-Eintrags von eben, contracts/api-spec.yaml + Track A/UI] — Drei zusaetzliche Signale fuer denselben "Check vor dem Senden"-Moment (POST /messages/draft/phishing-check), NICHT als harter Block wie Phishing, sondern als nicht-blockierender Warnhinweis (Sprechblase/Tooltip nahe der betroffenen Textstelle):
+
+1. Eigene sensible Daten im Entwurf erkannt (Kontonummer/IBAN-Muster, Kreditkarten-Muster, evtl. Sozialversicherungsnummer-Muster). Ist NICHT per se falsch (z.B. eigene IBAN fuer eine Ueberweisung mitteilen) — deshalb Warnhinweis, kein Blockieren. Sprechblase z.B.: "Diese Mail enthaelt eine Kontonummer. Pruef kurz, ob der Empfaenger vertrauenswuerdig ist."
+
+2. Empfaenger-Reputation: Ziel-Adresse gegen bekannte Betrugsmuster pruefen (Abgleich mit fraud_alerts/domain_reputation_score, die es fuer eingehende Mails schon gibt — hier auf die Empfaenger-Adresse angewendet). Ist die Kombination "sensible Daten im Text" + "Empfaenger mit schlechter Reputation" gegeben, wird der Hinweis deutlich schaerfer formuliert (nicht automatisch blockiert wie bei Phishing-Inhalt selbst, aber sehr auffaellig, z.B. rote statt gelbe Sprechblase).
+
+3. Links im Entwurf/in der angezeigten Mail in Echtzeit pruefen und bei Verdacht SOFORT rot markieren (nicht erst nach Analyse-Verzoegerung) — nutzt dieselben Signale wie message_links (domain_matches_display, is_known_malicious). Gilt fuer Links in empfangenen Mails genauso wie im eigenen Entwurf.
+
+Vorschlag: draft/phishing-check Response um folgende Felder erweitern:
+```yaml
+                  containsSensitiveData:
+                    type: array
+                    items: { type: string, enum: [iban, credit_card, other] }
+                  recipientReputation:
+                    type: string
+                    enum: [safe, unknown, flagged]
+                  riskyLinks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        url: { type: string }
+                        reason: { type: string }
+```
+
+design-tokens.json: Farbrolle fuer sofortige Link-Markierung ergaenzen (nutzt vorhandenes danger-Rot, kein neues Farbschema noetig) — bitte kurze Notiz in Track F/C aufnehmen, dass Link-Markierung CSS-seitig sofort beim Rendern passiert, nicht erst nach Server-Antwort (optimistische UI, Server-Check laeuft parallel nach).
+
+Kein Blocker. Betrifft Track A (Recipient-Reputation-Logik, PII-Pattern-Erkennung) und alle Compose-/Anzeige-UI-Tracks (C/F).
