@@ -53,6 +53,14 @@ Fragen, die ein Track nicht selbst entscheiden kann, weil sie einen Contract ode
 - ~~api-spec.yaml `SecurityResult` unvollständig gegenüber `ai-adapter-interface.ts`/`db-schema.sql`.~~ **Beantwortet (Web, 08.09.):** kein Kürzen, war Absicht/Versehen — YAML wurde nachgezogen, alle 11 Felder jetzt drin.
 - ~~api-spec.yaml `Contract`-Schema fehlt `contractStart` und `extractedConfidence`.~~ **Beantwortet (Web, 08.09.):** beide Felder in der YAML ergänzt.
 
+## Qualitäts-Checkliste (vor Status "fertig" je Track)
+
+- [ ] Grenzen explizit benannt: was ist Platzhalter, was ist echt umgesetzt
+- [ ] Jede eigene Design-Entscheidung dokumentiert (Datum + Begründung), nicht stillschweigend getroffen
+- [ ] Edge Cases behandelt, nicht nur der Erfolgsfall
+- [ ] Tests vorhanden und grün, Typprüfung sauber
+- [ ] Klare Übergabe: was der aufrufende Track (z.B. Backend/UI) noch selbst tun muss
+
 ## Blocker
 
 Nur eintragen, wenn ein Track wirklich nicht weiterkommt, ohne dass jemand anders etwas ändert. Bitte mit betroffenem Track markieren.

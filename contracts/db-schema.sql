@@ -238,3 +238,17 @@ CREATE TABLE data_retention_policy (
     archive_after_days INTEGER,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
+
+-- ===== Paketdienst-Erkennung =====
+
+CREATE TABLE shipments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  carrier TEXT,
+  tracking_number TEXT,
+  status TEXT NOT NULL DEFAULT 'in_transit'
+    CHECK (status IN ('in_transit', 'out_for_delivery', 'delivered', 'delayed', 'problem')),
+  estimated_delivery DATE,
+  extracted_confidence NUMERIC(3,2)
+);
