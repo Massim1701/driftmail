@@ -155,6 +155,16 @@ export class Store {
     return m;
   }
 
+  /** Entfernt eine Nachricht endgültig aus dem Store (DELETE /messages/:id/permanent). */
+  deleteMessage(id: string): boolean {
+    const idx = this.messages.findIndex((m) => m.id === id);
+    if (idx === -1) return false;
+    this.messages.splice(idx, 1);
+    this.messageSecurity.delete(id);
+    this.messageAiSummary.delete(id);
+    return true;
+  }
+
   // ----- Security -----
 
   setMessageSecurity(record: MessageSecurityRecord): void {
@@ -280,18 +290,22 @@ export class Store {
 
 export const store = new Store();
 
-// Default-Namen/Icons/Reihenfolge der 5 System-Ordner — gespiegelt aus
-// contracts/design-tokens.json ("systemFolders.defaults"). quarantaene und
-// spam sind laut Contract nicht umbenennbar (siehe routes/folders.ts).
+// Default-Namen/Icons/Reihenfolge der System-Ordner — gespiegelt aus
+// contracts/design-tokens.json ("systemFolders.defaults"). quarantaene, spam
+// und papierkorb sind laut Contract nicht umbenennbar (siehe routes/folders.ts).
+// "papierkorb" kam mit dem Soft-Delete-Contract-Nachtrag dazu (WEB_INBOX.md
+// 08.09. "Fehlende Basis-Funktion entdeckt", Commit 156f0fd) — jetzt 6 statt
+// 5 System-Ordner.
 const SYSTEM_FOLDER_DEFAULTS: Array<{ systemKey: SystemFolderKey; name: string; icon: string }> = [
   { systemKey: "wichtig", name: "Wichtig", icon: "star" },
   { systemKey: "sonstiges", name: "Sonstiges", icon: "inbox" },
   { systemKey: "rechnungen", name: "Rechnungen", icon: "receipt" },
   { systemKey: "quarantaene", name: "Quarantäne", icon: "shield-exclamation" },
   { systemKey: "spam", name: "Spam", icon: "trash" },
+  { systemKey: "papierkorb", name: "Papierkorb", icon: "trash-2" },
 ];
 
-/** Legt einen Demo-User + Demo-Konto + die 5 System-Ordner an, falls noch
+/** Legt einen Demo-User + Demo-Konto + die System-Ordner an, falls noch
  * keine existieren. Wird beim Serverstart aufgerufen, damit die API sofort
  * ohne Setup nutzbar ist. */
 export function ensureDemoUser(): { user: User; account: MailAccountRecord } {

@@ -28,6 +28,14 @@ Erster Durchstich der Backend-API gegen `contracts/api-spec.yaml` und
 > /messages/draft/phishing-check` hinzugekommen. Mock-Implementierung siehe
 > Abschnitt "Ausgehender Phishing-Check (Composer, Mock)" unten.
 
+> **Contract-Update (2026-09-08, WEB_INBOX.md "Fehlende Basis-Funktion
+> entdeckt", Commit `156f0fd`):** manuelles Löschen einer Mail gab es bisher
+> nicht (nur Quarantäne, Verschieben, Auto-Delete-Regeln). Neuer
+> System-Ordner `papierkorb` (6. System-Ordner) + `DELETE
+> /messages/{messageId}` (soft delete) + `DELETE
+> /messages/{messageId}/permanent` (endgültig löschen). Details siehe
+> Abschnitt "Papierkorb / Löschen" unten.
+
 > **Architekturentscheidung (2026-09-08, SYNC.md, Web-Antwort auf die vier
 > "wer macht den externen Lookup"-Fragen):** `security-classification/`
 > (Track B) bleibt bewusst zustandslos (kein Netzwerk, keine DB). Track A
@@ -79,11 +87,14 @@ Das ist ein End-to-End-Smoketest ohne Testframework
 (`src/smoketest.ts`): startet die App in-process, synct das Fixture-Konto
 und durchläuft den kompletten Kernfluss über echte HTTP-Requests —
 `/v1/accounts`, `/v1/folders` (GET/POST/PATCH/DELETE, inkl. Ablehnung von
-Umbenennung/Löschung bei System-Ordnern), `/v1/messages` (inkl.
-`folderId`-Filter), `/v1/messages/:id`, `/v1/messages/:id/move`,
-`/v1/messages/:id/summary`, `/v1/messages/:id/reply-draft`,
-`/v1/messages/:id/quarantine`, `/v1/contracts`,
-`/v1/contracts/:id/confirm`, `/v1/capability-check`. Bricht mit
+Umbenennung/Löschung bei System-Ordnern, inkl. `papierkorb`),
+`/v1/messages` (inkl. `folderId`-Filter), `/v1/messages/:id`,
+`/v1/messages/:id/move`, `/v1/messages/:id/summary`,
+`/v1/messages/:id/reply-draft`, `/v1/messages/:id/quarantine`,
+`/v1/messages/:id` (DELETE, soft delete in den Papierkorb),
+`/v1/messages/:id/permanent` (DELETE, endgültiges Löschen — inkl. Ablehnung
+außerhalb des Papierkorbs), `/v1/contracts`, `/v1/contracts/:id/confirm`,
+`/v1/capability-check`. Bricht mit
 Fehlermeldung ab, sobald eine Response nicht zum erwarteten Contract-Format
 passt. Prüft zusätzlich direkt gegen `store` (kein HTTP-Endpunkt dafür,
 siehe oben): den Auto-Delete-Pfad (adult/gambling-Spam-Fixture wird nicht
@@ -152,6 +163,14 @@ curl -X POST http://localhost:3000/v1/capability-check \
   Empfänger-Reputation) einer echten Prüfung gegen den bestehenden
   In-Memory-Store — kein echter WHOIS-/Spamhaus-/Fraud-Datenbank-Zugriff.
   Siehe eigener Abschnitt "Externe Lookup-Adapter" unten.
+- **Papierkorb / Löschen** (`src/routes/messages.ts`, `DELETE
+  /messages/{messageId}` + `DELETE /messages/{messageId}/permanent`): das
+  lokale Verschieben/Entfernen im Store ist echt implementiert, die laut
+  Auftrag ebenfalls geforderte Provider-Spiegelung (Gmail API
+  `messages.trash`/`messages.delete` bzw. IMAP `\Deleted`/`EXPUNGE`) ist
+  ein markierter `TODO`-Kommentar an der jeweiligen Stelle, kein
+  Schreibzugriff auf Gmail/IMAP in diesem Durchstich. Siehe eigener
+  Abschnitt "Papierkorb / Löschen" unten.
 
 ## Auto-Delete: adult/gambling-Spam
 
@@ -215,18 +234,20 @@ Ordner eigene Datensätze (Tabelle `folders`) statt eines festen
 Enum-Strings auf `messages.folder`:
 
 - Jeder User bekommt beim Anlegen (`ensureDemoUser()` in `src/db/store.ts`)
-  automatisch 5 System-Ordner (`is_system=true`), Namen/Icons/Reihenfolge
+  automatisch 6 System-Ordner (`is_system=true`), Namen/Icons/Reihenfolge
   1:1 aus `contracts/design-tokens.json` (`systemFolders.defaults`):
   `wichtig` (star), `sonstiges` (inbox), `rechnungen` (receipt),
-  `quarantaene` (shield-exclamation), `spam` (trash).
+  `quarantaene` (shield-exclamation), `spam` (trash), `papierkorb`
+  (trash-2, seit dem Nachtrag vom 08.09., siehe Abschnitt "Papierkorb /
+  Löschen" unten).
 - Eigene Ordner (`POST /folders`) haben `is_system=false`,
   `system_key=null` und als Default-Icon `folder`
   (`contracts/design-tokens.json` → `customFolder.defaultIcon`).
 - `PATCH /folders/:folderId`: Name/Icon/Reihenfolge änderbar. Ausnahme:
-  `quarantaene` und `spam` sind laut Design-Token (`renamable: false`)
-  **nicht umbenennbar** — ein `PATCH` mit `name` auf diese beiden liefert
-  `400`. Icon/Reihenfolge bleiben bei diesen beiden änderbar, da der
-  Contract dazu nichts einschränkt.
+  `quarantaene`, `spam` und `papierkorb` sind laut Design-Token
+  (`renamable: false`) **nicht umbenennbar** — ein `PATCH` mit `name` auf
+  diese drei liefert `400`. Icon/Reihenfolge bleiben bei diesen drei
+  änderbar, da der Contract dazu nichts einschränkt.
 - `DELETE /folders/:folderId`: System-Ordner (`is_system=true`) sind nicht
   löschbar (`400`).
 - **Design-Entscheidung (nicht im Contract geregelt), 2026-09-08:**
@@ -246,6 +267,58 @@ Enum-Strings auf `messages.folder`:
   `userId` aus dem Request gefiltert, sondern greifen intern immer auf
   `ensureDemoUser()` zu — analog zum bestehenden Muster in
   `src/routes/capability.ts`.
+
+## Papierkorb / Löschen
+
+Seit dem Contract-Nachtrag vom 08.09. (`WEB_INBOX.md` "Fehlende
+Basis-Funktion entdeckt", Commit `156f0fd`) kann eine Mail manuell gelöscht
+werden — analog zu Gmail zweistufig:
+
+- `DELETE /messages/{messageId}` (soft delete): verschiebt die Nachricht in
+  den `papierkorb`-System-Ordner des Accounts. **Gleiche Mechanik wie `POST
+  /messages/{messageId}/move`** (ruft intern dieselbe `store.moveMessage()`
+  auf, kein eigener Mechanismus) — nur das Ziel ist fest der
+  Papierkorb-Ordner statt eines beliebigen, im Body übergebenen Ordners.
+  `404`, falls die Nachricht nicht existiert. Response `200` mit der
+  aktualisierten Nachricht (`ApiMessage`).
+- `DELETE /messages/{messageId}/permanent` (endgültig löschen): entfernt
+  den Message-Datensatz (inkl. `message_security`/`message_ai_summary`)
+  endgültig aus dem Store (`store.deleteMessage()`). Response `200`
+  (`{ deleted: true }`).
+
+**Design-Entscheidung (2026-09-08, nicht explizit im Auftrag):**
+`permanent` ist standardmäßig **nur erlaubt, wenn sich die Nachricht gerade
+im Papierkorb-Ordner befindet** — sonst `400` mit Erklärung im
+Response-Body. Begründung: der Contract-Kommentar zu diesem Endpunkt sagt
+selbst "nur sinnvoll aus dem Papierkorb heraus"; ohne diese Prüfung könnte
+jede Mail aus jedem Ordner (Posteingang, Quarantäne, ...) ohne den
+Zwischenschritt "erst in den Papierkorb verschieben" endgültig und ohne
+jede Undo-Möglichkeit verschwinden — ein Foot-Gun bei versehentlichem
+Klick/API-Call. Entspricht außerdem dem Gmail-Vorbild, an dem sich dieser
+Nachtrag laut Auftrag orientiert (Gmail erlaubt "endgültig löschen"
+ebenfalls nur aus dem Papierkorb heraus über die normale UI). Der
+Papierkorb-Ordner selbst braucht laut Auftrag **keine** eigene
+Retention-Tabelle wie `quarantine` (kein automatisches 30-Tage-Löschen) —
+der User leert ihn manuell oder er bleibt liegen, wie bei Gmail.
+
+**Provider-Spiegelung — TODO, kein Blocker:** laut Auftrag soll `DELETE
+/messages/{messageId}` serverseitig zusätzlich über die Provider-API
+gespiegelt werden (Gmail API `messages.trash`), `DELETE
+/messages/{messageId}/permanent` entsprechend über `messages.delete` bzw.
+beim IMAP-Adapter über das `\Deleted`-Flag / `EXPUNGE`. Dieses Backend hat
+aktuell nur Lese-/Sync-Zugriff auf Gmail/IMAP (`src/mail/gmailAdapter.ts`,
+`src/mail/imapAdapter.ts` — siehe "Was ist echt, was ist Mock/Stub" oben),
+keinen Schreibzugriff. Beide Routen (`src/routes/messages.ts`) haben daher
+an der jeweiligen Stelle einen klar markierten `TODO(Provider-Spiegelung)`-
+Kommentar statt einer echten Implementierung — analog zur bestehenden
+Mock-/Real-Grenze beim Rest des Backends, kein Blocker für diesen Track.
+
+**Tests:** `src/smoketest.ts` deckt soft delete (Nachricht landet im
+Papierkorb-Ordner, `GET` bestätigt `folderId`), permanent delete aus dem
+Papierkorb (Nachricht danach nicht mehr im Store, `GET` liefert `404`),
+die Ablehnung von permanent delete außerhalb des Papierkorbs (`400`, aus
+dem Spam-Ordner heraus versucht) sowie `404` bei `DELETE` auf eine
+unbekannte `messageId` ab.
 
 ## Ausgehender Phishing-Check (Composer, Mock)
 

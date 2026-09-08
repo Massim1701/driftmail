@@ -9,10 +9,10 @@ import type { SystemFolderKey } from "../types";
 
 export const foldersRouter = Router();
 
-// quarantaene/spam sind laut design-tokens.json (systemFolders.defaults,
-// renamable: false) nicht umbenennbar — API lehnt PATCH auf `name` für
-// diese beiden mit 400 ab.
-const NOT_RENAMABLE: SystemFolderKey[] = ["quarantaene", "spam"];
+// quarantaene/spam/papierkorb sind laut design-tokens.json
+// (systemFolders.defaults, renamable: false) nicht umbenennbar — API lehnt
+// PATCH auf `name` für diese drei mit 400 ab.
+const NOT_RENAMABLE: SystemFolderKey[] = ["quarantaene", "spam", "papierkorb"];
 
 // design-tokens.json: customFolder.defaultIcon
 const CUSTOM_FOLDER_DEFAULT_ICON = "folder";

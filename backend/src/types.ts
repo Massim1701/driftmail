@@ -9,10 +9,13 @@ export type Provider = "gmail" | "imap";
 export type SyncStatus = "pending" | "syncing" | "ok" | "error";
 // CONTRACT-ÄNDERUNG (SYNC.md, Commit 734781e): fester Folder-Enum ersetzt
 // durch benutzerdefinierte Ordner (Tabelle `folders`). SystemFolderKey
-// bleibt als Enum bestehen, aber nur noch für die 5 mitgelieferten
+// bleibt als Enum bestehen, aber nur noch für die mitgelieferten
 // System-Ordner (folders.system_key) — Nachrichten zeigen jetzt per
 // folder_id auf eine echte Ordner-Zeile statt auf diesen String.
-export type SystemFolderKey = "wichtig" | "sonstiges" | "rechnungen" | "quarantaene" | "spam";
+// "papierkorb" kam mit dem Papierkorb-/Soft-Delete-Contract-Nachtrag dazu
+// (WEB_INBOX.md 08.09. "Fehlende Basis-Funktion entdeckt", Commit 156f0fd)
+// — inzwischen 6 statt 5 System-Ordner, siehe ensureDemoUser() in db/store.ts.
+export type SystemFolderKey = "wichtig" | "sonstiges" | "rechnungen" | "quarantaene" | "spam" | "papierkorb";
 export type Classification = "safe" | "spam" | "phishing" | "unclear";
 export type ContractStatus = "active" | "cancelled" | "expired" | "needs_review";
 export type AiSource = "on_device" | "cloud_fallback";

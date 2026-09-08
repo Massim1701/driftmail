@@ -96,6 +96,80 @@ messagesRouter.post("/messages/:messageId/move", (req, res) => {
   res.json(toApiMessage(updated, store.getMessageSecurity(updated.id)));
 });
 
+// DELETE /messages/:messageId — Mail in den Papierkorb verschieben (soft
+// delete), siehe api-spec.yaml. Nachtrag WEB_INBOX.md 08.09. "Fehlende
+// Basis-Funktion entdeckt" (Commit 156f0fd, Contract-Teil). Gleiche
+// Mechanik wie POST /messages/:messageId/move (kein neuer Mechanismus) --
+// nur das Ziel ist fest der Papierkorb-Ordner des Accounts statt eines
+// beliebigen, im Body übergebenen Ordners.
+messagesRouter.delete("/messages/:messageId", (req, res) => {
+  const message = store.getMessage(req.params.messageId);
+  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+
+  const account = store.getMailAccount(message.mailAccountId);
+  const papierkorb = account ? store.getSystemFolder(account.userId, "papierkorb") : undefined;
+  if (!papierkorb) {
+    // Sollte praktisch nie passieren (ensureDemoUser() legt den Ordner
+    // immer an), aber sauberer 500 statt eines "undefined"-Absturzes falls
+    // doch mal ein User ohne Papierkorb-Ordner existiert (z.B. altes
+    // In-Memory-Store-Objekt von vor diesem Feature).
+    return res.status(500).json({ error: "Papierkorb-Ordner für dieses Konto nicht gefunden" });
+  }
+
+  // TODO(Provider-Spiegelung, siehe WEB_INBOX.md 08.09. Punkt 3 + Auftrag
+  // Track A Schritt 4): laut Contract soll dies serverseitig zusätzlich
+  // über die Provider-API gespiegelt werden (Gmail API `messages.trash`
+  // bzw. IMAP `\Deleted`-Flag setzen), analog zur bereits umgesetzten
+  // Provider-Anbindung in src/mail/gmailAdapter.ts/imapAdapter.ts. Dieses
+  // Backend hat aktuell nur Lese-/Sync-Zugriff auf Gmail/IMAP (siehe
+  // README "Was ist echt, was ist Mock/Stub" -- kein Schreibzugriff
+  // implementiert), deshalb bleibt das hier ein Platzhalter/TODO, kein
+  // Blocker für diesen Track (gleiche Grenze wie beim restlichen
+  // Mock-Adapter-Rand).
+  store.moveMessage(message.id, papierkorb.id);
+  res.status(200).json(toApiMessage(store.getMessage(message.id)!, store.getMessageSecurity(message.id)));
+});
+
+// DELETE /messages/:messageId/permanent — Mail endgültig löschen, siehe
+// api-spec.yaml. Nachtrag WEB_INBOX.md 08.09. "Fehlende Basis-Funktion
+// entdeckt" (Commit 156f0fd, Contract-Teil).
+//
+// Design-Entscheidung (2026-09-08, nicht explizit im Auftrag, siehe
+// README "Endgültiges Löschen (Papierkorb)"): standardmäßig nur erlaubt,
+// wenn sich die Nachricht GERADE im Papierkorb-Ordner befindet, sonst 400
+// mit Erklärung. Begründung: der Contract-Endpunkt-Kommentar sagt selbst
+// "nur sinnvoll aus dem Papierkorb heraus" -- ohne diese Prüfung könnte
+// jede Mail aus jedem Ordner (Posteingang, Quarantäne, ...) ohne den
+// Zwischenschritt "erst in den Papierkorb verschieben" endgültig und ohne
+// jede Undo-Möglichkeit verschwinden. Das wäre ein Foot-Gun (z.B.
+// versehentlicher Klick/API-Call löscht eine wichtige Mail komplett statt
+// sie nur in den Papierkorb zu verschieben) und widerspricht dem
+// Gmail-Vorbild, an dem sich dieser Nachtrag laut Auftrag orientiert
+// (Gmail erlaubt "endgültig löschen" ebenfalls nur aus dem Papierkorb
+// heraus über die normale UI).
+messagesRouter.delete("/messages/:messageId/permanent", (req, res) => {
+  const message = store.getMessage(req.params.messageId);
+  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+
+  const account = store.getMailAccount(message.mailAccountId);
+  const papierkorb = account ? store.getSystemFolder(account.userId, "papierkorb") : undefined;
+  if (!papierkorb || message.folderId !== papierkorb.id) {
+    return res.status(400).json({
+      error: "endgültiges Löschen ist nur für Nachrichten im Papierkorb erlaubt -- zuerst DELETE /messages/{messageId} (in den Papierkorb verschieben)",
+    });
+  }
+
+  // TODO(Provider-Spiegelung, siehe WEB_INBOX.md 08.09. Punkt 3 + Auftrag
+  // Track A Schritt 4): laut Contract soll dies zusätzlich die endgültige
+  // Löschung beim Provider auslösen (Gmail API `messages.delete` bzw. IMAP
+  // `EXPUNGE`). Gleiche Backend-Grenze wie oben bei DELETE
+  // /messages/{messageId} -- kein echter Schreibzugriff auf Gmail/IMAP in
+  // diesem Durchstich, deshalb hier nur als markierter Platzhalter, kein
+  // Blocker.
+  store.deleteMessage(message.id);
+  res.status(200).json({ deleted: true });
+});
+
 // GET /messages/:messageId/summary — siehe api-spec.yaml
 // Wird on-demand berechnet (per User-Klick "Was wollen die von mir?") und
 // in message_ai_summary gecacht, wie in ai-adapter-interface.ts beschrieben.

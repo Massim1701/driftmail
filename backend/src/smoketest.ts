@@ -53,15 +53,18 @@ async function main() {
     const accounts = await accountsRes.json();
     assert(Array.isArray(accounts) && accounts.length > 0, "mind. 1 Konto erwartet");
 
-    // Ordner: 5 System-Ordner müssen für den Demo-User existieren
-    // (Contract-Änderung "benutzerdefinierte Ordner", SYNC.md Commit 734781e).
+    // Ordner: 6 System-Ordner müssen für den Demo-User existieren
+    // (Contract-Änderung "benutzerdefinierte Ordner", SYNC.md Commit 734781e;
+    // "papierkorb" kam per Nachtrag dazu, WEB_INBOX.md 08.09. "Fehlende
+    // Basis-Funktion entdeckt", Commit 156f0fd).
     const foldersRes = await fetch(`${base}/v1/folders`);
     assert(foldersRes.status === 200, "GET /v1/folders sollte 200 liefern");
     const folders = (await foldersRes.json()) as Array<Record<string, unknown>>;
-    assert(Array.isArray(folders) && folders.length === 5, "genau 5 System-Ordner erwartet");
+    assert(Array.isArray(folders) && folders.length === 6, "genau 6 System-Ordner erwartet");
     const spamFolder = folders.find((f) => f.systemKey === "spam");
     const sonstigesFolder = folders.find((f) => f.systemKey === "sonstiges");
-    assert(!!spamFolder && !!sonstigesFolder, "System-Ordner 'spam' und 'sonstiges' erwartet");
+    const papierkorbFolder = folders.find((f) => f.systemKey === "papierkorb") as Record<string, unknown>;
+    assert(!!spamFolder && !!sonstigesFolder && !!papierkorbFolder, "System-Ordner 'spam', 'sonstiges' und 'papierkorb' erwartet");
 
     const messagesRes = await fetch(`${base}/v1/messages`);
     const messages = await messagesRes.json();
@@ -95,6 +98,16 @@ async function main() {
       body: JSON.stringify({ name: "Nicht erlaubt" }),
     });
     assert(renameSpamRes.status === 400, "Umbenennen von 'spam' sollte 400 liefern");
+
+    const renamePapierkorbRes = await fetch(`${base}/v1/folders/${papierkorbFolder.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Nicht erlaubt" }),
+    });
+    assert(renamePapierkorbRes.status === 400, "Umbenennen von 'papierkorb' sollte 400 liefern (design-tokens.json: renamable=false)");
+
+    const deletePapierkorbFolderRes = await fetch(`${base}/v1/folders/${papierkorbFolder.id}`, { method: "DELETE" });
+    assert(deletePapierkorbFolderRes.status === 400, "Löschen des System-Ordners 'papierkorb' sollte 400 liefern");
 
     const first = messages[0];
 
@@ -138,6 +151,46 @@ async function main() {
 
     const quarantineRes = await fetch(`${base}/v1/messages/${first.id}/quarantine`, { method: "POST" });
     assert(quarantineRes.status === 200, "POST .../quarantine sollte 200 liefern");
+
+    // ----- Papierkorb / Löschen (WEB_INBOX.md 08.09. "Fehlende
+    // Basis-Funktion entdeckt", Commit 156f0fd) -----
+    // Eigene Fixture (3, Newsletter/generic-Spam) statt `first`/fixture1/2/4:
+    // die spätere Lookup-Adapter-Sektion prüft fixture1/2/4 noch per
+    // findMessageByHeader() nach Sync-Werten -- die dürfen hier nicht schon
+    // aus dem Store verschwunden sein.
+    const fixture3 = store.findMessageByHeader(account.id, "<fixture-3@newsletter-deals.example>");
+    assert(fixture3 !== undefined, "Fixture 3 sollte importiert worden sein");
+    const trashTarget = fixture3!;
+
+    // Fall 1: permanent delete NICHT aus einem anderen Ordner als dem
+    // Papierkorb erlaubt (Design-Entscheidung, siehe messages.ts-Kommentar
+    // + README) -- Fixture 3 liegt laut Sync-Pipeline im normalen
+    // Spam-Ordner, nicht im Papierkorb.
+    const permanentFromSpamRes = await fetch(`${base}/v1/messages/${trashTarget.id}/permanent`, { method: "DELETE" });
+    assert(
+      permanentFromSpamRes.status === 400,
+      "DELETE .../permanent aus dem Spam-Ordner (nicht Papierkorb) sollte 400 liefern",
+    );
+    assert(store.getMessage(trashTarget.id) !== undefined, "Nachricht darf nach abgelehntem permanent-delete weiterhin existieren");
+
+    // Fall 2: soft delete -- Nachricht landet im Papierkorb-Ordner.
+    const softDeleteRes = await fetch(`${base}/v1/messages/${trashTarget.id}`, { method: "DELETE" });
+    assert(softDeleteRes.status === 200, "DELETE /v1/messages/:id (soft delete) sollte 200 liefern");
+    const softDeleted = (await softDeleteRes.json()) as Record<string, unknown>;
+    assert(softDeleted.folderId === papierkorbFolder.id, "Nachricht sollte nach DELETE im Papierkorb-Ordner sein");
+    const afterSoftDeleteDetail = (await (await fetch(`${base}/v1/messages/${trashTarget.id}`)).json()) as Record<string, unknown>;
+    assert(afterSoftDeleteDetail.folderId === papierkorbFolder.id, "GET nach soft delete sollte folderId=Papierkorb zeigen");
+
+    // Fall 3: permanent delete AUS dem Papierkorb heraus -- Nachricht ist danach weg.
+    const permanentDeleteRes = await fetch(`${base}/v1/messages/${trashTarget.id}/permanent`, { method: "DELETE" });
+    assert(permanentDeleteRes.status === 200, "DELETE .../permanent aus dem Papierkorb sollte 200 liefern");
+    assert(store.getMessage(trashTarget.id) === undefined, "Nachricht sollte nach permanent delete nicht mehr im Store existieren");
+    const afterPermanentDeleteRes = await fetch(`${base}/v1/messages/${trashTarget.id}`);
+    assert(afterPermanentDeleteRes.status === 404, "GET nach permanent delete sollte 404 liefern");
+
+    // Fall 4: DELETE auf eine nicht existierende Nachricht -> 404 (Edge Case).
+    const deleteMissingRes = await fetch(`${base}/v1/messages/00000000-0000-0000-0000-000000000000`, { method: "DELETE" });
+    assert(deleteMissingRes.status === 404, "DELETE /v1/messages/:id für unbekannte id sollte 404 liefern");
 
     const contractsRes = await fetch(`${base}/v1/contracts`);
     const contracts = await contractsRes.json();
@@ -305,7 +358,7 @@ async function main() {
       "Empfänger-Domain, die schon als Phishing-Absender aufgefallen ist, sollte recipientReputation='flagged' liefern",
     );
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Contracts -> Capability -> Draft-Phishing-Check -> Externe Lookup-Adapter) end-to-end grün.");
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Externe Lookup-Adapter) end-to-end grün.");
   } finally {
     server.close();
   }
