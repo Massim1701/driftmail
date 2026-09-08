@@ -68,6 +68,43 @@ enum DesignTokens {
         static let lg: CGFloat = 16
         static let xl: CGFloat = 20
     }
+
+    /// Swift mirror of design-tokens.json `systemFolders` /
+    /// `customFolder`. [2026-09-08] Contract-Änderung: replaces the old
+    /// `folders` array (5 fixed folders) — folders are now user-manageable,
+    /// so this only ships the *defaults* used to seed a new account's
+    /// system folders (`Models/Folder.swift` carries the actual per-folder
+    /// data coming back from the API). Used by `MockAPIClient` to seed
+    /// `MockDatabase.json`-shaped data and by the UI as a fallback label/
+    /// icon before the real folder list has loaded.
+    enum SystemFolders {
+        struct SystemDefault {
+            let systemKey: SystemFolderKey
+            let defaultLabel: String
+            let icon: String
+            /// design-tokens.json `colorRole: "danger"` (quarantaene only).
+            let usesDangerColor: Bool
+            /// design-tokens.json `muted: true` (spam only).
+            let isMuted: Bool
+            /// design-tokens.json `renamable` — false only for
+            /// quarantaene/spam.
+            let renamable: Bool
+        }
+
+        static let defaults: [SystemDefault] = [
+            SystemDefault(systemKey: .wichtig, defaultLabel: "Wichtig", icon: "star", usesDangerColor: false, isMuted: false, renamable: true),
+            SystemDefault(systemKey: .sonstiges, defaultLabel: "Sonstiges", icon: "inbox", usesDangerColor: false, isMuted: false, renamable: true),
+            SystemDefault(systemKey: .rechnungen, defaultLabel: "Rechnungen", icon: "receipt", usesDangerColor: false, isMuted: false, renamable: true),
+            SystemDefault(systemKey: .quarantaene, defaultLabel: "Quarantäne", icon: "shield-exclamation", usesDangerColor: true, isMuted: false, renamable: false),
+            SystemDefault(systemKey: .spam, defaultLabel: "Spam", icon: "trash", usesDangerColor: false, isMuted: true, renamable: false),
+        ]
+    }
+
+    /// design-tokens.json `customFolder.defaultIcon` — used when the user
+    /// creates a new folder without picking an icon (`POST /folders`).
+    enum CustomFolder {
+        static let defaultIcon = "folder"
+    }
 }
 
 extension SwiftUI.Color {

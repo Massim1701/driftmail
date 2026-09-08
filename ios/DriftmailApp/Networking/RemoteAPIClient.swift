@@ -21,10 +21,28 @@ struct RemoteAPIClient: APIClient {
         try await get("/accounts")
     }
 
-    func fetchMessages(folder: Folder?, accountId: String?) async throws -> [Message] {
+    func fetchFolders() async throws -> [Folder] {
+        try await get("/folders")
+    }
+
+    func createFolder(name: String, icon: String?) async throws -> Folder {
+        struct Body: Encodable { let name: String; let icon: String? }
+        return try await post("/folders", body: Body(name: name, icon: icon))
+    }
+
+    func updateFolder(id: String, name: String?, icon: String?, sortOrder: Int?) async throws -> Folder {
+        struct Body: Encodable { let name: String?; let icon: String?; let sortOrder: Int? }
+        return try await patch("/folders/\(id)", body: Body(name: name, icon: icon, sortOrder: sortOrder))
+    }
+
+    func deleteFolder(id: String) async throws {
+        try await delete("/folders/\(id)")
+    }
+
+    func fetchMessages(folderId: String?, accountId: String?) async throws -> [Message] {
         var components = URLComponents(url: baseURL.appendingPathComponent("/messages"), resolvingAgainstBaseURL: false)!
         var items: [URLQueryItem] = []
-        if let folder { items.append(.init(name: "folder", value: folder.rawValue)) }
+        if let folderId { items.append(.init(name: "folderId", value: folderId)) }
         if let accountId { items.append(.init(name: "accountId", value: accountId)) }
         components.queryItems = items.isEmpty ? nil : items
         return try await get(components.url!)
@@ -36,6 +54,11 @@ struct RemoteAPIClient: APIClient {
 
     func quarantineMessage(id: String) async throws {
         let _: EmptyResponse = try await post("/messages/\(id)/quarantine", body: Optional<String>.none)
+    }
+
+    func moveMessage(id: String, toFolderId: String) async throws -> Message {
+        struct Body: Encodable { let folderId: String }
+        return try await post("/messages/\(id)/move", body: Body(folderId: toFolderId))
     }
 
     func fetchSummary(messageId: String) async throws -> MailSummary {
@@ -91,6 +114,33 @@ struct RemoteAPIClient: APIClient {
             return try decoder.decode(T.self, from: data)
         } catch let error as DecodingError {
             throw APIError.decodingFailed(error)
+        } catch {
+            throw APIError.network(error)
+        }
+    }
+
+    private func patch<Body: Encodable, T: Decodable>(_ path: String, body: Body) async throws -> T {
+        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(body)
+        do {
+            let (data, _) = try await session.data(for: request)
+            return try decoder.decode(T.self, from: data)
+        } catch let error as DecodingError {
+            throw APIError.decodingFailed(error)
+        } catch {
+            throw APIError.network(error)
+        }
+    }
+
+    /// For endpoints like `DELETE /folders/{folderId}` that respond
+    /// `204 No Content` — no body to decode.
+    private func delete(_ path: String) async throws {
+        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        request.httpMethod = "DELETE"
+        do {
+            _ = try await session.data(for: request)
         } catch {
             throw APIError.network(error)
         }

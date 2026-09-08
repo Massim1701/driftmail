@@ -8,6 +8,7 @@ actor MockAPIClient: APIClient {
 
     private struct MockDatabase: Codable {
         var accounts: [MailAccount]
+        var folders: [Folder]
         var messages: [MessageDetail]
         var contracts: [Contract]
         var summaries: [String: MailSummary]
@@ -43,10 +44,61 @@ actor MockAPIClient: APIClient {
         return db.accounts
     }
 
-    func fetchMessages(folder: Folder?, accountId: String?) async throws -> [Message] {
+    func fetchFolders() async throws -> [Folder] {
+        await delay()
+        return db.folders.sorted { $0.sortOrder < $1.sortOrder }
+    }
+
+    func createFolder(name: String, icon: String?) async throws -> Folder {
+        await delay()
+        let folder = Folder(
+            id: UUID().uuidString,
+            name: name,
+            icon: icon ?? DesignTokens.CustomFolder.defaultIcon,
+            isSystem: false,
+            systemKey: nil,
+            sortOrder: (db.folders.map(\.sortOrder).max() ?? -1) + 1
+        )
+        db.folders.append(folder)
+        return folder
+    }
+
+    func updateFolder(id: String, name: String?, icon: String?, sortOrder: Int?) async throws -> Folder {
+        await delay()
+        guard let index = db.folders.firstIndex(where: { $0.id == id }) else {
+            throw APIError.notFound
+        }
+        var folder = db.folders[index]
+        if let name {
+            guard folder.isRenamable else { throw APIError.forbidden }
+            folder.name = name
+        }
+        if let icon { folder.icon = icon }
+        if let sortOrder { folder.sortOrder = sortOrder }
+        db.folders[index] = folder
+        return folder
+    }
+
+    func deleteFolder(id: String) async throws {
+        await delay()
+        guard let folder = db.folders.first(where: { $0.id == id }) else {
+            throw APIError.notFound
+        }
+        guard folder.isDeletable else { throw APIError.forbidden }
+        // Messages left behind land in "sonstiges", mirroring how a real
+        // backend would need to reassign them rather than orphan them.
+        if let fallback = db.folders.first(where: { $0.systemKey == .sonstiges }) {
+            for index in db.messages.indices where db.messages[index].folderId == id {
+                db.messages[index] = db.messages[index].movedTo(folderId: fallback.id)
+            }
+        }
+        db.folders.removeAll { $0.id == id }
+    }
+
+    func fetchMessages(folderId: String?, accountId: String?) async throws -> [Message] {
         await delay()
         return db.messages
-            .filter { folder == nil || $0.folder == folder }
+            .filter { folderId == nil || $0.folderId == folderId }
             .sorted { $0.receivedAt > $1.receivedAt }
             .map(\.asMessage)
     }
@@ -61,21 +113,23 @@ actor MockAPIClient: APIClient {
 
     func quarantineMessage(id: String) async throws {
         await delay()
+        guard let quarantaeneFolder = db.folders.first(where: { $0.systemKey == .quarantaene }) else {
+            throw APIError.notFound
+        }
+        _ = try await moveMessage(id: id, toFolderId: quarantaeneFolder.id)
+    }
+
+    func moveMessage(id: String, toFolderId: String) async throws -> Message {
+        await delay()
         guard let index = db.messages.firstIndex(where: { $0.id == id }) else {
             throw APIError.notFound
         }
-        let existing = db.messages[index]
-        db.messages[index] = MessageDetail(
-            id: existing.id,
-            fromAddress: existing.fromAddress,
-            fromDisplayName: existing.fromDisplayName,
-            subject: existing.subject,
-            receivedAt: existing.receivedAt,
-            folder: .quarantaene,
-            classification: existing.classification,
-            bodyText: existing.bodyText,
-            security: existing.security
-        )
+        guard db.folders.contains(where: { $0.id == toFolderId }) else {
+            throw APIError.notFound
+        }
+        let updated = db.messages[index].movedTo(folderId: toFolderId)
+        db.messages[index] = updated
+        return updated.asMessage
     }
 
     func fetchSummary(messageId: String) async throws -> MailSummary {

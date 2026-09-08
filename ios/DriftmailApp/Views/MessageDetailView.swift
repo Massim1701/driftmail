@@ -1,7 +1,12 @@
 import SwiftUI
 
 /// GET /messages/{messageId} — full message + security analysis, plus the
-/// on-demand actions from api-spec.yaml: /summary and /reply-draft.
+/// on-demand actions from api-spec.yaml: /summary, /reply-draft and /move.
+///
+/// [2026-09-08] Contract-Änderung: `detail.folder == .quarantaene` gibt es
+/// nicht mehr (Ordner sind kein Enum mehr) — der aktuelle Ordner wird über
+/// `detail.folderId` gegen `environment.folders` nachgeschlagen. Neu: ein
+/// "Verschieben"-Menü nutzt `POST /messages/{id}/move`.
 struct MessageDetailView: View {
     let messageId: String
 
@@ -12,7 +17,16 @@ struct MessageDetailView: View {
     @State private var isLoadingSummary = false
     @State private var isLoadingDraft = false
     @State private var isQuarantining = false
+    @State private var isMoving = false
     @State private var errorMessage: String?
+
+    /// The folder the message currently sits in, looked up from
+    /// `environment.folders` via `detail.folderId`. `nil` while folders or
+    /// the detail haven't loaded yet.
+    private var currentFolder: Folder? {
+        guard let detail else { return nil }
+        return environment.folders.first { $0.id == detail.folderId }
+    }
 
     var body: some View {
         ScrollView {
@@ -20,7 +34,7 @@ struct MessageDetailView: View {
                 if let detail {
                     header(for: detail)
 
-                    if detail.folder == .quarantaene {
+                    if currentFolder?.systemKey == .quarantaene {
                         QuarantineWarningView(count: 1)
                     }
 
@@ -65,6 +79,7 @@ struct MessageDetailView: View {
         .navigationTitle(detail?.subject ?? "Nachricht")
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            await environment.loadFolders()
             await loadDetail()
         }
     }
@@ -106,7 +121,25 @@ struct MessageDetailView: View {
                 .disabled(isLoadingDraft)
             }
 
-            if detail.folder != .quarantaene {
+            if !environment.folders.isEmpty {
+                Menu {
+                    ForEach(environment.folders.filter { $0.id != detail.folderId }) { target in
+                        Button {
+                            Task { await move(to: target) }
+                        } label: {
+                            Label(target.name, systemImage: target.systemImage)
+                        }
+                    }
+                } label: {
+                    Label("Verschieben nach…", systemImage: "folder")
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(isMoving)
+            }
+
+            if currentFolder?.systemKey != .quarantaene {
                 Button(role: .destructive) {
                     Task { await quarantine() }
                 } label: {
@@ -204,6 +237,17 @@ struct MessageDetailView: View {
             await loadDetail()
         } catch {
             errorMessage = "In Quarantäne verschieben fehlgeschlagen."
+        }
+    }
+
+    private func move(to target: Folder) async {
+        isMoving = true
+        defer { isMoving = false }
+        do {
+            _ = try await environment.apiClient.moveMessage(id: messageId, toFolderId: target.id)
+            await loadDetail()
+        } catch {
+            errorMessage = "Verschieben nach \"\(target.name)\" fehlgeschlagen."
         }
     }
 }

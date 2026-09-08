@@ -7,6 +7,56 @@
       "syncStatus": "ok"
     }
   ],
+  "folders": [
+    {
+      "id": "folder-wichtig",
+      "name": "Wichtig",
+      "icon": "star",
+      "isSystem": true,
+      "systemKey": "wichtig",
+      "sortOrder": 0
+    },
+    {
+      "id": "folder-sonstiges",
+      "name": "Sonstiges",
+      "icon": "inbox",
+      "isSystem": true,
+      "systemKey": "sonstiges",
+      "sortOrder": 1
+    },
+    {
+      "id": "folder-rechnungen",
+      "name": "Rechnungen",
+      "icon": "receipt",
+      "isSystem": true,
+      "systemKey": "rechnungen",
+      "sortOrder": 2
+    },
+    {
+      "id": "folder-quarantaene",
+      "name": "Quarantäne",
+      "icon": "shield-exclamation",
+      "isSystem": true,
+      "systemKey": "quarantaene",
+      "sortOrder": 3
+    },
+    {
+      "id": "folder-spam",
+      "name": "Spam",
+      "icon": "trash",
+      "isSystem": true,
+      "systemKey": "spam",
+      "sortOrder": 4
+    },
+    {
+      "id": "folder-familie",
+      "name": "Familie",
+      "icon": "folder",
+      "isSystem": false,
+      "systemKey": null,
+      "sortOrder": 5
+    }
+  ],
   "messages": [
     {
       "id": "msg-001",
@@ -14,7 +64,7 @@
       "fromDisplayName": "Anna Weber",
       "subject": "Projektupdate bis Freitag benötigt",
       "receivedAt": "2026-09-08T08:12:00Z",
-      "folder": "wichtig",
+      "folderId": "folder-wichtig",
       "classification": "safe",
       "bodyText": "Hallo, bitte schick mir bis Freitag ein kurzes Update zum Projektstand. Danke!",
       "security": {
@@ -37,7 +87,7 @@
       "fromDisplayName": "Kanzlei Müller",
       "subject": "Unterlagen für die Steuererklärung",
       "receivedAt": "2026-09-07T14:30:00Z",
-      "folder": "wichtig",
+      "folderId": "folder-wichtig",
       "classification": "safe",
       "bodyText": "Guten Tag, bitte reichen Sie die fehlenden Belege bis zum 30.09. nach.",
       "security": {
@@ -60,7 +110,7 @@
       "fromDisplayName": "MyDealClub",
       "subject": "Diese Woche: 20% auf alles",
       "receivedAt": "2026-09-06T09:00:00Z",
-      "folder": "sonstiges",
+      "folderId": "folder-sonstiges",
       "classification": "safe",
       "bodyText": "Nur diese Woche: 20% Rabatt auf das gesamte Sortiment. Jetzt shoppen!",
       "security": {
@@ -83,7 +133,7 @@
       "fromDisplayName": "Sportverein Lokal e.V.",
       "subject": "Einladung zur Mitgliederversammlung",
       "receivedAt": "2026-09-05T18:00:00Z",
-      "folder": "sonstiges",
+      "folderId": "folder-sonstiges",
       "classification": "safe",
       "bodyText": "Wir laden alle Mitglieder herzlich zur Jahreshauptversammlung am 20.09. ein.",
       "security": {
@@ -106,7 +156,7 @@
       "fromDisplayName": "StromAnbieterPlus",
       "subject": "Ihre Jahresrechnung Strom 2026",
       "receivedAt": "2026-09-04T07:45:00Z",
-      "folder": "rechnungen",
+      "folderId": "folder-rechnungen",
       "classification": "safe",
       "bodyText": "Anbei Ihre Jahresrechnung. Ihr Vertrag läuft bis 31.12.2026, Kündigungsfrist 6 Wochen zum Vertragsende.",
       "security": {
@@ -129,7 +179,7 @@
       "fromDisplayName": "Streaming+ Abo",
       "subject": "Ihre Abo-Rechnung September",
       "receivedAt": "2026-09-03T10:15:00Z",
-      "folder": "rechnungen",
+      "folderId": "folder-rechnungen",
       "classification": "safe",
       "bodyText": "Ihr Streaming+-Abo wurde verlängert. Laufzeit bis 15.03.2027, jederzeit kündbar mit 30 Tagen Frist.",
       "security": {
@@ -152,7 +202,7 @@
       "fromDisplayName": "PayPal Sicherheitsteam",
       "subject": "Ihr Konto wurde vorübergehend gesperrt",
       "receivedAt": "2026-09-08T02:20:00Z",
-      "folder": "quarantaene",
+      "folderId": "folder-quarantaene",
       "classification": "phishing",
       "bodyText": "Dringend: Ihr Konto wurde gesperrt. Bestätigen Sie Ihre Daten innerhalb von 24 Stunden, sonst wird das Konto endgültig gelöscht. Neue IBAN zur Verifizierung erforderlich.",
       "security": {
@@ -175,7 +225,7 @@
       "fromDisplayName": "Apple Support",
       "subject": "Letzte Warnung: Apple-ID wird gesperrt",
       "receivedAt": "2026-09-07T23:55:00Z",
-      "folder": "quarantaene",
+      "folderId": "folder-quarantaene",
       "classification": "phishing",
       "bodyText": "Letzte Warnung: Ihre Apple-ID wird gesperrt. Bitte loggen Sie sich sofort über den folgenden Link ein, um dies zu verhindern.",
       "security": {
@@ -198,7 +248,7 @@
       "fromDisplayName": "Mega Gewinnspiel",
       "subject": "SIE HABEN GEWONNEN!!!",
       "receivedAt": "2026-09-06T03:11:00Z",
-      "folder": "spam",
+      "folderId": "folder-spam",
       "classification": "spam",
       "bodyText": "Herzlichen Glückwunsch! Sie haben 10.000 EUR gewonnen. Klicken Sie hier, um Ihren Gewinn abzuholen.",
       "security": {
@@ -221,7 +271,7 @@
       "fromDisplayName": "Pillen Shop Blitz",
       "subject": "-70% auf alle Produkte, nur heute",
       "receivedAt": "2026-09-05T05:40:00Z",
-      "folder": "spam",
+      "folderId": "folder-spam",
       "classification": "spam",
       "bodyText": "Riesenrabatt nur heute! Jetzt bestellen und sparen.",
       "security": {
@@ -236,6 +286,29 @@
         "containsNewIban": false,
         "classification": "spam",
         "confidenceScore": 0.85
+      }
+    },
+    {
+      "id": "msg-011",
+      "fromAddress": "mama@familie-weber.example",
+      "fromDisplayName": "Mama",
+      "subject": "Sonntagsessen bei uns?",
+      "receivedAt": "2026-09-02T16:05:00Z",
+      "folderId": "folder-familie",
+      "classification": "safe",
+      "bodyText": "Kommt ihr am Sonntag zum Essen vorbei? Es gibt Braten. Meld dich kurz.",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "pass",
+        "senderDomainAgeDays": 5000,
+        "domainReputationScore": 0.98,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.0,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.99
       }
     }
   ],

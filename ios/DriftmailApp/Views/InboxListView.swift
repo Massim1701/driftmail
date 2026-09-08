@@ -1,7 +1,11 @@
 import SwiftUI
 
-/// Message list for a single folder (GET /messages?folder=...).
+/// Message list for a single folder (`GET /messages?folderId=...`).
 /// Shows the quarantine warning banner when browsing "Quarantäne".
+///
+/// [2026-09-08] Contract-Änderung: `folder` ist jetzt das `Folder`-Objekt
+/// statt eines Enum-Falls; Vergleich gegen "die Quarantäne" läuft über
+/// `folder.systemKey` statt `folder == .quarantaene`.
 struct InboxListView: View {
     let folder: Folder
 
@@ -11,7 +15,7 @@ struct InboxListView: View {
 
     var body: some View {
         List {
-            if folder == .quarantaene && !messages.isEmpty {
+            if folder.systemKey == .quarantaene && !messages.isEmpty {
                 QuarantineWarningView(count: messages.count)
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
@@ -37,7 +41,7 @@ struct InboxListView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(DesignTokens.Color.surfacePage)
-        .navigationTitle(folder.label)
+        .navigationTitle(folder.name)
         .navigationDestination(for: Message.self) { message in
             MessageDetailView(messageId: message.id)
         }
@@ -58,7 +62,7 @@ struct InboxListView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            messages = try await environment.apiClient.fetchMessages(folder: folder, accountId: nil)
+            messages = try await environment.apiClient.fetchMessages(folderId: folder.id, accountId: nil)
         } catch {
             messages = []
         }
@@ -118,7 +122,10 @@ private struct ContentUnavailableCompat: View {
 
 #Preview {
     NavigationStack {
-        InboxListView(folder: .quarantaene)
+        InboxListView(folder: Folder(
+            id: "folder-quarantaene", name: "Quarantäne", icon: "shield-exclamation",
+            isSystem: true, systemKey: .quarantaene, sortOrder: 3
+        ))
     }
     .environmentObject(AppEnvironment())
 }

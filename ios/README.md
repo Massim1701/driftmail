@@ -6,6 +6,17 @@ Erster Durchstich der iOS-App gegen die Track-0-Contracts
 komplett gegen lokale Mock-Daten, kein echtes Backend nötig. SwiftUI,
 iOS 17+.
 
+## [2026-09-08] Contract-Änderung nachgezogen: benutzerdefinierte Ordner
+
+Der ursprüngliche Durchstich war gegen einen festen 5-Werte-Ordner-Enum
+(`wichtig`/`sonstiges`/`rechnungen`/`quarantaene`/`spam`) gebaut. Dieser
+Contract wurde ersetzt (SYNC.md "WICHTIGE CONTRACT-ÄNDERUNG", umgesetzt
+Commit `734781e`): Ordner sind jetzt benutzerdefinierte Objekte
+(anlegen/umbenennen/löschen/verschieben), die 5 System-Ordner existieren
+weiterhin, sind aber Daten vom Server, keine App-Konstante mehr. Die App
+wurde entsprechend angepasst — Details im Änderungsprotokoll unten unter
+"Was sich mit der Ordner-Contract-Änderung geändert hat".
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine
@@ -71,30 +82,41 @@ ios/
    läuft einmalig, ruft `CapabilityChecker.check()` auf, meldet das
    Ergebnis über `POST /capability-check` und zeigt an, ob On-Device-KI
    oder Cloud-Fallback aktiv ist.
-2. **Ordnerliste** (`Views/FolderListView.swift`): die 5 Ordner aus
-   `design-tokens.json` (`wichtig`, `sonstiges`, `rechnungen`,
-   `quarantaene`, `spam`) mit Anzahl pro Ordner (`GET /messages`).
-3. **Inbox pro Ordner** (`Views/InboxListView.swift`): Nachrichtenliste;
-   zeigt bei `quarantaene` zusätzlich `QuarantineWarningView` — Warnbanner
-   in `design-tokens.json`-Dangerfarbe.
+2. **Ordnerliste** (`Views/FolderListView.swift`): liest `GET /folders`
+   (System- und eigene Ordner, zentral gecacht in
+   `AppEnvironment.folders`) mit Anzahl pro Ordner (`GET /messages`); ein
+   "+"-Button legt über `POST /folders` einen neuen eigenen Ordner an.
+3. **Inbox pro Ordner** (`Views/InboxListView.swift`): Nachrichtenliste
+   für einen `Folder`; zeigt beim System-Ordner `quarantaene`
+   (`folder.systemKey == .quarantaene`) zusätzlich `QuarantineWarningView`
+   — Warnbanner in `design-tokens.json`-Dangerfarbe.
 4. **Nachrichtendetail** (`Views/MessageDetailView.swift`):
    Security-Badges (SPF/DKIM/DMARC, Homoglyph, Link-Mismatch, neue IBAN,
    Konfidenz), Body-Text, Buttons "Was wollen die von mir?"
    (`GET /messages/{id}/summary`) und "Antwortentwurf"
-   (`POST /messages/{id}/reply-draft`), sowie "In Quarantäne verschieben"
+   (`POST /messages/{id}/reply-draft`), ein "Verschieben nach…"-Menü über
+   alle Ordner (`POST /messages/{id}/move`), sowie — außer im
+   Quarantäne-Ordner selbst — "In Quarantäne verschieben"
    (`POST /messages/{id}/quarantine`).
 
 ## Was ist gemockt / stubbed
 
 - **Backend**: `Networking/MockAPIClient.swift` lädt
-  `Networking/MockData/MockDatabase.json` (10 Nachrichten über alle 5
-  Ordner, 2 Verträge, 3 vorberechnete Zusammenfassungen, 1 Mail-Account)
-  und bedient daraus alle Endpunkte aus `api-spec.yaml`, inklusive
-  simulierter Netzwerklatenz. `Networking/RemoteAPIClient.swift` ist ein
-  Skelett gegen `https://api.driftware.online/v1` (URLSession, alle Pfade
-  aus der Spec verdrahtet), aber ungetestet — Track A hat noch kein
-  Backend. Umschalten: `AppEnvironment.init(apiClient:)` in
-  `App/AppEnvironment.swift`.
+  `Networking/MockData/MockDatabase.json` (5 System-Ordner + 1 eigener
+  Beispiel-Ordner "Familie", 11 Nachrichten verteilt über alle 6 Ordner,
+  2 Verträge, 3 vorberechnete Zusammenfassungen, 1 Mail-Account) und
+  bedient daraus alle Endpunkte aus `api-spec.yaml`, inklusive
+  simulierter Netzwerklatenz und einfacher In-Memory-Validierung für die
+  Ordner-Endpunkte (Umbenennen von `quarantaene`/`spam` wird abgelehnt
+  — `APIError.forbidden` —, System-Ordner sind nicht löschbar, Nachrichten
+  eines gelöschten Ordners wandern nach "Sonstiges").
+  `Networking/RemoteAPIClient.swift` ist ein Skelett gegen
+  `https://api.driftware.online/v1` (URLSession, alle Pfade inkl. der
+  neuen Ordner-Endpunkte aus der Spec verdrahtet), aber ungetestet —
+  Track A hat noch kein Backend, und die serverseitige Validierung
+  (welche Umbenennungen/Löschungen erlaubt sind) ist dort nicht
+  nachgebildet, nur clientseitig im Mock. Umschalten:
+  `AppEnvironment.init(apiClient:)` in `App/AppEnvironment.swift`.
 - **On-Device-KI**: `AI/OnDeviceAiAdapter.swift` implementiert das
   `AiAdapter`-Protokoll (1:1 Port von `ai-adapter-interface.ts`) mit
   simplen Keyword-/Heuristik-Checks (z. B. Dringlichkeits-Wörter,
@@ -115,14 +137,25 @@ ios/
   iPhone-17-Pro-Simulator + Screenshots der vier Kernscreens
   (Onboarding, Ordnerliste, Quarantäne-Inbox, Nachrichtendetail) mit
   echten Mock-Daten. Tap-Interaktionen (Navigation durch Taps, Buttons)
-  konnten in dieser Umgebung nicht automatisiert geprüft werden — es gibt
-  keinen Accessibility-Zugriff für UI-Automation (`osascript`/System
-  Events schlägt mit Berechtigungsfehler -1719 fehl) und kein
-  XCUITest-Target wurde aufgesetzt. Alle drei Screens wurden stattdessen
-  einzeln temporär als Root-View geswitcht, gebaut, installiert,
-  gestartet und gescreenshottet.
+  konnten in dieser Umgebung nicht zuverlässig automatisiert geprüft
+  werden — `osascript`/System Events lief zwar ohne Berechtigungsfehler,
+  Klick-Koordinaten trafen aber nicht zuverlässig die richtige View (kein
+  Mapping von Screenshot-Pixeln auf Fenster-Punkte verfügbar), und kein
+  XCUITest-Target wurde aufgesetzt. Screens wurden stattdessen einzeln
+  temporär als Root-View geswitcht (`App/DriftmailApp.swift`), gebaut,
+  installiert, gestartet und gescreenshottet — danach jedes Mal sauber
+  zurückgesetzt (siehe `git diff` vor dem Commit).
 - `RemoteAPIClient` ist reiner Zeilencode, nie gegen einen echten Server
-  gelaufen (es gibt noch keinen).
+  gelaufen (es gibt noch keinen). Das gilt jetzt auch für die neuen
+  Ordner-Endpunkte (`GET/POST /folders`, `PATCH/DELETE /folders/{id}`,
+  `POST /messages/{id}/move`).
+- Die neue **Ordner-UI ist bewusst minimal**: Anlegen (Name via Alert/
+  `TextField`, Icon fest auf `customFolder.defaultIcon`) und Verschieben
+  gehen, aber Umbenennen und Löschen eines Ordners haben noch keine UI
+  (nur `APIClient`/`MockAPIClient` decken die Endpunkte ab) — Reihenfolge
+  ändern (`sortOrder` per Drag) ebenfalls nicht. Das war aus Zeitgründen
+  außerhalb des Kernauftrags ("Modelle, Mock-Daten, Navigation,
+  APIClient anpassen") zurückgestellt.
 - Dark Mode / Dynamic Type / iPad-Layout nicht separat geprüft (Farben
   sind aber via `Color(light:dark:)` dynamisch angelegt, sollten
   funktionieren).
@@ -162,9 +195,24 @@ ios/
   (`@AppStorage("hasCompletedOnboarding")`); es gibt keinen Weg, ihn aus
   der App heraus erneut auszulösen. Für einen echten Release bräuchte es
   einen Settings-Screen dafür.
+- **`Folder.isRenamable`/`.isDeletable` sind Client-seitige Ableitungen**
+  aus `systemKey` (nur `quarantaene`/`spam` gesperrt, alles andere
+  erlaubt), nicht aus einem eigenen API-Feld — `api-spec.yaml` liefert
+  kein `renamable`/`deletable` auf `Folder` selbst, nur implizit über die
+  Endpunkt-Beschreibungen. `MockAPIClient` setzt das serverseitig als
+  `APIError.forbidden` durch; ob Track A dieselbe Regel exakt so umsetzt
+  (z. B. Fehlercode/-format bei einem verbotenen Rename), ist unverifiziert.
+- **`AppEnvironment.folders` wird einmalig gecacht** (nicht bei jeder
+  View neu geladen) und nach Mutationen (Ordner anlegen, Nachricht
+  verschieben) manuell mit `forceRefresh: true` neu geholt. Kein
+  Realtime-Sync zwischen mehreren offenen Screens — für dieses
+  Grundgerüst ausreichend, für eine Mehrfenster-/Mehrgeräte-Situation
+  später zu prüfen.
 
 ## Nächste Schritte (nicht Teil dieses Durchstichs)
 
+- Ordner umbenennen/löschen/neu sortieren in der UI (Endpunkte sind da,
+  UI noch nicht).
 - XCUITest-Target für automatisierte Navigationstests.
 - Echtes On-Device-Modell hinter `AiAdapter` (Core ML/Apple Intelligence,
   sobald verfügbar).

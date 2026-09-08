@@ -1,13 +1,15 @@
 import Foundation
 
 /// Mirrors `components/schemas/Message` in contracts/api-spec.yaml.
+/// [2026-09-08] Contract-Änderung: `folder: Folder` (Enum) → `folderId`
+/// (Referenz auf `Folder.id`), da Ordner jetzt benutzerdefiniert sind.
 struct Message: Codable, Identifiable, Hashable {
     let id: String
     let fromAddress: String
     let fromDisplayName: String?
     let subject: String?
     let receivedAt: Date
-    let folder: Folder
+    let folderId: String
     let classification: Classification
 }
 
@@ -36,7 +38,7 @@ struct MessageDetail: Codable, Identifiable, Hashable {
     let fromDisplayName: String?
     let subject: String?
     let receivedAt: Date
-    let folder: Folder
+    let folderId: String
     let classification: Classification
     let bodyText: String?
     let security: SecurityResult?
@@ -48,8 +50,25 @@ struct MessageDetail: Codable, Identifiable, Hashable {
             fromDisplayName: fromDisplayName,
             subject: subject,
             receivedAt: receivedAt,
-            folder: folder,
+            folderId: folderId,
             classification: classification
+        )
+    }
+
+    /// Convenience for `MockAPIClient` — returns a copy moved to another
+    /// folder (`POST /messages/{messageId}/move` and the quarantine
+    /// shortcut both go through this).
+    func movedTo(folderId newFolderId: String) -> MessageDetail {
+        MessageDetail(
+            id: id,
+            fromAddress: fromAddress,
+            fromDisplayName: fromDisplayName,
+            subject: subject,
+            receivedAt: receivedAt,
+            folderId: newFolderId,
+            classification: classification,
+            bodyText: bodyText,
+            security: security
         )
     }
 }
