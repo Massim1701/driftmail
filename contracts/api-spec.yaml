@@ -135,6 +135,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MessageDetail"
+    delete:
+      summary: Mail in den Papierkorb verschieben (soft delete)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: In Papierkorb verschoben
+
+  /messages/{messageId}/permanent:
+    delete:
+      summary: Mail endgueltig loeschen (nur aus dem Papierkorb heraus moeglich)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Endgueltig geloescht
 
   /messages/{messageId}/quarantine:
     post:
@@ -215,6 +241,56 @@ paths:
                   draftText:
                     type: string
 
+  /messages/draft/phishing-check:
+    post:
+      summary: >
+        Prueft einen Mail-Entwurf vor dem Versand auf Phishing-Merkmale
+        (harter Block, siehe blocked) sowie nicht-blockierende Warnsignale
+        (sensible Daten, Empfaenger-Reputation, riskante Links). Nutzt
+        dieselben Signale wie SecurityResult/analyzeMail, angewendet auf den
+        eigenen Entwurf statt auf eingehende Mails (siehe WEB_INBOX.md 08.09.).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bodyText: { type: string }
+                links:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      displayText: { type: string }
+                      actualUrl: { type: string }
+      responses:
+        "200":
+          description: Ergebnis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocked:
+                    type: boolean
+                    description: >
+                      true = Phishing-Merkmale erkannt, Versand MUSS verhindert
+                      werden (kein Warnen-und-trotzdem-erlauben).
+                  reason: { type: string, nullable: true }
+                  containsSensitiveData:
+                    type: array
+                    items: { type: string, enum: [iban, credit_card, other] }
+                  recipientReputation:
+                    type: string
+                    enum: [safe, unknown, flagged]
+                  riskyLinks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        url: { type: string }
+                        reason: { type: string }
+
   /contracts:
     get:
       summary: Erkannte Verträge auflisten
@@ -271,7 +347,7 @@ components:
         systemKey:
           type: string
           nullable: true
-          enum: [wichtig, sonstiges, rechnungen, quarantaene, spam]
+          enum: [wichtig, sonstiges, rechnungen, quarantaene, spam, papierkorb]
         sortOrder: { type: integer }
 
     MailAccount:
@@ -344,9 +420,9 @@ components:
         id: { type: string, format: uuid }
         providerName: { type: string }
         contractStart: { type: string, format: date, nullable: true }
-        contractEnd: { type: string, format: date }
-        cancellationDeadline: { type: string, format: date }
-        cancellationPeriodDays: { type: integer }
+        contractEnd: { type: string, format: date, nullable: true }
+        cancellationDeadline: { type: string, format: date, nullable: true }
+        cancellationPeriodDays: { type: integer, nullable: true }
         status: { type: string, enum: [active, cancelled, expired, needs_review] }
         extractedConfidence: { type: number, format: float }
 
