@@ -91,19 +91,14 @@ const FIXTURES: FetchedMail[] = [
     // -> classification "spam" + spamSubcategory "gambling" -> wird von der
     // Sync-Pipeline NICHT persistiert, siehe mail/sync.ts.
     //
-    // integration (09.09.): braucht seit der echten Track-B-Klassifikation
-    // (@driftmail/security-classification/classification.ts) ein
-    // Auth-Signal, nicht nur Spam-Keywords im Text -- dessen classify()
-    // erreicht "spam" ausschließlich über schwache phishing-artige Signale
-    // (Auth-Fail/Homoglyph/Link-Mismatch, siehe dortige Kommentare), reine
-    // Werbe-/Glücksspiel-Sprache allein reicht nicht (anders als beim alten
-    // Mock-Adapter, der direkt auf Spam-Keywords matchte). `Received-SPF:
-    // fail` ist hier nicht künstlich, sondern realistisch: Bulk-Spam-Versender
-    // scheitern häufig an SPF, weil sie nicht über die legitime
-    // Mail-Infrastruktur der vorgetäuschten/genutzten Domain verschicken.
-    // spamSubcategory selbst (adult/gambling/generic/marketing) kommt
-    // weiterhin aus echter Keyword-Erkennung (spamSubcategory.ts), NACHDEM
-    // classify() "spam" festgestellt hat.
+    // integration (09.09.): kein Auth-Signal nötig -- Track B's
+    // `classification.ts` erhebt "adult"/"gambling"-Inhalt seit der
+    // Integrations-Antwort von Web (SYNC.md 09.09., "eigenständiger
+    // Klassifikations-Trigger", security-classification/src/index.ts) selbst
+    // zu "spam", auch ohne begleitendes technisches Signal (Auth-Fail/
+    // Homoglyph/Link-Mismatch). Realistisch: gerade Sex-/Glücksspiel-Spam ist
+    // technisch meist "sauber" versendet, kein SPF-Fail nötig für diese
+    // Fixture (anders als zwischenzeitlich, siehe Git-Historie dieser Zeile).
     messageIdHeader: "<fixture-5@casino-bonus-express.example>",
     fromAddress: "bonus@casino-bonus-express.example",
     fromDisplayName: "Casino Bonus Express",
@@ -113,7 +108,7 @@ const FIXTURES: FetchedMail[] = [
       "Spielen Sie jetzt im Online-Casino und sichern Sie sich Ihren Jackpot-Bonus — " +
       "einmalige Chance, jetzt kaufen!",
     receivedAt: daysAgo(3),
-    rawHeaders: { "Content-Type": "text/plain", "Received-SPF": "fail" },
+    rawHeaders: { "Content-Type": "text/plain", "Received-SPF": "pass" },
   },
   {
     // integration (09.09.): demonstriert echte (nicht Mock-)Klassifikation
