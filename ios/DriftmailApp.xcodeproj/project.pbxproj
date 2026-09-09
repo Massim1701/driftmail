@@ -1,0 +1,493 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		03EC2AAC33D0475E244538CE /* OnDeviceAiAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C71D7712BABCA5340A13D7CD /* OnDeviceAiAdapter.swift */; };
+		10F4B8755688A675B9F670D6 /* RemoteAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E04FC8B982502B4009BD5E99 /* RemoteAPIClient.swift */; };
+		13433A55E04668BCDD55BE65 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D5F16B1DECCDF540A2C9F8 /* DesignTokens.swift */; };
+		17C4F14248E732BB8B07E467 /* MessageRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DDCF453B5648DAD69C4517F /* MessageRowView.swift */; };
+		2A58757BBADB259127258013 /* MockAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BABE409ECD1D46EF47FB98FA /* MockAPIClient.swift */; };
+		2C051F1E1F7C145570751413 /* OnboardingCapabilityCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B86F3D07CC73E890FB011D0 /* OnboardingCapabilityCheckView.swift */; };
+		4DE709219BA100DA0A5740EC /* Classification.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3467EF332535F3D4020CD77 /* Classification.swift */; };
+		4FCF18334B11C934AA65A372 /* CapabilityChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD87F496A2CB75735328751 /* CapabilityChecker.swift */; };
+		57CE94E60FB91CE3EDC92446 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 950D7FA63F0DC96B0256A8CE /* Foundation.framework */; };
+		5CECC84358A2EB017F82A263 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35132EC1AF2378DB815081BF /* APIClient.swift */; };
+		68DAA2A9E031687D45B1E6BC /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26BF4D41872D36E3E90EE82D /* AppEnvironment.swift */; };
+		7979DDB83341C15C4272062F /* InboxListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CB465B688F6688D8153A4F2 /* InboxListView.swift */; };
+		7CFCD8D197C22326C72A6B12 /* Contract.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6044B79C9FE8B86319E5853 /* Contract.swift */; };
+		8A8D0C8E3457F9AC7D2B1820 /* MessageDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE3EBBE042341A42507CDDD /* MessageDetailView.swift */; };
+		8C6EE9C71D6DEDF2C921C895 /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EEFBE0EFB24A881316C051F /* Message.swift */; };
+		A99B2BB98A8838E891FA333E /* MailAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F1D97854BA9AAB832DF815 /* MailAccount.swift */; };
+		C13642EFBD8639A325242844 /* MockDatabase.json in Resources */ = {isa = PBXBuildFile; fileRef = 36C27E754C88445BFFF5A05A /* MockDatabase.json */; };
+		C6C27649E89DB70D29A270F2 /* DateDecoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B41FDBADBAC89E3A5BF0A9 /* DateDecoding.swift */; };
+		C8775F473A75CFDDE2C1B571 /* Folder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E694A0F7D60CC52D976EDB1 /* Folder.swift */; };
+		D501EC9DE3778E30541B2574 /* AiAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E6F95F89304583C0B76FC34 /* AiAdapter.swift */; };
+		DA8E86676314DFDDD036B6AF /* DriftmailApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BC22DCEB290A5E59433F09E /* DriftmailApp.swift */; };
+		E0A7C16ABBECCE7D921EEF0D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B316CEEB06B495EE114590 /* RootView.swift */; };
+		E9F415386910CF66CF600E78 /* FolderListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD063563C80DCB4C97F9555C /* FolderListView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		09F1D97854BA9AAB832DF815 /* MailAccount.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MailAccount.swift; sourceTree = "<group>"; };
+		0CB465B688F6688D8153A4F2 /* InboxListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InboxListView.swift; sourceTree = "<group>"; };
+		0DE3EBBE042341A42507CDDD /* MessageDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDetailView.swift; sourceTree = "<group>"; };
+		0EEFBE0EFB24A881316C051F /* Message.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
+		10B41FDBADBAC89E3A5BF0A9 /* DateDecoding.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DateDecoding.swift; sourceTree = "<group>"; };
+		26BF4D41872D36E3E90EE82D /* AppEnvironment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
+		35132EC1AF2378DB815081BF /* APIClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		36C27E754C88445BFFF5A05A /* MockDatabase.json */ = {isa = PBXFileReference; includeInIndex = 1; path = MockDatabase.json; sourceTree = "<group>"; };
+		3E6F95F89304583C0B76FC34 /* AiAdapter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AiAdapter.swift; sourceTree = "<group>"; };
+		61B316CEEB06B495EE114590 /* RootView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		6B86F3D07CC73E890FB011D0 /* OnboardingCapabilityCheckView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingCapabilityCheckView.swift; sourceTree = "<group>"; };
+		7DDCF453B5648DAD69C4517F /* MessageRowView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageRowView.swift; sourceTree = "<group>"; };
+		7E694A0F7D60CC52D976EDB1 /* Folder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Folder.swift; sourceTree = "<group>"; };
+		8BC22DCEB290A5E59433F09E /* DriftmailApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DriftmailApp.swift; sourceTree = "<group>"; };
+		950D7FA63F0DC96B0256A8CE /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		A3467EF332535F3D4020CD77 /* Classification.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Classification.swift; sourceTree = "<group>"; };
+		A6D5F16B1DECCDF540A2C9F8 /* DesignTokens.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		AD063563C80DCB4C97F9555C /* FolderListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FolderListView.swift; sourceTree = "<group>"; };
+		B8E1462919128D856CCE8B27 /* DriftmailApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DriftmailApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BABE409ECD1D46EF47FB98FA /* MockAPIClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MockAPIClient.swift; sourceTree = "<group>"; };
+		C71D7712BABCA5340A13D7CD /* OnDeviceAiAdapter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnDeviceAiAdapter.swift; sourceTree = "<group>"; };
+		DCD87F496A2CB75735328751 /* CapabilityChecker.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CapabilityChecker.swift; sourceTree = "<group>"; };
+		E04FC8B982502B4009BD5E99 /* RemoteAPIClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteAPIClient.swift; sourceTree = "<group>"; };
+		F6044B79C9FE8B86319E5853 /* Contract.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Contract.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		3485BF0CA0CDFE28E0537CD0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				57CE94E60FB91CE3EDC92446 /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		19C1D660EB84E1B3CEE1EAD5 /* DriftmailApp */ = {
+			isa = PBXGroup;
+			children = (
+				D9D9D2F8AE27B659C9F38312 /* AI */,
+				763791E06818B1AF1C45D457 /* App */,
+				735E690308EB44841B5092AD /* DesignSystem */,
+				5A001D4B95DF9648FFF6811A /* Models */,
+				1CD70C0F4C08BA42B379931D /* Networking */,
+				6CE5D1EDF86115B58845CD53 /* Resources */,
+				FD59A762F38A46E00113D5D7 /* Views */,
+			);
+			name = DriftmailApp;
+			path = DriftmailApp;
+			sourceTree = "<group>";
+		};
+		1CD70C0F4C08BA42B379931D /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				35132EC1AF2378DB815081BF /* APIClient.swift */,
+				10B41FDBADBAC89E3A5BF0A9 /* DateDecoding.swift */,
+				BABE409ECD1D46EF47FB98FA /* MockAPIClient.swift */,
+				988DFF29050D92CBD0EC53A6 /* MockData */,
+				E04FC8B982502B4009BD5E99 /* RemoteAPIClient.swift */,
+			);
+			name = Networking;
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		5A001D4B95DF9648FFF6811A /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A3467EF332535F3D4020CD77 /* Classification.swift */,
+				F6044B79C9FE8B86319E5853 /* Contract.swift */,
+				7E694A0F7D60CC52D976EDB1 /* Folder.swift */,
+				09F1D97854BA9AAB832DF815 /* MailAccount.swift */,
+				0EEFBE0EFB24A881316C051F /* Message.swift */,
+			);
+			name = Models;
+			path = Models;
+			sourceTree = "<group>";
+		};
+		6CE5D1EDF86115B58845CD53 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Resources;
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		6D1AD0A2F159A9F2EAB851F6 = {
+			isa = PBXGroup;
+			children = (
+				9ED04D74A4A39D8ED89FE677 /* Products */,
+				BB10C8949F71606E53B8F359 /* Frameworks */,
+				19C1D660EB84E1B3CEE1EAD5 /* DriftmailApp */,
+			);
+			sourceTree = "<group>";
+		};
+		735E690308EB44841B5092AD /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				A6D5F16B1DECCDF540A2C9F8 /* DesignTokens.swift */,
+			);
+			name = DesignSystem;
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		763791E06818B1AF1C45D457 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				26BF4D41872D36E3E90EE82D /* AppEnvironment.swift */,
+				8BC22DCEB290A5E59433F09E /* DriftmailApp.swift */,
+			);
+			name = App;
+			path = App;
+			sourceTree = "<group>";
+		};
+		988DFF29050D92CBD0EC53A6 /* MockData */ = {
+			isa = PBXGroup;
+			children = (
+				36C27E754C88445BFFF5A05A /* MockDatabase.json */,
+			);
+			name = MockData;
+			path = MockData;
+			sourceTree = "<group>";
+		};
+		9ED04D74A4A39D8ED89FE677 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				B8E1462919128D856CCE8B27 /* DriftmailApp.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BB10C8949F71606E53B8F359 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				CDB5A388C3A42796D22F8501 /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		CDB5A388C3A42796D22F8501 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				950D7FA63F0DC96B0256A8CE /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		D9D9D2F8AE27B659C9F38312 /* AI */ = {
+			isa = PBXGroup;
+			children = (
+				3E6F95F89304583C0B76FC34 /* AiAdapter.swift */,
+				DCD87F496A2CB75735328751 /* CapabilityChecker.swift */,
+				C71D7712BABCA5340A13D7CD /* OnDeviceAiAdapter.swift */,
+			);
+			name = AI;
+			path = AI;
+			sourceTree = "<group>";
+		};
+		FD59A762F38A46E00113D5D7 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AD063563C80DCB4C97F9555C /* FolderListView.swift */,
+				0CB465B688F6688D8153A4F2 /* InboxListView.swift */,
+				0DE3EBBE042341A42507CDDD /* MessageDetailView.swift */,
+				7DDCF453B5648DAD69C4517F /* MessageRowView.swift */,
+				6B86F3D07CC73E890FB011D0 /* OnboardingCapabilityCheckView.swift */,
+				61B316CEEB06B495EE114590 /* RootView.swift */,
+			);
+			name = Views;
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5D36898CF9C2345A2FC841A4 /* DriftmailApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 34F6986B8F1F1FAE48DE61BE /* Build configuration list for PBXNativeTarget "DriftmailApp" */;
+			buildPhases = (
+				4E63861407CE34CCD0852DD6 /* Sources */,
+				3485BF0CA0CDFE28E0537CD0 /* Frameworks */,
+				68BF5F1EC59074E415EAAD10 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DriftmailApp;
+			productName = DriftmailApp;
+			productReference = B8E1462919128D856CCE8B27 /* DriftmailApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C1FE05AADFA222F055E5ACE9 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 7F161BB6CF45B1FB85C9DF8C /* Build configuration list for PBXProject "DriftmailApp" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 6D1AD0A2F159A9F2EAB851F6;
+			minimizedProjectReferenceProxies = 0;
+			preferredProjectObjectVersion = 100;
+			productRefGroup = 9ED04D74A4A39D8ED89FE677 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5D36898CF9C2345A2FC841A4 /* DriftmailApp */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		68BF5F1EC59074E415EAAD10 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C13642EFBD8639A325242844 /* MockDatabase.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4E63861407CE34CCD0852DD6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D501EC9DE3778E30541B2574 /* AiAdapter.swift in Sources */,
+				4FCF18334B11C934AA65A372 /* CapabilityChecker.swift in Sources */,
+				03EC2AAC33D0475E244538CE /* OnDeviceAiAdapter.swift in Sources */,
+				68DAA2A9E031687D45B1E6BC /* AppEnvironment.swift in Sources */,
+				DA8E86676314DFDDD036B6AF /* DriftmailApp.swift in Sources */,
+				13433A55E04668BCDD55BE65 /* DesignTokens.swift in Sources */,
+				4DE709219BA100DA0A5740EC /* Classification.swift in Sources */,
+				7CFCD8D197C22326C72A6B12 /* Contract.swift in Sources */,
+				C8775F473A75CFDDE2C1B571 /* Folder.swift in Sources */,
+				A99B2BB98A8838E891FA333E /* MailAccount.swift in Sources */,
+				8C6EE9C71D6DEDF2C921C895 /* Message.swift in Sources */,
+				5CECC84358A2EB017F82A263 /* APIClient.swift in Sources */,
+				C6C27649E89DB70D29A270F2 /* DateDecoding.swift in Sources */,
+				2A58757BBADB259127258013 /* MockAPIClient.swift in Sources */,
+				10F4B8755688A675B9F670D6 /* RemoteAPIClient.swift in Sources */,
+				E9F415386910CF66CF600E78 /* FolderListView.swift in Sources */,
+				7979DDB83341C15C4272062F /* InboxListView.swift in Sources */,
+				8A8D0C8E3457F9AC7D2B1820 /* MessageDetailView.swift in Sources */,
+				17C4F14248E732BB8B07E467 /* MessageRowView.swift in Sources */,
+				2C051F1E1F7C145570751413 /* OnboardingCapabilityCheckView.swift in Sources */,
+				E0A7C16ABBECCE7D921EEF0D /* RootView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		30600FC059341DF8DC09BCD3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D463E1B6FB71EB95F06CFD4C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		DB0EE13EA4B99F2F3B50D2BA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = driftmail;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = online.driftware.driftmail;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F04227975480345AE6A93DCD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = driftmail;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = online.driftware.driftmail;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		34F6986B8F1F1FAE48DE61BE /* Build configuration list for PBXNativeTarget "DriftmailApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F04227975480345AE6A93DCD /* Release */,
+				DB0EE13EA4B99F2F3B50D2BA /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		7F161BB6CF45B1FB85C9DF8C /* Build configuration list for PBXProject "DriftmailApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				30600FC059341DF8DC09BCD3 /* Debug */,
+				D463E1B6FB71EB95F06CFD4C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = C1FE05AADFA222F055E5ACE9 /* Project object */;
+}

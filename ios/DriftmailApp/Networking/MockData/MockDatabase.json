@@ -1,0 +1,414 @@
+{
+  "accounts": [
+    {
+      "id": "acc-001",
+      "provider": "gmail",
+      "emailAddress": "massimo@example.com",
+      "syncStatus": "ok"
+    }
+  ],
+  "folders": [
+    {
+      "id": "folder-wichtig",
+      "name": "Wichtig",
+      "icon": "star",
+      "isSystem": true,
+      "systemKey": "wichtig",
+      "sortOrder": 0
+    },
+    {
+      "id": "folder-sonstiges",
+      "name": "Sonstiges",
+      "icon": "inbox",
+      "isSystem": true,
+      "systemKey": "sonstiges",
+      "sortOrder": 1
+    },
+    {
+      "id": "folder-rechnungen",
+      "name": "Rechnungen",
+      "icon": "receipt",
+      "isSystem": true,
+      "systemKey": "rechnungen",
+      "sortOrder": 2
+    },
+    {
+      "id": "folder-quarantaene",
+      "name": "Quarantäne",
+      "icon": "shield-exclamation",
+      "isSystem": true,
+      "systemKey": "quarantaene",
+      "sortOrder": 3
+    },
+    {
+      "id": "folder-spam",
+      "name": "Spam",
+      "icon": "trash",
+      "isSystem": true,
+      "systemKey": "spam",
+      "sortOrder": 4
+    },
+    {
+      "id": "folder-papierkorb",
+      "name": "Papierkorb",
+      "icon": "trash-2",
+      "isSystem": true,
+      "systemKey": "papierkorb",
+      "sortOrder": 5
+    },
+    {
+      "id": "folder-familie",
+      "name": "Familie",
+      "icon": "folder",
+      "isSystem": false,
+      "systemKey": null,
+      "sortOrder": 6
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg-001",
+      "fromAddress": "chef@firma.example",
+      "fromDisplayName": "Anna Weber",
+      "subject": "Projektupdate bis Freitag benötigt",
+      "receivedAt": "2026-09-08T08:12:00Z",
+      "folderId": "folder-wichtig",
+      "classification": "safe",
+      "bodyText": "Hallo, bitte schick mir bis Freitag ein kurzes Update zum Projektstand. Danke!",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "pass",
+        "senderDomainAgeDays": 3650,
+        "domainReputationScore": 0.95,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.1,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.97
+      }
+    },
+    {
+      "id": "msg-002",
+      "fromAddress": "steuerberater@kanzlei-mueller.example",
+      "fromDisplayName": "Kanzlei Müller",
+      "subject": "Unterlagen für die Steuererklärung",
+      "receivedAt": "2026-09-07T14:30:00Z",
+      "folderId": "folder-wichtig",
+      "classification": "safe",
+      "bodyText": "Guten Tag, bitte reichen Sie die fehlenden Belege bis zum 30.09. nach.",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "pass",
+        "senderDomainAgeDays": 2100,
+        "domainReputationScore": 0.88,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.05,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.93
+      }
+    },
+    {
+      "id": "msg-003",
+      "fromAddress": "newsletter@mydealclub.example",
+      "fromDisplayName": "MyDealClub",
+      "subject": "Diese Woche: 20% auf alles",
+      "receivedAt": "2026-09-06T09:00:00Z",
+      "folderId": "folder-sonstiges",
+      "classification": "safe",
+      "bodyText": "Nur diese Woche: 20% Rabatt auf das gesamte Sortiment. Jetzt shoppen!",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "none",
+        "senderDomainAgeDays": 900,
+        "domainReputationScore": 0.7,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.2,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.8
+      }
+    },
+    {
+      "id": "msg-004",
+      "fromAddress": "einladung@sportverein-lokal.example",
+      "fromDisplayName": "Sportverein Lokal e.V.",
+      "subject": "Einladung zur Mitgliederversammlung",
+      "receivedAt": "2026-09-05T18:00:00Z",
+      "folderId": "folder-sonstiges",
+      "classification": "safe",
+      "bodyText": "Wir laden alle Mitglieder herzlich zur Jahreshauptversammlung am 20.09. ein.",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "none",
+        "dmarcStatus": "none",
+        "senderDomainAgeDays": 1800,
+        "domainReputationScore": 0.75,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.0,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.85
+      }
+    },
+    {
+      "id": "msg-005",
+      "fromAddress": "rechnung@stromanbieter-plus.example",
+      "fromDisplayName": "StromAnbieterPlus",
+      "subject": "Ihre Jahresrechnung Strom 2026",
+      "receivedAt": "2026-09-04T07:45:00Z",
+      "folderId": "folder-rechnungen",
+      "classification": "safe",
+      "bodyText": "Anbei Ihre Jahresrechnung. Ihr Vertrag läuft bis 31.12.2026, Kündigungsfrist 6 Wochen zum Vertragsende.",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "pass",
+        "senderDomainAgeDays": 4200,
+        "domainReputationScore": 0.9,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.0,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.96
+      }
+    },
+    {
+      "id": "msg-006",
+      "fromAddress": "billing@streaming-plus.example",
+      "fromDisplayName": "Streaming+ Abo",
+      "subject": "Ihre Abo-Rechnung September",
+      "receivedAt": "2026-09-03T10:15:00Z",
+      "folderId": "folder-rechnungen",
+      "classification": "safe",
+      "bodyText": "Ihr Streaming+-Abo wurde verlängert. Laufzeit bis 15.03.2027, jederzeit kündbar mit 30 Tagen Frist.",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "pass",
+        "senderDomainAgeDays": 1500,
+        "domainReputationScore": 0.82,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.0,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.9
+      }
+    },
+    {
+      "id": "msg-007",
+      "fromAddress": "security-alert@paypaI-verifizierung.example",
+      "fromDisplayName": "PayPal Sicherheitsteam",
+      "subject": "Ihr Konto wurde vorübergehend gesperrt",
+      "receivedAt": "2026-09-08T02:20:00Z",
+      "folderId": "folder-quarantaene",
+      "classification": "phishing",
+      "bodyText": "Dringend: Ihr Konto wurde gesperrt. Bestätigen Sie Ihre Daten innerhalb von 24 Stunden, sonst wird das Konto endgültig gelöscht. Neue IBAN zur Verifizierung erforderlich.",
+      "security": {
+        "spfStatus": "fail",
+        "dkimStatus": "fail",
+        "dmarcStatus": "fail",
+        "senderDomainAgeDays": 12,
+        "domainReputationScore": 0.05,
+        "homoglyphDetected": true,
+        "linkMismatchDetected": true,
+        "urgencyLanguageScore": 0.9,
+        "containsNewIban": true,
+        "classification": "phishing",
+        "confidenceScore": 0.98
+      }
+    },
+    {
+      "id": "msg-008",
+      "fromAddress": "support@аpple-idcheck.example",
+      "fromDisplayName": "Apple Support",
+      "subject": "Letzte Warnung: Apple-ID wird gesperrt",
+      "receivedAt": "2026-09-07T23:55:00Z",
+      "folderId": "folder-quarantaene",
+      "classification": "phishing",
+      "bodyText": "Letzte Warnung: Ihre Apple-ID wird gesperrt. Bitte loggen Sie sich sofort über den folgenden Link ein, um dies zu verhindern.",
+      "security": {
+        "spfStatus": "fail",
+        "dkimStatus": "none",
+        "dmarcStatus": "fail",
+        "senderDomainAgeDays": 4,
+        "domainReputationScore": 0.02,
+        "homoglyphDetected": true,
+        "linkMismatchDetected": true,
+        "urgencyLanguageScore": 0.95,
+        "containsNewIban": false,
+        "classification": "phishing",
+        "confidenceScore": 0.97
+      }
+    },
+    {
+      "id": "msg-009",
+      "fromAddress": "promo@mega-gewinnspiel.example",
+      "fromDisplayName": "Mega Gewinnspiel",
+      "subject": "SIE HABEN GEWONNEN!!!",
+      "receivedAt": "2026-09-06T03:11:00Z",
+      "folderId": "folder-spam",
+      "classification": "spam",
+      "bodyText": "Herzlichen Glückwunsch! Sie haben 10.000 EUR gewonnen. Klicken Sie hier, um Ihren Gewinn abzuholen.",
+      "security": {
+        "spfStatus": "none",
+        "dkimStatus": "none",
+        "dmarcStatus": "none",
+        "senderDomainAgeDays": 30,
+        "domainReputationScore": 0.15,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": true,
+        "urgencyLanguageScore": 0.6,
+        "containsNewIban": false,
+        "classification": "spam",
+        "confidenceScore": 0.9
+      }
+    },
+    {
+      "id": "msg-010",
+      "fromAddress": "angebote@pillen-shop-blitz.example",
+      "fromDisplayName": "Pillen Shop Blitz",
+      "subject": "-70% auf alle Produkte, nur heute",
+      "receivedAt": "2026-09-05T05:40:00Z",
+      "folderId": "folder-spam",
+      "classification": "spam",
+      "bodyText": "Riesenrabatt nur heute! Jetzt bestellen und sparen.",
+      "security": {
+        "spfStatus": "none",
+        "dkimStatus": "none",
+        "dmarcStatus": "none",
+        "senderDomainAgeDays": 8,
+        "domainReputationScore": 0.1,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.4,
+        "containsNewIban": false,
+        "classification": "spam",
+        "confidenceScore": 0.85
+      }
+    },
+    {
+      "id": "msg-011",
+      "fromAddress": "mama@familie-weber.example",
+      "fromDisplayName": "Mama",
+      "subject": "Sonntagsessen bei uns?",
+      "receivedAt": "2026-09-02T16:05:00Z",
+      "folderId": "folder-familie",
+      "classification": "safe",
+      "bodyText": "Kommt ihr am Sonntag zum Essen vorbei? Es gibt Braten. Meld dich kurz.",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "pass",
+        "senderDomainAgeDays": 5000,
+        "domainReputationScore": 0.98,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.0,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.99
+      }
+    },
+    {
+      "id": "msg-012",
+      "fromAddress": "kontakt@altes-fitnessstudio.example",
+      "fromDisplayName": "Fitnessstudio Altstadt",
+      "subject": "Deine Kündigung wurde bestätigt",
+      "receivedAt": "2026-09-01T11:20:00Z",
+      "folderId": "folder-papierkorb",
+      "classification": "safe",
+      "bodyText": "Hiermit bestätigen wir die Kündigung deiner Mitgliedschaft zum Monatsende. Schade, dass du gehst!",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "pass",
+        "senderDomainAgeDays": 3000,
+        "domainReputationScore": 0.9,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.0,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.94
+      }
+    },
+    {
+      "id": "msg-013",
+      "fromAddress": "newsletter@alte-zeitung.example",
+      "fromDisplayName": "Alte Zeitung Wochendigest",
+      "subject": "Dein Wochenrückblick",
+      "receivedAt": "2026-08-30T07:00:00Z",
+      "folderId": "folder-papierkorb",
+      "classification": "safe",
+      "bodyText": "Die wichtigsten Nachrichten der Woche kompakt zusammengefasst.",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "none",
+        "senderDomainAgeDays": 1200,
+        "domainReputationScore": 0.6,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "urgencyLanguageScore": 0.0,
+        "containsNewIban": false,
+        "classification": "safe",
+        "confidenceScore": 0.75
+      }
+    }
+  ],
+  "contracts": [
+    {
+      "id": "ctr-001",
+      "providerName": "StromAnbieterPlus",
+      "contractStart": "2024-01-01",
+      "contractEnd": "2026-12-31",
+      "cancellationDeadline": "2026-11-19",
+      "cancellationPeriodDays": 42,
+      "status": "active",
+      "extractedConfidence": 0.92
+    },
+    {
+      "id": "ctr-002",
+      "providerName": "Streaming+ Abo",
+      "contractStart": "2025-03-15",
+      "contractEnd": "2027-03-15",
+      "cancellationDeadline": "2027-02-13",
+      "cancellationPeriodDays": 30,
+      "status": "needs_review",
+      "extractedConfidence": 0.58
+    }
+  ],
+  "summaries": {
+    "msg-001": {
+      "summaryText": "Anna bittet um ein Projektupdate bis Freitag.",
+      "actionRequired": true,
+      "actionDescription": "Kurzes Update zum Projektstand senden.",
+      "deadline": "2026-09-11",
+      "source": "on_device"
+    },
+    "msg-005": {
+      "summaryText": "Jahresrechnung Strom, Vertrag läuft bis Jahresende.",
+      "actionRequired": false,
+      "actionDescription": null,
+      "deadline": null,
+      "source": "on_device"
+    },
+    "msg-007": {
+      "summaryText": "Phishing-Versuch: gibt sich als PayPal aus und fordert Kontodaten.",
+      "actionRequired": true,
+      "actionDescription": "Nicht antworten, keine Daten eingeben. Mail bleibt in Quarantäne.",
+      "deadline": null,
+      "source": "on_device"
+    }
+  }
+}
