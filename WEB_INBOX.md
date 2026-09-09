@@ -185,3 +185,82 @@ Kein Blocker. Betrifft Track A (Recipient-Reputation-Logik, PII-Pattern-Erkennun
 3. Danach Track A wie zuvor besprochen: Backend nach aktueller api-spec.yaml (inkl. aller Erweiterungen aus dieser Datei).
 
 Kein neuer Scope, nur Abarbeitung des bereits Vereinbarten. Bitte Status je erledigtem Punkt hier und in SYNC.md aktualisieren, damit der Fortschritt sichtbar ist.
+
+
+[2026-09-08] [erledigt: a5432e6] [contracts/db-schema.sql] — Nachlieferung: vollstaendige CREATE TABLE send_abuse_flags Definition (wurde im Bot/Human-Missbrauchserkennungs-Eintrag nur per ALTER TABLE referenziert, aber die eigentliche CREATE TABLE fehlte — danke fuers Nachfragen statt Raten). Zusammen mit outgoing_send_log, wie urspruenglich gemeint:
+
+```sql
+CREATE TABLE outgoing_send_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_address TEXT NOT NULL,
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  time_since_draft_shown_ms INTEGER,
+  was_new_recipient BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE TABLE send_abuse_flags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  flag_reason TEXT NOT NULL CHECK (flag_reason IN
+    ('rate_burst', 'many_new_recipients', 'duplicate_content', 'no_read_before_reply', 'phishing_content')),
+  triggered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  action_taken TEXT NOT NULL DEFAULT 'warned' CHECK (action_taken IN ('warned', 'rate_limited', 'send_blocked')),
+  resolved BOOLEAN NOT NULL DEFAULT false
+);
+```
+
+Hinweis: 'phishing_content' ist hier direkt mit drin (nicht per separatem ALTER TABLE nachtraeglich), also keine weitere ALTER-TABLE-Migration noetig fuer den Phishing-Check-Eintrag von vorhin — die dortige "DROP CONSTRAINT / ADD CONSTRAINT"-Migration kann entfallen, wenn diese CREATE TABLE-Version direkt verwendet wird (z.B. falls die Migration noch nicht ausgefuehrt wurde). Falls send_abuse_flags bei euch schon ohne 'phishing_content' angelegt wurde, dann bitte die vorherige ALTER-TABLE-Migration wie spezifiziert nachziehen. Verhalten (warnen vs. blocken) wie in den beiden vorherigen Eintraegen beschrieben: bei flag_reason = 'phishing_content' immer action_taken = 'send_blocked', bei allen anderen Gruenden zunaechst 'warned'/'rate_limited'. Kein Blocker.
+
+
+[2026-09-08] [erledigt: 156f0fd (Contract), Track A/C/F Umsetzung folgt] [contracts/api-spec.yaml + contracts/db-schema.sql + Track A/C/F] — Fehlende Basis-Funktion entdeckt: manuelles Loeschen einer Mail durch den User gibt es noch nicht im Contract (nur Quarantaene, Verschieben, automatische Loeschregeln fuer Spam/Phishing). Nachtrag, analog zu Gmail-Verhalten: Loeschen = in Papierkorb verschieben (soft delete), kein sofortiges Hard-Delete.
+
+1. Neuer System-Ordner "Papierkorb" in design-tokens.json systemFolders.defaults ergaenzen (system_key = 'papierkorb', analog zu quarantaene/spam -- ebenfalls nicht umbenennbar/loeschbar wie die anderen System-Ordner).
+
+2. Neuer Endpoint in api-spec.yaml:
+```yaml
+  /messages/{messageId}:
+    delete:
+      summary: Mail in den Papierkorb verschieben (soft delete)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: In Papierkorb verschoben
+
+  /messages/{messageId}/permanent:
+    delete:
+      summary: Mail endgueltig loeschen (nur aus dem Papierkorb heraus moeglich)
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Endgueltig geloescht
+```
+
+3. Verhalten (Track A): DELETE /messages/{messageId} setzt folder_id auf den Papierkorb-Ordner (wie POST /messages/{messageId}/move, kein neuer Mechanismus). Serverseitig zusaetzlich ueber die Provider-API spiegeln (Gmail API messages.trash bzw. IMAP \\Deleted-Flag), analog zur bereits beschlossenen Regel bei automatisch geloeschtem Spam -- lokales Verschieben ohne Server-Spiegelung waere inkonsistent mit dem, was der User in Gmail/seinem Mail-Client direkt sieht. DELETE /messages/{messageId}/permanent entfernt den DB-Eintrag endgueltig UND loest die endgueltige Loeschung beim Provider aus (Gmail API messages.delete bzw. IMAP Expunge).
+
+4. Papierkorb-Ordner braucht KEINE eigene Retention-Tabelle wie quarantine -- Standard-Verhalten wie bei Gmail (User leert manuell oder es bleibt liegen) reicht fuer diesen Auftrag, keine automatische 30-Tage-Frist noetig (anders als bei message quarantine/phishing).
+
+Kein Blocker, reine Ergaenzung fehlender Basis-Funktionalitaet, keine grosse Contract-Aenderung im Sinne der Ankuendigungsregel.
+
+[2026-09-08] [erledigt: Track A Backend-Teil (Branch track-a-backend), Track C/F Umsetzung folgt] [backend/] — Track A hat den Backend-Teil umgesetzt: `ensureDemoUser()` legt jetzt 6 System-Ordner an (inkl. `papierkorb`), `DELETE /messages/{messageId}` (soft delete, gleiche Mechanik wie `/move`) und `DELETE /messages/{messageId}/permanent` sind implementiert. Design-Entscheidung (nicht explizit im Auftrag): `permanent` ist nur aus dem Papierkorb heraus erlaubt (sonst 400) -- Details/Begründung in `backend/README.md` Abschnitt "Papierkorb / Löschen" und `SYNC.md`-Änderungsprotokoll auf `track-a-backend`. Provider-Spiegelung (Gmail `messages.trash`/`messages.delete`, IMAP `\Deleted`/`EXPUNGE`) ist wie im Auftrag vorgesehen, aber mangels Schreibzugriff auf Gmail/IMAP in diesem Durchstich nur als markiertes TODO im Code, kein Blocker. Tests grün (`npm test`). Offen: Provider-Spiegelung, Track C/F müssen Löschen-Button/Papierkorb-Ansicht in der UI verdrahten.
+
+[2026-09-08] [erledigt: ea6b802 (Branch track-f-web-ui)] [web/] — Track F hat den Web-Teil umgesetzt: `src/api.ts` bekommt `deleteMessage(id)` (soft delete, `DELETE /messages/{id}`) und `permanentlyDeleteMessage(id)` (`DELETE /messages/{id}/permanent`). Mock-Server (`mock-server/data.mjs`+`server.mjs`) bekommt den 6. System-Ordner "Papierkorb" (`system_key: "papierkorb"`, Icon `trash-2`, nicht umbenennbar/löschbar wie Quarantäne/Spam) mit zwei Beispielnachrichten, sowie beide neuen DELETE-Endpunkte (soft delete verschiebt `folderId`, permanent entfernt aus der Mock-Datenliste, beide mit 404 bei unbekannter ID). UI: "Löschen"-Button in der Detailansicht (analog zum bestehenden "In Quarantäne verschieben"); liegt die Nachricht bereits im Papierkorb, zeigt die Detailansicht stattdessen einen Hinweis-Banner und "Endgültig löschen" (mit Bestätigungsdialog, nicht rückgängig machbar). Zurückholen aus dem Papierkorb läuft über das vorhandene "In Ordner verschieben…"-Dropdown, kein eigener Restore-Mechanismus. `tsc -b`/`vite build` grün, beide Endpunkte per curl gegen die `api-spec.yaml`-Schemas verifiziert. Details/Design-Entscheidungen/Übergabe an Track A (Provider-Spiegelung ist Backend-Sache) in `SYNC.md`-Änderungsprotokoll auf `track-f-web-ui` und `web/README.md`. Damit ist der Papierkorb-Nachtrag aus diesem Eintrag für Contract + Track A + Track F vollständig; offen bleibt nur noch Track C (iOS).
+
+[2026-09-08] [erledigt: 8341506 (Branch track-c-ios)] [ios/] — Track C hat den iOS-Teil umgesetzt: 6. System-Ordner "papierkorb" (Icon trash-2, weder umbenennbar noch löschbar wie quarantaene/spam), `APIClient` um `deleteMessage(id:)` (DELETE /messages/{id}, soft delete) und `permanentlyDeleteMessage(id:)` (DELETE /messages/{id}/permanent) erweitert, `MockAPIClient` implementiert beide, `RemoteAPIClient` als Skelett verdrahtet. UI: Swipe-Action "Löschen" in der Nachrichtenliste (im Papierkorb-Ordner selbst "Endgültig löschen" mit Bestätigungsdialog statt nochmal Verschieben), zusätzlicher destruktiver Button in der Detailansicht analog zum bestehenden "Verschieben nach…"-Menü. Build gegen iphonesimulator geprüft (BUILD SUCCEEDED), Papierkorb-Ordner im Simulator per Screenshot verifiziert (Icon, Name, Count korrekt); Tap-Interaktionen weiterhin nicht automatisierbar in dieser Umgebung (wie in den vorherigen iOS-Einträgen vermerkt). Details: ios/README.md, SYNC.md auf track-c-ios. Damit ist der Papierkorb-Nachtrag aus Contract + Track A + Track C + Track F vollständig umgesetzt.
+
+
+[2026-09-08] [offen] [Track E + Track A + Compose-UI (C/F)] — Zwei Klarstellungen zum Compose-/Antwort-Flow:
+
+1. Compose-Text bleibt vollstaendig user-editierbar, KI-Entwurf ist nur Vorschlag. Das ist bereits Contract-Prinzip (siehe ai-adapter-interface.ts Kommentar zu draftReply: "Ergebnis geht nie automatisch raus, immer Review/Edit/Send durch User") -- hier nochmal explizit bestaetigt, keine Aenderung, nur zur Sicherheit dokumentiert: der generierte draftText ist ein editierbares Textfeld in der UI, kein read-only Vorschlag, User kann alles frei umschreiben bevor gesendet wird.
+
+2. Keine doppelte Signatur bei Antworten. Kontext bleibt wie in Track E umgesetzt (apply_to_new/apply_to_replies + is_default-Fallback, siehe SYNC.md-Antwort vom 08.09.) -- aber composeReplyDraft() darf die Signatur pro erzeugtem Antwort-Text nur EINMAL anhaengen, nicht mehrfach (z.B. falls die Funktion versehentlich zweimal aufgerufen wird oder der UI-Entwurf schon eine Signatur enthaelt und die Compose-UI selbst nochmal eine anhaengt). Bitte in composeReplyDraft() defensiv gegen doppeltes Anhaengen pruefen (z.B. Signatur-Text nicht anhaengen, wenn der uebergebene/bereits vorhandene Entwurfstext ihn am Ende bereits enthaelt), Testfall dafuer ergaenzen. Betrifft nur den EINEN neu erzeugten Antwort-Text selbst -- nicht die im Thread zitierten, bereits gesendeten fruehreren Nachrichten (deren eigene Signaturen im Zitat sind normal und kein Bug).
+
+Kein Blocker, kleine Praezisierung/Absicherung des bestehenden Verhaltens.
