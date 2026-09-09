@@ -74,7 +74,7 @@ messagesRouter.get("/messages/:messageId", (req, res) => {
   const message = store.getMessage(req.params.messageId);
   if (!message) return res.status(404).json({ error: "message nicht gefunden" });
 
-  res.json(toApiMessageDetail(message, store.getMessageSecurity(message.id)));
+  res.json(toApiMessageDetail(message, store.getMessageSecurity(message.id), store.getQuarantineForMessage(message.id)));
 });
 
 // POST /messages/:messageId/quarantine — siehe api-spec.yaml

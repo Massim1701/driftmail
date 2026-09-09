@@ -152,6 +152,17 @@ async function main() {
     const quarantineRes = await fetch(`${base}/v1/messages/${first.id}/quarantine`, { method: "POST" });
     assert(quarantineRes.status === 200, "POST .../quarantine sollte 200 liefern");
 
+    // WEB_INBOX.md 08.09. (Track F) + contracts/api-spec.yaml `QuarantineInfo`:
+    // reason/autoDeleteAt waren in der quarantine-Tabelle vorhanden, aber
+    // ohne Lese-Weg über die API -- jetzt über MessageDetail.quarantine.
+    const detailAfterQuarantineRes = await fetch(`${base}/v1/messages/${first.id}`);
+    const detailAfterQuarantine = (await detailAfterQuarantineRes.json()) as Record<string, unknown>;
+    const quarantineInfo = detailAfterQuarantine.quarantine as Record<string, unknown> | null;
+    assert(quarantineInfo !== null, "MessageDetail.quarantine sollte nach POST .../quarantine gesetzt sein");
+    assert(typeof quarantineInfo!.reason === "string" && quarantineInfo!.reason.length > 0, "quarantine.reason erwartet");
+    assert(typeof quarantineInfo!.autoDeleteAt === "string", "quarantine.autoDeleteAt erwartet");
+    assert(quarantineInfo!.userReviewed === false, "quarantine.userReviewed sollte direkt nach dem Anlegen false sein");
+
     // ----- Papierkorb / Löschen (WEB_INBOX.md 08.09. "Fehlende
     // Basis-Funktion entdeckt", Commit 156f0fd) -----
     // Eigene Fixture (3, Newsletter/generic-Spam) statt `first`/fixture1/2/4:
@@ -318,6 +329,7 @@ async function main() {
     assert(fixture4 !== undefined, "Fixture 4 sollte importiert worden sein");
     const fixture4Detail = (await (await fetch(`${base}/v1/messages/${fixture4!.id}`)).json()) as Record<string, unknown>;
     const fixture4Security = fixture4Detail.security as Record<string, unknown>;
+    assert(fixture4Detail.quarantine === null, "MessageDetail.quarantine sollte null sein, solange die Nachricht nicht in Quarantäne ist");
     assert(
       fixture4Security.ipReputationFlag === "unknown",
       "ohne ermittelbare IP in den Headern sollte ipReputationFlag weiterhin 'unknown' sein, nie geraten",

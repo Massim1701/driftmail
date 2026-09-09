@@ -200,6 +200,15 @@ export class Store {
     return record;
   }
 
+  // WEB_INBOX.md 08.09. (Track F) + contracts/api-spec.yaml `QuarantineInfo`
+  // (Terminal 09.09.): `reason`/`autoDeleteAt` waren in der `quarantine`-
+  // Tabelle zwar vorhanden, aber ohne Lese-Weg für die API. Letzter Eintrag
+  // gewinnt, falls eine Nachricht (aktuell nicht möglich, aber nicht
+  // ausgeschlossen) mehrfach in Quarantäne landet.
+  getQuarantineForMessage(messageId: string): QuarantineRecord | undefined {
+    return [...this.quarantine].reverse().find((q) => q.messageId === messageId);
+  }
+
   // ----- Sicherheits-Audit-Log -----
   // `security_audit_log` (db-schema.sql). Write-only in diesem Durchstich --
   // kein GET-Endpunkt, weil `api-spec.yaml` dafür (noch) keinen vorsieht

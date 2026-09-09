@@ -139,6 +139,13 @@ curl -X POST http://localhost:3000/v1/capability-check \
 - IMAP-Adapter (`src/mail/imapAdapter.ts`, via `imapflow` + `mailparser`)
   — echte IMAP-Verbindung, wenn `IMAP_HOST`/`_USER`/`_PASSWORD` gesetzt
   sind.
+- **`MessageDetail.quarantine`** (integriert 09.09., WEB_INBOX.md 08.09.
+  "Track F"-Frage + `contracts/api-spec.yaml` `QuarantineInfo`, Terminal
+  09.09.): `GET /messages/{messageId}` liefert jetzt `reason`/
+  `autoDeleteAt`/`userReviewed` aus der `quarantine`-Tabelle
+  (`store.getQuarantineForMessage()`), `null` wenn die Nachricht nicht in
+  Quarantäne ist — vorher existierte nur das Contract-Schema, ohne dass das
+  Backend es befüllt hätte.
 - Sync-Pipeline (`src/mail/sync.ts`): Dedupe über
   `(mail_account_id, message_id_header)` wie im Schema (`UNIQUE`-Constraint
   auf `messages`), Ordner-Zuordnung, Auto-Quarantäne bei

@@ -208,9 +208,16 @@ export interface ApiSecurityResult {
   confidenceScore: number | null;
 }
 
+export interface ApiQuarantineInfo {
+  reason: string;
+  autoDeleteAt: string;
+  userReviewed: boolean;
+}
+
 export interface ApiMessageDetail extends ApiMessage {
   bodyText: string | null;
   security: ApiSecurityResult | null;
+  quarantine: ApiQuarantineInfo | null;
 }
 
 export interface ApiMailSummary {

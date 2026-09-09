@@ -8,6 +8,7 @@ import type {
   ApiMailSummary,
   ApiMessage,
   ApiMessageDetail,
+  ApiQuarantineInfo,
   ApiSecurityResult,
   ContractRecord,
   FolderRecord,
@@ -15,6 +16,7 @@ import type {
   MessageAiSummaryRecord,
   MessageRecord,
   MessageSecurityRecord,
+  QuarantineRecord,
 } from "./types";
 
 export function toApiMailAccount(a: MailAccountRecord): ApiMailAccount {
@@ -57,11 +59,20 @@ export function toApiMessage(m: MessageRecord, security: MessageSecurityRecord |
   };
 }
 
-export function toApiMessageDetail(m: MessageRecord, security: MessageSecurityRecord | undefined): ApiMessageDetail {
+function toApiQuarantineInfo(q: QuarantineRecord): ApiQuarantineInfo {
+  return { reason: q.reason, autoDeleteAt: q.autoDeleteAt, userReviewed: q.userReviewed };
+}
+
+export function toApiMessageDetail(
+  m: MessageRecord,
+  security: MessageSecurityRecord | undefined,
+  quarantine: QuarantineRecord | undefined,
+): ApiMessageDetail {
   return {
     ...toApiMessage(m, security),
     bodyText: m.bodyText,
     security: security ? toApiSecurityResult(security) : null,
+    quarantine: quarantine ? toApiQuarantineInfo(quarantine) : null,
   };
 }
 
