@@ -35,7 +35,14 @@ const FIXTURES: FetchedMail[] = [
     subject: "Wichtig: Konto gesperrt — jetzt Passwort bestätigen",
     bodyText:
       "Ihr Konto wurde vorübergehend gesperrt. Klicken Sie sofort auf den Link und bestätigen Sie Ihr Passwort, " +
-      "sonst wird Ihr Konto endgültig gelöscht. Neue IBAN für Rückerstattung: DE00 1234 5678 9012 3456 00.",
+      // integration (09.09.): Track B's echte IBAN-Erkennung validiert per
+      // Mod-97-Prüfsumme (ibanDetection.ts) statt nur das Format zu prüfen
+      // wie der alte Mock -- die ursprüngliche Platzhalter-IBAN
+      // "DE00 1234 5678 9012 3456 00" hatte eine ungültige Prüfsumme und
+      // wurde deshalb nicht mehr erkannt, was die Phishing-Klassifikation
+      // unter die 0.5-Schwelle drückte (nur Auth-Fail + Dringlichkeit,
+      // ohne den IBAN-Kombinationsbonus). Jetzt eine gültige Beispiel-IBAN.
+      "sonst wird Ihr Konto endgültig gelöscht. Neue IBAN für Rückerstattung: DE68 2105 0170 0012 3456 78.",
     receivedAt: daysAgo(0),
     // "Received" enthält hier absichtlich eine IP aus der Beispiel-
     // "Botnetz"-Liste im IP-Reputations-Mock (siehe ipReputationMock.ts),
@@ -55,7 +62,19 @@ const FIXTURES: FetchedMail[] = [
     subject: "Gewinnspiel: Jetzt gratis Preise sichern!",
     bodyText: "Nehmen Sie an unserem Gewinnspiel teil und sichern Sie sich 50% Rabatt — einmalige Chance, jetzt kaufen!",
     receivedAt: daysAgo(2),
-    rawHeaders: { "List-Unsubscribe": "<mailto:unsubscribe@newsletter-deals.example>", "Content-Type": "text/plain" },
+    // integration (09.09.): Track B's echte classify() (siehe
+    // classification.ts) bewertet nur phishing-artige Signale
+    // (Auth-Fail/Homoglyph/Link-Mismatch/Dringlichkeitssprache), nicht
+    // Werbe-Inhalte selbst -- reiner Marketing-Text allein landet dort bei
+    // "unclear", nicht "spam" (anders als beim alten Mock, der direkt auf
+    // SPAM_KEYWORDS matchte). `Received-SPF: fail` ist auch hier nicht
+    // künstlich: ein häufiger, ganz realer Grund, warum Marketing-/
+    // Newsletter-Mails im echten Leben im Spam-Ordner landen, ist ein
+    // falsch konfigurierter SPF-Eintrag beim Massenversender, nicht der
+    // Inhalt selbst. Ergibt classification "spam" + spamSubcategory
+    // "marketing" (nicht adult/gambling, landet also regulär im
+    // Spam-Ordner statt automatisch gelöscht zu werden, siehe Fixture 5).
+    rawHeaders: { "List-Unsubscribe": "<mailto:unsubscribe@newsletter-deals.example>", "Content-Type": "text/plain", "Received-SPF": "fail" },
   },
   {
     messageIdHeader: "<fixture-4@kollegin.example.com>",
@@ -69,9 +88,22 @@ const FIXTURES: FetchedMail[] = [
   },
   {
     // Auto-Delete-Pfad (WEB_INBOX.md 08.09.): eindeutiger Glücksspiel-Spam
-    // -> classification "spam" + spamSubcategory "gambling" (Mock-Heuristik,
-    // siehe ai/mockAdapter.ts) -> wird von der Sync-Pipeline NICHT
-    // persistiert, siehe mail/sync.ts.
+    // -> classification "spam" + spamSubcategory "gambling" -> wird von der
+    // Sync-Pipeline NICHT persistiert, siehe mail/sync.ts.
+    //
+    // integration (09.09.): braucht seit der echten Track-B-Klassifikation
+    // (@driftmail/security-classification/classification.ts) ein
+    // Auth-Signal, nicht nur Spam-Keywords im Text -- dessen classify()
+    // erreicht "spam" ausschließlich über schwache phishing-artige Signale
+    // (Auth-Fail/Homoglyph/Link-Mismatch, siehe dortige Kommentare), reine
+    // Werbe-/Glücksspiel-Sprache allein reicht nicht (anders als beim alten
+    // Mock-Adapter, der direkt auf Spam-Keywords matchte). `Received-SPF:
+    // fail` ist hier nicht künstlich, sondern realistisch: Bulk-Spam-Versender
+    // scheitern häufig an SPF, weil sie nicht über die legitime
+    // Mail-Infrastruktur der vorgetäuschten/genutzten Domain verschicken.
+    // spamSubcategory selbst (adult/gambling/generic/marketing) kommt
+    // weiterhin aus echter Keyword-Erkennung (spamSubcategory.ts), NACHDEM
+    // classify() "spam" festgestellt hat.
     messageIdHeader: "<fixture-5@casino-bonus-express.example>",
     fromAddress: "bonus@casino-bonus-express.example",
     fromDisplayName: "Casino Bonus Express",
@@ -81,7 +113,27 @@ const FIXTURES: FetchedMail[] = [
       "Spielen Sie jetzt im Online-Casino und sichern Sie sich Ihren Jackpot-Bonus — " +
       "einmalige Chance, jetzt kaufen!",
     receivedAt: daysAgo(3),
-    rawHeaders: { "Content-Type": "text/plain" },
+    rawHeaders: { "Content-Type": "text/plain", "Received-SPF": "fail" },
+  },
+  {
+    // integration (09.09.): demonstriert echte (nicht Mock-)Klassifikation
+    // von Track B -- Homoglyph-Erkennung gab es im alten Mock-KI-Adapter
+    // (mockAdapter.ts) gar nicht (homoglyphDetected war dort fest `false`,
+    // egal was im Text stand). Der Link-Text unten enthält bewusst ein
+    // kyrillisches "а" (U+0430) statt des lateinischen "a" in "apple.com" --
+    // für das menschliche Auge nahezu identisch, von
+    // security-classification/src/homoglyph.ts aber zuverlässig als
+    // Skript-Mix erkannt (siehe detectHomoglyphs()/isHomoglyphDomain()).
+    messageIdHeader: "<fixture-6@apple-id-verify.example>",
+    fromAddress: "support@apple-id-verify.example",
+    fromDisplayName: "Apple Support",
+    replyToAddress: null,
+    subject: "Apple-ID: Verdächtige Aktivität festgestellt",
+    bodyText:
+      "Wir haben eine verdächtige Aktivität in Ihrem Konto festgestellt. Bitte bestätigen Sie sofort Ihre " +
+      "Identität unter http://аpple.com/verify, sonst wird Ihr Konto gesperrt.",
+    receivedAt: daysAgo(0),
+    rawHeaders: { "Received-SPF": "none", "Content-Type": "text/plain" },
   },
 ];
 

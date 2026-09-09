@@ -13,6 +13,7 @@
     "test": "tsx src/smoketest.ts"
   },
   "dependencies": {
+    "@driftmail/security-classification": "file:../security-classification",
     "express": "^4.19.2",
     "googleapis": "^144.0.0",
     "imapflow": "^1.0.171",

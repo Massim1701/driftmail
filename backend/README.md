@@ -25,8 +25,15 @@ Erster Durchstich der Backend-API gegen `contracts/api-spec.yaml` und
 
 > **Contract-Update (2026-09-08, WEB_INBOX.md "Ausgehender Phishing-Check im
 > Composer" + Erweiterung, Commit `b6b3eb2`):** neuer Endpoint `POST
-> /messages/draft/phishing-check` hinzugekommen. Mock-Implementierung siehe
-> Abschnitt "Ausgehender Phishing-Check (Composer, Mock)" unten.
+> /messages/draft/phishing-check` hinzugekommen. Siehe Abschnitt
+> "Ausgehender Phishing-Check (Composer)" unten.
+
+> **Integration (2026-09-09, WEB_INBOX.md "Track A + Track B
+> Integration"):** `analyzeMail()` und `checkDraftForPhishing()` rufen
+> jetzt die echte Logik aus `@driftmail/security-classification` (Track B)
+> auf statt der vorherigen Mock-Implementierungen. Details siehe "Was ist
+> echt, was ist Mock/Stub" und "Ausgehender Phishing-Check (Composer)"
+> unten.
 
 > **Contract-Update (2026-09-08, WEB_INBOX.md "Fehlende Basis-Funktion
 > entdeckt", Commit `156f0fd`):** manuelles Löschen einer Mail gab es bisher
@@ -41,12 +48,12 @@ Erster Durchstich der Backend-API gegen `contracts/api-spec.yaml` und
 > (Track B) bleibt bewusst zustandslos (kein Netzwerk, keine DB). Track A
 > macht `senderDomainAgeDays`/`domainReputationScore`, `ipReputationFlag`,
 > `containsNewIban` (nach `analyzeMail()`) und `recipientReputation` (nach
-> `checkDraftForPhishingMock()`) als eigenen Nachbearbeitungsschritt über
+> `checkDraftForPhishing()`) als eigenen Nachbearbeitungsschritt über
 > austauschbare Lookup-Adapter. Details siehe Abschnitt "Externe
 > Lookup-Adapter" unten.
 
 ```
-Mail-Adapter (Gmail/IMAP/Fixture) -> Sync-Pipeline -> Mock-KI-Analyse
+Mail-Adapter (Gmail/IMAP/Fixture) -> Sync-Pipeline -> Track-B-Klassifikation
   -> externe Lookup-Adapter (Domain-/IP-Reputation, IBAN-Historie)
   -> Ordner-Zuordnung + ggf. Auto-Quarantäne (phishing) / Auto-Delete
      (adult/gambling-Spam) -> API (GET/POST wie im Contract)
@@ -58,7 +65,13 @@ Durchstich.
 
 ## Starten
 
+Seit der Track-A+Track-B-Integration (09.09.) hängt `backend/` per
+`file:../security-classification`-Dependency von Track B ab. Dessen
+`dist/` muss vor `npm install` hier einmal gebaut sein (nicht Teil dieses
+Builds, da separates npm-Package):
+
 ```bash
+cd ../security-classification && npm install && npm run build && cd -
 npm install
 npm run dev        # tsx watch, http://localhost:3000
 # oder:
@@ -66,11 +79,12 @@ npm run build && npm start
 ```
 
 Ohne jede Konfiguration synct der Server beim Start automatisch ein
-Demo-Konto gegen den **Fixture-Mail-Adapter** (5 Beispiel-Mails: normale
-Mail, Phishing-Versuch, Spam-Newsletter [marketing], Vertragsmail,
-Glücksspiel-Spam [wird sofort automatisch gelöscht, siehe unten]) und
-läuft sofort end-to-end durch — kein Postgres, kein Google/IMAP-Setup
-nötig.
+Demo-Konto gegen den **Fixture-Mail-Adapter** (6 Beispiel-Mails: normale
+Vertragsmail, Phishing-Versuch [Auth-Fail + IBAN], Spam-Newsletter
+[marketing, SPF-Fail], private Mail, Glücksspiel-Spam [wird sofort
+automatisch gelöscht, siehe unten], Homoglyph-Phishing [Apple-ID-Betrug
+mit kyrillischem Domain-Zeichen]) und läuft sofort end-to-end durch — kein
+Postgres, kein Google/IMAP-Setup nötig.
 
 - API-Basis (Contract, `servers[0].url` in `api-spec.yaml` ist
   `/v1`-relativ): `http://localhost:3000/v1`
@@ -133,15 +147,24 @@ curl -X POST http://localhost:3000/v1/capability-check \
   unten).
 - Ordner-Verwaltung (`src/routes/folders.ts`): System-Ordner + eigene
   Ordner, siehe Abschnitt "Ordner (benutzerdefiniert)" unten.
-
-**Mock/Stub (bewusst, siehe Auftrag):**
-- **KI-Logik** (`src/ai/mockAdapter.ts`): implementiert
-  `contracts/ai-adapter-interface.ts` vollständig, aber mit simplen
-  Keyword-Heuristiken statt echter Klassifikation/Extraktion — liefert
-  plausible Beispieldaten. Track B (Sicherheits-Klassifikation) und Track D
-  (Vertrag & Reminder) ersetzen das später; der Austausch betrifft nur
-  `src/ai/index.ts` (eine Zeile), da Routen/Sync-Pipeline ausschließlich
-  gegen das `AiAdapter`-Interface arbeiten.
+- **Sicherheits-Klassifikation** (`src/ai/mockAdapter.ts` ->
+  `analyzeMail()`, integriert 09.09.): ruft seit der Track-A+Track-B-
+  Integration die ECHTE Logik aus `@driftmail/security-classification`
+  (Track B, als `file:`-Dependency eingebunden, siehe `package.json`) auf
+  — SPF/DKIM/DMARC-Parsing, Homoglyph-Erkennung, Link-Mismatch,
+  Dringlichkeitssprache, Mod-97-validierte IBAN-Erkennung,
+  Spam-Unterkategorie. Nicht mehr Mock. `senderDomainAgeDays`/
+  `domainReputationScore` bleiben weiterhin `null` aus diesem Modul (siehe
+  security-classification/README.md) und werden wie bisher von den
+  externen Lookup-Adaptern unten nachbefüllt.
+- **Ausgehender Phishing-Check** (`src/routes/messages.ts`, integriert
+  09.09.): `POST /messages/draft/phishing-check` ruft die echte
+  `checkDraftForPhishing()` aus `@driftmail/security-classification` auf
+  (Homoglyph-Domains, Luhn-validierte Kreditkarten, Mod-97-validierte
+  IBANs) statt der vorherigen `draftPhishingCheckMock.ts` (gelöscht).
+  `recipientReputation` bleibt weiterhin ein eigener
+  Nachbearbeitungsschritt (siehe "Externe Lookup-Adapter" unten), da das
+  Track-B-Modul dafür bewusst zustandslos ist.
 - **Fixture-Mail-Adapter** (`src/mail/fixtureAdapter.ts`): Standardpfad
   ohne echte Zugangsdaten, damit das Skeleton ohne Setup läuft und
   testbar ist (siehe "Annahmen" unten).
@@ -149,14 +172,11 @@ curl -X POST http://localhost:3000/v1/capability-check \
   Postgres, siehe "Annahmen".
 - **Auth**: keine — kein Login/Session/Token-Handling in diesem
   Durchstich, ein fester "Demo-User" wird beim Start angelegt.
-- **Ausgehender Phishing-Check** (`src/ai/draftPhishingCheckMock.ts`,
-  Endpoint `POST /messages/draft/phishing-check`): simple, ehrliche
-  Mock-Heuristik (Link-Mismatch, einfache Regex-Erkennung für IBAN/
-  Kreditkarte) — NICHT die echte Erkennungslogik. Track B hat diese bereits
-  gebaut (`security-classification/src/draftPhishingCheck.ts`), siehe
-  eigener Abschnitt unten. `recipientReputation` wird seit dem
-  Lookup-Adapter-Schritt (siehe "Externe Lookup-Adapter" unten) als
-  Nachbearbeitungsschritt befüllt, nicht mehr fest `"unknown"`.
+- **Extraktion/Zusammenfassung/Antwortentwurf** (`src/ai/mockAdapter.ts` ->
+  `extractContract()`/`summarize()`/`draftReply()`): weiterhin simple
+  Keyword-Heuristiken/Platzhalter — anders als `analyzeMail()` (s.o.) noch
+  NICHT gegen echte Track-D/Track-E-Logik integriert, das ist ein
+  separater, noch offener Schritt.
 - **Externe Lookup-Adapter** (`src/lookups/`): Domain-/IP-Reputation,
   IBAN-Historie und Empfänger-Reputation sind Mock-Implementierungen mit
   plausiblen, deterministischen Beispieldaten bzw. (IBAN-Historie,
@@ -320,57 +340,33 @@ die Ablehnung von permanent delete außerhalb des Papierkorbs (`400`, aus
 dem Spam-Ordner heraus versucht) sowie `404` bei `DELETE` auf eine
 unbekannte `messageId` ab.
 
-## Ausgehender Phishing-Check (Composer, Mock)
+## Ausgehender Phishing-Check (Composer)
 
 Seit dem Contract-Update vom 08.09. (`WEB_INBOX.md` "Ausgehender
 Phishing-Check im Composer" + Erweiterung, Commit `b6b3eb2`) gibt es
 `POST /messages/draft/phishing-check`: prüft einen Mail-ENTWURF (`bodyText`
 + `links`) vor dem Versand, bevor er den Composer verlässt.
 
-**Implementierung:** `src/ai/draftPhishingCheckMock.ts`
-(`checkDraftForPhishingMock()`), verdrahtet in `src/routes/messages.ts`.
+**Implementierung (integriert 09.09.):** ruft direkt `checkDraftForPhishing()`
+aus `@driftmail/security-classification` (Track B) auf, verdrahtet in
+`src/routes/messages.ts`. Die vorherige Mock-Implementierung
+(`src/ai/draftPhishingCheckMock.ts`) ist gelöscht. Damit laufen
+Homoglyph-Domain-Erkennung, Mod-97-validierte IBAN- und Luhn-validierte
+Kreditkarten-Erkennung sowie die Link-Mismatch-/Dringlichkeitssprache-Logik
+jetzt echt, nicht mehr über vereinfachte Regex-/Keyword-Nachbauten.
 
-**Grenze — bewusst Mock, kein `AiAdapter`-Austausch wie sonst:** Track B
-(Sicherheits-Klassifikation, Branch `track-b-security`) hat die ECHTE
-Erkennungslogik dafür bereits gebaut
-(`security-classification/src/draftPhishingCheck.ts`,
-`checkDraftForPhishing()`) — inkl. Homoglyph-Domain-Erkennung, Mod-97
-validierter IBAN- und Luhn-validierter Kreditkarten-Erkennung. Track A
-(`backend/`) und Track B (`security-classification/`) sind aktuell zwei
-getrennte npm-Packages ohne formale Abhängigkeit zueinander — `backend/`
-hat keine Dependency auf `security-classification/`. Die echte Integration
-(dieses Mock-Modul durch einen Aufruf von Track B's Funktion ersetzen, z.B.
-über eine Workspace-Dependency oder einen internen Aufruf) ist ein
-separater, noch **nicht gestarteter** Integrations-Schritt — bewusst außen
-vor gelassen (siehe Auftrag), analog zur "Was ist echt/Mock"-Trennung beim
-`AiAdapter` oben.
+**Einzige Anpassung beim Aufruf:** Track B's `ExtractedLink.displayText`
+ist `string` (nicht nullable wie im API-Contract) — ein fehlender
+Anzeigetext aus dem Request wird als leerer String übergeben, siehe
+`src/routes/messages.ts`.
 
-Diese Mock-Implementierung folgt derselben Grund-Logik wie Track B, aber
-vereinfacht:
-- **Link-Mismatch:** simple Heuristik — Domain aus dem tatsächlichen
-  Link-Ziel (`actualUrl`) und aus dem Anzeigetext (`displayText`, falls der
-  selbst wie eine Domain/URL aussieht) extrahieren und vergleichen; kein
-  Homoglyph-Check (anders als Track B), keine Subdomain-Sonderbehandlung.
-- **`blocked` (harter Block, siehe api-spec.yaml-Kommentar):** `true`, wenn
-  ein Link-Mismatch gefunden wurde ODER Dringlichkeits-Sprache UND eine
-  Zugangs-/Zahlungsdaten-Anfrage gleichzeitig im Text vorkommen (simple
-  Keyword-Listen, gleiches Muster wie `src/ai/mockAdapter.ts`s
-  `PHISHING_KEYWORDS`) — bewusst eine UND-Verknüpfung wie bei Track B, weil
-  jedes Signal allein auch in legitimen Mails vorkommt.
-- **`containsSensitiveData` (IBAN/Kreditkarte):** simple Regex-Kandidaten,
-  **ohne** Prüfsumme (kein Mod-97 für IBAN, kein Luhn für Kreditkarten) —
-  Auftrag sagt explizit "IBAN-Erkennung simple Regex reicht". Mehr false
-  positives/negatives als Track B's validierte Version. `"other"` (z.B.
-  Sozialversicherungsnummer) bewusst nicht implementiert, gleiche
-  Begründung wie bei Track B (kein einheitliches, per Regex sauber
-  erkennbares Format über Länder hinweg).
-- **`recipientReputation`:** bei Track B (`security-classification/`)
-  weiterhin immer `"unknown"` (das Paket bleibt bewusst zustandslos, siehe
-  "Architekturentscheidung" oben). Im Backend seit dem Lookup-Adapter-Schritt
-  (siehe "Externe Lookup-Adapter" unten) ein eigener Nachbearbeitungsschritt
-  NACH `checkDraftForPhishingMock()`, der `recipientAddress` (neues,
-  optionales Request-Feld, siehe `contracts/api-spec.yaml`) gegen den Store
-  prüft — bleibt `"unknown"`, wenn `recipientAddress` fehlt.
+**`recipientReputation`:** bleibt bei Track B (`security-classification/`)
+weiterhin immer `"unknown"` (das Paket bleibt bewusst zustandslos, siehe
+"Architekturentscheidung" oben). Im Backend seit dem Lookup-Adapter-Schritt
+(siehe "Externe Lookup-Adapter" unten) ein eigener Nachbearbeitungsschritt
+NACH `checkDraftForPhishing()`, der `recipientAddress` (neues, optionales
+Request-Feld, siehe `contracts/api-spec.yaml`) gegen den Store prüft —
+bleibt `"unknown"`, wenn `recipientAddress` fehlt.
 
 **Tests:** `src/smoketest.ts` deckt einen Block-Fall (Link-Mismatch,
 `blocked === true` + `reason` gesetzt + genau 1 `riskyLink`), einen
@@ -386,7 +382,7 @@ Seit der Web-Antwort auf die vier "wer macht den externen Lookup"-Fragen
 (SYNC.md 08.09.) ist geklärt: `security-classification/` (Track B) bleibt
 bewusst zustandslos (kein Netzwerk, keine DB) — Track A macht alle vier
 Lookups als eigenen Nachbearbeitungsschritt, NACH dem Aufruf von
-`aiAdapter.analyzeMail()` bzw. `checkDraftForPhishingMock()`, nicht als
+`aiAdapter.analyzeMail()` bzw. `checkDraftForPhishing()`, nicht als
 Erweiterung der Funktionssignaturen selbst. Kein Contract-Bruch: die
 Feld-Typen in `SecurityResult`/der phishing-check-Response bleiben
 unverändert, nur **wer** sie befüllt ändert sich.
@@ -402,7 +398,7 @@ eine echte Implementierung betrifft jeweils nur eine Zeile dort.
 |---|---|---|---|
 | `DomainReputationLookup` | `senderDomainAgeDays`, `domainReputationScore` | `domainReputationMock.ts`: deterministische Heuristik auf verdächtigen TLDs/Schlüsselwörtern im Domain-Namen (z.B. `.tk`, `"secure"`) | WHOIS-Abfrage + Reputationsdienst |
 | `IpReputationLookup` | `ipReputationFlag` | `ipReputationMock.ts`: IP wird aus `X-Originating-IP`/`Received`-Header extrahiert (`extractSendingIp()`), gegen eine frei erfundene Beispiel-Adressliste geprüft; ohne ermittelbare IP immer `"unknown"`, nie geraten | Abgleich gegen einen DNSBL-Dienst (z.B. Spamhaus XBL/CBL) |
-| `IbanHistoryCheck` | `containsNewIban` | `ibanHistoryCheck.ts`: IBAN-Kandidaten per simpler Regex extrahiert (`extractIbanCandidates()`, ohne Mod-97-Prüfsumme, gleiches Prinzip wie `draftPhishingCheckMock.ts`), gegen eine **echte** In-Memory-Historie im Store geprüft (`store.ibanHistory`, Schlüssel `userId:senderAddress`) — "neu" heißt: noch nie zuvor von diesem Absender an diesen User gesehen | dieselbe Prüfung gegen eine Postgres-Tabelle statt In-Memory |
+| `IbanHistoryCheck` | `containsNewIban` | `ibanHistoryCheck.ts`: IBAN-Kandidaten per simpler Regex extrahiert (`extractIbanCandidates()`, ohne eigene Mod-97-Prüfsumme — die eigentliche IBAN-Erkennung inkl. Prüfsumme läuft bereits vorher in `@driftmail/security-classification`), gegen eine **echte** In-Memory-Historie im Store geprüft (`store.ibanHistory`, Schlüssel `userId:senderAddress`) — "neu" heißt: noch nie zuvor von diesem Absender an diesen User gesehen | dieselbe Prüfung gegen eine Postgres-Tabelle statt In-Memory |
 | `RecipientReputationLookup` | `recipientReputation` | `recipientReputationMock.ts`: `"safe"`, wenn der User laut `store.outgoingSendLog` dieser Adresse schon einmal geschrieben hat; `"flagged"`, wenn die Adresse/Domain schon als Absender einer `phishing`-klassifizierten eingehenden Mail aufgefallen ist (`store.messages`/`messageSecurity`); sonst `"unknown"` | Abgleich gegen `fraud_alerts`/`domain_reputation_score` in Postgres |
 
 **Verdrahtung:**
@@ -411,7 +407,7 @@ eine echte Implementierung betrifft jeweils nur eine Zeile dort.
   persistiert wird — überschreiben also die vom Mock-KI-Adapter gelieferten
   Platzhalterwerte für diese drei Felder.
 - `src/routes/messages.ts` (`POST /messages/draft/phishing-check`): der
-  Empfänger-Reputations-Lookup läuft nach `checkDraftForPhishingMock(...)`,
+  Empfänger-Reputations-Lookup läuft nach `checkDraftForPhishing(...)`,
   bevor die Response geschickt wird. Braucht die Ziel-Adresse — dafür neues,
   **optionales** Request-Feld `recipientAddress` (kleine Contract-Ergänzung,
   siehe `contracts/api-spec.yaml` + SYNC.md-Änderungsprotokoll; ohne dieses
@@ -516,7 +512,7 @@ src/
   routes/               ein Router-Modul je api-spec.yaml-Ressource (inkl. folders.ts) + internal.ts (Health/Sync/Seed)
   db/store.ts           In-Memory-Repository (siehe "Annahmen")
   mail/                 MailAdapter-Interface + Gmail/IMAP/Fixture-Implementierungen + Sync-Pipeline
-  ai/                   AiAdapter-Interface (Spiegel von ai-adapter-interface.ts) + Mock-Implementierung + draftPhishingCheckMock.ts (Composer-Phishing-Check-Mock)
+  ai/                   AiAdapter-Interface (Spiegel von ai-adapter-interface.ts) + Adapter (analyzeMail() ruft @driftmail/security-classification, Rest weiterhin Mock)
   lookups/               vier externe Lookup-Adapter (Domain-/IP-Reputation, IBAN-Historie, Empfänger-Reputation), Mock-Implementierungen, siehe "Externe Lookup-Adapter"
   smoketest.ts           End-to-End-Test (npm test)
 ```

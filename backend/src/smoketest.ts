@@ -212,9 +212,10 @@ async function main() {
     });
     assert(capRes.status === 200, "POST /v1/capability-check sollte 200 liefern");
 
-    // POST /messages/draft/phishing-check (WEB_INBOX.md 08.09., Mock-Logik
-    // siehe src/ai/draftPhishingCheckMock.ts) — Block-Fall: Link-Mismatch
-    // (Anzeigetext behauptet paypal.com, Ziel zeigt auf andere Domain).
+    // POST /messages/draft/phishing-check (WEB_INBOX.md 08.09., seit 09.09.
+    // echte Erkennungslogik von Track B, @driftmail/security-classification)
+    // — Block-Fall: Link-Mismatch (Anzeigetext behauptet paypal.com, Ziel
+    // zeigt auf andere Domain).
     const blockedCheckRes = await fetch(`${base}/v1/messages/draft/phishing-check`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -249,13 +250,13 @@ async function main() {
     );
     assert(
       sensitiveCheck.recipientReputation === "unknown",
-      "ohne recipientAddress im Request sollte recipientReputation weiterhin 'unknown' sein (siehe draftPhishingCheckMock.ts + lookups/recipientReputationMock.ts)",
+      "ohne recipientAddress im Request sollte recipientReputation weiterhin 'unknown' sein (siehe lookups/recipientReputationMock.ts)",
     );
 
     // ----- Externe Lookup-Adapter (SYNC.md 08.09., Web-Antwort auf die vier
     // "wer macht den externen Lookup"-Fragen): src/lookups/*. Jeder der vier
     // Lookups läuft als Nachbearbeitungsschritt NACH analyzeMail() (Sync) bzw.
-    // checkDraftForPhishingMock() (Composer-Endpoint) -- geprüft wird hier,
+    // checkDraftForPhishing() (Composer-Endpoint) -- geprüft wird hier,
     // dass die entsprechenden SecurityResult-/phishing-check-Felder jetzt
     // tatsächlich befüllt werden statt fest auf dem alten Platzhalter zu
     // stehen (senderDomainAgeDays/domainReputationScore: vorher immer vom
@@ -320,6 +321,24 @@ async function main() {
     assert(
       fixture4Security.ipReputationFlag === "unknown",
       "ohne ermittelbare IP in den Headern sollte ipReputationFlag weiterhin 'unknown' sein, nie geraten",
+    );
+
+    // Track A + Track B Integration (09.09., WEB_INBOX.md "Track A + Track B
+    // Integration"): Fixture 6 beweist, dass analyzeMail() jetzt echte
+    // Track-B-Logik läuft, nicht mehr den alten Mock -- Homoglyph-Erkennung
+    // gab es im Mock-Adapter gar nicht (dort war homoglyphDetected fest
+    // `false`, egal was im Text stand).
+    const fixture6 = store.findMessageByHeader(account.id, "<fixture-6@apple-id-verify.example>");
+    assert(fixture6 !== undefined, "Fixture 6 sollte importiert worden sein");
+    const fixture6Detail = (await (await fetch(`${base}/v1/messages/${fixture6!.id}`)).json()) as Record<string, unknown>;
+    const fixture6Security = fixture6Detail.security as Record<string, unknown>;
+    assert(
+      fixture6Security.homoglyphDetected === true,
+      "Fixture 6 (kyrillisches 'а' in 'аpple.com') sollte von der echten Track-B-Logik als Homoglyph-Domain erkannt werden -- der alte Mock konnte das nicht",
+    );
+    assert(
+      fixture6Security.classification === "phishing",
+      "Fixture 6 sollte durch die Homoglyph-Domain als phishing klassifiziert werden",
     );
 
     // 3) IBAN-Historie: eine wiederholte IBAN vom selben Absender gilt NICHT

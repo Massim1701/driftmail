@@ -1,77 +1,37 @@
 // Mock-Implementierung von AiAdapter (contracts/ai-adapter-interface.ts).
 //
-// WICHTIG: Die echte KI-Klassifikations-/Extraktions-Logik baut Track B
-// (Sicherheits-Klassifikation) bzw. Track D (Vertrag & Reminder). Dieser
-// Adapter liefert plausible Beispieldaten mit ein paar simplen
-// Keyword-Heuristiken, NICHT echte KI-Analyse. Er erfüllt nur die
-// Interface-Form, damit Track A end-to-end testbar ist.
+// integration (09.09.): analyzeMail() ruft jetzt die ECHTE Track-B-Logik
+// auf (@driftmail/security-classification, siehe package.json --
+// file:-Dependency auf ../security-classification, verdrahtet in
+// WEB_INBOX.md "Track A + Track B Integration"). Die restlichen drei
+// Methoden (extractContract/summarize/draftReply) sind weiterhin Mock --
+// Track D/E bauen die jeweils echte Logik, das ist eine separate,
+// noch offene Integration.
 //
 // source ist hier immer "cloud_fallback", weil der Adapter serverseitig
 // läuft (kein On-Device-Pfad im Backend). Die On-Device-Variante bauen die
 // Plattform-Tracks (iOS etc.) nativ gegen dasselbe Interface.
 
+import { analyzeMail as trackBAnalyzeMail } from "@driftmail/security-classification";
 import type { AiAdapter, ContractData, MailSummary, MailThread, SecurityResult } from "./types";
 
 const PHISHING_KEYWORDS = ["passwort bestätigen", "konto gesperrt", "klicken sie sofort", "iban geändert", "verifizieren sie jetzt"];
-const SPAM_KEYWORDS = ["gewinnspiel", "gratis", "jetzt kaufen", "einmalige chance", "% rabatt"];
 const CONTRACT_KEYWORDS = ["vertrag", "abonnement", "kündigungsfrist", "laufzeit", "vertragsende"];
-
-// Spam-Unterkategorie (WEB_INBOX.md 08.09., siehe SYNC.md): "adult"/"gambling"
-// loesen in der Sync-Pipeline sofortiges Loeschen aus, "generic"/"marketing"
-// verhalten sich wie bisheriger Spam. Simple Keyword-Heuristik, NICHT echte
-// Klassifikation -- Track B ersetzt das (siehe README "Was ist echt/Mock").
-const ADULT_KEYWORDS = ["xxx video", "erotik-cam", "live sex chat"];
-const GAMBLING_KEYWORDS = ["casino", "jackpot", "sportwetten", "spielautomaten"];
-const MARKETING_KEYWORDS = ["% rabatt", "jetzt kaufen"];
 
 function containsAny(haystack: string, needles: string[]): boolean {
   const lower = haystack.toLowerCase();
   return needles.some((n) => lower.includes(n));
 }
 
-function resolveSpamSubcategory(rawText: string): SecurityResult["spamSubcategory"] {
-  if (containsAny(rawText, ADULT_KEYWORDS)) return "adult";
-  if (containsAny(rawText, GAMBLING_KEYWORDS)) return "gambling";
-  if (containsAny(rawText, MARKETING_KEYWORDS)) return "marketing";
-  return "generic";
-}
-
 export class MockAiAdapter implements AiAdapter {
   async analyzeMail(rawText: string, headers: Record<string, string>): Promise<SecurityResult> {
-    const looksPhishing = containsAny(rawText, PHISHING_KEYWORDS);
-    const looksSpam = !looksPhishing && containsAny(rawText, SPAM_KEYWORDS);
-    const classification: SecurityResult["classification"] = looksPhishing
-      ? "phishing"
-      : looksSpam
-      ? "spam"
-      : "safe";
-
-    const spf = (headers["Received-SPF"] ?? headers["received-spf"] ?? "").toLowerCase();
-
-    return {
-      spfStatus: spf.includes("fail") ? "fail" : spf.includes("pass") ? "pass" : "none",
-      dkimStatus: "none",
-      dmarcStatus: "none",
-      senderDomainAgeDays: looksPhishing ? 12 : 1460,
-      domainReputationScore: looksPhishing ? 0.12 : looksSpam ? 0.4 : 0.92,
-      homoglyphDetected: false,
-      linkMismatchDetected: looksPhishing,
-      urgencyLanguageScore: looksPhishing ? 0.85 : looksSpam ? 0.5 : 0.05,
-      containsNewIban: rawText.toLowerCase().includes("iban"),
-      classification,
-      spamSubcategory: looksSpam ? resolveSpamSubcategory(rawText) : null,
-      // Botnetz-Signale (WEB_INBOX.md 08.09.): ipReputationFlag braucht einen
-      // externen Blocklist-Abgleich (Spamhaus XBL/CBL o.ä.), den dieser Mock
-      // nicht hat -- deshalb immer "unknown", NIE geraten (analog zu Track
-      // B's ipReputation.ts). heloMismatch/imageToTextRatio sind einfache
-      // Platzhalterwerte (kein echter SMTP-Handshake- bzw. Bildanalyse-Zugriff
-      // in diesem Mock) -- echte Erkennung baut Track B, Integration ist ein
-      // separater, noch offener Schritt (siehe README).
-      ipReputationFlag: "unknown",
-      heloMismatch: false,
-      imageToTextRatio: null,
-      confidenceScore: looksPhishing ? 0.88 : looksSpam ? 0.7 : 0.95,
-    };
+    // Track B liefert senderDomainAgeDays/domainReputationScore immer als
+    // `null` (braucht externen WHOIS/Reputationsdienst, siehe
+    // security-classification/README.md) -- die vier externen Lookups
+    // (domain-/ip-Reputation, IBAN-/Empfänger-Historie) befüllen das als
+    // eigener Nachbearbeitungsschritt in src/mail/sync.ts, unverändert
+    // durch diese Integration.
+    return trackBAnalyzeMail(rawText, headers);
   }
 
   async extractContract(rawText: string): Promise<ContractData | null> {

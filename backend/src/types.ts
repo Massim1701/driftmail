@@ -243,11 +243,10 @@ export interface ApiUserAiCapability {
 // ===== POST /messages/draft/phishing-check (WEB_INBOX.md 08.09.,
 // "Ausgehender Phishing-Check im Composer" + Erweiterung) =====
 // Kein AiAdapter-Bestandteil (contracts/ai-adapter-interface.ts kennt diese
-// Funktion nicht) -- eigener Endpoint, siehe api-spec.yaml. Mock-Logik in
-// src/ai/draftPhishingCheckMock.ts, spiegelt grob die echte Implementierung
-// von Track B (security-classification/src/draftPhishingCheck.ts), aber
-// bewusst vereinfacht (siehe dortige Kommentare). Echte Integration mit
-// Track B ist ein separater, noch offener Schritt.
+// Funktion nicht) -- eigener Endpoint, siehe api-spec.yaml. Nutzt seit der
+// Integration (09.09.) die echte Erkennungslogik von Track B
+// (@driftmail/security-classification, checkDraftForPhishing()), siehe
+// src/routes/messages.ts.
 
 export interface ApiDraftPhishingCheckLink {
   displayText: string | null;

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { store, ensureDemoUser } from "../db/store";
 import { toApiMessage, toApiMessageDetail, toApiMailSummary } from "../mappers";
 import { aiAdapter } from "../ai";
-import { checkDraftForPhishingMock } from "../ai/draftPhishingCheckMock";
+import { checkDraftForPhishing } from "@driftmail/security-classification";
 import { recipientReputationLookup } from "../lookups";
 import type { AiSource, ApiDraftPhishingCheckLink } from "../types";
 
@@ -12,11 +12,11 @@ export const messagesRouter = Router();
 // b6b3eb2, WEB_INBOX.md 08.09. "Ausgehender Phishing-Check im Composer" +
 // Erweiterung). Registriert VOR den `/:messageId`-Routen unten aus Klarheit
 // (funktional egal, da HTTP-Methode + letztes Pfadsegment ohnehin nicht mit
-// `/messages/:messageId/quarantine` o.ä. kollidieren). Nutzt eine simple
-// Mock-Implementierung (src/ai/draftPhishingCheckMock.ts) nach demselben
-// Grundprinzip wie Track B's echte Erkennungslogik
-// (security-classification/src/draftPhishingCheck.ts) -- echte Integration
-// mit Track B ist ein separater, noch offener Schritt (siehe README/SYNC.md).
+// `/messages/:messageId/quarantine` o.ä. kollidieren). Nutzt seit der
+// Integration (09.09., WEB_INBOX.md "Track A + Track B Integration") die
+// ECHTE Erkennungslogik aus @driftmail/security-classification statt der
+// vorherigen Mock-Implementierung (src/ai/draftPhishingCheckMock.ts, jetzt
+// ungenutzt).
 messagesRouter.post("/messages/draft/phishing-check", async (req, res) => {
   const bodyText = typeof req.body?.bodyText === "string" ? req.body.bodyText : "";
   const rawLinks = Array.isArray(req.body?.links) ? req.body.links : [];
@@ -34,12 +34,20 @@ messagesRouter.post("/messages/draft/phishing-check", async (req, res) => {
     }))
     .filter((l: ApiDraftPhishingCheckLink) => l.actualUrl.length > 0);
 
-  const result = checkDraftForPhishingMock(bodyText, links);
+  // Track B's ExtractedLink verlangt displayText als string (nicht
+  // nullable wie im API-Contract) -- fehlender Anzeigetext wird als leerer
+  // String übergeben, das Fehlen selbst bleibt dadurch für die
+  // Mismatch-Erkennung wirkungslos (kein "Anzeigetext täuscht Domain vor"
+  // ohne Anzeigetext).
+  const result = checkDraftForPhishing(
+    bodyText,
+    links.map((l) => ({ displayText: l.displayText ?? "", actualUrl: l.actualUrl })),
+  );
 
   // Empfänger-Reputation als eigener Nachbearbeitungsschritt NACH
-  // checkDraftForPhishingMock() (SYNC.md 08.09., Web-Antwort), ersetzt den
-  // bisherigen festen "unknown"-Platzhalter. Mock-Implementierung, siehe
-  // src/lookups/recipientReputationMock.ts.
+  // checkDraftForPhishing() (SYNC.md 08.09., Web-Antwort), ersetzt den
+  // von Track B gelieferten festen "unknown"-Wert. Mock-Implementierung,
+  // siehe src/lookups/recipientReputationMock.ts.
   const { user } = ensureDemoUser();
   result.recipientReputation = await recipientReputationLookup.lookup(user.id, recipientAddress);
 
