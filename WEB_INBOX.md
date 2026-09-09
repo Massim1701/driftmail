@@ -402,3 +402,26 @@ Verhalten (Track A): POST /messages/send lehnt ab (422, gleiche Fehlerform wie b
 Verhalten (Track C/F): Compose-UI braucht eine Anhang-Auswahl (Dateipicker), zeigt den Scan-Status waehrend/nach dem Hochladen (z.B. Spinner -> Haekchen oder Warn-Icon), Senden-Button bleibt deaktiviert/blockiert solange ein Anhang noch 'pending' oder nicht 'clean' ist.
 
 Kein Blocker, aber bitte zusammen mit dem Senden-Endpunkt von eben umsetzen, nicht getrennt -- beide haengen inhaltlich zusammen.
+
+
+[2026-09-09] [offen] [GROSSE CONTRACT-AENDERUNG - vorher angekuendigt] [contracts/db-schema.sql + contracts/api-spec.yaml + contracts/design-tokens.json + Track A/C/F] — Massimo: Standard-Ordnerstruktur wird umgebaut. Zwei getrennte Aenderungen, beide klar spezifiziert:
+
+**1) Standard-System-Ordner neu (final abgestimmt mit Massimo):**
+Neue Liste: eingang, sonstiges, quarantaene, spam, papierkorb (5 Ordner). ENTFERNT als System-Ordner: wichtig, rechnungen (User kann beides als eigenen Ordner selbst anlegen, dafuer gibt es ja jetzt die frei anlegbaren Ordner).
+
+- "eingang" ist ein ECHTER Ordner (kein virtueller Sammel-View), ersetzt die bisherige automatische Landezone: neue, normale (nicht spam/phishing) Mail landet jetzt automatisch in "eingang" statt wie bisher in "sonstiges". "sonstiges" bleibt als Ordner bestehen, aber OHNE automatische Zuordnung (rein manuell nutzbar durch den User, gleiches Prinzip wie das bisherige "wichtig").
+- renamable: eingang und sonstiges bleiben umbenennbar (wie bisher wichtig/sonstiges), quarantaene/spam/papierkorb weiterhin nicht umbenennbar/loeschbar (unveraendert).
+- Icon-Vorschlag fuer eingang: "inbox" (wie zuvor bei sonstiges/wichtig-artigen Ordnern ueblich) -- Track A/C/F koennen ein passendes Icon waehlen, kein hartes Muss.
+
+Aenderungen konkret:
+- design-tokens.json systemFolders.defaults: Eintraege fuer wichtig und rechnungen ENTFERNEN, neuen Eintrag "eingang" (system_key='eingang', renamable=true) HINZUFUEGEN. sonstiges/quarantaene/spam/papierkorb-Eintraege bleiben wie sie sind.
+- db-schema.sql: ueberall wo system_key als Enum/CHECK gegen die bisherigen 6 Werte (wichtig, sonstiges, rechnungen, quarantaene, spam, papierkorb) geprueft wird, auf die neuen 5 Werte (eingang, sonstiges, quarantaene, spam, papierkorb) aendern.
+- api-spec.yaml: Folder.systemKey enum entsprechend auf die neuen 5 Werte aendern.
+- Track A (mail/sync.ts bzw. Nachfolgemodul nach der Persistenz-Umstellung): resolveFolderId-Logik aendern -- bisher "spam/phishing -> spam-Systemordner, sonst -> sonstiges", jetzt "spam/phishing -> spam-Systemordner, sonst -> eingang-Systemordner". ensureDemoUser()/Postgres-Migration-Seed muss die neuen 5 Standard-Ordner anlegen statt der alten 6.
+- Bestandsdaten/Demo-Fixtures: falls aktuell Nachrichten in wichtig/rechnungen liegen (z.B. Demo-Daten), diese beim Umbau nach "eingang" verschieben (gleiches Prinzip wie beim Loeschen eines eigenen Ordners: Nachrichten wandern in einen sinnvollen Standard-Ordner statt verloren zu gehen).
+- Track C (iOS)/Track F (Web): SystemFolderKey-Enum bzw. aequivalente Konstanten (Models/Folder.swift, folderMeta.ts/types.ts) auf die neuen 5 Werte aktualisieren, Sidebar/FolderList entsprechend anpassen. Onboarding-Screens, die bisher "wichtig" als ersten/Standard-Ordner zeigen, muessen auf "eingang" umgestellt werden.
+
+**2) Feld-/Label-Umbenennung "Was wollen die von mir?" -> "Inhalt":**
+Reine UI-Textaenderung, KEINE Contract-Aenderung noetig -- das technische Feld heisst weiterhin summaryText (MailSummary-Schema), nur der sichtbare Button-/Label-Text in der UI (Track C/F) wird von "Was wollen die von mir?" auf "Inhalt" geaendert. Kein Backend-Bezug.
+
+Kein Contract-Bruch im Sinne von Datenverlust, aber definitiv eine groessere strukturelle Aenderung (Standard-Ordner-Set aendert sich) -- deshalb hier vorher vollstaendig spezifiziert statt einfach committet, wie in der eigenen Regel vereinbart. Bitte NACH der aktuell laufenden Persistenz-Arbeit einplanen (betrifft ohnehin denselben Seed-/Migrations-Code), es sei denn es liegt zeitlich guenstiger direkt zusammen mit der Migration.
