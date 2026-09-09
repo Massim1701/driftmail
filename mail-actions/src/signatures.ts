@@ -74,13 +74,43 @@ export function selectSignatureForReply(
   return selectSignatureForContext(signatures, mailAccountId, "reply");
 }
 
-/** Hängt eine Signatur an einen HTML-Body an, sofern eine ausgewählt wurde. */
+/** Trenner, den appendSignature zwischen Body und Signatur einfügt. */
+const SIGNATURE_SEPARATOR = "\n<br/>\n";
+
+/**
+ * Prüft, ob bodyHtml am Ende bereits den Inhalt der Signatur enthält —
+ * unabhängig davon, ob er mit dem von appendSignature verwendeten
+ * SIGNATURE_SEPARATOR angehängt wurde oder anderweitig (z.B. weil der
+ * übergebene Entwurfstext die Signatur schon aus einer anderen Quelle
+ * enthält) am Ende steht. Macht appendSignature idempotent: doppeltes
+ * Aufrufen mit derselben Signatur hängt sie nicht ein zweites Mal an.
+ */
+function bodyEndsWithSignature(
+  bodyHtml: string,
+  signature: SignatureRecord
+): boolean {
+  const trimmedSignature = signature.content_html.trim();
+  if (trimmedSignature.length === 0) return false;
+  return bodyHtml.trimEnd().endsWith(trimmedSignature);
+}
+
+/**
+ * Hängt eine Signatur an einen HTML-Body an, sofern eine ausgewählt wurde.
+ *
+ * Idempotent (Klarstellung Web 08.09., siehe WEB_INBOX.md): endet bodyHtml
+ * bereits mit dem Signatur-Inhalt — egal ob mit dem hier verwendeten
+ * Trenner oder ohne, z.B. weil der Entwurfstext ihn schon enthält —, wird
+ * nicht nochmal angehängt. Das schützt gegen versehentliches doppeltes
+ * Aufrufen (z.B. in composeReplyDraft) und gegen bereits mit Signatur
+ * übergebene Entwurfstexte.
+ */
 export function appendSignature(
   bodyHtml: string,
   signature: SignatureRecord | null
 ): string {
   if (!signature) return bodyHtml;
-  return `${bodyHtml}\n<br/>\n${signature.content_html}`;
+  if (bodyEndsWithSignature(bodyHtml, signature)) return bodyHtml;
+  return `${bodyHtml}${SIGNATURE_SEPARATOR}${signature.content_html}`;
 }
 
 export type NewSignatureInput = {

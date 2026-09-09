@@ -109,6 +109,30 @@ describe("appendSignature", () => {
       "<p>Body</p>\n<br/>\n<p>Grüße, X</p>"
     );
   });
+
+  it("ist idempotent: zweimaliges Anhängen derselben Signatur hängt sie nur einmal an", () => {
+    // Klarstellung Web 08.09. (WEB_INBOX.md "Zwei Klarstellungen zum
+    // Compose-/Antwort-Flow"): schützt gegen versehentlichen doppelten
+    // Aufruf, z.B. in composeReplyDraft.
+    const s = sig({ content_html: "<p>Grüße, X</p>" });
+    const once = appendSignature("<p>Body</p>", s);
+    const twice = appendSignature(once, s);
+    expect(twice).toBe(once);
+  });
+
+  it("hängt die Signatur nicht an, wenn der Entwurfstext sie am Ende schon enthält", () => {
+    const s = sig({ content_html: "<p>Grüße, X</p>" });
+    const alreadySigned = "<p>Body</p>\n<br/>\n<p>Grüße, X</p>";
+    expect(appendSignature(alreadySigned, s)).toBe(alreadySigned);
+  });
+
+  it("erkennt die vorhandene Signatur auch ohne den appendSignature-eigenen Trenner", () => {
+    // z.B. wenn der Entwurfstext die Signatur aus einer anderen Quelle
+    // (UI, bereits gespeicherter Entwurf) ohne "\n<br/>\n" enthält.
+    const s = sig({ content_html: "<p>Grüße, X</p>" });
+    const alreadySigned = "<p>Body</p><p>Grüße, X</p>";
+    expect(appendSignature(alreadySigned, s)).toBe(alreadySigned);
+  });
 });
 
 describe("SignatureStore", () => {

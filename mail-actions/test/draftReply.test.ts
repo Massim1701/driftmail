@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { composeReplyDraft, draftReply } from "../src/draftReply";
-import { SignatureStore } from "../src/signatures";
+import { SignatureStore, appendSignature } from "../src/signatures";
 import type { MailThread } from "../src/types";
 
 const ACCOUNT_A = "11111111-1111-1111-1111-111111111111";
