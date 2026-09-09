@@ -35,13 +35,21 @@ export interface SecurityResult {
   confidenceScore: number; // 0.0 - 1.0
 }
 
+// Gemeinsamer Schwellwert fuer "niedrige Konfidenz" (TERMINAL_INBOX.md 08.09.,
+// Punkt 5): unterhalb dieses Werts zeigt die UI einen Review-Schritt statt die
+// extrahierten Daten direkt zu uebernehmen. Gilt fuer ContractData.extractedConfidence
+// und SecurityResult.confidenceScore gleichermassen -- ein Wert statt getrennter
+// Schwellen pro Feld, damit C/D/F nicht unabhaengig voneinander unterschiedliche
+// Werte annehmen. War zuvor nur lokal in Track D als 0.6 angenommen.
+export const LOW_CONFIDENCE_THRESHOLD = 0.6;
+
 export interface ContractData {
   providerName: string;
   contractStart: string | null; // ISO date
   contractEnd: string | null; // ISO date
   cancellationDeadline: string | null; // ISO date
   cancellationPeriodDays: number | null;
-  extractedConfidence: number; // 0.0 - 1.0, niedrig -> User muss bestätigen
+  extractedConfidence: number; // 0.0 - 1.0, niedrig -> User muss bestätigen (siehe LOW_CONFIDENCE_THRESHOLD)
 }
 
 export interface MailSummary {
