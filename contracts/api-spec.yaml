@@ -10,7 +10,27 @@ info:
 servers:
   - url: https://api.driftware.online/v1
 
+security:
+  - bearerAuth: []
+
 paths:
+  /auth/session:
+    post:
+      summary: >
+        Session-Token erneuern/erstellen. Login selbst passiert implizit
+        durch den OAuth-Flow beim Verbinden eines Mail-Kontos, dieser
+        Endpoint dient nur der Token-Erneuerung.
+      security: []
+      responses:
+        "200":
+          description: Neues Token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+
   /accounts:
     get:
       summary: Verbundene Mail-Konten des Users auflisten
@@ -120,7 +140,7 @@ paths:
 
   /messages/{messageId}:
     get:
-      summary: Einzelne Nachricht inkl. Security-Analyse
+      summary: Einzelne Nachricht inkl. Security-Analyse und Links
       parameters:
         - name: messageId
           in: path
@@ -201,6 +221,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Message"
+
+  /messages/{messageId}/unsubscribe:
+    post:
+      summary: >
+        Abmeldung ueber RFC-8058 List-Unsubscribe-Header anstoßen. Legt einen
+        unsubscribe_actions-Eintrag mit status='pending_confirmation' an,
+        nie automatischer Klick auf Links im Mail-Body.
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Abmeldung angestoßen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [pending_confirmation, confirmed, rejected]
 
   /messages/{messageId}/summary:
     get:
@@ -291,6 +336,110 @@ paths:
                         url: { type: string }
                         reason: { type: string }
 
+  /signatures:
+    get:
+      summary: Signaturen des Users auflisten
+      responses:
+        "200":
+          description: Liste der Signaturen
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Signature"
+    post:
+      summary: Neue Signatur anlegen
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Signature"
+      responses:
+        "201":
+          description: Angelegt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Signature"
+
+  /signatures/{signatureId}:
+    patch:
+      summary: Signatur bearbeiten
+      parameters:
+        - name: signatureId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Signature"
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Signature"
+    delete:
+      summary: Signatur löschen
+      parameters:
+        - name: signatureId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Gelöscht
+
+  /reminders:
+    get:
+      summary: >
+        Anstehende Erinnerungen auflisten (werden automatisch bei
+        POST /contracts/{contractId}/confirm angelegt, kein eigener
+        POST-Endpoint noetig).
+      responses:
+        "200":
+          description: Liste der Erinnerungen
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Reminder"
+
+  /reminders/{reminderId}:
+    patch:
+      summary: Erinnerung verschieben (snooze) oder als gesendet markieren
+      parameters:
+        - name: reminderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                snoozedUntil: { type: string, format: date-time, nullable: true }
+                sent: { type: boolean }
+      responses:
+        "200":
+          description: Aktualisiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reminder"
+
   /contracts:
     get:
       summary: Erkannte Verträge auflisten
@@ -336,6 +485,15 @@ paths:
           description: Gespeichert
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Session-Token nach OAuth-Verknuepfung des Mail-Kontos. userId wird
+        serverseitig aus dem Token aufgeloest, nie aus Request-Body/Query/Pfad
+        vertraut.
+
   schemas:
     Folder:
       type: object
@@ -379,6 +537,33 @@ components:
             bodyText: { type: string }
             security:
               $ref: "#/components/schemas/SecurityResult"
+            links:
+              type: array
+              items:
+                $ref: "#/components/schemas/MessageLink"
+            quarantine:
+              $ref: "#/components/schemas/QuarantineInfo"
+
+    QuarantineInfo:
+      type: object
+      nullable: true
+      description: >
+        Nur gesetzt, wenn sich die Nachricht aktuell im Quarantaene-Ordner
+        befindet (quarantine-Tabelle in db-schema.sql), sonst null.
+        TERMINAL_INBOX.md 08.09. Punkt 6: bisher gab es keinen GET-Weg fuer
+        reason/auto_delete_at, obwohl die Spalten seit Track 0 existieren.
+      properties:
+        reason: { type: string }
+        autoDeleteAt: { type: string, format: date-time }
+        userReviewed: { type: boolean }
+
+    MessageLink:
+      type: object
+      properties:
+        displayText: { type: string }
+        actualUrl: { type: string }
+        domainMatchesDisplay: { type: boolean }
+        isKnownMalicious: { type: boolean }
 
     SecurityResult:
       type: object
@@ -425,6 +610,25 @@ components:
         cancellationPeriodDays: { type: integer, nullable: true }
         status: { type: string, enum: [active, cancelled, expired, needs_review] }
         extractedConfidence: { type: number, format: float }
+
+    Signature:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        mailAccountId: { type: string, format: uuid }
+        contentHtml: { type: string }
+        isDefault: { type: boolean }
+        applyToNew: { type: boolean }
+        applyToReplies: { type: boolean }
+
+    Reminder:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        contractId: { type: string, format: uuid }
+        remindAt: { type: string, format: date-time }
+        sent: { type: boolean }
+        snoozedUntil: { type: string, format: date-time, nullable: true }
 
     UserAiCapability:
       type: object
