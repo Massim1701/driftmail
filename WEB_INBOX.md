@@ -266,7 +266,7 @@ Kein Blocker, reine Ergaenzung fehlender Basis-Funktionalitaet, keine grosse Con
 Kein Blocker, kleine Praezisierung/Absicherung des bestehenden Verhaltens.
 
 
-[2026-09-08] [offen] [PRIORITAET] [Track A + Track B Integration] — Massimo: Track A und Track B jetzt zusammenfuehren (echte Erkennung statt Mock). Konkret:
+[2026-09-08] [erledigt: 613e27a (Branch track-a-backend)] [PRIORITAET] [Track A + Track B Integration] — Massimo: Track A und Track B jetzt zusammenfuehren (echte Erkennung statt Mock). Konkret:
 
 1. Branch-Strategie: track-b-security in track-a-backend mergen (oder umgekehrt, je nachdem wo weniger Konflikte entstehen -- Track A ist der "Konsument", daher vermutlich einfacher: track-b-security nach track-a-backend mergen, security-classification/ landet dann als Sub-Ordner/Package neben backend/).
 
@@ -282,3 +282,7 @@ Kein Blocker, kleine Praezisierung/Absicherung des bestehenden Verhaltens.
 5. Grenzen weiterhin klar dokumentieren: was ist jetzt echt (Track-B-Klassifikation), was bleibt Mock (die vier externen Lookups) -- README.md entsprechend aktualisieren, nicht stillschweigend lassen.
 
 Kein Contract-Bruch zu erwarten (beide Seiten nutzen bereits dieselben Interfaces aus contracts/ai-adapter-interface.ts). Bei echten Konflikten/Unklarheiten waehrend der Integration bitte in SYNC.md (Branch nach dem Merge) oder TERMINAL_INBOX.md eintragen statt zu raten.
+
+**Umgesetzt (Terminal, 09.09., Commit `613e27a` auf `track-a-backend`):** alle 5 Punkte wie beschrieben. Punkt 1: `track-b-security` in `track-a-backend` gemergt, `security-classification/` liegt jetzt als Sub-Ordner daneben. Punkt 2: `mockAdapter.ts`'s `analyzeMail()` und `routes/messages.ts`'s Phishing-Check-Route rufen jetzt Track B's echte Funktionen; `draftPhishingCheckMock.ts` gelöscht; die vier externen Lookups unverändert Mock. Punkt 3: `@driftmail/security-classification` als `file:../security-classification`-Dependency (kein npm-Link, kein Workspace nötig) — Node 24 lädt das ESM-Package per `require()` direkt (stabiles ESM-in-CJS-Interop), siehe README "Starten". Punkt 4: Smoketest grün, neue Fixture 6 (Homoglyph-Phishing) beweist echte Klassifikation. Punkt 5: README.md aktualisiert.
+
+**Fund während der Integration (siehe SYNC.md für Details):** Track B's echte `classify()` erkennt reinen Werbe-/Glücksspiel-Inhalt ohne Auth-Fail/Homoglyph/Link-Mismatch/Dringlichkeitssprache NICHT als "spam" — anders als der alte Mock, der direkt auf Content-Keywords matchte. Zwei bestehende Fixtures brauchten deshalb ein zusätzliches, realistisches Signal (SPF-Fail), eine hatte eine Mod-97-ungültige Platzhalter-IBAN. Kein Blocker, aber falls "reine Marketing-Mail ohne Sicherheitsmerkmale = Spam" ein gewolltes Produktverhalten ist, wäre das eine Erweiterung von Track B's `classification.ts`, keine Backend-Änderung — bitte bestätigen oder als bewusste Grenze akzeptieren.
