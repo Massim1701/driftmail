@@ -148,3 +148,8 @@ Track B kann Status "fertig" behalten, keine weitere Aenderung am Modul noetig. 
 Tests (`src/smoketest.ts`): soft delete (Nachricht landet im Papierkorb, `GET` bestätigt `folderId`), permanent delete aus dem Papierkorb (Nachricht danach `404`), Ablehnung von permanent delete aus einem anderen Ordner (400, getestet aus dem Spam-Ordner), 404 bei DELETE auf unbekannte `messageId`, sowie die Nicht-Umbenennbarkeit/Nicht-Löschbarkeit des `papierkorb`-Systemordners. `npm test` grün, `tsc --noEmit` sauber. README.md aktualisiert (neuer Abschnitt "Papierkorb / Löschen").
 
 Offen/Übergabe: Provider-Spiegelung (s.o.), Track C/F müssen die neuen Endpunkte + den Papierkorb-Ordner in der UI verdrahten (Löschen-Button, Papierkorb-Ansicht, "endgültig löschen" nur im Papierkorb anbieten).
+
+[2026-09-09] [terminal] [0] — Die letzten beiden offenen TERMINAL_INBOX.md-Punkte (5+6) als kleinere Ergänzungen bereits vereinbarter Features direkt umgesetzt (Contract-Ankündigungsregel greift hier nicht, siehe Regel oben):
+- `contracts/ai-adapter-interface.ts`: `LOW_CONFIDENCE_THRESHOLD = 0.6` als gemeinsame Konstante ergänzt (bisher nur lokal in Track D angenommen).
+- `contracts/api-spec.yaml`: `MessageDetail.quarantine` (neues Schema `QuarantineInfo`: reason/autoDeleteAt/userReviewed, nullable) ergänzt, damit Track F/C die schon in der DB vorhandenen Quarantäne-Infos auch lesen können.
+Details/Begründung in TERMINAL_INBOX.md Punkt 5/6. Betrifft Track A (Response befüllen), C/D/F (Werte übernehmen/anzeigen). Punkt 7 (npm-Package für contracts/*.ts) bewusst vertagt, siehe TERMINAL_INBOX.md.
