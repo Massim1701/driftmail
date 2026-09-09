@@ -36,7 +36,7 @@ CREATE TABLE folders (
     name TEXT NOT NULL,
     icon TEXT NOT NULL DEFAULT 'inbox',
     is_system BOOLEAN NOT NULL DEFAULT false,
-    system_key TEXT CHECK (system_key IN ('wichtig', 'sonstiges', 'rechnungen', 'quarantaene', 'spam')),
+    system_key TEXT CHECK (system_key IN ('wichtig', 'sonstiges', 'rechnungen', 'quarantaene', 'spam', 'papierkorb')),
     sort_order INTEGER NOT NULL DEFAULT 0,
     UNIQUE (user_id, system_key)
   );
@@ -288,4 +288,29 @@ CREATE TABLE shipments (
     CHECK (status IN ('in_transit', 'out_for_delivery', 'delivered', 'delayed', 'problem')),
   estimated_delivery DATE,
   extracted_confidence NUMERIC(3,2)
+);
+
+-- ===== Versand-Missbrauchserkennung (Bot/Human, Phishing-Versand) =====
+-- Nachgeliefert von Web (WEB_INBOX.md 08.09.) nach Rueckfrage -- die
+-- urspruengliche ALTER-TABLE-Migration fuer 'phishing_content' ist hier
+-- schon direkt in den CHECK eingearbeitet, keine separate Migration noetig.
+
+CREATE TABLE outgoing_send_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_address TEXT NOT NULL,
+  sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  time_since_draft_shown_ms INTEGER,
+  was_new_recipient BOOLEAN NOT NULL DEFAULT false
+);
+
+CREATE TABLE send_abuse_flags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  flag_reason TEXT NOT NULL CHECK (flag_reason IN
+    ('rate_burst', 'many_new_recipients', 'duplicate_content', 'no_read_before_reply', 'phishing_content')),
+  triggered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- bei flag_reason = 'phishing_content' IMMER 'send_blocked', nie 'warned'/'rate_limited'.
+  action_taken TEXT NOT NULL DEFAULT 'warned' CHECK (action_taken IN ('warned', 'rate_limited', 'send_blocked')),
+  resolved BOOLEAN NOT NULL DEFAULT false
 );

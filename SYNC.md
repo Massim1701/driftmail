@@ -81,3 +81,21 @@ Fragen, die ein Track nicht selbst entscheiden kann, weil sie einen Contract ode
 Nur eintragen, wenn ein Track wirklich nicht weiterkommt, ohne dass jemand anders etwas ändert. Bitte mit betroffenem Track markieren.
 
 (keine — Push-Blocker vom 08.09. ist erledigt, siehe Änderungsprotokoll)
+
+
+[2026-09-08] [web] [B] — Antwort auf die vier "wer macht den externen Lookup"-Fragen (senderDomainAgeDays/domainReputationScore, containsNewIban-Historie, ipReputationFlag, recipientReputation): Alle vier nach demselben Muster loesen, EINHEITLICH:
+
+Entscheidung: security-classification/ bleibt bewusst zustandslos (kein Netzwerk, keine DB) — das ist architektonisch richtig und bleibt so, keine Contract-Aenderung am Interface noetig. Track A macht ALLE VIER Lookups als eigener Nachbearbeitungsschritt NACH dem Aufruf von analyzeMail() bzw. checkDraftForPhishing(), nicht als Erweiterung der Funktionssignaturen selbst:
+
+1. Nach analyzeMail(rawText, headers) liefert Track A per eigenem Nachbearbeitungsschritt: senderDomainAgeDays/domainReputationScore (WHOIS/Reputationsdienst-Abfrage), ipReputationFlag (Spamhaus XBL/CBL-Abgleich gegen die sendende IP aus den Headern), containsNewIban (Abgleich der von security-classification/ erkannten IBAN gegen die IBAN-Historie des Absenders in der eigenen DB — "neu" heisst: noch nie zuvor von diesem Absender an diesen User gesehen).
+
+2. Nach checkDraftForPhishing(bodyText, links) liefert Track A per eigenem Nachbearbeitungsschritt: recipientReputation (Abgleich der Empfaenger-Adresse gegen fraud_alerts/Empfaenger-Historie in der eigenen DB). Wie in WEB_INBOX.md spezifiziert: ist recipientReputation = "flagged" UND containsSensitiveData nicht leer, wird der UI-Warnhinweis vom Frontend deutlich schaerfer dargestellt (rote statt gelbe Sprechblase) — das ist reine UI-Logik in Track C/F basierend auf den beiden vom Backend gelieferten Feldern, keine weitere Backend-Aenderung noetig.
+
+Begruendung fuer "Track A, nicht Contract-Erweiterung": Netzwerk-/DB-Zugriff gehoert ins Backend, das testbare, deterministische, plattformunabhaengige security-classification/-Modul soll das nicht selbst brauchen. Track A ruft das Modul auf, reichert das Ergebnis mit den vier Feldern an, bevor es an die API-Antwort geht (SecurityResult/phishing-check-Response werden also final erst im Backend vollstaendig befuellt, nicht schon von security-classification/ allein). Kein Contract-Bruch, da die Feld-Typen (TEXT/BOOLEAN/NUMERIC bzw. enum) unveraendert bleiben — nur WER sie befuellt aendert sich.
+
+Track B kann Status "fertig" behalten, keine weitere Aenderung am Modul noetig. An Track A weitergeben: vier Nachbearbeitungsschritte einplanen (idealerweise als externe Lookup-Services/Adapter, die gemockt werden koennen, analog zum bestehenden Mock-KI-Adapter-Muster aus Track E, damit Backend-Tests nicht von echten externen Diensten abhaengen).
+
+[2026-09-09] [terminal] [0] — Die letzten beiden offenen TERMINAL_INBOX.md-Punkte (5+6) als kleinere Ergänzungen bereits vereinbarter Features direkt umgesetzt (Contract-Ankündigungsregel greift hier nicht, siehe Regel oben):
+- `contracts/ai-adapter-interface.ts`: `LOW_CONFIDENCE_THRESHOLD = 0.6` als gemeinsame Konstante ergänzt (bisher nur lokal in Track D angenommen).
+- `contracts/api-spec.yaml`: `MessageDetail.quarantine` (neues Schema `QuarantineInfo`: reason/autoDeleteAt/userReviewed, nullable) ergänzt, damit Track F/C die schon in der DB vorhandenen Quarantäne-Infos auch lesen können.
+Details/Begründung in TERMINAL_INBOX.md Punkt 5/6. Betrifft Track A (Response befüllen), C/D/F (Werte übernehmen/anzeigen). Punkt 7 (npm-Package für contracts/*.ts) bewusst vertagt, siehe TERMINAL_INBOX.md.
