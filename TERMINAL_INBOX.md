@@ -51,3 +51,24 @@ Punkte 1-6 sind damit abgearbeitet. Nur Punkt 7 bleibt als reine Tooling-Entsche
 3. TS-Package-Entscheidung (Punkt 7, "noch kein npm-Package"): Zustimmung, kein Widerspruch. Pragmatisch richtig bei 3 Tracks, re-evaluieren wenn ein vierter TS-Track dazukommt oder Typ-Drift real zum Problem wird.
 
 Sehr guter, gruendlicher Gesamtstand -- Track A hat quasi den kompletten Contract selbst konsistent gehalten und dokumentiert. Naechster sinnvoller Schritt waere der Integrations-Schritt (Track A + Track B echte Verdrahtung statt Mock-Ersatz), aber das ist keine Frage an mich, sondern reine Weiterarbeit.
+
+---
+
+[2026-09-09] [offen] [Statusupdate + Priorisierungsfrage an Web/Massimo] — Massimo hat bestaetigt: main enthaelt jetzt den kompletten Code aus allen 6 Track-Branches (vorher nur contracts/ + Doku). Seitdem zusaetzlich direkt auf main erledigt, jeweils mit Tests/README/SYNC.md dokumentiert:
+
+1. Alle 6 Track-Branches nach main gemerged, gebaut und getestet (Details SYNC.md Aenderungsprotokoll "[terminal] [Integration]").
+2. Track A + Track B Integration (analyzeMail()/checkDraftForPhishing() rufen jetzt echte Track-B-Logik statt Mock) inkl. eines von mir gefundenen und mit Web abgestimmten Fixes: adult/gambling-Content ist jetzt ein eigenstaendiger Klassifikations-Trigger in security-classification/, nicht mehr nur nachgelagerte Subcategory.
+3. SYNC.md "Offene Fragen" gegen den tatsaechlichen Code-Stand bereinigt (mehrere Punkte waren laengst geloest, aber nie durchgestrichen).
+4. Echter, bis dahin uebersehener Gap gefunden und behoben: `MessageDetail.quarantine` war im Contract definiert, aber vom Backend nie befuellt worden -- nachgezogen.
+5. Provider-Spiegelung fuer Papierkorb/Loeschen umgesetzt (Gmail messages.trash/delete, IMAP \Deleted/EXPUNGE) -- war bisher ein TODO-Platzhalter.
+
+Alles einzeln getestet (`npm run typecheck`/`npm test` pro Modul, iOS BUILD SUCCEEDED), gepusht auf main. Kein Blocker, keine offene Frage aus den Punkten 1-5 selbst.
+
+**Priorisierungsfrage fuer den naechsten Schritt** (habe Massimo zwei Kandidaten genannt, er hat sich fuer Punkt 5 oben entschieden -- die folgenden sind noch offen, keiner davon ist angefangen):
+
+- Echte Persistenz (Postgres statt In-Memory-Store) -- groesster, uebergreifender Umbau, betrifft Backend + potenziell contracts-logic/ (SQLite dort).
+- Echte Auth (Contract hat schon bearerAuth + /auth/session, Backend nutzt weiterhin nur einen festen Demo-User).
+- Echte KI-Funktionen fuer Track D/E (extractContract/summarize/draftReply sind weiterhin Mock/Platzhalter -- nur analyzeMail/checkDraftForPhishing wurden mit Track B "echt" gemacht).
+- Externe Lookups an echte Dienste anbinden (WHOIS/Spamhaus/fraud_alerts statt Mock-Heuristiken in src/lookups/).
+
+Keine davon ist ein Blocker fuer irgendeinen Track. Falls Web/Massimo eine Praeferenz hat, gerne hier eintragen, sonst arbeite ich mich in absteigender Reihenfolge (Persistenz zuerst, da am meisten andere Punkte davon abhaengen wuerden) weiter durch, sobald der naechste Auftrag kommt.
