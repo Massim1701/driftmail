@@ -294,14 +294,58 @@ was ist Platzhalter" oben und "Übergabe an Track A" unten.
   genommen, weil diese Funktion NIE allein `blocked` auslöst -- immer nur
   in Kombination mit hoher Dringlichkeits-Sprache. Ein echter NLP-Ersatz
   gehört wie bei den anderen Platzhaltern in den KI-Adapter.
-- **`spamSubcategory` wird NICHT für `classify()`s Entscheidung selbst
-  verwendet:** Ob eine Mail überhaupt als "spam" (statt phishing/safe/
-  unclear) gilt, entscheidet weiterhin ausschließlich `classification.ts`
+- **`spamSubcategory` (`adult`/`gambling`) ist seit 09.09. ein
+  EIGENSTÄNDIGER Klassifikations-Trigger, nicht mehr nur eine nachgelagerte
+  Verfeinerung (SYNC.md, Web-Antwort auf einen Fund aus der Track-A+B-
+  Integration):**
+
+  **Alt (bis 08.09.):** Ob eine Mail überhaupt als "spam" (statt
+  phishing/safe/unclear) galt, entschied ausschließlich `classification.ts`
   (Auth/Homoglyph/Link-Mismatch/Urgency/IBAN). `detectSpamSubcategory()`
-  wird von `index.ts` erst danach aufgerufen, nur wenn `classification ===
-  "spam"` bereits feststeht. Das hält die harte Contract-Regel
-  ("spamSubcategory bei phishing immer null") strukturell ein, statt sie
-  nur per if-Abfrage zu erzwingen.
+  wurde von `index.ts` erst DANACH aufgerufen, nur wenn `classification ===
+  "spam"` durch diese Signale bereits feststand -- reine Verfeinerung
+  ("welche Art Spam ist es"), keine eigene Entscheidung ("ist es
+  überhaupt Spam").
+
+  **Problem:** Der ursprüngliche Anlass für die ganze `spamSubcategory`-Regel
+  war explizit "Sex-/Glücksspiel-Mails erkennen und sofort löschen"
+  (WEB_INBOX.md 08.09.). Genau diese Mails sind in der Praxis aber meist
+  technisch "sauber" -- kein SPF-Fail, kein Link-Mismatch, keine
+  Homoglyphen, keine Dringlichkeits-Sprache. Mit der alten Reihenfolge
+  erreichten sie `classification.ts`'s "spam"-Schwelle (phishingScore
+  0.25-0.5) oft gar nicht und blieben "unclear"/"safe" -- die Regel griff
+  im eigentlichen Hauptfall nicht, für den sie gebaut wurde. Das kam erst
+  während der Track-A+B-Integration ans Licht, als ein Backend-Fixture mit
+  reinem Glücksspiel-Text ohne technisches Signal fälschlich nicht als Spam
+  erkannt wurde.
+
+  **Neu (ab 09.09.):** `index.ts` ruft `detectSpamSubcategory()` jetzt
+  IMMER auf, unabhängig vom `classification.ts`-Ergebnis. Liefert es
+  `"adult"` oder `"gambling"`, wird `classification` auf `"spam"` gehoben,
+  AUCH wenn `classification.ts` sonst `"safe"`/`"unclear"` ergäbe -- außer
+  `classification.ts` hat bereits `"phishing"` festgestellt (stärkeres,
+  spezifischeres Signal geht vor, ein zufälliger Content-Treffer soll ein
+  echtes Phishing-Ergebnis nicht herabstufen). `generic`/`marketing` bleiben
+  bewusst weiterhin rein nachgelagert (kein eigener Trigger) -- nur
+  `adult`/`gambling` ist die zeitkritische Auto-Delete-Kategorie im
+  Aufrufer (Track A), `generic`/`marketing` landet ohnehin nur im normalen
+  Spam-Ordner ohne Eile.
+
+  **Konfidenz:** Ein rein content-getriggertes `"spam"` (ohne jedes
+  phishing-artige Signal) bekommt einen fixen Platzhalterwert
+  `CONTENT_TRIGGERED_SPAM_CONFIDENCE = 0.75` statt der
+  `classify()`-Formel (die für phishingScore=0 ohnehin nur "unclear"/0.4
+  oder "safe"/0.5 liefern würde, beides für ein Feld irreführend, das jetzt
+  effektiv "spam" mit Auto-Delete-Konsequenz bedeutet). 0.75 gewählt: klar
+  über der 0.5-Grenze, aber unter dem, was ein echtes technisches
+  Phishing-Signal typischerweise erreicht (>= 0.85) — ein reiner
+  Content-Treffer ohne technisches Signal ist etwas weniger sicher.
+
+  Tests: `tests/index.test.ts`, describe-Block "content-triggered spam"
+  (klarer adult/gambling-Treffer ohne jedes Signal -> spam; reiner
+  marketing/generic-Text ohne Signal -> weiterhin unclear/nachgelagert;
+  bereits erkanntes phishing wird durch Content-Keywords nicht
+  herabgestuft).
 
 ## Bekannte Lücken / bewusste Annahmen
 
@@ -425,6 +469,14 @@ Track A in der Message-Pipeline ergänzt werden (siehe WEB_INBOX.md 08.09.):
 
 Track B (dieses Modul) ist für den Erkennungs-Teil ab diesem Commit
 fertig; der Auto-Delete-Pfad läuft als separate Arbeit in Track A.
+
+**Update 09.09.:** `adult`/`gambling` erreichen `classification === "spam"`
+jetzt auch OHNE begleitendes technisches Signal (Auth-Fail/Homoglyph/
+Link-Mismatch/Dringlichkeit) -- siehe "Design-Entscheidungen" oben,
+"eigenständiger Klassifikations-Trigger". Für Track A ändert sich an der
+Handlungslogik selbst nichts (weiterhin einfach `classification`/
+`spamSubcategory` aus dem `SecurityResult` auslesen), nur mehr echte
+Glücksspiel-/Erotik-Mails erreichen diesen Pfad jetzt zuverlässig.
 
 ## Übergabe an Track A (`ipReputationFlag`)
 

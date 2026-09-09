@@ -29,7 +29,12 @@ import { scoreUrgencyLanguage } from "./urgencyLanguage.js";
  *    regelbasierte Platzhalter, kein echtes NLP/ML.
  *  - spamSubcategory: ebenfalls Keyword-Heuristik (siehe spamSubcategory.ts),
  *    bewusst konservativ kalibriert, weil "adult"/"gambling" im Aufrufer
- *    (Track A) sofortiges Löschen ohne Quarantäne auslösen.
+ *    (Track A) sofortiges Löschen ohne Quarantäne auslösen. Seit 09.09.
+ *    (SYNC.md, Web-Antwort auf den Track-A+B-Integrationsfund) ist
+ *    "adult"/"gambling" ein EIGENSTÄNDIGER Klassifikations-Trigger, nicht
+ *    mehr nur eine nachgelagerte Verfeinerung einer bereits anderweitig
+ *    erreichten "spam"-Klassifikation -- siehe Kommentar bei
+ *    `CONTENT_TRIGGERED_SPAM_CONFIDENCE` unten.
  *  - ipReputationFlag: braucht einen externen Botnetz-Blocklist-Abgleich
  *    (Netzwerkzugriff), bleibt hier immer `"unknown"` (siehe
  *    ipReputation.ts).
@@ -39,6 +44,20 @@ import { scoreUrgencyLanguage } from "./urgencyLanguage.js";
  *    sichtbarer Textmenge), aber `null` ohne erkennbares HTML (siehe
  *    imageToTextRatio.ts).
  */
+
+// Konfidenz für classification="spam", wenn sie NICHT über classify()'s
+// phishing-Score-Signale erreicht wird, sondern allein über einen
+// eindeutigen adult/gambling-Inhaltstreffer (siehe Aufruf unten). Fixer
+// Platzhalterwert wie der Rest dieses Moduls (kein ML) -- detectSpamSubcategory()
+// liefert selbst keinen Konfidenzwert, nur eine binäre STRONG/WEAK-Schwelle
+// (siehe spamSubcategory.ts), daher hier eine einzelne Zahl statt einer
+// Formel. 0.75 gewählt: klar über der 0.5-"nur Vermutung"-Grenze der
+// phishing-Score-Formel, aber unter dem, was ein tatsächliches
+// Phishing-Signal (>= 0.85 typischerweise) erreicht -- ein reiner
+// Content-Treffer ohne technisches Signal ist etwas weniger sicher als
+// Auth-Fail/Homoglyph/Link-Mismatch.
+const CONTENT_TRIGGERED_SPAM_CONFIDENCE = 0.75;
+
 export async function analyzeMail(
   rawText: string,
   headers: Record<string, string>,
@@ -52,7 +71,7 @@ export async function analyzeMail(
   const imageToTextRatio = computeImageToTextRatio(rawText);
   const ipReputationFlag = detectIpReputation();
 
-  const { classification, confidenceScore } = classify({
+  const { classification: signalClassification, confidenceScore: signalConfidence } = classify({
     spfStatus,
     dkimStatus,
     dmarcStatus,
@@ -62,10 +81,32 @@ export async function analyzeMail(
     containsNewIban,
   });
 
+  // Eigenständiger Klassifikations-Trigger (SYNC.md 09.09., Web-Antwort auf
+  // den Track-A+B-Integrationsfund): eindeutiger adult/gambling-Inhalt hebt
+  // classification auf "spam", AUCH wenn sonst keine phishing-artigen
+  // Signale (Auth-Fail/Homoglyph/Link-Mismatch/Dringlichkeit) vorliegen --
+  // der Hauptfall, für den die spamSubcategory-Regel ursprünglich gebaut
+  // wurde (Sex-/Glücksspiel-Werbemails sind technisch meist "sauber").
+  // "phishing" bleibt unangetastet (stärkeres, spezifischeres Signal geht
+  // vor) -- ein zufälliger Content-Treffer soll ein echtes Phishing-Ergebnis
+  // nicht herabstufen. generic/marketing lösen weiterhin KEINEN eigenen
+  // Trigger aus (unverändert nachgelagert), da nur adult/gambling die
+  // zeitkritische Auto-Delete-Kategorie ist (siehe WEB_INBOX.md 08.09.).
+  const contentSpamSubcategory = detectSpamSubcategory(rawText);
+  const contentTriggersSpam =
+    signalClassification !== "phishing" &&
+    (contentSpamSubcategory === "adult" || contentSpamSubcategory === "gambling");
+
+  const classification = contentTriggersSpam ? "spam" : signalClassification;
+  const confidenceScore = contentTriggersSpam ? CONTENT_TRIGGERED_SPAM_CONFIDENCE : signalConfidence;
+
   // Hart aus dem Contract: NUR bei classification === "spam" gesetzt, sonst
   // immer null -- explizit auch bei "phishing" (siehe types.ts-Kommentar
-  // und WEB_INBOX.md 08.09.).
-  const spamSubcategory = classification === "spam" ? detectSpamSubcategory(rawText) : null;
+  // und WEB_INBOX.md 08.09.). `contentSpamSubcategory` oben bereits
+  // berechnet -- bei classification "spam" über den bisherigen
+  // signal-basierten Pfad ist das derselbe Aufruf wie vorher (rawText
+  // ändert sich zwischen beiden Aufrufen nicht, reiner Namens-Alias).
+  const spamSubcategory = classification === "spam" ? contentSpamSubcategory : null;
 
   return {
     spfStatus,
