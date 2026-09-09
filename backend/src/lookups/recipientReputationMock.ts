@@ -28,18 +28,10 @@ export class MockRecipientReputationLookup implements RecipientReputationLookup 
     const normalized = recipientAddress.trim().toLowerCase();
     if (!normalized) return "unknown";
 
-    if (this.store.hasSentTo(userId, normalized)) return "safe";
+    if (await this.store.hasSentTo(userId, normalized)) return "safe";
 
     const domain = domainFromAddress(normalized);
-    const matchesPhishingSender = this.store.messages.some((m) => {
-      const fromLower = m.fromAddress.toLowerCase();
-      const sameAddress = fromLower === normalized;
-      const sameDomain = domain !== null && domainFromAddress(fromLower) === domain;
-      if (!sameAddress && !sameDomain) return false;
-      const security = this.store.getMessageSecurity(m.id);
-      return security?.classification === "phishing";
-    });
-    if (matchesPhishingSender) return "flagged";
+    if (await this.store.hasPhishingMessageFrom(normalized, domain)) return "flagged";
 
     return "unknown";
   }

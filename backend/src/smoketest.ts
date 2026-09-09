@@ -3,7 +3,7 @@
 // gegen contracts/api-spec.yaml. `npm test` führt das aus.
 
 import { createApp } from "./app";
-import { ensureDemoUser, store } from "./db/store";
+import { ensureDemoUser, initStore, store } from "./db/store";
 import { syncAccount } from "./mail/sync";
 import { aiAdapter } from "./ai";
 import { domainReputationLookup, extractIbanCandidates, ibanHistoryCheck } from "./lookups";
@@ -14,7 +14,8 @@ function assert(cond: unknown, msg: string): asserts cond {
 }
 
 async function main() {
-  const { account } = ensureDemoUser();
+  await initStore();
+  const { account } = await ensureDemoUser();
   const { imported, autoDeleted } = await syncAccount(account, aiAdapter);
   assert(imported > 0, "Fixture-Sync sollte Nachrichten importieren");
 
@@ -22,22 +23,22 @@ async function main() {
   // ist eindeutiger Glücksspiel-Spam und darf NICHT als Nachricht landen.
   assert(autoDeleted === 1, "genau 1 adult/gambling-Spam-Mail sollte automatisch gelöscht worden sein (Fixture 5)");
   assert(
-    store.findMessageByHeader(account.id, "<fixture-5@casino-bonus-express.example>") === undefined,
+    (await store.findMessageByHeader(account.id, "<fixture-5@casino-bonus-express.example>")) === undefined,
     "auto-gelöschte Mail darf keine messages-Zeile bekommen",
   );
   assert(
-    store.securityAuditLog.some(
-      (e) => e.action === "auto_deleted_adult_gambling_spam" && e.userId === account.userId && e.messageId === null,
+    (await store.listSecurityAuditLog({ userId: account.userId, action: "auto_deleted_adult_gambling_spam" })).some(
+      (e) => e.messageId === null,
     ),
     "Auto-Delete sollte einen security_audit_log-Eintrag hinterlassen (messageId=null, da nie angelegt)",
   );
 
   // Erneuter Sync darf dieselbe Mail nicht nochmal löschen/loggen (Dedupe
-  // über store.autoDeletedHeaders, siehe store.ts-Kommentar).
+  // über store.wasAutoDeleted(), siehe store.ts-Kommentar).
   const second = await syncAccount(account, aiAdapter);
   assert(second.autoDeleted === 0, "wiederholter Sync sollte dieselbe auto-gelöschte Mail nicht erneut zählen");
   assert(
-    store.securityAuditLog.filter((e) => e.action === "auto_deleted_adult_gambling_spam").length === 1,
+    (await store.listSecurityAuditLog({ action: "auto_deleted_adult_gambling_spam" })).length === 1,
     "wiederholter Sync sollte keinen zweiten Audit-Log-Eintrag für dieselbe Mail erzeugen",
   );
 
@@ -169,7 +170,7 @@ async function main() {
     // die spätere Lookup-Adapter-Sektion prüft fixture1/2/4 noch per
     // findMessageByHeader() nach Sync-Werten -- die dürfen hier nicht schon
     // aus dem Store verschwunden sein.
-    const fixture3 = store.findMessageByHeader(account.id, "<fixture-3@newsletter-deals.example>");
+    const fixture3 = await store.findMessageByHeader(account.id, "<fixture-3@newsletter-deals.example>");
     assert(fixture3 !== undefined, "Fixture 3 sollte importiert worden sein");
     const trashTarget = fixture3!;
 
@@ -182,7 +183,7 @@ async function main() {
       permanentFromSpamRes.status === 400,
       "DELETE .../permanent aus dem Spam-Ordner (nicht Papierkorb) sollte 400 liefern",
     );
-    assert(store.getMessage(trashTarget.id) !== undefined, "Nachricht darf nach abgelehntem permanent-delete weiterhin existieren");
+    assert((await store.getMessage(trashTarget.id)) !== undefined, "Nachricht darf nach abgelehntem permanent-delete weiterhin existieren");
 
     // Fall 2: soft delete -- Nachricht landet im Papierkorb-Ordner.
     const softDeleteRes = await fetch(`${base}/v1/messages/${trashTarget.id}`, { method: "DELETE" });
@@ -195,7 +196,7 @@ async function main() {
     // Fall 3: permanent delete AUS dem Papierkorb heraus -- Nachricht ist danach weg.
     const permanentDeleteRes = await fetch(`${base}/v1/messages/${trashTarget.id}/permanent`, { method: "DELETE" });
     assert(permanentDeleteRes.status === 200, "DELETE .../permanent aus dem Papierkorb sollte 200 liefern");
-    assert(store.getMessage(trashTarget.id) === undefined, "Nachricht sollte nach permanent delete nicht mehr im Store existieren");
+    assert((await store.getMessage(trashTarget.id)) === undefined, "Nachricht sollte nach permanent delete nicht mehr im Store existieren");
     const afterPermanentDeleteRes = await fetch(`${base}/v1/messages/${trashTarget.id}`);
     assert(afterPermanentDeleteRes.status === 404, "GET nach permanent delete sollte 404 liefern");
 
@@ -295,7 +296,7 @@ async function main() {
     // end-to-end über den Sync-Pfad (mail/sync.ts reichert MessageSecurity
     // NACH analyzeMail() an) -- geprüft über die echte HTTP-Response von
     // GET /messages/:id, nicht nur den direkten Lookup-Aufruf.
-    const fixture1 = store.findMessageByHeader(account.id, "<fixture-1@beispiel-versicherung.de>");
+    const fixture1 = await store.findMessageByHeader(account.id, "<fixture-1@beispiel-versicherung.de>");
     assert(fixture1 !== undefined, "Fixture 1 sollte importiert worden sein");
     const fixture1Detail = (await (await fetch(`${base}/v1/messages/${fixture1!.id}`)).json()) as Record<string, unknown>;
     const fixture1Security = fixture1Detail.security as Record<string, unknown>;
@@ -308,7 +309,7 @@ async function main() {
       "Fixture 1 (Beispiel-IP außerhalb der Mock-Botnetz-Liste im X-Originating-IP-Header) sollte ipReputationFlag='clean' liefern",
     );
 
-    const fixture2 = store.findMessageByHeader(account.id, "<fixture-2@sicherheit-konto-check.tk>");
+    const fixture2 = await store.findMessageByHeader(account.id, "<fixture-2@sicherheit-konto-check.tk>");
     assert(fixture2 !== undefined, "Fixture 2 sollte importiert worden sein");
     const fixture2Detail = (await (await fetch(`${base}/v1/messages/${fixture2!.id}`)).json()) as Record<string, unknown>;
     const fixture2Security = fixture2Detail.security as Record<string, unknown>;
@@ -325,7 +326,7 @@ async function main() {
       "erste eingehende IBAN dieses Absenders sollte containsNewIban=true liefern (IBAN-Historie-Check)",
     );
 
-    const fixture4 = store.findMessageByHeader(account.id, "<fixture-4@kollegin.example.com>");
+    const fixture4 = await store.findMessageByHeader(account.id, "<fixture-4@kollegin.example.com>");
     assert(fixture4 !== undefined, "Fixture 4 sollte importiert worden sein");
     const fixture4Detail = (await (await fetch(`${base}/v1/messages/${fixture4!.id}`)).json()) as Record<string, unknown>;
     const fixture4Security = fixture4Detail.security as Record<string, unknown>;
@@ -340,7 +341,7 @@ async function main() {
     // Track-B-Logik läuft, nicht mehr den alten Mock -- Homoglyph-Erkennung
     // gab es im Mock-Adapter gar nicht (dort war homoglyphDetected fest
     // `false`, egal was im Text stand).
-    const fixture6 = store.findMessageByHeader(account.id, "<fixture-6@apple-id-verify.example>");
+    const fixture6 = await store.findMessageByHeader(account.id, "<fixture-6@apple-id-verify.example>");
     assert(fixture6 !== undefined, "Fixture 6 sollte importiert worden sein");
     const fixture6Detail = (await (await fetch(`${base}/v1/messages/${fixture6!.id}`)).json()) as Record<string, unknown>;
     const fixture6Security = fixture6Detail.security as Record<string, unknown>;
@@ -357,7 +358,7 @@ async function main() {
     // mehr als neu (der Sync-Lauf oben hat die IBAN aus Fixture 2 bereits
     // einmal gesehen/gespeichert), eine ANDERE IBAN vom selben Absender
     // weiterhin schon.
-    const ibanFromFixture2 = store.messages.find((m) => m.id === fixture2!.id)?.bodyText ?? "";
+    const ibanFromFixture2 = fixture2!.bodyText ?? "";
     const ibanCandidates = extractIbanCandidates(ibanFromFixture2);
     assert(ibanCandidates.length > 0, "Fixture 2 sollte mind. eine IBAN-Kandidatin enthalten");
     const repeatedIbanCheck = await ibanHistoryCheck.checkAndRecord(account.userId, fixture2!.fromAddress, ibanCandidates);

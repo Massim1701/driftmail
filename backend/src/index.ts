@@ -1,12 +1,17 @@
 import { createApp } from "./app";
-import { ensureDemoUser } from "./db/store";
+import { ensureDemoUser, initStore } from "./db/store";
 import { syncAccount } from "./mail/sync";
 import { aiAdapter } from "./ai";
 
 const PORT = Number(process.env.PORT ?? 3000);
 
 async function main() {
-  const { account } = ensureDemoUser();
+  // Echte Persistenz (Terminal 09.09.): initStore() migriert das Schema,
+  // wenn DATABASE_URL gesetzt ist (siehe db/store.ts) -- muss VOR jedem
+  // Store-Zugriff abgewartet werden, sonst schlagen die ersten Queries
+  // gegen noch nicht existierende Tabellen fehl.
+  await initStore();
+  const { account } = await ensureDemoUser();
 
   // Initialer Sync beim Start, damit GET /v1/messages sofort Daten liefert
   // (Fixture-Adapter, solange keine echten Zugangsdaten konfiguriert sind).

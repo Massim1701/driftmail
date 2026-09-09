@@ -18,14 +18,14 @@ const NOT_RENAMABLE: SystemFolderKey[] = ["quarantaene", "spam", "papierkorb"];
 const CUSTOM_FOLDER_DEFAULT_ICON = "folder";
 
 // GET /folders — siehe api-spec.yaml
-foldersRouter.get("/folders", (_req, res) => {
-  const { user } = ensureDemoUser();
-  res.json(store.listFolders(user.id).map(toApiFolder));
+foldersRouter.get("/folders", async (_req, res) => {
+  const { user } = await ensureDemoUser();
+  res.json((await store.listFolders(user.id)).map(toApiFolder));
 });
 
 // POST /folders — eigenen Ordner anlegen (is_system=false, system_key=null)
-foldersRouter.post("/folders", (req, res) => {
-  const { user } = ensureDemoUser();
+foldersRouter.post("/folders", async (req, res) => {
+  const { user } = await ensureDemoUser();
 
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   if (!name) return res.status(400).json({ error: "name ist erforderlich" });
@@ -35,9 +35,9 @@ foldersRouter.post("/folders", (req, res) => {
 
   // sort_order: ans Ende der bestehenden Liste anhängen (kein sortOrder im
   // Request-Body laut api-spec.yaml POST /folders — nur PATCH erlaubt das).
-  const sortOrder = store.listFolders(user.id).length;
+  const sortOrder = (await store.listFolders(user.id)).length;
 
-  const folder = store.createFolder({
+  const folder = await store.createFolder({
     userId: user.id,
     name,
     icon,
@@ -49,8 +49,8 @@ foldersRouter.post("/folders", (req, res) => {
 });
 
 // PATCH /folders/:folderId — umbenennen/Icon/Reihenfolge ändern
-foldersRouter.patch("/folders/:folderId", (req, res) => {
-  const folder = store.getFolder(req.params.folderId);
+foldersRouter.patch("/folders/:folderId", async (req, res) => {
+  const folder = await store.getFolder(req.params.folderId);
   if (!folder) return res.status(404).json({ error: "Ordner nicht gefunden" });
 
   const patch: { name?: string; icon?: string; sortOrder?: number } = {};
@@ -79,13 +79,13 @@ foldersRouter.patch("/folders/:folderId", (req, res) => {
     patch.sortOrder = req.body.sortOrder;
   }
 
-  const updated = store.updateFolder(folder.id, patch)!;
+  const updated = (await store.updateFolder(folder.id, patch))!;
   res.json(toApiFolder(updated));
 });
 
 // DELETE /folders/:folderId — eigenen Ordner löschen (System-Ordner nicht löschbar)
-foldersRouter.delete("/folders/:folderId", (req, res) => {
-  const folder = store.getFolder(req.params.folderId);
+foldersRouter.delete("/folders/:folderId", async (req, res) => {
+  const folder = await store.getFolder(req.params.folderId);
   if (!folder) return res.status(404).json({ error: "Ordner nicht gefunden" });
 
   if (folder.isSystem) {
@@ -96,13 +96,13 @@ foldersRouter.delete("/folders/:folderId", (req, res) => {
   // messages.folder_id ist im Schema NOT NULL/FK, darf also nie ins Leere
   // zeigen. Nachrichten aus dem gelöschten Ordner werden deshalb vor dem
   // Löschen in den System-Ordner "sonstiges" verschoben.
-  const fallback = store.getSystemFolder(folder.userId, "sonstiges");
+  const fallback = await store.getSystemFolder(folder.userId, "sonstiges");
   if (fallback) {
-    for (const message of store.listMessages({ folderId: folder.id })) {
-      store.moveMessage(message.id, fallback.id);
+    for (const message of await store.listMessages({ folderId: folder.id })) {
+      await store.moveMessage(message.id, fallback.id);
     }
   }
 
-  store.deleteFolder(folder.id);
+  await store.deleteFolder(folder.id);
   res.status(204).send();
 });

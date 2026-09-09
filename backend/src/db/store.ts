@@ -1,14 +1,22 @@
-// In-Memory-Datenhaltung für diesen ersten Durchstich.
+// Datenhaltung für das Backend.
 //
-// ANNAHME (siehe README): contracts/db-schema.sql ist Postgres-DDL. Damit
-// dieses Skeleton ohne Datenbank-Setup läuft und andere Tracks sofort
-// dagegen testen können, hält dieses Modul die Daten im Prozessspeicher,
-// aber mit exakt den Feldern/Typen aus dem Schema. Die Store-Methoden
-// (list/get/insert je Tabelle) sind absichtlich so geschnitten, dass ein
-// Ersatz durch eine echte Postgres-Anbindung (z.B. mit `pg`) nur dieses
-// eine Modul betrifft — Routen und Sync-Pipeline bleiben unverändert.
+// Echte Persistenz (Terminal 09.09., Web-Priorisierung "Persistenz zuerst"
+// -- siehe TERMINAL_INBOX.md/SYNC.md): `store` zeigt auf eine
+// Postgres-Anbindung (`PostgresStore`, siehe postgresStore.ts), wenn
+// `DATABASE_URL` gesetzt ist, sonst auf die ursprüngliche `InMemoryStore`
+// (Daten gehen bei Neustart verloren, aber kein DB-Setup nötig -- gleiches
+// Muster wie bei Gmail/IMAP vs. Fixture-Adapter: echt, wenn ENV gesetzt
+// ist, sonst Zero-Config-Fallback). Beide implementieren dasselbe `Store`-
+// Interface, exakt mit den Feldern/Typen aus contracts/db-schema.sql --
+// Routen und Sync-Pipeline arbeiten nur gegen dieses Interface, nicht
+// gegen eine der beiden konkreten Implementierungen.
+//
+// Alle Methoden sind async (auch bei InMemoryStore, wo das nicht nötig
+// wäre) -- eine echte DB-Anbindung kann nicht synchron sein, und die
+// Caller sollen nicht wissen müssen, welche Implementierung gerade läuft.
 
 import { randomUUID } from "node:crypto";
+import { PostgresStore } from "./postgresStore";
 import type {
   ContractRecord,
   FolderRecord,
@@ -24,7 +32,81 @@ import type {
   UserAiCapabilityRecord,
 } from "../types";
 
-export class Store {
+export interface Store {
+  // ----- Users / Accounts -----
+  createUser(email: string): Promise<User>;
+  /** Für ensureDemoUser(): liefert den ersten angelegten User, falls vorhanden. */
+  getFirstUser(): Promise<User | undefined>;
+  createMailAccount(input: Omit<MailAccountRecord, "id">): Promise<MailAccountRecord>;
+  listMailAccounts(): Promise<MailAccountRecord[]>;
+  getMailAccount(id: string): Promise<MailAccountRecord | undefined>;
+  getMailAccountByUserId(userId: string): Promise<MailAccountRecord | undefined>;
+  /** Für den Sync-Status (syncAccount() in mail/sync.ts) -- ersetzt die
+   * vorherige direkte Mutation des `MailAccountRecord`-Objekts, die bei
+   * einer echten DB nicht persistiert hätte. */
+  updateMailAccount(id: string, patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt">>): Promise<MailAccountRecord | undefined>;
+
+  // ----- Ordner -----
+  createFolder(input: Omit<FolderRecord, "id">): Promise<FolderRecord>;
+  listFolders(userId: string): Promise<FolderRecord[]>;
+  getFolder(id: string): Promise<FolderRecord | undefined>;
+  getSystemFolder(userId: string, systemKey: SystemFolderKey): Promise<FolderRecord | undefined>;
+  updateFolder(id: string, patch: Partial<Pick<FolderRecord, "name" | "icon" | "sortOrder">>): Promise<FolderRecord | undefined>;
+  deleteFolder(id: string): Promise<boolean>;
+
+  // ----- Messages -----
+  findMessageByHeader(mailAccountId: string, messageIdHeader: string): Promise<MessageRecord | undefined>;
+  wasAutoDeleted(mailAccountId: string, messageIdHeader: string): Promise<boolean>;
+  markAutoDeleted(mailAccountId: string, messageIdHeader: string): Promise<void>;
+  insertMessage(input: Omit<MessageRecord, "id">): Promise<MessageRecord>;
+  listMessages(filter: { folderId?: string; accountId?: string }): Promise<MessageRecord[]>;
+  getMessage(id: string): Promise<MessageRecord | undefined>;
+  moveMessage(id: string, folderId: string): Promise<MessageRecord | undefined>;
+  deleteMessage(id: string): Promise<boolean>;
+
+  // ----- Security -----
+  setMessageSecurity(record: MessageSecurityRecord): Promise<void>;
+  getMessageSecurity(messageId: string): Promise<MessageSecurityRecord | undefined>;
+  /** Empfänger-Reputations-Lookup (siehe lookups/recipientReputationMock.ts):
+   * true, wenn eine eingehende, als "phishing" klassifizierte Nachricht von
+   * dieser Adresse ODER Domain existiert. Eigene Methode statt Rohzugriff
+   * auf `messages`, weil das mit einer echten DB ein einzelnes SQL-Join
+   * wird statt eines In-Memory-Scans. */
+  hasPhishingMessageFrom(address: string, domain: string | null): Promise<boolean>;
+
+  // ----- Quarantäne -----
+  quarantineMessage(messageId: string, reason: string): Promise<QuarantineRecord>;
+  getQuarantineForMessage(messageId: string): Promise<QuarantineRecord | undefined>;
+
+  // ----- Sicherheits-Audit-Log -----
+  logSecurityAudit(input: Omit<SecurityAuditLogRecord, "id" | "timestamp">): Promise<SecurityAuditLogRecord>;
+  listSecurityAuditLog(filter: { userId?: string; action?: string }): Promise<SecurityAuditLogRecord[]>;
+
+  // ----- Verträge -----
+  insertContract(input: Omit<ContractRecord, "id">): Promise<ContractRecord>;
+  listContracts(): Promise<ContractRecord[]>;
+  getContract(id: string): Promise<ContractRecord | undefined>;
+  updateContract(id: string, patch: Partial<Omit<ContractRecord, "id">>): Promise<ContractRecord | undefined>;
+
+  // ----- KI-Zusammenfassung (Cache) -----
+  setMessageAiSummary(record: MessageAiSummaryRecord): Promise<void>;
+  getMessageAiSummary(messageId: string): Promise<MessageAiSummaryRecord | undefined>;
+
+  // ----- AI Capability -----
+  setUserAiCapability(record: UserAiCapabilityRecord): Promise<void>;
+
+  // ----- IBAN-Historie (Grundlage für containsNewIban) -----
+  hasSeenIban(userId: string, senderAddress: string, iban: string): Promise<boolean>;
+  recordIban(userId: string, senderAddress: string, iban: string): Promise<void>;
+
+  // ----- Ausgehende Sends (Grundlage für recipientReputation) -----
+  hasSentTo(userId: string, recipientAddress: string): Promise<boolean>;
+  recordOutgoingSend(input: { userId: string; recipientAddress: string; timeSinceDraftShownMs?: number | null }): Promise<OutgoingSendLogRecord>;
+}
+
+/** In-Memory-Implementierung (Standard, wenn DATABASE_URL nicht gesetzt ist).
+ * Daten gehen bei jedem Neustart verloren -- siehe Kopfkommentar. */
+export class InMemoryStore implements Store {
   users: User[] = [];
   mailAccounts: MailAccountRecord[] = [];
   folders: FolderRecord[] = [];
@@ -56,24 +138,43 @@ export class Store {
 
   // ----- Users / Accounts -----
 
-  createUser(email: string): User {
+  async createUser(email: string): Promise<User> {
     const user: User = { id: randomUUID(), email, createdAt: new Date().toISOString() };
     this.users.push(user);
     return user;
   }
 
-  createMailAccount(input: Omit<MailAccountRecord, "id">): MailAccountRecord {
+  async getFirstUser(): Promise<User | undefined> {
+    return this.users[0];
+  }
+
+  async createMailAccount(input: Omit<MailAccountRecord, "id">): Promise<MailAccountRecord> {
     const record: MailAccountRecord = { id: randomUUID(), ...input };
     this.mailAccounts.push(record);
     return record;
   }
 
-  listMailAccounts(): MailAccountRecord[] {
+  async listMailAccounts(): Promise<MailAccountRecord[]> {
     return this.mailAccounts;
   }
 
-  getMailAccount(id: string): MailAccountRecord | undefined {
+  async getMailAccount(id: string): Promise<MailAccountRecord | undefined> {
     return this.mailAccounts.find((a) => a.id === id);
+  }
+
+  async getMailAccountByUserId(userId: string): Promise<MailAccountRecord | undefined> {
+    return this.mailAccounts.find((a) => a.userId === userId);
+  }
+
+  async updateMailAccount(
+    id: string,
+    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt">>,
+  ): Promise<MailAccountRecord | undefined> {
+    const account = await this.getMailAccount(id);
+    if (!account) return undefined;
+    if (patch.syncStatus !== undefined) account.syncStatus = patch.syncStatus;
+    if (patch.lastSyncedAt !== undefined) account.lastSyncedAt = patch.lastSyncedAt;
+    return account;
   }
 
   // ----- Ordner -----
@@ -82,26 +183,29 @@ export class Store {
   // system_key gesetzt, siehe ensureDemoUser) und kann beliebig eigene
   // Ordner (is_system=false, system_key=null) anlegen.
 
-  createFolder(input: Omit<FolderRecord, "id">): FolderRecord {
+  async createFolder(input: Omit<FolderRecord, "id">): Promise<FolderRecord> {
     const record: FolderRecord = { id: randomUUID(), ...input };
     this.folders.push(record);
     return record;
   }
 
-  listFolders(userId: string): FolderRecord[] {
+  async listFolders(userId: string): Promise<FolderRecord[]> {
     return this.folders.filter((f) => f.userId === userId).sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
-  getFolder(id: string): FolderRecord | undefined {
+  async getFolder(id: string): Promise<FolderRecord | undefined> {
     return this.folders.find((f) => f.id === id);
   }
 
-  getSystemFolder(userId: string, systemKey: SystemFolderKey): FolderRecord | undefined {
+  async getSystemFolder(userId: string, systemKey: SystemFolderKey): Promise<FolderRecord | undefined> {
     return this.folders.find((f) => f.userId === userId && f.systemKey === systemKey);
   }
 
-  updateFolder(id: string, patch: Partial<Pick<FolderRecord, "name" | "icon" | "sortOrder">>): FolderRecord | undefined {
-    const folder = this.getFolder(id);
+  async updateFolder(
+    id: string,
+    patch: Partial<Pick<FolderRecord, "name" | "icon" | "sortOrder">>,
+  ): Promise<FolderRecord | undefined> {
+    const folder = await this.getFolder(id);
     if (!folder) return undefined;
     if (patch.name !== undefined) folder.name = patch.name;
     if (patch.icon !== undefined) folder.icon = patch.icon;
@@ -109,7 +213,7 @@ export class Store {
     return folder;
   }
 
-  deleteFolder(id: string): boolean {
+  async deleteFolder(id: string): Promise<boolean> {
     const idx = this.folders.findIndex((f) => f.id === id);
     if (idx === -1) return false;
     this.folders.splice(idx, 1);
@@ -118,45 +222,45 @@ export class Store {
 
   // ----- Messages -----
 
-  findMessageByHeader(mailAccountId: string, messageIdHeader: string): MessageRecord | undefined {
+  async findMessageByHeader(mailAccountId: string, messageIdHeader: string): Promise<MessageRecord | undefined> {
     return this.messages.find((m) => m.mailAccountId === mailAccountId && m.messageIdHeader === messageIdHeader);
   }
 
   /** Dedupe für den Auto-Delete-Pfad (siehe `autoDeletedHeaders`-Kommentar). */
-  wasAutoDeleted(mailAccountId: string, messageIdHeader: string): boolean {
+  async wasAutoDeleted(mailAccountId: string, messageIdHeader: string): Promise<boolean> {
     return this.autoDeletedHeaders.has(`${mailAccountId}:${messageIdHeader}`);
   }
 
-  markAutoDeleted(mailAccountId: string, messageIdHeader: string): void {
+  async markAutoDeleted(mailAccountId: string, messageIdHeader: string): Promise<void> {
     this.autoDeletedHeaders.add(`${mailAccountId}:${messageIdHeader}`);
   }
 
-  insertMessage(input: Omit<MessageRecord, "id">): MessageRecord {
+  async insertMessage(input: Omit<MessageRecord, "id">): Promise<MessageRecord> {
     const record: MessageRecord = { id: randomUUID(), ...input };
     this.messages.push(record);
     return record;
   }
 
-  listMessages(filter: { folderId?: string; accountId?: string }): MessageRecord[] {
+  async listMessages(filter: { folderId?: string; accountId?: string }): Promise<MessageRecord[]> {
     return this.messages
       .filter((m) => (filter.folderId ? m.folderId === filter.folderId : true))
       .filter((m) => (filter.accountId ? m.mailAccountId === filter.accountId : true))
       .sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
   }
 
-  getMessage(id: string): MessageRecord | undefined {
+  async getMessage(id: string): Promise<MessageRecord | undefined> {
     return this.messages.find((m) => m.id === id);
   }
 
   /** Verschiebt eine Nachricht in einen anderen Ordner (POST /messages/:id/move). */
-  moveMessage(id: string, folderId: string): MessageRecord | undefined {
-    const m = this.getMessage(id);
+  async moveMessage(id: string, folderId: string): Promise<MessageRecord | undefined> {
+    const m = await this.getMessage(id);
     if (m) m.folderId = folderId;
     return m;
   }
 
   /** Entfernt eine Nachricht endgültig aus dem Store (DELETE /messages/:id/permanent). */
-  deleteMessage(id: string): boolean {
+  async deleteMessage(id: string): Promise<boolean> {
     const idx = this.messages.findIndex((m) => m.id === id);
     if (idx === -1) return false;
     this.messages.splice(idx, 1);
@@ -167,17 +271,29 @@ export class Store {
 
   // ----- Security -----
 
-  setMessageSecurity(record: MessageSecurityRecord): void {
+  async setMessageSecurity(record: MessageSecurityRecord): Promise<void> {
     this.messageSecurity.set(record.messageId, record);
   }
 
-  getMessageSecurity(messageId: string): MessageSecurityRecord | undefined {
+  async getMessageSecurity(messageId: string): Promise<MessageSecurityRecord | undefined> {
     return this.messageSecurity.get(messageId);
+  }
+
+  async hasPhishingMessageFrom(address: string, domain: string | null): Promise<boolean> {
+    const normalized = address.toLowerCase();
+    return this.messages.some((m) => {
+      const fromLower = m.fromAddress.toLowerCase();
+      const sameAddress = fromLower === normalized;
+      const sameDomain = domain !== null && fromLower.split("@")[1] === domain;
+      if (!sameAddress && !sameDomain) return false;
+      const security = this.messageSecurity.get(m.id);
+      return security?.classification === "phishing";
+    });
   }
 
   // ----- Quarantäne -----
 
-  quarantineMessage(messageId: string, reason: string): QuarantineRecord {
+  async quarantineMessage(messageId: string, reason: string): Promise<QuarantineRecord> {
     const record: QuarantineRecord = {
       id: randomUUID(),
       messageId,
@@ -192,10 +308,10 @@ export class Store {
     // ist jetzt eine echte folders-Zeile pro User, kein fester String mehr.
     // Der User wird über die mail_account der Nachricht ermittelt (kein
     // eigenes userId-Feld auf messages, siehe db-schema.sql).
-    const message = this.getMessage(messageId);
-    const account = message ? this.getMailAccount(message.mailAccountId) : undefined;
-    const quarantaeneFolder = account ? this.getSystemFolder(account.userId, "quarantaene") : undefined;
-    if (quarantaeneFolder) this.moveMessage(messageId, quarantaeneFolder.id);
+    const message = await this.getMessage(messageId);
+    const account = message ? await this.getMailAccount(message.mailAccountId) : undefined;
+    const quarantaeneFolder = account ? await this.getSystemFolder(account.userId, "quarantaene") : undefined;
+    if (quarantaeneFolder) await this.moveMessage(messageId, quarantaeneFolder.id);
 
     return record;
   }
@@ -205,50 +321,63 @@ export class Store {
   // Tabelle zwar vorhanden, aber ohne Lese-Weg für die API. Letzter Eintrag
   // gewinnt, falls eine Nachricht (aktuell nicht möglich, aber nicht
   // ausgeschlossen) mehrfach in Quarantäne landet.
-  getQuarantineForMessage(messageId: string): QuarantineRecord | undefined {
+  async getQuarantineForMessage(messageId: string): Promise<QuarantineRecord | undefined> {
     return [...this.quarantine].reverse().find((q) => q.messageId === messageId);
   }
 
   // ----- Sicherheits-Audit-Log -----
-  // `security_audit_log` (db-schema.sql). Write-only in diesem Durchstich --
+  // `security_audit_log` (db-schema.sql). Write-only im Contract-Sinn --
   // kein GET-Endpunkt, weil `api-spec.yaml` dafür (noch) keinen vorsieht
-  // (siehe README "Annahmen"). Aktuell einziger Schreiber: der
-  // Auto-Delete-Pfad in src/mail/sync.ts (adult/gambling-Spam).
-  logSecurityAudit(input: Omit<SecurityAuditLogRecord, "id" | "timestamp">): SecurityAuditLogRecord {
+  // (siehe README "Annahmen"). `listSecurityAuditLog()` selbst ist nur für
+  // den Smoketest da (direkter Store-Zugriff, kein API-Pfad).
+  async logSecurityAudit(input: Omit<SecurityAuditLogRecord, "id" | "timestamp">): Promise<SecurityAuditLogRecord> {
     const record: SecurityAuditLogRecord = { id: randomUUID(), timestamp: new Date().toISOString(), ...input };
     this.securityAuditLog.push(record);
     return record;
   }
 
+  async listSecurityAuditLog(filter: { userId?: string; action?: string }): Promise<SecurityAuditLogRecord[]> {
+    return this.securityAuditLog
+      .filter((e) => (filter.userId ? e.userId === filter.userId : true))
+      .filter((e) => (filter.action ? e.action === filter.action : true));
+  }
+
   // ----- Verträge -----
 
-  insertContract(input: Omit<ContractRecord, "id">): ContractRecord {
+  async insertContract(input: Omit<ContractRecord, "id">): Promise<ContractRecord> {
     const record: ContractRecord = { id: randomUUID(), ...input };
     this.contracts.push(record);
     return record;
   }
 
-  listContracts(): ContractRecord[] {
+  async listContracts(): Promise<ContractRecord[]> {
     return this.contracts;
   }
 
-  getContract(id: string): ContractRecord | undefined {
+  async getContract(id: string): Promise<ContractRecord | undefined> {
     return this.contracts.find((c) => c.id === id);
+  }
+
+  async updateContract(id: string, patch: Partial<Omit<ContractRecord, "id">>): Promise<ContractRecord | undefined> {
+    const contract = await this.getContract(id);
+    if (!contract) return undefined;
+    Object.assign(contract, patch);
+    return contract;
   }
 
   // ----- KI-Zusammenfassung (Cache) -----
 
-  setMessageAiSummary(record: MessageAiSummaryRecord): void {
+  async setMessageAiSummary(record: MessageAiSummaryRecord): Promise<void> {
     this.messageAiSummary.set(record.messageId, record);
   }
 
-  getMessageAiSummary(messageId: string): MessageAiSummaryRecord | undefined {
+  async getMessageAiSummary(messageId: string): Promise<MessageAiSummaryRecord | undefined> {
     return this.messageAiSummary.get(messageId);
   }
 
   // ----- AI Capability -----
 
-  setUserAiCapability(record: UserAiCapabilityRecord): void {
+  async setUserAiCapability(record: UserAiCapabilityRecord): Promise<void> {
     this.userAiCapability.set(`${record.userId}:${record.platform}`, record);
   }
 
@@ -261,11 +390,11 @@ export class Store {
     return `${userId}:${senderAddress.toLowerCase()}`;
   }
 
-  hasSeenIban(userId: string, senderAddress: string, iban: string): boolean {
+  async hasSeenIban(userId: string, senderAddress: string, iban: string): Promise<boolean> {
     return this.ibanHistory.get(this.ibanHistoryKey(userId, senderAddress))?.has(iban) ?? false;
   }
 
-  recordIban(userId: string, senderAddress: string, iban: string): void {
+  async recordIban(userId: string, senderAddress: string, iban: string): Promise<void> {
     const key = this.ibanHistoryKey(userId, senderAddress);
     let seen = this.ibanHistory.get(key);
     if (!seen) {
@@ -277,13 +406,17 @@ export class Store {
 
   // ----- Ausgehende Sends (Grundlage für recipientReputation) -----
 
-  hasSentTo(userId: string, recipientAddress: string): boolean {
+  async hasSentTo(userId: string, recipientAddress: string): Promise<boolean> {
     const normalized = recipientAddress.toLowerCase();
     return this.outgoingSendLog.some((e) => e.userId === userId && e.recipientAddress.toLowerCase() === normalized);
   }
 
-  recordOutgoingSend(input: { userId: string; recipientAddress: string; timeSinceDraftShownMs?: number | null }): OutgoingSendLogRecord {
-    const wasNewRecipient = !this.hasSentTo(input.userId, input.recipientAddress);
+  async recordOutgoingSend(input: {
+    userId: string;
+    recipientAddress: string;
+    timeSinceDraftShownMs?: number | null;
+  }): Promise<OutgoingSendLogRecord> {
+    const wasNewRecipient = !(await this.hasSentTo(input.userId, input.recipientAddress));
     const record: OutgoingSendLogRecord = {
       id: randomUUID(),
       userId: input.userId,
@@ -297,7 +430,25 @@ export class Store {
   }
 }
 
-export const store = new Store();
+// `pg.Pool` baut beim Konstruieren keine Verbindung auf (lazy connect bei
+// der ersten Query) -- der Import von PostgresStore ist deshalb immer
+// sicher, auch ohne laufenden Postgres-Server. Nur INSTANZIIERT wird sie
+// aber nur, wenn DATABASE_URL gesetzt ist -- exakt dasselbe
+// "echt, wenn ENV gesetzt ist, sonst Zero-Config-Fallback"-Muster wie beim
+// Gmail-/IMAP-Adapter (siehe mail/sync.ts adapterForAccount()).
+function createStore(): Store {
+  const databaseUrl = process.env.DATABASE_URL;
+  return databaseUrl ? new PostgresStore(databaseUrl) : new InMemoryStore();
+}
+
+export const store: Store = createStore();
+
+/** Führt beim Start einmalig nötige Initialisierung aus (Schema-Migration
+ * für Postgres, No-Op für InMemoryStore). Muss vor dem ersten Store-Zugriff
+ * abgewartet werden (siehe index.ts/smoketest.ts). */
+export async function initStore(): Promise<void> {
+  if (store instanceof PostgresStore) await store.migrate();
+}
 
 // Default-Namen/Icons/Reihenfolge der System-Ordner — gespiegelt aus
 // contracts/design-tokens.json ("systemFolders.defaults"). quarantaene, spam
@@ -317,13 +468,13 @@ const SYSTEM_FOLDER_DEFAULTS: Array<{ systemKey: SystemFolderKey; name: string; 
 /** Legt einen Demo-User + Demo-Konto + die System-Ordner an, falls noch
  * keine existieren. Wird beim Serverstart aufgerufen, damit die API sofort
  * ohne Setup nutzbar ist. */
-export function ensureDemoUser(): { user: User; account: MailAccountRecord } {
-  let user = store.users[0];
-  if (!user) user = store.createUser("demo@driftmail.local");
+export async function ensureDemoUser(): Promise<{ user: User; account: MailAccountRecord }> {
+  let user = await store.getFirstUser();
+  if (!user) user = await store.createUser("demo@driftmail.local");
 
-  let account = store.mailAccounts.find((a) => a.userId === user.id);
+  let account = await store.getMailAccountByUserId(user.id);
   if (!account) {
-    account = store.createMailAccount({
+    account = await store.createMailAccount({
       userId: user.id,
       provider: "gmail",
       emailAddress: "demo@driftmail.local",
@@ -334,9 +485,9 @@ export function ensureDemoUser(): { user: User; account: MailAccountRecord } {
     });
   }
 
-  if (store.listFolders(user.id).length === 0) {
-    SYSTEM_FOLDER_DEFAULTS.forEach((def, index) => {
-      store.createFolder({
+  if ((await store.listFolders(user.id)).length === 0) {
+    for (const [index, def] of SYSTEM_FOLDER_DEFAULTS.entries()) {
+      await store.createFolder({
         userId: user.id,
         name: def.name,
         icon: def.icon,
@@ -344,7 +495,7 @@ export function ensureDemoUser(): { user: User; account: MailAccountRecord } {
         systemKey: def.systemKey,
         sortOrder: index,
       });
-    });
+    }
   }
 
   // Demo-Seed für den Empfänger-Reputations-Lookup (src/lookups/
@@ -352,8 +503,8 @@ export function ensureDemoUser(): { user: User; account: MailAccountRecord } {
   // (Fixture 4, harmlose Kollegin-Mail) bereits einmal erfolgreich
   // angeschrieben -- macht den "safe"-Fall im Mock ohne echten Versand-Pfad
   // testbar. Reiner Beispieldaten-Seed, KEINE echte Versandhistorie.
-  if (!store.hasSentTo(user.id, "kollegin@example.com")) {
-    store.recordOutgoingSend({ userId: user.id, recipientAddress: "kollegin@example.com" });
+  if (!(await store.hasSentTo(user.id, "kollegin@example.com"))) {
+    await store.recordOutgoingSend({ userId: user.id, recipientAddress: "kollegin@example.com" });
   }
 
   return { user, account };

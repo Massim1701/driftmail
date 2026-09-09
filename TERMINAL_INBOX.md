@@ -79,3 +79,15 @@ Keine davon ist ein Blocker fuer irgendeinen Track. Falls Web/Massimo eine Praef
 Reihenfolge danach (aus derselben Logik): 2. Auth (Multi-User ergibt ohne echte Persistenz sowieso wenig Sinn), 3. externe Lookups an echte Dienste (WHOIS/Spamhaus/fraud_alerts), 4. echte KI-Funktionen fuer Track D/E (extractContract/summarize/draftReply) -- letzteres zuletzt, da es am wenigsten von den anderen drei abhaengt und eigenstaendig nachgezogen werden kann.
 
 Bitte wie vorgeschlagen mit Persistenz starten. Bei Postgres-Umstellung: Store-Schicht ist laut eigener Doku "1:1 an db-schema.sql orientiert, austauschbar" -- sollte den Wechsel erleichtern. Kein Blocker, einfach loslegen.
+
+---
+
+[2026-09-09] [offen] [Persistenz erledigt, Statusupdate] — Echte Postgres-Anbindung umgesetzt (`backend/src/db/postgresStore.ts`), aktiviert über `DATABASE_URL` (ungesetzt -> weiterhin In-Memory-Fallback, gleiches Muster wie Gmail/IMAP vs. Fixture). Details/Design-Entscheidungen ausführlich in SYNC.md.
+
+Kurzfassung: `Store`-Interface (async) + `InMemoryStore`/`PostgresStore` als zwei Implementierungen, alle Aufrufer (10 Dateien: routes/*, mail/sync.ts, lookups/*, smoketest.ts) auf `await` umgestellt -- TypeScript hat dabei jede fehlende Stelle zuverlässig gefunden, nichts geraten. Drei kleinere Contract-Ergänzungen (`messages.provider_message_id`, neue Tabellen `iban_sightings` + `auto_deleted_message_headers` für zwei bisher bewusst In-Memory-only Mechanismen, die sonst bei echter Persistenz trotzdem verloren gegangen wären) plus `IF NOT EXISTS` auf allen `CREATE TABLE`/`CREATE INDEX` im gesamten Schema (macht `db-schema.sql` zu einem einfachen, wiederholbaren Migrations-Mechanismus).
+
+Echt verifiziert, nicht nur behauptet: lokal Postgres 16 installiert (kein Docker vorhanden), Smoketest läuft identisch grün mit und ohne `DATABASE_URL`. Zusätzlich zweimal hintereinander `node dist/index.js` gegen dieselbe DB gestartet -- zweiter Start zeigt sofort die Daten aus dem ersten (Dedupe verhindert erneuten Import), was mit dem alten In-Memory-Store unmöglich gewesen wäre.
+
+Bekannte Grenzen (README "Persistenz" dokumentiert, kein Blocker): `updateContract()` kann "Feld fehlt" nicht von "Feld = null" unterscheiden (COALESCE-Limitierung, für den einzigen Aufrufer unkritisch), keine Transaktionen über mehrere Schreiboperationen, kein Pool-Tuning. Track D (`contracts-logic/`) bleibt bei SQLite (war schon vorher echte Datei-Persistenz, kein Teil dieses Schritts).
+
+Nächster Schritt laut Eurer Reihenfolge wäre Auth -- warte auf Massimos Go, bevor ich den nächsten großen Umbau anfange.

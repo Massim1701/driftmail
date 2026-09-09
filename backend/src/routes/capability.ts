@@ -9,14 +9,14 @@ export const capabilityRouter = Router();
 // (user_ai_capability, db-schema.sql). userId ist im Contract nicht Teil
 // des Bodys -> in diesem Skeleton wird der Demo-User verwendet
 // (siehe README "Annahmen" / SYNC.md "Offene Fragen").
-capabilityRouter.post("/capability-check", (req, res) => {
+capabilityRouter.post("/capability-check", async (req, res) => {
   const body = req.body as Partial<ApiUserAiCapability>;
   if (!body.platform || !body.activeMode) {
     return res.status(400).json({ error: "platform und activeMode sind erforderlich" });
   }
 
-  const { user } = ensureDemoUser();
-  store.setUserAiCapability({
+  const { user } = await ensureDemoUser();
+  await store.setUserAiCapability({
     userId: user.id,
     platform: body.platform,
     deviceModel: body.deviceModel ?? null,

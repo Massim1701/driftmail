@@ -3,13 +3,13 @@
 
 -- ===== Users & Accounts =====
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
-CREATE TABLE mail_accounts (
+CREATE TABLE IF NOT EXISTS mail_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     provider TEXT NOT NULL CHECK (provider IN ('gmail', 'imap')),
@@ -30,7 +30,7 @@ CREATE TABLE mail_accounts (
 -- umbenennbar (siehe design-tokens.json systemFolders.defaults), das wird
 -- app-seitig durchgesetzt, nicht per Constraint.
 
-CREATE TABLE folders (
+CREATE TABLE IF NOT EXISTS folders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -41,14 +41,19 @@ CREATE TABLE folders (
     UNIQUE (user_id, system_key)
   );
 
-CREATE INDEX idx_folders_user ON folders (user_id);
+CREATE INDEX IF NOT EXISTS idx_folders_user ON folders (user_id);
 
 -- ===== Messages =====
 
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     mail_account_id UUID NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
     message_id_header TEXT NOT NULL,
+    -- Provider-natives Handle fuer Papierkorb/Loeschen-Spiegelung (Terminal
+    -- 09.09., siehe backend/README.md "Papierkorb / Loeschen"): Gmail-
+    -- Message-ID bzw. IMAP-UID, NICHT der RFC822 Message-ID-Header oben.
+    -- NULL bei Nachrichten ohne echtes Postfach dahinter (Fixtures).
+    provider_message_id TEXT,
     from_address TEXT NOT NULL,
     from_display_name TEXT,
     reply_to_address TEXT,
@@ -60,11 +65,11 @@ CREATE TABLE messages (
     UNIQUE (mail_account_id, message_id_header)
   );
 
-CREATE INDEX idx_messages_account_folder ON messages (mail_account_id, folder_id);
+CREATE INDEX IF NOT EXISTS idx_messages_account_folder ON messages (mail_account_id, folder_id);
 
 -- ===== Security-Analyse (1:1 zu messages) =====
 
-CREATE TABLE message_security (
+CREATE TABLE IF NOT EXISTS message_security (
     message_id UUID PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
     spf_status TEXT CHECK (spf_status IN ('pass', 'fail', 'none')),
     dkim_status TEXT CHECK (dkim_status IN ('pass', 'fail', 'none')),
@@ -94,7 +99,7 @@ CREATE TABLE message_security (
     analyzed_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
-CREATE TABLE message_links (
+CREATE TABLE IF NOT EXISTS message_links (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     display_text TEXT,
@@ -105,7 +110,7 @@ CREATE TABLE message_links (
 
 -- ===== Unsubscribe (nur RFC 8058, nie Body-Link) =====
 
-CREATE TABLE unsubscribe_actions (
+CREATE TABLE IF NOT EXISTS unsubscribe_actions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     method TEXT NOT NULL CHECK (method IN ('list_unsubscribe_header', 'manual')),
@@ -116,7 +121,7 @@ CREATE TABLE unsubscribe_actions (
 
 -- ===== Quarantäne =====
 
-CREATE TABLE quarantine (
+CREATE TABLE IF NOT EXISTS quarantine (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     quarantined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -127,7 +132,7 @@ CREATE TABLE quarantine (
 
 -- ===== Audit-Log =====
 
-CREATE TABLE security_audit_log (
+CREATE TABLE IF NOT EXISTS security_audit_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
@@ -137,7 +142,7 @@ CREATE TABLE security_audit_log (
 
 -- ===== Verträge & Reminder =====
 
-CREATE TABLE contracts (
+CREATE TABLE IF NOT EXISTS contracts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
@@ -150,7 +155,7 @@ CREATE TABLE contracts (
     extracted_confidence NUMERIC(3,2)
   );
 
-CREATE TABLE reminders (
+CREATE TABLE IF NOT EXISTS reminders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     contract_id UUID NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
     remind_at TIMESTAMPTZ NOT NULL,
@@ -160,7 +165,7 @@ CREATE TABLE reminders (
 
 -- ===== Signaturen =====
 
-CREATE TABLE signatures (
+CREATE TABLE IF NOT EXISTS signatures (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     mail_account_id UUID NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
     content_html TEXT NOT NULL,
@@ -171,7 +176,7 @@ CREATE TABLE signatures (
 
 -- ===== KI: Zusammenfassungen & Provider-Konfiguration =====
 
-CREATE TABLE message_ai_summary (
+CREATE TABLE IF NOT EXISTS message_ai_summary (
     message_id UUID PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
     summary_text TEXT,
     action_required BOOLEAN NOT NULL DEFAULT false,
@@ -181,7 +186,7 @@ CREATE TABLE message_ai_summary (
     generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
-CREATE TABLE ai_provider_config (
+CREATE TABLE IF NOT EXISTS ai_provider_config (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_type TEXT NOT NULL CHECK (task_type IN ('classification', 'extraction', 'summary', 'reply_draft')),
     primary_provider TEXT NOT NULL, -- 'on_device' | 'groq' | 'gemini' | 'openrouter'
@@ -190,7 +195,7 @@ CREATE TABLE ai_provider_config (
     quota_reset_at TIMESTAMPTZ
   );
 
-CREATE TABLE user_ai_capability (
+CREATE TABLE IF NOT EXISTS user_ai_capability (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     platform TEXT NOT NULL CHECK (platform IN ('ios', 'android', 'windows', 'web')),
     device_model TEXT,
@@ -205,7 +210,7 @@ CREATE TABLE user_ai_capability (
 -- Wird beim Onboarding und in den Einstellungen gesetzt. Routing-Logik
 -- prueft dies VOR der ai_provider_config-Kaskade: bei 'byok' geht der
 -- Call an den eigenen Schluessel des Users statt On-Device/Free-Tier.
-CREATE TABLE user_ai_preference (
+CREATE TABLE IF NOT EXISTS user_ai_preference (
     user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     mode TEXT NOT NULL DEFAULT 'free' CHECK (mode IN ('free', 'byok')),
     byok_provider TEXT CHECK (byok_provider IN ('anthropic', 'openai', 'google', 'other')),
@@ -215,7 +220,7 @@ CREATE TABLE user_ai_preference (
 
 -- ===== Sicherheit: Anhang-Scan =====
 
-CREATE TABLE message_attachments (
+CREATE TABLE IF NOT EXISTS message_attachments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     filename TEXT NOT NULL,
@@ -228,7 +233,7 @@ CREATE TABLE message_attachments (
 
 -- ===== Sicherheit: Tracking-Schutz (Spionage-Pixel) =====
 
-CREATE TABLE user_privacy_settings (
+CREATE TABLE IF NOT EXISTS user_privacy_settings (
     user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     block_remote_images BOOLEAN NOT NULL DEFAULT true,
     block_tracking_links BOOLEAN NOT NULL DEFAULT true,
@@ -237,7 +242,7 @@ CREATE TABLE user_privacy_settings (
 
 -- ===== Sicherheit: Account-Schutz (driftmail selbst) =====
 
-CREATE TABLE user_security_settings (
+CREATE TABLE IF NOT EXISTS user_security_settings (
     user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     mfa_enabled BOOLEAN NOT NULL DEFAULT false,
     encrypted_mfa_secret TEXT,
@@ -245,7 +250,7 @@ CREATE TABLE user_security_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
-CREATE TABLE user_sessions (
+CREATE TABLE IF NOT EXISTS user_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     device_name TEXT,
@@ -258,7 +263,7 @@ CREATE TABLE user_sessions (
 
 -- ===== Sicherheit: Betrugswarnung =====
 
-CREATE TABLE fraud_alerts (
+CREATE TABLE IF NOT EXISTS fraud_alerts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
     alert_type TEXT NOT NULL CHECK (alert_type IN ('new_iban', 'ceo_fraud_pattern', 'urgent_payment_request')),
@@ -268,7 +273,7 @@ CREATE TABLE fraud_alerts (
 
 -- ===== Datenaufbewahrung (DSGVO) =====
 
-CREATE TABLE data_retention_policy (
+CREATE TABLE IF NOT EXISTS data_retention_policy (
     user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     delete_spam_after_days INTEGER NOT NULL DEFAULT 30,
     delete_trash_after_days INTEGER NOT NULL DEFAULT 30,
@@ -278,7 +283,7 @@ CREATE TABLE data_retention_policy (
 
 -- ===== Paketdienst-Erkennung =====
 
-CREATE TABLE shipments (
+CREATE TABLE IF NOT EXISTS shipments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
@@ -295,7 +300,7 @@ CREATE TABLE shipments (
 -- urspruengliche ALTER-TABLE-Migration fuer 'phishing_content' ist hier
 -- schon direkt in den CHECK eingearbeitet, keine separate Migration noetig.
 
-CREATE TABLE outgoing_send_log (
+CREATE TABLE IF NOT EXISTS outgoing_send_log (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   recipient_address TEXT NOT NULL,
@@ -304,7 +309,7 @@ CREATE TABLE outgoing_send_log (
   was_new_recipient BOOLEAN NOT NULL DEFAULT false
 );
 
-CREATE TABLE send_abuse_flags (
+CREATE TABLE IF NOT EXISTS send_abuse_flags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   flag_reason TEXT NOT NULL CHECK (flag_reason IN
@@ -313,4 +318,33 @@ CREATE TABLE send_abuse_flags (
   -- bei flag_reason = 'phishing_content' IMMER 'send_blocked', nie 'warned'/'rate_limited'.
   action_taken TEXT NOT NULL DEFAULT 'warned' CHECK (action_taken IN ('warned', 'rate_limited', 'send_blocked')),
   resolved BOOLEAN NOT NULL DEFAULT false
+);
+
+-- ===== IBAN-Historie je Absender (Grundlage fuer containsNewIban) =====
+-- Kleinere Ergaenzung (Terminal 09.09., echte Persistenz statt In-Memory-Map,
+-- siehe backend/README.md "Persistenz"): "neu" heisst noch nie zuvor von
+-- diesem Absender an diesen User gesehen (SYNC.md 08.09., Web-Antwort).
+-- Bewusst ohne eigene id/Historie-Zeitreihe -- nur "wurde diese IBAN von
+-- diesem Absender an diesen User schon einmal gesehen" wird gebraucht.
+
+CREATE TABLE IF NOT EXISTS iban_sightings (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sender_address TEXT NOT NULL,
+  iban TEXT NOT NULL,
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, sender_address, iban)
+);
+
+-- ===== Dedupe-Fingerprint fuer den Auto-Delete-Pfad (adult/gambling-Spam) =====
+-- Kleinere Ergaenzung (Terminal 09.09.): diese Mails bekommen laut
+-- WEB_INBOX.md 08.09. NIE eine messages-Zeile (siehe backend/src/mail/sync.ts),
+-- muessen aber trotzdem als "schon gesehen" markierbar sein, damit ein
+-- wiederholter Sync (z.B. Server-Neustart + erneutes POST /internal/sync)
+-- dieselbe Mail nicht ein zweites Mal loescht/loggt. Enthaelt bewusst keinen
+-- Inhalt, nur den Dedupe-Schluessel.
+
+CREATE TABLE IF NOT EXISTS auto_deleted_message_headers (
+  mail_account_id UUID NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
+  message_id_header TEXT NOT NULL,
+  PRIMARY KEY (mail_account_id, message_id_header)
 );

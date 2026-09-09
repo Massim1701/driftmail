@@ -32,11 +32,11 @@ export class StoreIbanHistoryCheck implements IbanHistoryCheck {
 
     let foundNew = false;
     for (const iban of ibans) {
-      if (!this.store.hasSeenIban(userId, senderAddress, iban)) foundNew = true;
+      if (!(await this.store.hasSeenIban(userId, senderAddress, iban))) foundNew = true;
       // IBAN merken, unabhängig davon ob neu oder nicht -- damit ein
       // wiederholtes Vorkommen beim nächsten Aufruf korrekt als "nicht neu"
       // erkannt wird.
-      this.store.recordIban(userId, senderAddress, iban);
+      await this.store.recordIban(userId, senderAddress, iban);
     }
     return foundNew;
   }

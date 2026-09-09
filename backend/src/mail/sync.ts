@@ -56,9 +56,9 @@ export function adapterForAccount(account: MailAccountRecord): MailAdapter {
  * der Mock-Klassifikation. Löst gegen die System-Ordner des Kontobesitzers
  * auf (folders.system_key, siehe ensureDemoUser) statt gegen einen festen
  * Enum-String — Contract-Änderung, siehe SYNC.md Commit 734781e. */
-function resolveFolderId(classification: string, userId: string): string {
+async function resolveFolderId(classification: string, userId: string): Promise<string> {
   const key: SystemFolderKey = classification === "phishing" || classification === "spam" ? "spam" : "sonstiges";
-  const folder = store.getSystemFolder(userId, key);
+  const folder = await store.getSystemFolder(userId, key);
   if (!folder) {
     throw new Error(
       `Systemordner '${key}' fehlt für User ${userId} — ensureDemoUser() muss vor dem ersten Sync gelaufen sein.`,
@@ -69,7 +69,14 @@ function resolveFolderId(classification: string, userId: string): string {
 
 export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, limit = 20): Promise<{ imported: number; autoDeleted: number }> {
   const adapter = adapterForAccount(account);
+  // Echte Persistenz (Terminal 09.09.): `account.syncStatus` wird weiterhin
+  // lokal mutiert, DAMIT die aufrufenden Routen (routes/internal.ts) den
+  // aktuellen Wert direkt aus demselben Objekt lesen können, ohne erneut
+  // zu queryen -- zusätzlich über store.updateMailAccount() persistiert,
+  // sonst wäre der Status nach einem Neustart wieder "pending" (bei
+  // PostgresStore) bzw. schlicht falsch (bei einer zweiten Objektreferenz).
   account.syncStatus = "syncing";
+  await store.updateMailAccount(account.id, { syncStatus: "syncing" });
 
   let imported = 0;
   let autoDeleted = 0;
@@ -77,8 +84,8 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
     const fetched = await adapter.fetchRecentMessages(limit);
 
     for (const mail of fetched) {
-      if (store.findMessageByHeader(account.id, mail.messageIdHeader)) continue; // dedupe, siehe UNIQUE-Constraint im Schema
-      if (store.wasAutoDeleted(account.id, mail.messageIdHeader)) continue; // dedupe für den Auto-Delete-Pfad, siehe store.ts
+      if (await store.findMessageByHeader(account.id, mail.messageIdHeader)) continue; // dedupe, siehe UNIQUE-Constraint im Schema
+      if (await store.wasAutoDeleted(account.id, mail.messageIdHeader)) continue; // dedupe für den Auto-Delete-Pfad, siehe store.ts
 
       const security = await ai.analyzeMail(mail.bodyText ?? "", mail.rawHeaders);
 
@@ -114,19 +121,19 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
       // `security_audit_log` (action 'auto_deleted_adult_gambling_spam'),
       // ohne Message-Referenz (messageId=null, da nie angelegt).
       if (security.classification === "spam" && (security.spamSubcategory === "adult" || security.spamSubcategory === "gambling")) {
-        store.logSecurityAudit({
+        await store.logSecurityAudit({
           userId: account.userId,
           messageId: null,
           action: "auto_deleted_adult_gambling_spam",
         });
-        store.markAutoDeleted(account.id, mail.messageIdHeader);
+        await store.markAutoDeleted(account.id, mail.messageIdHeader);
         autoDeleted++;
         continue;
       }
 
-      const folderId = resolveFolderId(security.classification, account.userId);
+      const folderId = await resolveFolderId(security.classification, account.userId);
 
-      const message = store.insertMessage({
+      const message = await store.insertMessage({
         mailAccountId: account.id,
         messageIdHeader: mail.messageIdHeader,
         providerMessageId: mail.providerMessageId,
@@ -140,20 +147,20 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         rawHeaders: mail.rawHeaders,
       });
 
-      store.setMessageSecurity({
+      await store.setMessageSecurity({
         messageId: message.id,
         ...security,
         analyzedAt: new Date().toISOString(),
       });
 
       if (security.classification === "phishing") {
-        store.quarantineMessage(message.id, "Automatisch: Phishing-Klassifikation (Mock-KI)");
+        await store.quarantineMessage(message.id, "Automatisch: Phishing-Klassifikation (Mock-KI)");
       }
 
       // Vertragsdaten best-effort extrahieren (Mock).
       const contractData = await ai.extractContract(mail.bodyText ?? "");
       if (contractData) {
-        store.insertContract({
+        await store.insertContract({
           userId: account.userId,
           messageId: message.id,
           providerName: contractData.providerName,
@@ -171,8 +178,10 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
 
     account.syncStatus = "ok";
     account.lastSyncedAt = new Date().toISOString();
+    await store.updateMailAccount(account.id, { syncStatus: "ok", lastSyncedAt: account.lastSyncedAt });
   } catch (err) {
     account.syncStatus = "error";
+    await store.updateMailAccount(account.id, { syncStatus: "error" });
     throw err;
   }
 

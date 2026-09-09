@@ -19,7 +19,7 @@ import type { MessageRecord } from "../types";
 // keine `providerMessageId` hat (Fixture-Ursprung).
 async function mirrorToProvider(message: MessageRecord, action: "trash" | "permanent"): Promise<void> {
   if (!message.providerMessageId) return;
-  const account = store.getMailAccount(message.mailAccountId);
+  const account = await store.getMailAccount(message.mailAccountId);
   if (!account) return;
   try {
     const adapter = adapterForAccount(account);
@@ -72,7 +72,7 @@ messagesRouter.post("/messages/draft/phishing-check", async (req, res) => {
   // checkDraftForPhishing() (SYNC.md 08.09., Web-Antwort), ersetzt den
   // von Track B gelieferten festen "unknown"-Wert. Mock-Implementierung,
   // siehe src/lookups/recipientReputationMock.ts.
-  const { user } = ensureDemoUser();
+  const { user } = await ensureDemoUser();
   result.recipientReputation = await recipientReputationLookup.lookup(user.id, recipientAddress);
 
   res.json(result);
@@ -81,51 +81,55 @@ messagesRouter.post("/messages/draft/phishing-check", async (req, res) => {
 // GET /messages?folderId=&accountId= — siehe api-spec.yaml
 // CONTRACT-ÄNDERUNG (SYNC.md, Commit 734781e): Query-Param `folder` (Enum)
 // -> `folderId` (UUID, verweist auf eine Zeile in folders).
-messagesRouter.get("/messages", (req, res) => {
+messagesRouter.get("/messages", async (req, res) => {
   const folderId = typeof req.query.folderId === "string" ? req.query.folderId : undefined;
   const accountId = typeof req.query.accountId === "string" ? req.query.accountId : undefined;
 
-  if (folderId && !store.getFolder(folderId)) {
+  if (folderId && !(await store.getFolder(folderId))) {
     return res.status(400).json({ error: `ungültiger folderId-Wert: ${folderId}` });
   }
 
-  const messages = store.listMessages({ folderId, accountId });
-  res.json(messages.map((m) => toApiMessage(m, store.getMessageSecurity(m.id))));
+  const messages = await store.listMessages({ folderId, accountId });
+  res.json(await Promise.all(messages.map(async (m) => toApiMessage(m, await store.getMessageSecurity(m.id)))));
 });
 
 // GET /messages/:messageId — siehe api-spec.yaml
-messagesRouter.get("/messages/:messageId", (req, res) => {
-  const message = store.getMessage(req.params.messageId);
+messagesRouter.get("/messages/:messageId", async (req, res) => {
+  const message = await store.getMessage(req.params.messageId);
   if (!message) return res.status(404).json({ error: "message nicht gefunden" });
 
-  res.json(toApiMessageDetail(message, store.getMessageSecurity(message.id), store.getQuarantineForMessage(message.id)));
+  const [security, quarantine] = await Promise.all([
+    store.getMessageSecurity(message.id),
+    store.getQuarantineForMessage(message.id),
+  ]);
+  res.json(toApiMessageDetail(message, security, quarantine));
 });
 
 // POST /messages/:messageId/quarantine — siehe api-spec.yaml
-messagesRouter.post("/messages/:messageId/quarantine", (req, res) => {
-  const message = store.getMessage(req.params.messageId);
+messagesRouter.post("/messages/:messageId/quarantine", async (req, res) => {
+  const message = await store.getMessage(req.params.messageId);
   if (!message) return res.status(404).json({ error: "message nicht gefunden" });
 
-  const record = store.quarantineMessage(message.id, "manuell durch User");
+  const record = await store.quarantineMessage(message.id, "manuell durch User");
   res.json(record);
 });
 
 // POST /messages/:messageId/move — siehe api-spec.yaml (neu durch die
 // Ordner-Contract-Änderung, SYNC.md Commit 734781e)
-messagesRouter.post("/messages/:messageId/move", (req, res) => {
-  const message = store.getMessage(req.params.messageId);
+messagesRouter.post("/messages/:messageId/move", async (req, res) => {
+  const message = await store.getMessage(req.params.messageId);
   if (!message) return res.status(404).json({ error: "message nicht gefunden" });
 
   const folderId = req.body?.folderId;
   if (typeof folderId !== "string" || !folderId) {
     return res.status(400).json({ error: "folderId ist erforderlich" });
   }
-  if (!store.getFolder(folderId)) {
+  if (!(await store.getFolder(folderId))) {
     return res.status(400).json({ error: `Ordner nicht gefunden: ${folderId}` });
   }
 
-  const updated = store.moveMessage(message.id, folderId)!;
-  res.json(toApiMessage(updated, store.getMessageSecurity(updated.id)));
+  const updated = (await store.moveMessage(message.id, folderId))!;
+  res.json(toApiMessage(updated, await store.getMessageSecurity(updated.id)));
 });
 
 // DELETE /messages/:messageId — Mail in den Papierkorb verschieben (soft
@@ -135,11 +139,11 @@ messagesRouter.post("/messages/:messageId/move", (req, res) => {
 // nur das Ziel ist fest der Papierkorb-Ordner des Accounts statt eines
 // beliebigen, im Body übergebenen Ordners.
 messagesRouter.delete("/messages/:messageId", async (req, res) => {
-  const message = store.getMessage(req.params.messageId);
+  const message = await store.getMessage(req.params.messageId);
   if (!message) return res.status(404).json({ error: "message nicht gefunden" });
 
-  const account = store.getMailAccount(message.mailAccountId);
-  const papierkorb = account ? store.getSystemFolder(account.userId, "papierkorb") : undefined;
+  const account = await store.getMailAccount(message.mailAccountId);
+  const papierkorb = account ? await store.getSystemFolder(account.userId, "papierkorb") : undefined;
   if (!papierkorb) {
     // Sollte praktisch nie passieren (ensureDemoUser() legt den Ordner
     // immer an), aber sauberer 500 statt eines "undefined"-Absturzes falls
@@ -152,8 +156,9 @@ messagesRouter.delete("/messages/:messageId", async (req, res) => {
   // siehe mirrorToProvider oben): Gmail `messages.trash` bzw. IMAP
   // `\Deleted`-Flag.
   await mirrorToProvider(message, "trash");
-  store.moveMessage(message.id, papierkorb.id);
-  res.status(200).json(toApiMessage(store.getMessage(message.id)!, store.getMessageSecurity(message.id)));
+  await store.moveMessage(message.id, papierkorb.id);
+  const updated = (await store.getMessage(message.id))!;
+  res.status(200).json(toApiMessage(updated, await store.getMessageSecurity(message.id)));
 });
 
 // DELETE /messages/:messageId/permanent — Mail endgültig löschen, siehe
@@ -174,11 +179,11 @@ messagesRouter.delete("/messages/:messageId", async (req, res) => {
 // (Gmail erlaubt "endgültig löschen" ebenfalls nur aus dem Papierkorb
 // heraus über die normale UI).
 messagesRouter.delete("/messages/:messageId/permanent", async (req, res) => {
-  const message = store.getMessage(req.params.messageId);
+  const message = await store.getMessage(req.params.messageId);
   if (!message) return res.status(404).json({ error: "message nicht gefunden" });
 
-  const account = store.getMailAccount(message.mailAccountId);
-  const papierkorb = account ? store.getSystemFolder(account.userId, "papierkorb") : undefined;
+  const account = await store.getMailAccount(message.mailAccountId);
+  const papierkorb = account ? await store.getSystemFolder(account.userId, "papierkorb") : undefined;
   if (!papierkorb || message.folderId !== papierkorb.id) {
     return res.status(400).json({
       error: "endgültiges Löschen ist nur für Nachrichten im Papierkorb erlaubt -- zuerst DELETE /messages/{messageId} (in den Papierkorb verschieben)",
@@ -190,7 +195,7 @@ messagesRouter.delete("/messages/:messageId/permanent", async (req, res) => {
   // `\Deleted`-Flag + Expunge. VOR dem lokalen `deleteMessage()`, weil
   // `message.providerMessageId` danach nicht mehr auflösbar wäre.
   await mirrorToProvider(message, "permanent");
-  store.deleteMessage(message.id);
+  await store.deleteMessage(message.id);
   res.status(200).json({ deleted: true });
 });
 
@@ -198,10 +203,10 @@ messagesRouter.delete("/messages/:messageId/permanent", async (req, res) => {
 // Wird on-demand berechnet (per User-Klick "Was wollen die von mir?") und
 // in message_ai_summary gecacht, wie in ai-adapter-interface.ts beschrieben.
 messagesRouter.get("/messages/:messageId/summary", async (req, res) => {
-  const message = store.getMessage(req.params.messageId);
+  const message = await store.getMessage(req.params.messageId);
   if (!message) return res.status(404).json({ error: "message nicht gefunden" });
 
-  const cached = store.getMessageAiSummary(message.id);
+  const cached = await store.getMessageAiSummary(message.id);
   if (cached) return res.json(toApiMailSummary(cached));
 
   const summary = await aiAdapter.summarize(message.bodyText ?? "");
@@ -215,13 +220,13 @@ messagesRouter.get("/messages/:messageId/summary", async (req, res) => {
     source,
     generatedAt: new Date().toISOString(),
   };
-  store.setMessageAiSummary(record);
+  await store.setMessageAiSummary(record);
   res.json(toApiMailSummary(record));
 });
 
 // POST /messages/:messageId/reply-draft — siehe api-spec.yaml
 messagesRouter.post("/messages/:messageId/reply-draft", async (req, res) => {
-  const message = store.getMessage(req.params.messageId);
+  const message = await store.getMessage(req.params.messageId);
   if (!message) return res.status(404).json({ error: "message nicht gefunden" });
 
   const draftText = await aiAdapter.draftReply({

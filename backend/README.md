@@ -52,11 +52,18 @@ Erster Durchstich der Backend-API gegen `contracts/api-spec.yaml` und
 > austauschbare Lookup-Adapter. Details siehe Abschnitt "Externe
 > Lookup-Adapter" unten.
 
+> **Echte Persistenz (2026-09-09, Web-Priorisierung "Persistenz zuerst",
+> siehe SYNC.md/TERMINAL_INBOX.md):** der bisherige In-Memory-Store ist
+> durch eine echte Postgres-Anbindung ersetzbar (`DATABASE_URL` setzen),
+> mit dem bisherigen In-Memory-Verhalten als Zero-Config-Fallback ohne
+> DB-Setup. Details siehe Abschnitt "Persistenz" unten.
+
 ```
 Mail-Adapter (Gmail/IMAP/Fixture) -> Sync-Pipeline -> Track-B-Klassifikation
   -> externe Lookup-Adapter (Domain-/IP-Reputation, IBAN-Historie)
   -> Ordner-Zuordnung + ggf. Auto-Quarantäne (phishing) / Auto-Delete
-     (adult/gambling-Spam) -> API (GET/POST wie im Contract)
+     (adult/gambling-Spam) -> Postgres oder In-Memory (siehe "Persistenz")
+     -> API (GET/POST wie im Contract)
 ```
 
 Node/TypeScript + Express. Kein produktionsreifer Code, sondern ein
@@ -76,6 +83,15 @@ npm install
 npm run dev        # tsx watch, http://localhost:3000
 # oder:
 npm run build && npm start
+```
+
+Ohne weitere Konfiguration läuft das mit In-Memory-Persistenz (Daten gehen
+bei jedem Neustart verloren). Für echte Postgres-Persistenz `DATABASE_URL`
+setzen -- siehe Abschnitt "Persistenz" unten für Details, Kurzfassung:
+
+```bash
+createdb driftmail_dev   # einmalig, braucht einen laufenden Postgres-Server
+DATABASE_URL="postgresql://<user>@localhost:5432/driftmail_dev" npm run dev
 ```
 
 Ohne jede Konfiguration synct der Server beim Start automatisch ein
@@ -175,8 +191,13 @@ curl -X POST http://localhost:3000/v1/capability-check \
 - **Fixture-Mail-Adapter** (`src/mail/fixtureAdapter.ts`): Standardpfad
   ohne echte Zugangsdaten, damit das Skeleton ohne Setup läuft und
   testbar ist (siehe "Annahmen" unten).
-- **Persistenz**: In-Memory-Store (`src/db/store.ts`) statt echtem
-  Postgres, siehe "Annahmen".
+- **Persistenz** (integriert 09.09., siehe eigener Abschnitt "Persistenz"
+  unten): echte Postgres-Anbindung (`src/db/postgresStore.ts`), wenn
+  `DATABASE_URL` gesetzt ist. Ohne `DATABASE_URL` weiterhin der
+  ursprüngliche In-Memory-Store (`src/db/store.ts`, `InMemoryStore`) als
+  Zero-Config-Fallback — Daten gehen dann bei jedem Neustart verloren,
+  aber kein DB-Setup nötig, exakt dasselbe Muster wie beim Gmail-/IMAP-
+  Adapter (echt, wenn ENV gesetzt ist, sonst Fixture).
 - **Auth**: keine — kein Login/Session/Token-Handling in diesem
   Durchstich, ein fester "Demo-User" wird beim Start angelegt.
 - **Extraktion/Zusammenfassung/Antwortentwurf** (`src/ai/mockAdapter.ts` ->
@@ -229,11 +250,12 @@ liegt, und sei es nur für einen Tick. Nachteil: ohne eine echte
 `messages`-Zeile kann das normale Dedupe (`UNIQUE (mail_account_id,
 message_id_header)`) diese Mails nicht wiedererkennen — ein erneuter Sync
 (z.B. wiederholtes `POST /internal/sync`) hätte sie sonst bei jedem Lauf
-erneut "entdeckt". Behelf dafür: `store.autoDeletedHeaders`
-(In-Memory-`Set<mailAccountId:messageIdHeader>`, kein Mail-Inhalt) in
-`src/db/store.ts` — reines Prozess-Gedächtnis, geht bei Neustart verloren;
-für eine echte Postgres-Anbindung müsste das durch eine leichtgewichtige,
-inhaltslose Tabelle (nur Header-Hash) ersetzt werden.
+erneut "entdeckt". Behelf dafür: `store.wasAutoDeleted()`/`markAutoDeleted()`
+— bei `InMemoryStore` ein reines Prozess-Gedächtnis
+(`Set<mailAccountId:messageIdHeader>`, kein Mail-Inhalt, geht bei Neustart
+verloren), bei `PostgresStore` seit 09.09. (siehe Abschnitt "Persistenz"
+unten) echt persistiert in der kleinen, inhaltslosen Tabelle
+`auto_deleted_message_headers` (nur der Dedupe-Schlüssel, kein Mail-Inhalt).
 
 **Audit-Log:** jeder Auto-Delete schreibt einen Eintrag in
 `security_audit_log` (`action = 'auto_deleted_adult_gambling_spam'`,
@@ -433,7 +455,7 @@ eine echte Implementierung betrifft jeweils nur eine Zeile dort.
 |---|---|---|---|
 | `DomainReputationLookup` | `senderDomainAgeDays`, `domainReputationScore` | `domainReputationMock.ts`: deterministische Heuristik auf verdächtigen TLDs/Schlüsselwörtern im Domain-Namen (z.B. `.tk`, `"secure"`) | WHOIS-Abfrage + Reputationsdienst |
 | `IpReputationLookup` | `ipReputationFlag` | `ipReputationMock.ts`: IP wird aus `X-Originating-IP`/`Received`-Header extrahiert (`extractSendingIp()`), gegen eine frei erfundene Beispiel-Adressliste geprüft; ohne ermittelbare IP immer `"unknown"`, nie geraten | Abgleich gegen einen DNSBL-Dienst (z.B. Spamhaus XBL/CBL) |
-| `IbanHistoryCheck` | `containsNewIban` | `ibanHistoryCheck.ts`: IBAN-Kandidaten per simpler Regex extrahiert (`extractIbanCandidates()`, ohne eigene Mod-97-Prüfsumme — die eigentliche IBAN-Erkennung inkl. Prüfsumme läuft bereits vorher in `@driftmail/security-classification`), gegen eine **echte** In-Memory-Historie im Store geprüft (`store.ibanHistory`, Schlüssel `userId:senderAddress`) — "neu" heißt: noch nie zuvor von diesem Absender an diesen User gesehen | dieselbe Prüfung gegen eine Postgres-Tabelle statt In-Memory |
+| `IbanHistoryCheck` | `containsNewIban` | `ibanHistoryCheck.ts`: IBAN-Kandidaten per simpler Regex extrahiert (`extractIbanCandidates()`, ohne eigene Mod-97-Prüfsumme — die eigentliche IBAN-Erkennung inkl. Prüfsumme läuft bereits vorher in `@driftmail/security-classification`), gegen eine **echte** Historie geprüft (`store.hasSeenIban()`/`recordIban()`, Schlüssel `userId`+`senderAddress`) — "neu" heißt: noch nie zuvor von diesem Absender an diesen User gesehen. Seit 09.09. (siehe "Persistenz" oben) echt persistiert in `iban_sightings`, wenn `DATABASE_URL` gesetzt ist, sonst In-Memory-Map wie bisher | bereits identisch — kein Unterschied mehr zwischen "Mock" und "real" bei gesetzter `DATABASE_URL` |
 | `RecipientReputationLookup` | `recipientReputation` | `recipientReputationMock.ts`: `"safe"`, wenn der User laut `store.outgoingSendLog` dieser Adresse schon einmal geschrieben hat; `"flagged"`, wenn die Adresse/Domain schon als Absender einer `phishing`-klassifizierten eingehenden Mail aufgefallen ist (`store.messages`/`messageSecurity`); sonst `"unknown"` | Abgleich gegen `fraud_alerts`/`domain_reputation_score` in Postgres |
 
 **Verdrahtung:**
@@ -448,14 +470,17 @@ eine echte Implementierung betrifft jeweils nur eine Zeile dort.
   siehe `contracts/api-spec.yaml` + SYNC.md-Änderungsprotokoll; ohne dieses
   Feld bleibt `recipientReputation` weiterhin `"unknown"`).
 
-**IBAN-Historie-Ablage:** `src/db/store.ts` hat dafür eine neue
-`Map<string, Set<string>>` (`ibanHistory`, Schlüssel `` `${userId}:${senderAddress}` ``)
-plus `hasSeenIban()`/`recordIban()`. Kein eigenes `db-schema.sql`-Pendant
-(Auftrag: "simple Set/Map ... in deinem bestehenden Store") — rein
-In-Memory wie der Rest des Stores, geht bei Neustart verloren.
+**IBAN-Historie-Ablage:** `store.hasSeenIban()`/`recordIban()` — bei
+`InMemoryStore` eine `Map<string, Set<string>>` (Schlüssel
+`` `${userId}:${senderAddress}` ``), bei `PostgresStore` seit 09.09. (siehe
+Abschnitt "Persistenz" unten) echt persistiert in der neuen Tabelle
+`iban_sightings` (kleine Contract-Ergänzung — der ursprüngliche Auftrag
+sagte "simple Set/Map ... in deinem bestehenden Store", was für den reinen
+In-Memory-Durchstich richtig war, aber ohne eigene Tabelle bei einem
+Neustart mit Postgres verloren gegangen wäre).
 
-**Empfänger-Historie:** `store.outgoingSendLog` (`OutgoingSendLogRecord[]`,
-neu in `src/types.ts`) spiegelt `outgoing_send_log` (`db-schema.sql`,
+**Empfänger-Historie:** `store.outgoingSendLog`/`hasSentTo()`/
+`recordOutgoingSend()` spiegelt `outgoing_send_log` (`db-schema.sql`,
 Commit `a5432e6`) — bisher nur write-/lookup-seitig genutzt (kein eigener
 `POST`-Endpoint für tatsächliches Versenden in diesem Durchstich, siehe
 "Annahmen" unten). `ensureDemoUser()` seedet einen Beispiel-Eintrag
@@ -464,13 +489,14 @@ Versand-Pfad testbar ist — reiner Beispieldaten-Seed, keine echte
 Versandhistorie.
 
 **Grenzen (bewusst Mock, siehe Auftrag):** alle vier Lookups liefern
-Mock-Daten. Domain-/IP-Reputation sind reine Heuristiken auf
-Beispiel-Listen, keine echten WHOIS-/Spamhaus-Abfragen. IBAN-/
-Empfänger-Historie prüfen zwar *echt* gegen den bestehenden Store (kein
-geratener Wert), aber gegen In-Memory-Daten statt einer echten
-Postgres-Tabelle mit echter Nutzungshistorie. Die echte Anbindung an
-WHOIS/Spamhaus/einen Reputationsdienst bzw. eine echte `fraud_alerts`-Query
-ist ein separater, noch nicht gestarteter Schritt — betrifft dann nur
+weiterhin Mock-Daten für die eigentliche Reputationsbewertung.
+Domain-/IP-Reputation sind reine Heuristiken auf Beispiel-Listen, keine
+echten WHOIS-/Spamhaus-Abfragen. IBAN-/Empfänger-Historie prüfen *echt*
+gegen den Store (kein geratener Wert) — seit der Persistenz-Integration
+(09.09., siehe unten) bei gesetzter `DATABASE_URL` auch echt in Postgres,
+nicht mehr zwangsläufig In-Memory. Die echte Anbindung an WHOIS/Spamhaus/
+einen Reputationsdienst bzw. eine echte `fraud_alerts`-Query ist ein
+separater, noch nicht gestarteter Schritt — betrifft dann nur
 `src/lookups/index.ts`.
 
 **Tests:** `src/smoketest.ts` prüft je Lookup mind. einen Fall, in dem das
@@ -487,14 +513,83 @@ eine andere IBAN vom selben Absender weiterhin schon; `recipientReputation`
 über `POST /messages/draft/phishing-check` für `"safe"` (bekannter Kontakt)
 und `"flagged"` (Empfänger-Domain bereits als Phishing-Absender aufgefallen).
 
+## Persistenz
+
+Seit 09.09. (Web-Priorisierung "Persistenz zuerst", siehe
+SYNC.md/TERMINAL_INBOX.md) gibt es eine echte Postgres-Anbindung
+(`src/db/postgresStore.ts`, `PostgresStore`) neben dem ursprünglichen
+In-Memory-Store (`src/db/store.ts`, `InMemoryStore`). Beide implementieren
+dasselbe `Store`-Interface — Routen und Sync-Pipeline arbeiten nur dagegen,
+nicht gegen eine der beiden konkreten Implementierungen oder gegen SQL
+direkt (das war schon vorher so geschnitten, siehe Kopfkommentar in
+`store.ts`).
+
+**Welche Implementierung aktiv ist, entscheidet `DATABASE_URL`** — exakt
+dasselbe "echt, wenn ENV gesetzt ist, sonst Zero-Config-Fallback"-Muster
+wie beim Gmail-/IMAP-Adapter (`adapterForAccount()`): gesetzt ->
+`PostgresStore`, sonst `InMemoryStore` (Daten gehen bei jedem Neustart
+verloren, aber kein DB-Setup nötig).
+
+**Setup:**
+```bash
+createdb driftmail_dev   # oder eine andere DB, braucht einen laufenden Postgres-Server
+DATABASE_URL="postgresql://<user>@localhost:5432/driftmail_dev" npm run dev
+```
+`initStore()` (aufgerufen in `index.ts`/`smoketest.ts` vor dem ersten
+Store-Zugriff) führt `contracts/db-schema.sql` einmal komplett aus. Alle
+`CREATE TABLE`/`CREATE INDEX`-Anweisungen dort sind `IF NOT EXISTS` (kleine
+Contract-Ergänzung, Terminal 09.09.) — kein separates Migrations-Tool
+nötig, das Schema ist beliebig oft wiederholbar anwendbar.
+
+**Contract-Ergänzungen für diesen Schritt** (kleinere Ergänzungen bereits
+vereinbarter Features, siehe SYNC.md-Ankündigungsregel):
+- `messages.provider_message_id` (nullable) — fehlte, obwohl das Feld seit
+  der Provider-Spiegelung (siehe Abschnitt "Papierkorb / Löschen" oben)
+  schon im internen `MessageRecord`-Typ existierte.
+- `iban_sightings` (neue, kleine Tabelle) — die IBAN-Historie
+  (`hasSeenIban`/`recordIban`, Grundlage für `containsNewIban`) war laut
+  ursprünglichem Auftrag bewusst nur eine In-Memory-Map ohne
+  `db-schema.sql`-Pendant. Für echte Persistenz jetzt nachgezogen, sonst
+  wäre genau dieses eine Sicherheitsmerkmal nach einem Neustart verloren
+  gegangen — ein Widerspruch zum Sinn dieses ganzen Schritts.
+- `auto_deleted_message_headers` (neue, kleine Tabelle) — derselbe Fall wie
+  oben, nur für den Dedupe-Fingerprint des Auto-Delete-Pfads
+  (adult/gambling-Spam, siehe "Auto-Delete: adult/gambling-Spam" oben).
+
+**Typ-Konvertierung** (siehe Kopfkommentar in `postgresStore.ts` für
+Details): `pg` liefert `TIMESTAMPTZ` standardmäßig als JS-`Date` und
+`NUMERIC` als String (Präzisionsschutz) — beides passt nicht zu den
+`string`/`number`-Typen in `types.ts`. Global über `pg.types.setTypeParser`
+umkonfiguriert: `TIMESTAMPTZ` -> ISO-8601-String, `DATE` -> unverändertes
+`YYYY-MM-DD` (Postgres' Text-Ausgabe dafür ist schon exakt das richtige
+Format), `NUMERIC` -> `parseFloat`.
+
+**Bekannte Grenze:** `PostgresStore.updateContract()` (genutzt von `POST
+/contracts/:id/confirm`) nutzt SQL `COALESCE` und kann deshalb "Feld nicht
+im Patch enthalten" nicht von "Feld absichtlich auf `null` gesetzt"
+unterscheiden — für den einzigen Aufrufer unkritisch (siehe Kommentar an
+der Methode), aber kein generischer Patch-Mechanismus.
+
+**Getestet:** `npm test` (Smoketest) läuft identisch gegen beide
+Implementierungen — ohne `DATABASE_URL` (In-Memory, unverändertes
+Verhalten) und mit `DATABASE_URL` gegen eine echte lokale Postgres-Instanz
+(Daten danach per `psql` verifiziert: Nutzer/Ordner/Nachrichten/
+Sicherheits-Analyse/Quarantäne/IBAN-Historie/Audit-Log landen tatsächlich
+in den Tabellen, nicht nur im Prozessspeicher).
+
+Nicht Teil dieses Schritts: Connection-Pooling-Tuning, Transaktionen über
+mehrere Schreiboperationen hinweg (z.B. `insertMessage` +
+`setMessageSecurity` laufen als zwei separate Queries, nicht atomar),
+Datenbank-Migrationen im engeren Sinne (Schema-Änderungen an bestehenden
+Spalten, nur `IF NOT EXISTS` für neue Tabellen/Indizes).
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
-- `contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war nicht
-  Teil des Auftrags/Setups. Für den ersten Durchstich wurde eine
-  In-Memory-Repository-Schicht mit identischen Feldern/Typen gebaut
-  (`src/db/store.ts`). Der Wechsel auf echtes Postgres (z.B. mit `pg`)
-  sollte nur dieses eine Modul betreffen, da Routen/Sync-Pipeline nur
-  gegen die Store-Methoden arbeiten, nicht gegen SQL direkt.
+- ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war
+  nicht Teil des Auftrags/Setups.~~ **Nachgezogen (Terminal 09.09.):** siehe
+  Abschnitt "Persistenz" oben — eine echte Postgres-Anbindung existiert
+  jetzt, mit dem hier beschriebenen In-Memory-Verhalten als weiterhin
+  gültigem Zero-Config-Fallback ohne `DATABASE_URL`.
 - Kein Auth/Multi-User-Handling: `api-spec.yaml` enthält keine
   Auth-Parameter (kein `userId` in Pfaden/Query), daher arbeitet dieses
   Skeleton mit einem einzigen Demo-User (`ensureDemoUser()` in
@@ -545,7 +640,8 @@ src/
   types.ts             interne Modelle + API-Shapes (Spiegel von db-schema.sql / api-spec.yaml)
   mappers.ts            interne Records -> API-Response-Shapes
   routes/               ein Router-Modul je api-spec.yaml-Ressource (inkl. folders.ts) + internal.ts (Health/Sync/Seed)
-  db/store.ts           In-Memory-Repository (siehe "Annahmen")
+  db/store.ts           Store-Interface + InMemoryStore (Zero-Config-Fallback) + ensureDemoUser()
+  db/postgresStore.ts   PostgresStore -- echte Persistenz, aktiv wenn DATABASE_URL gesetzt ist (siehe "Persistenz")
   mail/                 MailAdapter-Interface + Gmail/IMAP/Fixture-Implementierungen + Sync-Pipeline
   ai/                   AiAdapter-Interface (Spiegel von ai-adapter-interface.ts) + Adapter (analyzeMail() ruft @driftmail/security-classification, Rest weiterhin Mock)
   lookups/               vier externe Lookup-Adapter (Domain-/IP-Reputation, IBAN-Historie, Empfänger-Reputation), Mock-Implementierungen, siehe "Externe Lookup-Adapter"
