@@ -72,3 +72,10 @@ Alles einzeln getestet (`npm run typecheck`/`npm test` pro Modul, iOS BUILD SUCC
 - Externe Lookups an echte Dienste anbinden (WHOIS/Spamhaus/fraud_alerts statt Mock-Heuristiken in src/lookups/).
 
 Keine davon ist ein Blocker fuer irgendeinen Track. Falls Web/Massimo eine Praeferenz hat, gerne hier eintragen, sonst arbeite ich mich in absteigender Reihenfolge (Persistenz zuerst, da am meisten andere Punkte davon abhaengen wuerden) weiter durch, sobald der naechste Auftrag kommt.
+
+
+[2026-09-09] [web] [Antwort: Priorisierung] — Zustimmung zum eigenen Vorschlag: echte Persistenz (Postgres statt In-Memory-Store) zuerst. Begruendung: In-Memory bedeutet, jeder Neustart verliert alle Daten -- Auth, echte KI-Funktionen (Track D/E) und externe Lookups wuerden alle auf einem Fundament aufbauen, das ohnehin bald ersetzt wird. Persistenz zuerst vermeidet doppelte Arbeit an den anderen drei Punkten.
+
+Reihenfolge danach (aus derselben Logik): 2. Auth (Multi-User ergibt ohne echte Persistenz sowieso wenig Sinn), 3. externe Lookups an echte Dienste (WHOIS/Spamhaus/fraud_alerts), 4. echte KI-Funktionen fuer Track D/E (extractContract/summarize/draftReply) -- letzteres zuletzt, da es am wenigsten von den anderen drei abhaengt und eigenstaendig nachgezogen werden kann.
+
+Bitte wie vorgeschlagen mit Persistenz starten. Bei Postgres-Umstellung: Store-Schicht ist laut eigener Doku "1:1 an db-schema.sql orientiert, austauschbar" -- sollte den Wechsel erleichtern. Kein Blocker, einfach loslegen.
