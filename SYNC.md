@@ -14,12 +14,14 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | Track | Ordner | Status | Zuletzt geändert |
 |---|---|---|---|
 | 0 — Contracts | contracts/ | fertig | 2026-09-08 |
-| A — Backend | backend/ | offen | — |
-| B — Sicherheits-Klassifikation | security-classification/ | offen | — |
-| C — iOS App | ios/ | offen | — |
-| D — Vertrag & Reminder | contracts-logic/ | offen | — |
-| E — Antwort & Signatur | mail-actions/ | offen | — |
-| F — Web-Fallback-UI | web/ | offen | — |
+| A — Backend | backend/ | fertig (inkl. echter Track-B-Integration, siehe Branch) | 2026-09-09 |
+| B — Sicherheits-Klassifikation | security-classification/ | fertig | 2026-09-08 |
+| C — iOS App | ios/ | fertig | 2026-09-08 |
+| D — Vertrag & Reminder | contracts-logic/ | fertig | 2026-09-08 |
+| E — Antwort & Signatur | mail-actions/ | fertig | 2026-09-09 |
+| F — Web-Fallback-UI | web/ | fertig | 2026-09-08 |
+
+Hinweis: "fertig" bezieht sich jeweils auf den eigenen Track-Branch (siehe `git branch`, z.B. `track-a-backend`) — der Integrations-/Merge-Schritt nach `main` selbst hat noch nicht stattgefunden (main enthält bisher nur `contracts/` + Doku).
 
 Status-Werte: offen · in arbeit · fertig · blockiert
 
@@ -88,3 +90,7 @@ Track B kann Status "fertig" behalten, keine weitere Aenderung am Modul noetig. 
 - `contracts/ai-adapter-interface.ts`: `LOW_CONFIDENCE_THRESHOLD = 0.6` als gemeinsame Konstante ergänzt (bisher nur lokal in Track D angenommen).
 - `contracts/api-spec.yaml`: `MessageDetail.quarantine` (neues Schema `QuarantineInfo`: reason/autoDeleteAt/userReviewed, nullable) ergänzt, damit Track F/C die schon in der DB vorhandenen Quarantäne-Infos auch lesen können.
 Details/Begründung in TERMINAL_INBOX.md Punkt 5/6. Betrifft Track A (Response befüllen), C/D/F (Werte übernehmen/anzeigen). Punkt 7 (npm-Package für contracts/*.ts) bewusst vertagt, siehe TERMINAL_INBOX.md.
+
+[2026-09-09] [terminal] [Integration] — main in alle 6 Track-Branches gemerged, gebaut und getestet (waren zwischen 14 und 50 Commits hinter main): Track A (Smoketest grün), Track B (110 Tests grün), Track C (BUILD SUCCEEDED, iphonesimulator), Track D (14 Tests grün), Track E (34 Tests grün, dabei nebenbei eine echte, bisher unkommittete Signatur-Idempotenz-Fix in einem verwaisten lokalen Worktree gefunden und gerettet, siehe dortiger Commit), Track F (tsc+vite build grün). Mehrere Merge-Konflikte in SYNC.md/WEB_INBOX.md waren reine parallele Ergänzungen (beide Seiten behalten). In zwei weiteren verwaisten Worktrees (track-b-security-, track-e-mail-actions-Duplikate) lag reine Revert-Altlast einer abgebrochenen früheren Session (hätte main-Ergänzungen rückgängig gemacht) — verworfen, nichts Reales verloren.
+
+Danach WEB_INBOX.md-PRIORITAET "Track A + Track B Integration" umgesetzt (Details siehe dortiger Eintrag + `SYNC.md`/`backend/README.md` auf Branch `track-a-backend`, Commit `613e27a`): `analyzeMail()`/`checkDraftForPhishing()` rufen jetzt echte Track-B-Logik statt Mock. Status-Tabelle oben aktualisiert (alle 6 Tracks "fertig" auf ihrem Branch, main selbst noch ohne Code-Merge).
