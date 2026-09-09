@@ -1,0 +1,87 @@
+/*
+  driftmail — Design-Tokens als CSS Custom Properties
+  Quelle: contracts/design-tokens.json (Track 0). Werte hier NICHT frei
+  erfinden — bei Änderungsbedarf zuerst die Contract-Datei anpassen und
+  in SYNC.md unter "Contract-Änderungen" eintragen.
+
+  Theme-Logik: drei Zustände laut design-tokens.json ("hell", "dunkel",
+  "system"). "system" = kein data-theme-Attribut -> folgt
+  prefers-color-scheme. Explizite Wahl setzt data-theme="hell"/"dunkel"
+  auf <html> und gewinnt in beide Richtungen.
+*/
+
+:root {
+  /* Farben: Rollen (plattformunabhängig) */
+  --color-accent: #1D9E75;
+  --color-danger: #D85A30;
+  --color-danger-text: #993C1D;
+  --color-warning: #EF9F27;
+  --color-success: #1D9E75;
+
+  /* Farben: hell (Default) */
+  --color-surface-page: #FAFAF8;
+  --color-surface-card: #FFFFFF;
+  --color-text-primary: #141414;
+  --color-text-secondary: #6B6B66;
+  --color-text-muted: #9A9A94;
+  --color-border: #EAEAE6;
+
+  /* Typografie */
+  --font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-size-caption: 11px;
+  --font-size-small: 12px;
+  --font-size-body: 13px;
+  --font-size-body-lg: 14px;
+  --font-size-heading: 15px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+
+  /* Radius */
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-pill: 20px;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+
+  color-scheme: light;
+}
+
+/* system: folgt der OS-Einstellung, solange kein expliziter Theme-Wahl vorliegt */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="hell"]) {
+    --color-surface-page: #141414;
+    --color-surface-card: #1E1E1E;
+    --color-text-primary: #FAFAF8;
+    --color-text-secondary: rgba(255, 255, 255, 0.75);
+    --color-text-muted: rgba(255, 255, 255, 0.4);
+    --color-border: #2A2A2A;
+    color-scheme: dark;
+  }
+}
+
+/* explizite Wahl "dunkel" gewinnt immer, auch wenn OS hell eingestellt ist */
+:root[data-theme="dunkel"] {
+  --color-surface-page: #141414;
+  --color-surface-card: #1E1E1E;
+  --color-text-primary: #FAFAF8;
+  --color-text-secondary: rgba(255, 255, 255, 0.75);
+  --color-text-muted: rgba(255, 255, 255, 0.4);
+  --color-border: #2A2A2A;
+  color-scheme: dark;
+}
+
+/* explizite Wahl "hell" gewinnt immer, auch wenn OS dunkel eingestellt ist */
+:root[data-theme="hell"] {
+  --color-surface-page: #FAFAF8;
+  --color-surface-card: #FFFFFF;
+  --color-text-primary: #141414;
+  --color-text-secondary: #6B6B66;
+  --color-text-muted: #9A9A94;
+  --color-border: #EAEAE6;
+  color-scheme: light;
+}
