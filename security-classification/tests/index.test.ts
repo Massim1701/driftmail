@@ -167,4 +167,61 @@ describe("analyzeMail (integration)", () => {
       expect(result.spamSubcategory).toBeNull();
     });
   });
+
+  describe("content-triggered spam (SYNC.md 09.09., adult/gambling ohne technisches Signal)", () => {
+    // Kein Auth-Header, kein Link, keine Dringlichkeit -- phishingScore aus
+    // classify() wäre 0, klassisch also "unclear"/"safe". Genau der Fall,
+    // für den der Trigger gebaut wurde: technisch "saubere" Werbemail mit
+    // eindeutigem Inhalt.
+    it("classifies clean adult content (no auth/link signals at all) as spam", async () => {
+      const rawText = "Sieh dir jetzt heiße XXX Videos an, kostenlos und ohne Anmeldung!";
+      const result = await analyzeMail(rawText, {});
+      expect(result.classification).toBe("spam");
+      expect(result.spamSubcategory).toBe("adult");
+      expect(result.confidenceScore).toBe(0.75);
+    });
+
+    it("classifies clean gambling content (SPF pass, no other signals) as spam", async () => {
+      const rawText = "Riesiger Casino Bonus ohne Einzahlung wartet auf dich, jetzt Freispiele sichern!";
+      const result = await analyzeMail(rawText, {
+        "Authentication-Results": "mx.example.com; spf=pass; dkim=pass; dmarc=pass",
+      });
+      expect(result.classification).toBe("spam");
+      expect(result.spamSubcategory).toBe("gambling");
+      expect(result.confidenceScore).toBe(0.75);
+    });
+
+    it("does NOT trigger spam for clean marketing/generic content without any signal (unchanged, nachgelagert)", async () => {
+      const marketing = await analyzeMail("50% Rabatt nur heute! Gutscheincode: SUMMER50. Jetzt bestellen.", {});
+      expect(marketing.classification).toBe("unclear");
+      expect(marketing.spamSubcategory).toBeNull();
+
+      const generic = await analyzeMail("Wir haben ein neues Angebot für Sie, schauen Sie mal vorbei.", {});
+      expect(generic.classification).toBe("unclear");
+      expect(generic.spamSubcategory).toBeNull();
+    });
+
+    it("does NOT downgrade an already-phishing mail to spam, even with adult/gambling keywords present", async () => {
+      // Identisch zum Phishing-Testfall oben (Casino/XXX-Keywords im Text),
+      // stellt hier explizit sicher, dass der neue Content-Trigger
+      // "phishing" nicht ueberschreibt -- staerkeres Signal gewinnt.
+      const rawText = `
+        <p>DRINGEND: Ihr Konto wurde gesperrt! Bestätigen Sie sofort Ihre Daten,
+        sonst wird Ihr Konto endgültig gesperrt!!! Casino Bonus ohne Einzahlung, XXX Videos gratis.</p>
+        <p>Bitte loggen Sie sich hier ein:
+        <a href="https://login-verify.example-evil.ru/x">www.paypal.com</a></p>
+        <p>Alternativ überweisen Sie direkt an unsere neue Bankverbindung:
+        DE89 3704 0044 0532 0130 00</p>
+      `;
+      const headers = {
+        From: "PayPal Support <support@pаypal.com>", // Cyrillic а in "paypal"
+        "Authentication-Results": "mx.example.com; spf=fail; dkim=fail; dmarc=fail",
+      };
+
+      const result = await analyzeMail(rawText, headers);
+
+      expect(result.classification).toBe("phishing");
+      expect(result.spamSubcategory).toBeNull();
+    });
+  });
 });
