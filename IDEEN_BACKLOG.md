@@ -14,3 +14,6 @@ Format: [Datum] [Titel] — Beschreibung + Kontext
 
 ---
 
+
+
+[2026-09-09] Event-Einladungen erkennen (Termine/Feiern) — Mail als Kalender-Einladung erkennen (z.B. iCal/.ics-Anhang oder typische Einladungs-Formulierungen/Datum+Uhrzeit-Muster im Text). User entscheidet aktiv: teilnehmen oder nicht. Je nach Entscheidung automatisch Zu-/Absage-Antwort an den Absender verschicken (Text editierbar wie bei anderen Antwortentwuerfen, kein Auto-Send ohne Bestaetigung, siehe bestehende Compose-Regeln). Bei Zusage: Termin im Kalender vermerken (eigener Kalender oder Verknuepfung zu einem externen, noch zu klaeren) + automatische Erinnerung 1 Tag vorher. Beruehrt vermutlich: neue Tabelle fuer erkannte Termine (aehnlich contracts/reminders-Muster aus Track D), neue Ordner-/Detail-UI fuer "Einladung" aehnlich der Vertrags-Karte, eigener Reminder-Typ oder Wiederverwendung der bestehenden reminders-Tabelle. Noch nicht spezifiziert, nur Idee.
