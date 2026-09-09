@@ -1,0 +1,20 @@
+{
+  "name": "@driftmail/security-classification",
+  "version": "0.1.0",
+  "private": true,
+  "description": "driftmail Track B — Sicherheits-Klassifikation (SPF/DKIM/DMARC, Homoglyphen, Link-Mismatch, Dringlichkeitssprache, IBAN-Erkennung). Implementiert analyzeMail() aus contracts/ai-adapter-interface.ts.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.1"
+  }
+}
