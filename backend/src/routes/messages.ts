@@ -4,7 +4,31 @@ import { toApiMessage, toApiMessageDetail, toApiMailSummary } from "../mappers";
 import { aiAdapter } from "../ai";
 import { checkDraftForPhishing } from "@driftmail/security-classification";
 import { recipientReputationLookup } from "../lookups";
+import { adapterForAccount } from "../mail/sync";
 import type { AiSource, ApiDraftPhishingCheckLink } from "../types";
+import type { MessageRecord } from "../types";
+
+// Provider-Spiegelung (WEB_INBOX.md 08.09. Punkt 3, umgesetzt 09.09.): ruft
+// den passenden Mail-Adapter für das Konto der Nachricht auf. Best-effort
+// -- der lokale Store-Zustand (Papierkorb/gelöscht) ist bereits die
+// Quelle der Wahrheit für die App selbst, wenn der Provider-Call
+// fehlschlägt (Netzwerk, abgelaufenes Token, ...) wird das geloggt, aber
+// die lokale Operation NICHT rückgängig gemacht -- ein User soll eine Mail
+// in seiner eigenen App-Ansicht auch dann loswerden können, wenn der
+// Roundtrip zum Provider gerade klemmt. Kein Mirroring, wenn die Nachricht
+// keine `providerMessageId` hat (Fixture-Ursprung).
+async function mirrorToProvider(message: MessageRecord, action: "trash" | "permanent"): Promise<void> {
+  if (!message.providerMessageId) return;
+  const account = store.getMailAccount(message.mailAccountId);
+  if (!account) return;
+  try {
+    const adapter = adapterForAccount(account);
+    if (action === "trash") await adapter.trashMessage(message.providerMessageId);
+    else await adapter.permanentlyDeleteMessage(message.providerMessageId);
+  } catch (err) {
+    console.warn(`Provider-Spiegelung (${action}) für Nachricht ${message.id} fehlgeschlagen:`, err);
+  }
+}
 
 export const messagesRouter = Router();
 
@@ -110,7 +134,7 @@ messagesRouter.post("/messages/:messageId/move", (req, res) => {
 // Mechanik wie POST /messages/:messageId/move (kein neuer Mechanismus) --
 // nur das Ziel ist fest der Papierkorb-Ordner des Accounts statt eines
 // beliebigen, im Body übergebenen Ordners.
-messagesRouter.delete("/messages/:messageId", (req, res) => {
+messagesRouter.delete("/messages/:messageId", async (req, res) => {
   const message = store.getMessage(req.params.messageId);
   if (!message) return res.status(404).json({ error: "message nicht gefunden" });
 
@@ -124,16 +148,10 @@ messagesRouter.delete("/messages/:messageId", (req, res) => {
     return res.status(500).json({ error: "Papierkorb-Ordner für dieses Konto nicht gefunden" });
   }
 
-  // TODO(Provider-Spiegelung, siehe WEB_INBOX.md 08.09. Punkt 3 + Auftrag
-  // Track A Schritt 4): laut Contract soll dies serverseitig zusätzlich
-  // über die Provider-API gespiegelt werden (Gmail API `messages.trash`
-  // bzw. IMAP `\Deleted`-Flag setzen), analog zur bereits umgesetzten
-  // Provider-Anbindung in src/mail/gmailAdapter.ts/imapAdapter.ts. Dieses
-  // Backend hat aktuell nur Lese-/Sync-Zugriff auf Gmail/IMAP (siehe
-  // README "Was ist echt, was ist Mock/Stub" -- kein Schreibzugriff
-  // implementiert), deshalb bleibt das hier ein Platzhalter/TODO, kein
-  // Blocker für diesen Track (gleiche Grenze wie beim restlichen
-  // Mock-Adapter-Rand).
+  // Provider-Spiegelung (WEB_INBOX.md 08.09. Punkt 3, umgesetzt 09.09.,
+  // siehe mirrorToProvider oben): Gmail `messages.trash` bzw. IMAP
+  // `\Deleted`-Flag.
+  await mirrorToProvider(message, "trash");
   store.moveMessage(message.id, papierkorb.id);
   res.status(200).json(toApiMessage(store.getMessage(message.id)!, store.getMessageSecurity(message.id)));
 });
@@ -155,7 +173,7 @@ messagesRouter.delete("/messages/:messageId", (req, res) => {
 // Gmail-Vorbild, an dem sich dieser Nachtrag laut Auftrag orientiert
 // (Gmail erlaubt "endgültig löschen" ebenfalls nur aus dem Papierkorb
 // heraus über die normale UI).
-messagesRouter.delete("/messages/:messageId/permanent", (req, res) => {
+messagesRouter.delete("/messages/:messageId/permanent", async (req, res) => {
   const message = store.getMessage(req.params.messageId);
   if (!message) return res.status(404).json({ error: "message nicht gefunden" });
 
@@ -167,13 +185,11 @@ messagesRouter.delete("/messages/:messageId/permanent", (req, res) => {
     });
   }
 
-  // TODO(Provider-Spiegelung, siehe WEB_INBOX.md 08.09. Punkt 3 + Auftrag
-  // Track A Schritt 4): laut Contract soll dies zusätzlich die endgültige
-  // Löschung beim Provider auslösen (Gmail API `messages.delete` bzw. IMAP
-  // `EXPUNGE`). Gleiche Backend-Grenze wie oben bei DELETE
-  // /messages/{messageId} -- kein echter Schreibzugriff auf Gmail/IMAP in
-  // diesem Durchstich, deshalb hier nur als markierter Platzhalter, kein
-  // Blocker.
+  // Provider-Spiegelung (WEB_INBOX.md 08.09. Punkt 3, umgesetzt 09.09.,
+  // siehe mirrorToProvider oben): Gmail `messages.delete` bzw. IMAP
+  // `\Deleted`-Flag + Expunge. VOR dem lokalen `deleteMessage()`, weil
+  // `message.providerMessageId` danach nicht mehr auflösbar wäre.
+  await mirrorToProvider(message, "permanent");
   store.deleteMessage(message.id);
   res.status(200).json({ deleted: true });
 });

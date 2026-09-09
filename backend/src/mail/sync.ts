@@ -129,6 +129,7 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
       const message = store.insertMessage({
         mailAccountId: account.id,
         messageIdHeader: mail.messageIdHeader,
+        providerMessageId: mail.providerMessageId,
         fromAddress: mail.fromAddress,
         fromDisplayName: mail.fromDisplayName,
         replyToAddress: mail.replyToAddress,

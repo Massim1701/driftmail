@@ -190,14 +190,17 @@ curl -X POST http://localhost:3000/v1/capability-check \
   Empfänger-Reputation) einer echten Prüfung gegen den bestehenden
   In-Memory-Store — kein echter WHOIS-/Spamhaus-/Fraud-Datenbank-Zugriff.
   Siehe eigener Abschnitt "Externe Lookup-Adapter" unten.
-- **Papierkorb / Löschen** (`src/routes/messages.ts`, `DELETE
-  /messages/{messageId}` + `DELETE /messages/{messageId}/permanent`): das
-  lokale Verschieben/Entfernen im Store ist echt implementiert, die laut
-  Auftrag ebenfalls geforderte Provider-Spiegelung (Gmail API
-  `messages.trash`/`messages.delete` bzw. IMAP `\Deleted`/`EXPUNGE`) ist
-  ein markierter `TODO`-Kommentar an der jeweiligen Stelle, kein
-  Schreibzugriff auf Gmail/IMAP in diesem Durchstich. Siehe eigener
-  Abschnitt "Papierkorb / Löschen" unten.
+- **Papierkorb / Löschen inkl. Provider-Spiegelung** (integriert 09.09.,
+  `src/routes/messages.ts`, `DELETE /messages/{messageId}` + `DELETE
+  /messages/{messageId}/permanent`): lokales Verschieben/Entfernen im
+  Store UND die Spiegelung beim Provider (Gmail API
+  `messages.trash`/`messages.delete`, IMAP `\Deleted`-Flag/`EXPUNGE`) sind
+  jetzt implementiert (`src/mail/gmailAdapter.ts`/`imapAdapter.ts`,
+  `MailAdapter.trashMessage()`/`permanentlyDeleteMessage()`). Wie bei
+  Gmail/IMAP-Fetch nur mit echten Zugangsdaten (Env-Variablen) end-to-end
+  testbar — der Smoketest läuft gegen den Fixture-Adapter, dort ist die
+  Spiegelung ein dokumentiertes No-Op. Siehe eigener Abschnitt "Papierkorb
+  / Löschen" unten.
 
 ## Auto-Delete: adult/gambling-Spam
 
@@ -328,17 +331,42 @@ Papierkorb-Ordner selbst braucht laut Auftrag **keine** eigene
 Retention-Tabelle wie `quarantine` (kein automatisches 30-Tage-Löschen) —
 der User leert ihn manuell oder er bleibt liegen, wie bei Gmail.
 
-**Provider-Spiegelung — TODO, kein Blocker:** laut Auftrag soll `DELETE
-/messages/{messageId}` serverseitig zusätzlich über die Provider-API
-gespiegelt werden (Gmail API `messages.trash`), `DELETE
-/messages/{messageId}/permanent` entsprechend über `messages.delete` bzw.
-beim IMAP-Adapter über das `\Deleted`-Flag / `EXPUNGE`. Dieses Backend hat
-aktuell nur Lese-/Sync-Zugriff auf Gmail/IMAP (`src/mail/gmailAdapter.ts`,
-`src/mail/imapAdapter.ts` — siehe "Was ist echt, was ist Mock/Stub" oben),
-keinen Schreibzugriff. Beide Routen (`src/routes/messages.ts`) haben daher
-an der jeweiligen Stelle einen klar markierten `TODO(Provider-Spiegelung)`-
-Kommentar statt einer echten Implementierung — analog zur bestehenden
-Mock-/Real-Grenze beim Rest des Backends, kein Blocker für diesen Track.
+**Provider-Spiegelung (integriert 09.09.):** `DELETE /messages/{messageId}`
+ruft serverseitig zusätzlich `MailAdapter.trashMessage()` auf (Gmail API
+`messages.trash`, IMAP `\Deleted`-Flag OHNE Expunge), `DELETE
+/messages/{messageId}/permanent` entsprechend `permanentlyDeleteMessage()`
+(Gmail `messages.delete`, IMAP `\Deleted` + `EXPUNGE` in einem Schritt über
+`imapflow`s `messageDelete()`). Umgesetzt in `src/routes/messages.ts`
+(`mirrorToProvider()`-Helper) + `src/mail/gmailAdapter.ts`/`imapAdapter.ts`.
+
+- **`providerMessageId`:** `MailAdapter.fetchRecentMessages()` liefert seit
+  dieser Integration zusätzlich ein `providerMessageId` pro Nachricht
+  (Gmail: die Gmail-Message-ID, NICHT der RFC822-`Message-ID`-Header, mit
+  dem `messageIdHeader`/das Dedupe-Feld befüllt ist; IMAP: die UID
+  innerhalb von "INBOX"), das beim Import in `MessageRecord` mitgespeichert
+  wird — ohne dieses Handle könnte man eine Nachricht später nicht mehr
+  eindeutig beim Provider adressieren. Fixture-Nachrichten haben
+  `providerMessageId: null` (kein echtes Postfach dahinter).
+- **IMAP-UID-Grenze:** eine UID ist nur innerhalb ihrer Mailbox + aktueller
+  `UIDVALIDITY` eindeutig. Da `fetchRecentMessages()` ausschließlich
+  "INBOX" liest, ist das für diesen Durchstich unkritisch — bricht aber,
+  falls eine Mailbox jemals neu erstellt wird (UIDVALIDITY-Wechsel) oder
+  mehrere Mailboxen gelesen werden sollten. Nicht behandelt, da außerhalb
+  des aktuellen Scopes (nur "INBOX").
+- **Fehlerverhalten — best effort, kein Rollback:** schlägt der
+  Provider-Call fehl (Netzwerk, abgelaufenes Token, ...), wird das nur mit
+  `console.warn` geloggt, die lokale Store-Operation (Papierkorb/Löschen)
+  läuft trotzdem durch. Begründung: der lokale Zustand ist bereits die
+  Quelle der Wahrheit für die App-Ansicht selbst; ein User soll eine Mail
+  aus seiner eigenen Ansicht auch dann entfernen können, wenn der
+  Provider-Roundtrip gerade klemmt.
+- **Nicht end-to-end getestet:** wie beim restlichen Gmail-/IMAP-Zugriff
+  (siehe "Was ist echt, was ist Mock/Stub" oben) braucht ein echter Test
+  echte Zugangsdaten. Der Smoketest läuft gegen den Fixture-Adapter, dessen
+  `trashMessage()`/`permanentlyDeleteMessage()` ein dokumentiertes No-Op
+  sind (kein echtes Postfach zum Spiegeln) — die Verdrahtung selbst
+  (`mirrorToProvider()` wird aufgerufen, überlebt `providerMessageId ===
+  null`) ist dadurch abgedeckt, die echten Gmail-/IMAP-API-Calls nicht.
 
 **Tests:** `src/smoketest.ts` deckt soft delete (Nachricht landet im
 Papierkorb-Ordner, `GET` bestätigt `folderId`), permanent delete aus dem

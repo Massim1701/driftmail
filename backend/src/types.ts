@@ -55,6 +55,10 @@ export interface MessageRecord {
   id: string;
   mailAccountId: string;
   messageIdHeader: string;
+  // Provider-natives Handle für Papierkorb/Löschen-Spiegelung (siehe
+  // mail/types.ts FetchedMail.providerMessageId für Details/Grenzen).
+  // `null` bei Fixture-Nachrichten (kein echtes Postfach dahinter).
+  providerMessageId: string | null;
   fromAddress: string;
   fromDisplayName: string | null;
   replyToAddress: string | null;

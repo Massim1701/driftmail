@@ -13,6 +13,7 @@ const daysAgo = (n: number) => new Date(now().getTime() - n * 24 * 3600 * 1000).
 const FIXTURES: FetchedMail[] = [
   {
     messageIdHeader: "<fixture-1@beispiel-versicherung.de>",
+    providerMessageId: null,
     fromAddress: "vertrag@beispiel-versicherung.de",
     fromDisplayName: "Beispiel Versicherung",
     replyToAddress: null,
@@ -29,6 +30,7 @@ const FIXTURES: FetchedMail[] = [
   },
   {
     messageIdHeader: "<fixture-2@sicherheit-konto-check.tk>",
+    providerMessageId: null,
     fromAddress: "service@sicherheit-konto-check.tk",
     fromDisplayName: "Kundenservice",
     replyToAddress: "reply@andere-domain.ru",
@@ -56,6 +58,7 @@ const FIXTURES: FetchedMail[] = [
   },
   {
     messageIdHeader: "<fixture-3@newsletter-deals.example>",
+    providerMessageId: null,
     fromAddress: "deals@newsletter-deals.example",
     fromDisplayName: "Deals Newsletter",
     replyToAddress: null,
@@ -78,6 +81,7 @@ const FIXTURES: FetchedMail[] = [
   },
   {
     messageIdHeader: "<fixture-4@kollegin.example.com>",
+    providerMessageId: null,
     fromAddress: "kollegin@example.com",
     fromDisplayName: "Anna Kollegin",
     replyToAddress: null,
@@ -100,6 +104,7 @@ const FIXTURES: FetchedMail[] = [
     // technisch meist "sauber" versendet, kein SPF-Fail nötig für diese
     // Fixture (anders als zwischenzeitlich, siehe Git-Historie dieser Zeile).
     messageIdHeader: "<fixture-5@casino-bonus-express.example>",
+    providerMessageId: null,
     fromAddress: "bonus@casino-bonus-express.example",
     fromDisplayName: "Casino Bonus Express",
     replyToAddress: null,
@@ -120,6 +125,7 @@ const FIXTURES: FetchedMail[] = [
     // security-classification/src/homoglyph.ts aber zuverlässig als
     // Skript-Mix erkannt (siehe detectHomoglyphs()/isHomoglyphDomain()).
     messageIdHeader: "<fixture-6@apple-id-verify.example>",
+    providerMessageId: null,
     fromAddress: "support@apple-id-verify.example",
     fromDisplayName: "Apple Support",
     replyToAddress: null,
@@ -140,4 +146,10 @@ export class FixtureMailAdapter implements MailAdapter {
   async fetchRecentMessages(limit: number): Promise<FetchedMail[]> {
     return FIXTURES.slice(0, limit);
   }
+
+  // Provider-Spiegelung (WEB_INBOX.md 08.09. Punkt 3): Fixtures sind kein
+  // echtes Postfach, es gibt nichts zu spiegeln -- bewusstes No-Op, kein
+  // Platzhalter-TODO wie zuvor bei Gmail/IMAP.
+  async trashMessage(): Promise<void> {}
+  async permanentlyDeleteMessage(): Promise<void> {}
 }

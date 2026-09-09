@@ -68,6 +68,7 @@ export class GmailAdapter implements MailAdapter {
 
       results.push({
         messageIdHeader: headerValue(headers, "Message-ID") ?? id,
+        providerMessageId: id,
         fromAddress: fromMatch ? fromMatch[2] : fromRaw,
         fromDisplayName: fromMatch ? fromMatch[1].replace(/^"|"$/g, "") || null : null,
         replyToAddress: headerValue(headers, "Reply-To"),
@@ -80,5 +81,16 @@ export class GmailAdapter implements MailAdapter {
       });
     }
     return results;
+  }
+
+  // Provider-Spiegelung (WEB_INBOX.md 08.09. Punkt 3, umgesetzt 09.09.):
+  // `id` ist die Gmail-Message-ID aus `FetchedMail.providerMessageId`
+  // (NICHT der RFC822 Message-ID-Header).
+  async trashMessage(id: string): Promise<void> {
+    await this.client.users.messages.trash({ userId: "me", id });
+  }
+
+  async permanentlyDeleteMessage(id: string): Promise<void> {
+    await this.client.users.messages.delete({ userId: "me", id });
   }
 }

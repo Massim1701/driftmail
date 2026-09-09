@@ -56,6 +56,7 @@ export class ImapAdapter implements MailAdapter {
           const fromAddr = parsed.from?.value?.[0];
           results.push({
             messageIdHeader: parsed.messageId ?? `imap-${message.uid}`,
+            providerMessageId: String(message.uid),
             fromAddress: fromAddr?.address ?? "unbekannt@unbekannt",
             fromDisplayName: fromAddr?.name || null,
             replyToAddress: parsed.replyTo?.value?.[0]?.address ?? null,
@@ -72,5 +73,46 @@ export class ImapAdapter implements MailAdapter {
       await client.logout();
     }
     return results.reverse(); // neueste zuerst
+  }
+
+  // Provider-Spiegelung (WEB_INBOX.md 08.09. Punkt 3, umgesetzt 09.09.):
+  // `uid` kommt aus `FetchedMail.providerMessageId`. Öffnet dieselbe
+  // Mailbox ("INBOX"), aus der auch gelesen wird -- siehe Kommentar bei
+  // `FetchedMail.providerMessageId` (types.ts) zur UID/Mailbox-Grenze.
+  async trashMessage(uid: string): Promise<void> {
+    const client = this.client();
+    await client.connect();
+    try {
+      const lock = await client.getMailboxLock("INBOX");
+      try {
+        // Nur das \Deleted-Flag setzen, noch NICHT expungen -- das
+        // entspricht "in den Papierkorb verschieben" (soft delete,
+        // umkehrbar durch Entfernen des Flags), nicht dem endgültigen
+        // Löschen (siehe permanentlyDeleteMessage).
+        await client.messageFlagsAdd(uid, ["\\Deleted"], { uid: true });
+      } finally {
+        lock.release();
+      }
+    } finally {
+      await client.logout();
+    }
+  }
+
+  async permanentlyDeleteMessage(uid: string): Promise<void> {
+    const client = this.client();
+    await client.connect();
+    try {
+      const lock = await client.getMailboxLock("INBOX");
+      try {
+        // messageDelete() setzt \Deleted und expunged in einem Schritt --
+        // funktioniert unabhängig davon, ob trashMessage() das Flag vorher
+        // schon gesetzt hatte.
+        await client.messageDelete(uid, { uid: true });
+      } finally {
+        lock.release();
+      }
+    } finally {
+      await client.logout();
+    }
   }
 }
