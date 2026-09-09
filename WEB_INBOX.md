@@ -291,3 +291,58 @@ Kein Contract-Bruch zu erwarten (beide Seiten nutzen bereits dieselben Interface
 [2026-09-09] [erledigt: siehe TERMINAL_INBOX.md "Re: date-time/date-Inkonsistenz"] [Track A - erneut eingetragen, war beim ersten Versuch durch eine Verbindungsstoerung verlorengegangen] — Von Track C (iOS) gefundene Inkonsistenz in api-spec.yaml: die Spec mischt format: date-time (z.B. Message.receivedAt) und format: date (z.B. Contract.contractEnd, MailSummary.deadline) im selben Dokument, ohne explizite Kennzeichnung als Absicht. Track C hat clientseitig defensiv beide Formate akzeptiert (ios/DriftmailApp/Networking/DateDecoding.swift), das ersetzt aber nicht die eigentliche Pruefung.
 
 Guter Zeitpunkt, das jetzt mitzunehmen: bei der anstehenden Postgres-Umstellung (Persistenz-Prioritaet) ist ohnehin klar zu entscheiden, welches Format jede Spalte tatsaechlich ausgibt. Bitte verifizieren/festlegen: volles ISO-8601 mit Uhrzeit fuer *-At-Felder (receivedAt etc.), reines yyyy-MM-dd fuer reine Datumsfelder (contractEnd, deadline etc.). Falls das aktuelle In-Memory-Backend das schon uneinheitlich macht, gleich bei der Postgres-Migration mit sauberem Spaltentyp (TIMESTAMPTZ vs. DATE) und korrekter Serialisierung angehen, statt es spaeter nochmal anzufassen. Kein Blocker fuer den aktuellen Stand, aber bitte vor dem naechsten Schritt beruecksichtigen, in dem Track C/F von Mock auf den echten Server umstellen.
+
+
+[2026-09-09] [offen] [PRIORITAET - grosse Luecke] [contracts/api-spec.yaml + Track A + Track C/F] — Massimo hat im laufenden iOS-Simulator getestet: es gibt komplett keinen "Senden"-Button bei Antworten. Verifiziert: api-spec.yaml hat KEINEN einzigen Endpunkt zum tatsaechlichen Versenden einer Mail -- nur POST /messages/{id}/reply-draft (generiert den KI-Entwurfstext) existiert. Ueberraschend, weil bereits viel Infrastruktur um einen Sendevorgang herum gebaut wurde (Phishing-Check vor dem Senden, outgoing_send_log, send_abuse_flags, Bot/Human-Missbrauchserkennung), aber der eigentliche Endpunkt, der das alles auslöst, wurde nie definiert. Echte Contract-Luecke, kein UI-Versehen.
+
+Neuer Endpoint noetig:
+```yaml
+  /messages/send:
+    post:
+      summary: >
+        Sendet eine Mail (neu oder Antwort). Loest VOR dem eigentlichen Versand
+        den Phishing-Check aus (POST /messages/draft/phishing-check-Logik,
+        blocked=true verhindert das Senden) und schreibt einen
+        outgoing_send_log-Eintrag fuer die Abuse-Erkennung.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, bodyText]
+              properties:
+                accountId: { type: string, format: uuid }
+                inReplyToMessageId: { type: string, format: uuid, nullable: true }
+                to:
+                  type: array
+                  items: { type: string }
+                cc:
+                  type: array
+                  items: { type: string }
+                subject: { type: string }
+                bodyText: { type: string }
+      responses:
+        "200":
+          description: Gesendet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sentMessageId: { type: string }
+        "422":
+          description: Blockiert (Phishing-Check hat blocked=true geliefert)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocked: { type: boolean }
+                  reason: { type: string }
+```
+
+Verhalten (Track A): Versand laeuft ausschliesslich ueber die Provider-API des verbundenen Kontos (Gmail API messages.send bzw. IMAP/SMTP mit Auth des Nutzers -- siehe fruehere Regel "Ausgehende Mail-Authentifizierung", Fall 1, kein eigener Mailserver). Vor dem eigentlichen Provider-Send-Call: Phishing-Check ausfuehren, bei blocked=true mit 422 abbrechen, KEIN Versand. Nach erfolgreichem Versand: outgoing_send_log-Eintrag schreiben (fuer die bereits bestehende Empfaenger-Reputations-/Abuse-Logik).
+
+Verhalten (Track C/F): Compose-/Antwort-Ansicht braucht einen sichtbaren "Senden"-Button, der POST /messages/send aufruft, NACHDEM der User den (ggf. KI-generierten und frei editierten) Text final bestaetigt hat. Bei 422-Antwort: Blockier-Hinweis anzeigen (wie beim Phishing-Check-Warnhinweis-Muster), Senden verhindern, kein stiller Fehlschlag.
+
+Kein Contract-Bruch fuer Bestehendes (reply-draft bleibt wie es ist, liefert nur den Text-Vorschlag). Bitte als naechstes nach der aktuell laufenden Persistenz-Arbeit einplanen, da es sich um eine grundlegende Kernfunktion handelt (Mail-Client ohne Senden-Button ist nicht nutzbar) -- bei Ressourcenkonflikt bitte kurz mit Massimo/Web abstimmen, ob das vor oder parallel zur Persistenz laufen soll.
