@@ -264,3 +264,21 @@ Kein Blocker, reine Ergaenzung fehlender Basis-Funktionalitaet, keine grosse Con
 2. Keine doppelte Signatur bei Antworten. Kontext bleibt wie in Track E umgesetzt (apply_to_new/apply_to_replies + is_default-Fallback, siehe SYNC.md-Antwort vom 08.09.) -- aber composeReplyDraft() darf die Signatur pro erzeugtem Antwort-Text nur EINMAL anhaengen, nicht mehrfach (z.B. falls die Funktion versehentlich zweimal aufgerufen wird oder der UI-Entwurf schon eine Signatur enthaelt und die Compose-UI selbst nochmal eine anhaengt). Bitte in composeReplyDraft() defensiv gegen doppeltes Anhaengen pruefen (z.B. Signatur-Text nicht anhaengen, wenn der uebergebene/bereits vorhandene Entwurfstext ihn am Ende bereits enthaelt), Testfall dafuer ergaenzen. Betrifft nur den EINEN neu erzeugten Antwort-Text selbst -- nicht die im Thread zitierten, bereits gesendeten fruehreren Nachrichten (deren eigene Signaturen im Zitat sind normal und kein Bug).
 
 Kein Blocker, kleine Praezisierung/Absicherung des bestehenden Verhaltens.
+
+
+[2026-09-08] [offen] [PRIORITAET] [Track A + Track B Integration] — Massimo: Track A und Track B jetzt zusammenfuehren (echte Erkennung statt Mock). Konkret:
+
+1. Branch-Strategie: track-b-security in track-a-backend mergen (oder umgekehrt, je nachdem wo weniger Konflikte entstehen -- Track A ist der "Konsument", daher vermutlich einfacher: track-b-security nach track-a-backend mergen, security-classification/ landet dann als Sub-Ordner/Package neben backend/).
+
+2. Ersetzen, was bisher Mock war (alles bereits in SYNC.md/backend/README.md als "bewusst Mock" dokumentiert):
+   - src/ai/mockAdapter.ts analyzeMail() -> echten Aufruf von security-classification's analyzeMail() ersetzen (Track B, Branch track-b-security, 79 Tests gruen).
+   - src/ai/draftPhishingCheckMock.ts -> echten Aufruf von security-classification's checkDraftForPhishing() ersetzen (Track B hat das laut SYNC.md bereits fertig: security-classification/src/draftPhishingCheck.ts).
+   - Die vier externen Lookups (src/lookups/*Mock.ts) bleiben vorerst Mock (das ist ein separates, noch nicht gestartetes Thema laut eurer eigenen Doku -- WHOIS/Spamhaus/fraud_alerts-Anbindung), NICHT Teil dieser Integration.
+
+3. Package-Verdrahtung: da noch kein gemeinsames npm-Package existiert (Entscheidung Terminal 09.09., bestaetigt), bitte security-classification/ vorerst per relativem Pfad-Import oder lokalem npm-Link einbinden (kein Registry-Publish noetig fuer diesen Schritt) -- pragmatischste Loesung waehlen, die die bestehenden Tests beider Seiten nicht bricht.
+
+4. Nach der Integration: Smoketest (src/smoketest.ts) muss weiterhin gruen sein, plus mindestens ein neuer Testfall, der zeigt, dass eine echte (nicht Mock-)Klassifikation durchlaeuft (z.B. eine Fixture-Mail, die Track B's echte Logik als Phishing erkennt, nicht nur die bisherige simple Mock-Heuristik).
+
+5. Grenzen weiterhin klar dokumentieren: was ist jetzt echt (Track-B-Klassifikation), was bleibt Mock (die vier externen Lookups) -- README.md entsprechend aktualisieren, nicht stillschweigend lassen.
+
+Kein Contract-Bruch zu erwarten (beide Seiten nutzen bereits dieselben Interfaces aus contracts/ai-adapter-interface.ts). Bei echten Konflikten/Unklarheiten waehrend der Integration bitte in SYNC.md (Branch nach dem Merge) oder TERMINAL_INBOX.md eintragen statt zu raten.
