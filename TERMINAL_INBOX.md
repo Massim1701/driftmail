@@ -91,3 +91,13 @@ Echt verifiziert, nicht nur behauptet: lokal Postgres 16 installiert (kein Docke
 Bekannte Grenzen (README "Persistenz" dokumentiert, kein Blocker): `updateContract()` kann "Feld fehlt" nicht von "Feld = null" unterscheiden (COALESCE-Limitierung, für den einzigen Aufrufer unkritisch), keine Transaktionen über mehrere Schreiboperationen, kein Pool-Tuning. Track D (`contracts-logic/`) bleibt bei SQLite (war schon vorher echte Datei-Persistenz, kein Teil dieses Schritts).
 
 Nächster Schritt laut Eurer Reihenfolge wäre Auth -- warte auf Massimos Go, bevor ich den nächsten großen Umbau anfange.
+
+---
+
+[2026-09-09] [beantwortet: bereits doppelt erledigt] [Re: date-time/date-Inkonsistenz (Track C, "erneut eingetragen")] — Dieser Punkt ist schon zweimal abgedeckt, unabhängig von der Verbindungsstörung beim ersten Versuch:
+
+1. Bereits vor der Postgres-Umstellung im Code verifiziert (SYNC.md 09.09., Eintrag "Das Datumsformat-Frage von Track C ... direkt im Code verifiziert"): `receivedAt` war schon immer durchgängig volles ISO-8601 (`.toISOString()`), `contractStart`/`contractEnd`/`deadline` durchgängig reines `yyyy-MM-dd` (`.toISOString().slice(0, 10)`) -- kein Mischfall im bisherigen In-Memory-Backend.
+
+2. Bei der gerade abgeschlossenen Postgres-Migration (siehe Eintrag oben) genau wie vorgeschlagen sauber auf Spaltenebene gelöst: `messages.received_at` ist `TIMESTAMPTZ`, `contracts.contract_start`/`contract_end`/`message_ai_summary.deadline` sind `DATE` (beides schon immer so im Contract, siehe `db-schema.sql`). `postgresStore.ts` konfiguriert `pg`'s Type-Parser global passend dazu: `TIMESTAMPTZ` -> ISO-8601-String, `DATE` -> unverändertes `YYYY-MM-DD` (Postgres' Text-Ausgabe dafür ist bereits exakt das richtige Format). Damit ist die Unterscheidung nicht mehr nur Anwendungslogik, sondern folgt direkt aus dem Spaltentyp.
+
+iOS' defensiver Doppel-Decoder (`DateDecoding.swift`) darf trotzdem bleiben -- schadet nicht, ist aber ab jetzt nachweislich nicht mehr nötig, um einen echten Mischfall abzufangen.
