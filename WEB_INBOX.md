@@ -346,3 +346,59 @@ Verhalten (Track A): Versand laeuft ausschliesslich ueber die Provider-API des v
 Verhalten (Track C/F): Compose-/Antwort-Ansicht braucht einen sichtbaren "Senden"-Button, der POST /messages/send aufruft, NACHDEM der User den (ggf. KI-generierten und frei editierten) Text final bestaetigt hat. Bei 422-Antwort: Blockier-Hinweis anzeigen (wie beim Phishing-Check-Warnhinweis-Muster), Senden verhindern, kein stiller Fehlschlag.
 
 Kein Contract-Bruch fuer Bestehendes (reply-draft bleibt wie es ist, liefert nur den Text-Vorschlag). Bitte als naechstes nach der aktuell laufenden Persistenz-Arbeit einplanen, da es sich um eine grundlegende Kernfunktion handelt (Mail-Client ohne Senden-Button ist nicht nutzbar) -- bei Ressourcenkonflikt bitte kurz mit Massimo/Web abstimmen, ob das vor oder parallel zur Persistenz laufen soll.
+
+
+[2026-09-09] [offen] [Erweiterung des Send-Endpunkt-Eintrags von eben, contracts/db-schema.sql + contracts/api-spec.yaml + Track A/C/F] — Massimo: Dateianhaenge beim Senden erlauben, aber nur nachdem sie geprueft (gescannt) wurden. Bestehende message_attachments-Tabelle (Anhang-Scan) hat scan_status ('pending'/'clean'/'malicious'/'blocked_type'/'scan_failed') und is_dangerous_type, ist aber ueber message_id an eine bereits existierende (empfangene) Nachricht gebunden -- fuer ausgehende Anhaenge (hochgeladen, BEVOR die gesendete Mail als messages-Zeile existiert) passt das nicht direkt. Vorschlag: message_id in message_attachments nullable machen plus neue Spalte fuer den Fall "Anhang gehoert zu einer noch nicht gesendeten Mail":
+
+```sql
+ALTER TABLE message_attachments ALTER COLUMN message_id DROP NOT NULL;
+ALTER TABLE message_attachments ADD COLUMN uploaded_by_user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+ALTER TABLE message_attachments ADD CONSTRAINT message_attachments_owner_check
+  CHECK (message_id IS NOT NULL OR uploaded_by_user_id IS NOT NULL);
+```
+
+Ablauf: Anhang wird ueber einen neuen Endpoint hochgeladen und SOFORT gescannt (message_id ist hier noch null, uploaded_by_user_id gesetzt), erst nach Bestaetigung scan_status = 'clean' darf die Anhang-ID beim eigentlichen Senden mitgegeben werden. Beim erfolgreichen Versand wird message_id nachtraeglich auf die neu entstandene gesendete Nachricht gesetzt (uploaded_by_user_id kann bleiben oder genullt werden, Track A entscheidet).
+
+Neuer Endpoint:
+```yaml
+  /attachments:
+    post:
+      summary: >
+        Datei hochladen und sofort scannen (vor dem eigentlichen Senden).
+        Muss scan_status='clean' liefern, bevor die attachmentId beim
+        Senden verwendet werden darf.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Hochgeladen, Scan-Ergebnis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attachmentId: { type: string, format: uuid }
+                  scanStatus:
+                    type: string
+                    enum: [pending, clean, malicious, blocked_type, scan_failed]
+```
+
+/messages/send (aus dem Eintrag von eben) bekommt ein neues optionales Feld:
+```yaml
+                attachmentIds:
+                  type: array
+                  items: { type: string, format: uuid }
+```
+
+Verhalten (Track A): POST /messages/send lehnt ab (422, gleiche Fehlerform wie beim Phishing-Block), wenn IRGENDEINE mitgegebene attachmentId nicht scan_status='clean' hat -- kein Versand mit ungeprueften oder als gefaehrlich erkannten Anhaengen, keine Ausnahme. Scan-Logik selbst (was genau "malicious"/"blocked_type" ausloest, z.B. gefaehrliche Dateiendungen wie .exe, Makro-Dokumente, echter Virenscan-Dienst) ist bewusst noch offen/spaeter zu spezifizieren -- fuer den ersten Durchstich reicht eine einfache Dateityp-/Endungspruefung (analog zu den bereits bestehenden Mock-Pattern-Ansaetzen an anderer Stelle), kein Blocker, echte Scan-Anbindung ist ein spaeterer Schritt wie bei den externen Lookups.
+
+Verhalten (Track C/F): Compose-UI braucht eine Anhang-Auswahl (Dateipicker), zeigt den Scan-Status waehrend/nach dem Hochladen (z.B. Spinner -> Haekchen oder Warn-Icon), Senden-Button bleibt deaktiviert/blockiert solange ein Anhang noch 'pending' oder nicht 'clean' ist.
+
+Kein Blocker, aber bitte zusammen mit dem Senden-Endpunkt von eben umsetzen, nicht getrennt -- beide haengen inhaltlich zusammen.
