@@ -541,6 +541,21 @@ components:
               type: array
               items:
                 $ref: "#/components/schemas/MessageLink"
+            quarantine:
+              $ref: "#/components/schemas/QuarantineInfo"
+
+    QuarantineInfo:
+      type: object
+      nullable: true
+      description: >
+        Nur gesetzt, wenn sich die Nachricht aktuell im Quarantaene-Ordner
+        befindet (quarantine-Tabelle in db-schema.sql), sonst null.
+        TERMINAL_INBOX.md 08.09. Punkt 6: bisher gab es keinen GET-Weg fuer
+        reason/auto_delete_at, obwohl die Spalten seit Track 0 existieren.
+      properties:
+        reason: { type: string }
+        autoDeleteAt: { type: string, format: date-time }
+        userReviewed: { type: boolean }
 
     MessageLink:
       type: object
