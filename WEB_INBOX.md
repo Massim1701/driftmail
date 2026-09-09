@@ -176,7 +176,7 @@ design-tokens.json: Farbrolle fuer sofortige Link-Markierung ergaenzen (nutzt vo
 Kein Blocker. Betrifft Track A (Recipient-Reputation-Logik, PII-Pattern-Erkennung) und alle Compose-/Anzeige-UI-Tracks (C/F).
 
 
-[2026-09-08] [offen] [PRIORITAET - bitte zuerst] [an Track B, dann A] — Massimo moechte, dass die Warteschlange jetzt konkret abgearbeitet wird, nicht weiter wachsen. Bitte in dieser Reihenfolge:
+[2026-09-08] [erledigt: alle 3 Schritte, siehe nachfolgende Eintraege (a5432e6 send_abuse_flags, Track B Sicherheits-Eintraege, Track A Backend)] [PRIORITAET - bitte zuerst] [an Track B, dann A] — Massimo moechte, dass die Warteschlange jetzt konkret abgearbeitet wird, nicht weiter wachsen. Bitte in dieser Reihenfolge:
 
 1. ZUERST: main in alle 6 Track-Branches mergen (falls noch nicht geschehen — Branches waren zuletzt 11 Commits hinter main, u.a. wegen Ordner-Umbau folder_id statt folder-Enum, user_ai_preference, spam_subcategory, Botnetz-Signale). Ohne das bauen alle Tracks gegen veraltete Contracts.
 
@@ -257,7 +257,7 @@ Kein Blocker, reine Ergaenzung fehlender Basis-Funktionalitaet, keine grosse Con
 [2026-09-08] [erledigt: 8341506 (Branch track-c-ios)] [ios/] — Track C hat den iOS-Teil umgesetzt: 6. System-Ordner "papierkorb" (Icon trash-2, weder umbenennbar noch löschbar wie quarantaene/spam), `APIClient` um `deleteMessage(id:)` (DELETE /messages/{id}, soft delete) und `permanentlyDeleteMessage(id:)` (DELETE /messages/{id}/permanent) erweitert, `MockAPIClient` implementiert beide, `RemoteAPIClient` als Skelett verdrahtet. UI: Swipe-Action "Löschen" in der Nachrichtenliste (im Papierkorb-Ordner selbst "Endgültig löschen" mit Bestätigungsdialog statt nochmal Verschieben), zusätzlicher destruktiver Button in der Detailansicht analog zum bestehenden "Verschieben nach…"-Menü. Build gegen iphonesimulator geprüft (BUILD SUCCEEDED), Papierkorb-Ordner im Simulator per Screenshot verifiziert (Icon, Name, Count korrekt); Tap-Interaktionen weiterhin nicht automatisierbar in dieser Umgebung (wie in den vorherigen iOS-Einträgen vermerkt). Details: ios/README.md, SYNC.md auf track-c-ios. Damit ist der Papierkorb-Nachtrag aus Contract + Track A + Track C + Track F vollständig umgesetzt.
 
 
-[2026-09-08] [offen] [Track E + Track A + Compose-UI (C/F)] — Zwei Klarstellungen zum Compose-/Antwort-Flow:
+[2026-09-08] [erledigt: 4920b19 (Branch track-e-mail-actions, 09.09.), Punkt 1 reine Bestaetigung ohne Code-Aenderung] [Track E + Track A + Compose-UI (C/F)] — Zwei Klarstellungen zum Compose-/Antwort-Flow:
 
 1. Compose-Text bleibt vollstaendig user-editierbar, KI-Entwurf ist nur Vorschlag. Das ist bereits Contract-Prinzip (siehe ai-adapter-interface.ts Kommentar zu draftReply: "Ergebnis geht nie automatisch raus, immer Review/Edit/Send durch User") -- hier nochmal explizit bestaetigt, keine Aenderung, nur zur Sicherheit dokumentiert: der generierte draftText ist ein editierbares Textfeld in der UI, kein read-only Vorschlag, User kann alles frei umschreiben bevor gesendet wird.
 

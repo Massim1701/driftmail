@@ -10,7 +10,7 @@ Format: [Datum] [Status] [Betrifft] — Beschreibung
 
 ---
 
-[2026-09-08] [offen] [SYNC.md Attribution] — Korrektur zu WEB_INBOX.md-Eintrag von eben: die beiden Commits sind NICHT von Claude Code/Terminal. Git-Beleg:
+[2026-09-08] [beantwortet: siehe "[web] [Antworten auf offene Punkte]" unten, Punkt 2] [SYNC.md Attribution] — Korrektur zu WEB_INBOX.md-Eintrag von eben: die beiden Commits sind NICHT von Claude Code/Terminal. Git-Beleg:
 
 ```
 c7efeee Massim1701 <welove80sde@gmail.com> Document important contract changes for folder management
@@ -29,7 +29,7 @@ Nebenbei erledigt: main wurde wie im PRIORITAET-Eintrag gefordert in alle 6 Trac
 
 ---
 
-[2026-09-08] [offen] [Konsolidierte offene Fragen aus allen 6 Track-Branches] — Massimo hat gefragt, ob SYNC.md komplett abgearbeitet ist. Antwort: main selbst zeigt nur die 2 längst beantworteten Fragen (Status-Tabelle auf main ist auch veraltet, alle 6 Tracks sind "fertig" auf ihrem jeweiligen Branch, aber der Integrations-Schritt hat noch nicht stattgefunden). Auf den einzelnen Branches liegen aber noch mehrere offene Fragen, die eine Produkt-/Architekturentscheidung brauchen, keine reinen Bugfixes. Eine reine Contract-Lücke habe ich direkt gefixt (Commit `f268d39`: `Contract.contractEnd`/`cancellationDeadline`/`cancellationPeriodDays` fehlte `nullable: true` in api-spec.yaml, obwohl ai-adapter-interface.ts sie als nullable führt — Track-D-Fund). Die folgenden brauchen euch/Massimo:
+[2026-09-08] [beantwortet: alle 7 Punkte abgearbeitet, siehe "[web] [Antworten auf offene Punkte]" unten] [Konsolidierte offene Fragen aus allen 6 Track-Branches] — Massimo hat gefragt, ob SYNC.md komplett abgearbeitet ist. Antwort: main selbst zeigt nur die 2 längst beantworteten Fragen (Status-Tabelle auf main ist auch veraltet, alle 6 Tracks sind "fertig" auf ihrem jeweiligen Branch, aber der Integrations-Schritt hat noch nicht stattgefunden). Auf den einzelnen Branches liegen aber noch mehrere offene Fragen, die eine Produkt-/Architekturentscheidung brauchen, keine reinen Bugfixes. Eine reine Contract-Lücke habe ich direkt gefixt (Commit `f268d39`: `Contract.contractEnd`/`cancellationDeadline`/`cancellationPeriodDays` fehlte `nullable: true` in api-spec.yaml, obwohl ai-adapter-interface.ts sie als nullable führt — Track-D-Fund). Die folgenden brauchen euch/Massimo:
 
 1. ~~**Kein Auth-/User-Konzept in api-spec.yaml**~~ **Beantwortet (Web, 08.09., Commit `42a8b53`):** `security: bearerAuth`, neuer Endpoint `/auth/session`, `userId` wird serverseitig aus dem Token aufgelöst, nie aus Request-Body/Query/Pfad vertraut. YAML geprüft (valide, sauber strukturiert). Wird jetzt in Track A umgesetzt.
 2. ~~**Wer macht externe Lookups?**~~ **Beantwortet (Web, 08.09., siehe SYNC.md):** einheitlich Track A als Nachbearbeitungsschritt nach `analyzeMail()`/`checkDraftForPhishing()`, `security-classification/` bleibt zustandslos, kein Contract-Bruch. Idealerweise als mockbare Adapter analog Track E. **Umgesetzt** (Track A, siehe Änderungsprotokoll).
