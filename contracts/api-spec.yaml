@@ -308,6 +308,14 @@ paths:
                     properties:
                       displayText: { type: string }
                       actualUrl: { type: string }
+                recipientAddress:
+                  type: string
+                  nullable: true
+                  description: >
+                    Optional. Ziel-Adresse des Entwurfs, Grundlage für
+                    recipientReputation (siehe unten). Ohne dieses Feld bleibt
+                    recipientReputation "unknown" (SYNC.md 08.09., kleinere
+                    Contract-Ergänzung).
       responses:
         "200":
           description: Ergebnis
