@@ -5,6 +5,7 @@ import { aiAdapter } from "../ai";
 import { checkDraftForPhishing } from "@driftmail/security-classification";
 import { recipientReputationLookup } from "../lookups";
 import { adapterForAccount } from "../mail/sync";
+import { parseListUnsubscribeHeader } from "../mail/listUnsubscribe";
 import type { AiSource, ApiDraftPhishingCheckLink } from "../types";
 import type { MessageRecord } from "../types";
 
@@ -250,6 +251,43 @@ messagesRouter.post("/messages/:messageId/quarantine", async (req, res) => {
 
   const record = await store.quarantineMessage(message.id, "manuell durch User");
   res.json(record);
+});
+
+// POST /messages/:messageId/unsubscribe — siehe api-spec.yaml. War im
+// Contract bereits seit Track 0 definiert, aber bisher von keinem Code
+// implementiert -- beim Umsetzen der automatischen Abmeldung (WEB_INBOX.md
+// 09.09. "Automatisches Abmelden bei Spam", siehe mail/sync.ts) nachgezogen,
+// da beide denselben Store-Mechanismus (insertUnsubscribeAction) brauchen.
+// Manuell vom User angestoßen -> status='pending_confirmation' (anders als
+// die automatische Variante, die direkt 'confirmed' setzt, siehe
+// mail/sync.ts maybeAutoUnsubscribeFromSpam()). NIE Klick auf Links im
+// Mail-Body, nur der sichere List-Unsubscribe-Header-Mechanismus.
+messagesRouter.post("/messages/:messageId/unsubscribe", async (req, res) => {
+  const message = await store.getMessage(req.params.messageId);
+  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+
+  const parsed = parseListUnsubscribeHeader(message.rawHeaders);
+  if (!parsed) {
+    return res.status(400).json({ error: "Nachricht hat keinen gültigen List-Unsubscribe-Header" });
+  }
+
+  const account = await store.getMailAccount(message.mailAccountId);
+  if (!account) {
+    // Sollte praktisch nie passieren, siehe analoge Absicherung bei
+    // DELETE /messages/:messageId oben.
+    return res.status(500).json({ error: "Mail-Konto für diese Nachricht nicht gefunden" });
+  }
+
+  const action = await store.insertUnsubscribeAction({
+    userId: account.userId,
+    messageId: message.id,
+    method: "manual",
+    listUnsubscribeHeaderValue: parsed.raw,
+    status: "pending_confirmation",
+    userConfirmedAt: null,
+  });
+
+  res.status(200).json({ status: action.status });
 });
 
 // POST /messages/:messageId/move — siehe api-spec.yaml (neu durch die

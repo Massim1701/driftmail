@@ -1,6 +1,7 @@
 // Mapping interne Records (snake_case-Semantik aus db-schema.sql) ->
 // API-Response-Shapes (camelCase aus api-spec.yaml).
 
+import { parseListUnsubscribeHeader } from "./mail/listUnsubscribe";
 import type {
   ApiContract,
   ApiDraft,
@@ -75,6 +76,7 @@ export function toApiMessageDetail(
     bodyText: m.bodyText,
     security: security ? toApiSecurityResult(security) : null,
     quarantine: quarantine ? toApiQuarantineInfo(quarantine) : null,
+    canUnsubscribe: parseListUnsubscribeHeader(m.rawHeaders) !== null,
   };
 }
 

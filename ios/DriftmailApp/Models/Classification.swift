@@ -19,3 +19,12 @@ enum AiSource: String, Codable {
 enum PassFailNone: String, Codable {
     case pass, fail, none
 }
+
+/// Response of `POST /messages/{messageId}/unsubscribe` (WEB_INBOX.md 09.09.
+/// "Automatische Abmeldung bei Spam"), mirrors `unsubscribe_actions.status`
+/// in contracts/db-schema.sql.
+enum UnsubscribeStatus: String, Codable {
+    case pendingConfirmation = "pending_confirmation"
+    case confirmed
+    case rejected
+}

@@ -358,6 +358,11 @@ export const messages = [
     folderId: SPAM,
     security: securitySpam(),
     bodyText: "Riesenrabatte nur für kurze Zeit. Jetzt zuschlagen, bevor es zu spät ist!",
+    // Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.): Mock für den
+    // List-Unsubscribe-Header, den das echte Backend syntaktisch auswertet
+    // (backend/src/mail/listUnsubscribe.ts) -- hier nur ein einfaches Flag,
+    // da der Mock-Server keine echten rawHeaders modelliert.
+    hasListUnsubscribe: true,
   },
   {
     id: "b5000000-0000-0000-0000-000000000002",
@@ -368,6 +373,7 @@ export const messages = [
     folderId: SPAM,
     security: securitySpam(),
     bodyText: "Verlieren Sie 10kg in einer Woche mit diesem einfachen Trick.",
+    hasListUnsubscribe: true,
   },
   {
     id: "b5000000-0000-0000-0000-000000000003",
@@ -437,6 +443,7 @@ export function messageDetail(msg) {
     ...messageSummary(msg),
     bodyText: msg.bodyText,
     security: msg.security,
+    canUnsubscribe: msg.hasListUnsubscribe === true,
   };
 }
 

@@ -34,6 +34,7 @@ import type {
   QuarantineRecord,
   SecurityAuditLogRecord,
   SystemFolderKey,
+  UnsubscribeActionRecord,
   User,
   UserAiCapabilityRecord,
 } from "../types";
@@ -190,6 +191,19 @@ function rowToDraft(r: any): DraftRecord {
     subject: r.subject,
     bodyText: r.body_text,
     updatedAt: r.updated_at,
+  };
+}
+
+function rowToUnsubscribeAction(r: any): UnsubscribeActionRecord {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    messageId: r.message_id,
+    method: r.method,
+    listUnsubscribeHeaderValue: r.list_unsubscribe_header_value,
+    status: r.status,
+    triggeredAt: r.triggered_at,
+    userConfirmedAt: r.user_confirmed_at,
   };
 }
 
@@ -788,5 +802,35 @@ export class PostgresStore implements Store {
   async deleteDraft(id: string): Promise<boolean> {
     const { rowCount } = await this.pool.query("DELETE FROM drafts WHERE id = $1", [id]);
     return (rowCount ?? 0) > 0;
+  }
+
+  // ----- Unsubscribe -----
+
+  async insertUnsubscribeAction(input: Omit<UnsubscribeActionRecord, "id" | "triggeredAt">): Promise<UnsubscribeActionRecord> {
+    const { rows } = await this.pool.query(
+      `INSERT INTO unsubscribe_actions (user_id, message_id, method, list_unsubscribe_header_value, status, user_confirmed_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [input.userId, input.messageId, input.method, input.listUnsubscribeHeaderValue, input.status, input.userConfirmedAt],
+    );
+    return rowToUnsubscribeAction(rows[0]);
+  }
+
+  async listUnsubscribeActions(filter: { userId?: string; messageId?: string | null }): Promise<UnsubscribeActionRecord[]> {
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    if (filter.userId) {
+      params.push(filter.userId);
+      conditions.push(`user_id = $${params.length}`);
+    }
+    if (filter.messageId === null) {
+      conditions.push(`message_id IS NULL`);
+    } else if (filter.messageId !== undefined) {
+      params.push(filter.messageId);
+      conditions.push(`message_id = $${params.length}`);
+    }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const { rows } = await this.pool.query(`SELECT * FROM unsubscribe_actions ${where}`, params);
+    return rows.map(rowToUnsubscribeAction);
   }
 }

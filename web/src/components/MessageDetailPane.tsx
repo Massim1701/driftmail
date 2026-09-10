@@ -92,6 +92,8 @@ export function MessageDetailPane({
   const [sent, setSent] = useState(false);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [unsubscribing, setUnsubscribing] = useState(false);
+  const [unsubscribeStatus, setUnsubscribeStatus] = useState<"pending_confirmation" | "confirmed" | "rejected" | null>(null);
 
   // Beim Wechsel der Nachricht abgeleiteten Zustand zurücksetzen
   useEffect(() => {
@@ -101,6 +103,7 @@ export function MessageDetailPane({
     setSent(false);
     setShowDetails(false);
     setAttachments([]);
+    setUnsubscribeStatus(null);
   }, [message?.id]);
 
   if (loading) {
@@ -143,6 +146,22 @@ export function MessageDetailPane({
       onQuarantined(message.id);
     } finally {
       setQuarantining(false);
+    }
+  }
+
+  // POST /messages/{id}/unsubscribe (WEB_INBOX.md 09.09. "Automatische
+  // Abmeldung bei Spam", manueller Pfad) -- nur sichtbar, wenn
+  // message.canUnsubscribe=true. Läuft unabhängig von der Klassifikation:
+  // auch eine als phishing/unclear eingestufte Mail mit gültigem
+  // List-Unsubscribe-Header kann der User hierüber manuell abmelden.
+  async function handleUnsubscribe() {
+    if (!message) return;
+    setUnsubscribing(true);
+    try {
+      const res = await api.unsubscribeFromMessage(message.id);
+      setUnsubscribeStatus(res.status);
+    } finally {
+      setUnsubscribing(false);
     }
   }
 
@@ -322,6 +341,19 @@ export function MessageDetailPane({
           <button type="button" className="btn btn-secondary" onClick={loadDraft} disabled={draftLoading}>
             {draftLoading ? "Erstelle Entwurf…" : "Antwortentwurf erstellen"}
           </button>
+        )}
+        {/* Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.): manueller
+            Abmelden-Button, unabhängig von der Klassifikation -- nur wenn
+            die Nachricht einen gültigen List-Unsubscribe-Header hat. */}
+        {message.canUnsubscribe && unsubscribeStatus === null && (
+          <button type="button" className="btn btn-secondary" onClick={handleUnsubscribe} disabled={unsubscribing}>
+            {unsubscribing ? "Melde ab…" : "Von Absender abmelden"}
+          </button>
+        )}
+        {unsubscribeStatus !== null && (
+          <span className="unsubscribe-status">
+            {unsubscribeStatus === "pending_confirmation" ? "Abmeldung angestoßen" : "Abgemeldet"}
+          </span>
         )}
         <select
           className="move-select"

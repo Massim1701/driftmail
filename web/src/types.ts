@@ -62,6 +62,10 @@ export interface SecurityResult {
 export interface MessageDetail extends Message {
   bodyText: string;
   security: SecurityResult;
+  // Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.): steuert, ob der
+  // "Abmelden"-Button für POST /messages/{id}/unsubscribe angezeigt wird --
+  // unabhängig von classification (siehe backend/README.md).
+  canUnsubscribe: boolean;
 }
 
 // GET/POST /drafts, PATCH/DELETE /drafts/{id} (WEB_INBOX.md 09.09.

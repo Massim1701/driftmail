@@ -30,6 +30,7 @@ import type {
   QuarantineRecord,
   SecurityAuditLogRecord,
   SystemFolderKey,
+  UnsubscribeActionRecord,
   User,
   UserAiCapabilityRecord,
 } from "../types";
@@ -123,6 +124,16 @@ export interface Store {
     patch: Partial<Pick<DraftRecord, "toAddresses" | "ccAddresses" | "subject" | "bodyText">>,
   ): Promise<DraftRecord | undefined>;
   deleteDraft(id: string): Promise<boolean>;
+
+  // ----- Unsubscribe (POST /messages/{id}/unsubscribe + automatische
+  // Abmeldung bei Spam, WEB_INBOX.md 09.09. "Automatisches Abmelden bei
+  // Spam") -----
+  insertUnsubscribeAction(input: Omit<UnsubscribeActionRecord, "id" | "triggeredAt">): Promise<UnsubscribeActionRecord>;
+  /** `messageId: null` filtert gezielt auf Einträge OHNE Nachricht (adult/
+   * gambling-Auto-Delete-Pfad, siehe UnsubscribeActionRecord-Kommentar);
+   * `messageId` weggelassen filtert gar nicht danach. Nur für den
+   * Smoketest gedacht (kein API-Endpunkt liest diese Liste). */
+  listUnsubscribeActions(filter: { userId?: string; messageId?: string | null }): Promise<UnsubscribeActionRecord[]>;
 }
 
 /** In-Memory-Implementierung (Standard, wenn DATABASE_URL nicht gesetzt ist).
@@ -147,6 +158,9 @@ export class InMemoryStore implements Store {
   userAiCapability: Map<string, UserAiCapabilityRecord> = new Map(); // key: userId:platform
   // `drafts` (db-schema.sql) -- siehe DraftRecord-Kommentar in types.ts.
   drafts: DraftRecord[] = [];
+  // `unsubscribe_actions` (db-schema.sql) -- siehe UnsubscribeActionRecord-
+  // Kommentar in types.ts.
+  unsubscribeActions: UnsubscribeActionRecord[] = [];
 
   // ----- Externe Lookup-Adapter (SYNC.md 08.09., Web-Antwort "vier externe
   // Lookups") -----
@@ -508,6 +522,20 @@ export class InMemoryStore implements Store {
     if (idx === -1) return false;
     this.drafts.splice(idx, 1);
     return true;
+  }
+
+  // ----- Unsubscribe -----
+
+  async insertUnsubscribeAction(input: Omit<UnsubscribeActionRecord, "id" | "triggeredAt">): Promise<UnsubscribeActionRecord> {
+    const record: UnsubscribeActionRecord = { id: randomUUID(), triggeredAt: new Date().toISOString(), ...input };
+    this.unsubscribeActions.push(record);
+    return record;
+  }
+
+  async listUnsubscribeActions(filter: { userId?: string; messageId?: string | null }): Promise<UnsubscribeActionRecord[]> {
+    return this.unsubscribeActions
+      .filter((a) => (filter.userId ? a.userId === filter.userId : true))
+      .filter((a) => (filter.messageId === undefined ? true : a.messageId === filter.messageId));
   }
 }
 

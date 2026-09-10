@@ -303,6 +303,53 @@ nur `src/ai/index.ts` (siehe oben "Was ist echt, was ist Mock/Stub").
 Integration mit Track B (echte `spamSubcategory`-Werte statt Mock) ist ein
 separater, noch offener Schritt.
 
+## Automatische Abmeldung bei Spam
+
+Seit dem Contract-Update vom 09.09. (`WEB_INBOX.md` "Automatische Abmeldung
+bei Spam", Tabelle `unsubscribe_actions` in `contracts/db-schema.sql`,
+Endpunkt `POST /messages/{messageId}/unsubscribe` in
+`contracts/api-spec.yaml`) gibt es zwei Wege, eine `unsubscribe_actions`-Zeile
+anzulegen:
+
+- **Automatisch** (`src/mail/sync.ts`, `maybeAutoUnsubscribeFromSpam()`): nur
+  wenn `classification === "spam"` (egal welche `spamSubcategory`) UND die
+  Mail einen syntaktisch gültigen `List-Unsubscribe`-Header hat. Läuft direkt
+  in der Sync-Pipeline, entweder nach dem Anlegen der normalen `messages`-Zeile
+  (`message_id` gesetzt) oder — bei adult/gambling-Spam — **vor** dem
+  Auto-Delete (siehe oben), mit `message_id = null`, da dort nie eine
+  `messages`-Zeile existiert. Status landet direkt auf `'confirmed'`
+  (`user_confirmed_at = now()`), da hier kein User in der Schleife ist.
+  `classification === "phishing"` löst NIE automatisch aus, auch wenn ein
+  (dann meist gefälschter) `List-Unsubscribe`-Header vorhanden ist — ein
+  Angreifer könnte sonst über einen frei erfundenen Header serverseitig einen
+  Netzwerk-Call/E-Mail-Versand an eine beliebige Adresse auslösen.
+- **Manuell** (`POST /messages/:messageId/unsubscribe`, `src/routes/
+  messages.ts`): prüft nur, ob die (bereits gespeicherte) Nachricht einen
+  gültigen `List-Unsubscribe`-Header hat — unabhängig von ihrer
+  Klassifikation, da hier explizit der User selbst entscheidet. `404` wenn die
+  `messageId` unbekannt ist, `400` wenn kein gültiger Header vorliegt, sonst
+  `200` mit einer neuen Zeile im Status `'pending_confirmation'`.
+
+**Header-Parsing** (`src/mail/listUnsubscribe.ts`,
+`parseListUnsubscribeHeader()`): liest `mailto:`/`https:`-URIs aus den
+kommagetrennten `<...>`-Einträgen von RFC 2369 (`List-Unsubscribe`), analog zu
+RFC 8058. **Bewusste Einschränkung:** rein syntaktische Auswertung — es wird
+nie wirklich eine Mail verschickt oder eine URL aufgerufen (kein
+Netzwerk-Call), und der `List-Unsubscribe-Post`-Header (RFC 8058,
+One-Click-Bestätigung per POST) wird nicht geprüft/verlangt. Für einen
+echten Versand/Call bräuchte es eine explizite Freigabe (Netzwerkzugriff auf
+beliebige, aus Mail-Headern stammende Adressen ist ein reales Missbrauchs-
+/SSRF-Risiko) — außerhalb des Rahmens dieses ersten Durchstichs.
+
+**Contract-Ergänzung (kleine, additive Änderung ohne Web-Vorabsprache, siehe
+Muster unten "Annahmen"):** `unsubscribe_actions.message_id` war im Contract
+`NOT NULL REFERENCES messages(id)`, das widerspricht aber direkt Webs eigener
+Vorgabe, bei adult/gambling-Spam VOR dem Verwerfen abzumelden (dort gibt es
+nie eine `messages`-Zeile). Analog zum bereits bestehenden Muster in
+`security_audit_log` (identisches Problem, dort bereits mit eigener
+`user_id`-Spalte + nullable `message_id` gelöst) `message_id` nullable gemacht
+und eine `user_id`-Spalte ergänzt.
+
 ## Ordner (benutzerdefiniert)
 
 Seit dem Contract-Update vom 08.09. (SYNC.md, Commit `734781e`) sind

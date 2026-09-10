@@ -62,6 +62,12 @@ export const api = {
   quarantineMessage: (id: string) =>
     request<unknown>(`/messages/${id}/quarantine`, { method: "POST" }),
 
+  // POST /messages/{id}/unsubscribe (WEB_INBOX.md 09.09. "Automatische
+  // Abmeldung bei Spam", manueller Pfad) -- nur aufrufbar, wenn
+  // MessageDetail.canUnsubscribe=true ist (siehe backend/README.md).
+  unsubscribeFromMessage: (id: string) =>
+    request<{ status: "pending_confirmation" | "confirmed" | "rejected" }>(`/messages/${id}/unsubscribe`, { method: "POST" }),
+
   // Soft delete: verschiebt die Nachricht in den Papierkorb (analog moveMessage,
   // nur mit fest verdrahtetem Ziel-Ordner serverseitig statt frei wählbarem folderId).
   deleteMessage: (id: string) => request<Message>(`/messages/${id}`, { method: "DELETE" }),

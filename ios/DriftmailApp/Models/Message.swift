@@ -42,6 +42,11 @@ struct MessageDetail: Codable, Identifiable, Hashable {
     let classification: Classification
     let bodyText: String?
     let security: SecurityResult?
+    /// Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.): true, wenn die
+    /// Nachricht einen syntaktisch gültigen List-Unsubscribe-Header hat
+    /// (unabhängig von classification) -- steuert den "Von Absender
+    /// abmelden"-Button in MessageDetailView, siehe backend/README.md.
+    let canUnsubscribe: Bool
 
     var asMessage: Message {
         Message(
@@ -68,7 +73,8 @@ struct MessageDetail: Codable, Identifiable, Hashable {
             folderId: newFolderId,
             classification: classification,
             bodyText: bodyText,
-            security: security
+            security: security,
+            canUnsubscribe: canUnsubscribe
         )
     }
 }

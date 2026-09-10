@@ -19,6 +19,15 @@ protocol APIClient {
     func fetchMessages(folderId: String?, accountId: String?) async throws -> [Message]
     func fetchMessageDetail(id: String) async throws -> MessageDetail
     func quarantineMessage(id: String) async throws
+    /// `POST /messages/{messageId}/unsubscribe` — manuelle Abmeldung über
+    /// den List-Unsubscribe-Header der Nachricht (WEB_INBOX.md 09.09.
+    /// "Automatische Abmeldung bei Spam"). Nur sinnvoll aufrufbar, wenn
+    /// `MessageDetail.canUnsubscribe == true`; der Server prüft das
+    /// zusätzlich selbst (400, falls kein gültiger Header vorliegt).
+    /// Unabhängig von `classification` — läuft NICHT automatisch bei
+    /// phishing, aber der User kann trotzdem manuell abmelden, siehe
+    /// backend/README.md. Gibt den resultierenden Status zurück.
+    func unsubscribeFromMessage(id: String) async throws -> UnsubscribeStatus
     /// `POST /messages/{messageId}/move` — Nachricht in einen anderen
     /// (System- oder eigenen) Ordner verschieben.
     func moveMessage(id: String, toFolderId: String) async throws -> Message

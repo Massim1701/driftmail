@@ -56,6 +56,12 @@ struct RemoteAPIClient: APIClient {
         let _: EmptyResponse = try await post("/messages/\(id)/quarantine", body: Optional<String>.none)
     }
 
+    func unsubscribeFromMessage(id: String) async throws -> UnsubscribeStatus {
+        struct Response: Decodable { let status: UnsubscribeStatus }
+        let response: Response = try await post("/messages/\(id)/unsubscribe", body: Optional<String>.none)
+        return response.status
+    }
+
     func moveMessage(id: String, toFolderId: String) async throws -> Message {
         struct Body: Encodable { let folderId: String }
         return try await post("/messages/\(id)/move", body: Body(folderId: toFolderId))

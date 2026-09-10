@@ -225,9 +225,16 @@ paths:
   /messages/{messageId}/unsubscribe:
     post:
       summary: >
-        Abmeldung ueber RFC-8058 List-Unsubscribe-Header anstoßen. Legt einen
-        unsubscribe_actions-Eintrag mit status='pending_confirmation' an,
-        nie automatischer Klick auf Links im Mail-Body.
+        Manuelle Abmeldung ueber RFC-8058 List-Unsubscribe-Header anstoßen.
+        Legt einen unsubscribe_actions-Eintrag mit status='pending_confirmation'
+        an, nie automatischer Klick auf Links im Mail-Body. 400, wenn die
+        Nachricht keinen gueltigen List-Unsubscribe-Header hat. Siehe auch
+        WEB_INBOX.md 09.09. "Automatisches Abmelden bei Spam": fuer
+        Nachrichten mit classification='spam' (NIE 'phishing') loest das
+        Backend denselben Mechanismus zusaetzlich automatisch aus (ohne
+        Rueckfrage, status='confirmed' direkt) -- dieser Endpunkt bleibt der
+        Weg fuer eine vom User selbst angestoßene Abmeldung bei allen
+        anderen Nachrichten mit einem List-Unsubscribe-Header.
       parameters:
         - name: messageId
           in: path
@@ -246,6 +253,10 @@ paths:
                   status:
                     type: string
                     enum: [pending_confirmation, confirmed, rejected]
+        "400":
+          description: Nachricht hat keinen gueltigen List-Unsubscribe-Header
+        "404":
+          description: Nachricht nicht gefunden
 
   /messages/{messageId}/summary:
     get:
@@ -761,6 +772,13 @@ components:
                 $ref: "#/components/schemas/MessageLink"
             quarantine:
               $ref: "#/components/schemas/QuarantineInfo"
+            canUnsubscribe:
+              type: boolean
+              description: >
+                true, wenn die Nachricht einen syntaktisch gueltigen
+                List-Unsubscribe-Header hat (unabhaengig von classification)
+                -- steuert, ob die Client-UI den manuellen Abmelden-Button
+                zu POST /messages/{messageId}/unsubscribe anbietet.
 
     QuarantineInfo:
       type: object

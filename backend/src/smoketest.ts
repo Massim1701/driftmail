@@ -43,6 +43,43 @@ async function main() {
     "wiederholter Sync sollte keinen zweiten Audit-Log-Eintrag für dieselbe Mail erzeugen",
   );
 
+  // Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09. "Automatische
+  // Abmeldung bei Spam"): List-Unsubscribe-Header wird bei spam-Klassifikation
+  // automatisch ausgewertet und als 'confirmed' in unsubscribe_actions
+  // protokolliert -- rein syntaktische Auswertung, kein echter Netzwerk-Call
+  // (siehe mail/listUnsubscribe.ts). Direkt nach dem Sync geprüft, bevor die
+  // spätere Papierkorb-Sektion Fixture 3 löscht.
+  const fixture3ForUnsub = await store.findMessageByHeader(account.id, "<fixture-3@newsletter-deals.example>");
+  assert(fixture3ForUnsub !== undefined, "Fixture 3 sollte importiert worden sein (Abmelde-Test)");
+  const fixture3UnsubActions = await store.listUnsubscribeActions({ messageId: fixture3ForUnsub!.id });
+  assert(
+    fixture3UnsubActions.some((a) => a.status === "confirmed" && a.method === "list_unsubscribe_header"),
+    "Fixture 3 (Marketing-Spam mit List-Unsubscribe-Header) sollte automatisch abgemeldet worden sein",
+  );
+
+  // Fixture 5 (adult/gambling, auto-gelöscht): Abmeldung muss VOR dem
+  // Verwerfen laufen, messageId=null, da nie eine messages-Zeile angelegt wird.
+  const fixture5UnsubActions = await store.listUnsubscribeActions({ messageId: null });
+  assert(
+    fixture5UnsubActions.some(
+      (a) =>
+        a.status === "confirmed" &&
+        a.method === "list_unsubscribe_header" &&
+        (a.listUnsubscribeHeaderValue ?? "").includes("casino-bonus-express"),
+    ),
+    "Fixture 5 (adult/gambling-Spam) sollte VOR dem Auto-Delete automatisch abgemeldet worden sein (messageId=null)",
+  );
+
+  // Fixture 2 (Phishing mit gefälschtem List-Unsubscribe-Header): automatische
+  // Abmeldung gilt laut Auftrag NUR für classification='spam', nicht 'phishing'.
+  const fixture2ForUnsub = await store.findMessageByHeader(account.id, "<fixture-2@sicherheit-konto-check.tk>");
+  assert(fixture2ForUnsub !== undefined, "Fixture 2 sollte importiert worden sein (Abmelde-Test)");
+  const fixture2UnsubActionsAuto = await store.listUnsubscribeActions({ messageId: fixture2ForUnsub!.id });
+  assert(
+    fixture2UnsubActionsAuto.length === 0,
+    "Fixture 2 (Phishing) darf trotz vorhandenem Header NICHT automatisch abgemeldet werden",
+  );
+
   const app = createApp();
   const server: Server = app.listen(0);
   const address = server.address();
@@ -654,7 +691,31 @@ async function main() {
       "Empfänger-Domain, die schon als Phishing-Absender aufgefallen ist, sollte recipientReputation='flagged' liefern",
     );
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter) end-to-end grün.");
+    // POST /messages/:messageId/unsubscribe (WEB_INBOX.md 09.09. "Automatische
+    // Abmeldung bei Spam", manueller Pfad): prüft nur, ob der Header
+    // syntaktisch vorhanden ist -- unabhängig von der Klassifikation. Fixture 2
+    // (Phishing mit gefälschtem Header) liefert deshalb hier bewusst 200, im
+    // Gegensatz zum automatischen Pfad oben, der Phishing ausschließt.
+    // MessageDetail.canUnsubscribe (kleine Contract-Ergänzung, siehe README
+    // "Automatische Abmeldung bei Spam"): steuert die Sichtbarkeit des
+    // Abmelden-Buttons in der Client-UI, unabhängig von der Klassifikation.
+    assert(fixture2Detail.canUnsubscribe === true, "Fixture 2 (mit List-Unsubscribe-Header) sollte canUnsubscribe=true liefern");
+    assert(fixture4Detail.canUnsubscribe === false, "Fixture 4 (ohne List-Unsubscribe-Header) sollte canUnsubscribe=false liefern");
+
+    const manualUnsubRes = await fetch(`${base}/v1/messages/${fixture2!.id}/unsubscribe`, { method: "POST" });
+    assert(manualUnsubRes.status === 200, "POST .../unsubscribe auf eine Nachricht mit List-Unsubscribe-Header sollte 200 liefern");
+    const manualUnsub = (await manualUnsubRes.json()) as Record<string, unknown>;
+    assert(manualUnsub.status === "pending_confirmation", "manuelle Abmeldung sollte status 'pending_confirmation' liefern");
+
+    // Edge Case: Nachricht ohne List-Unsubscribe-Header -> 400.
+    const manualUnsubNoHeaderRes = await fetch(`${base}/v1/messages/${fixture1!.id}/unsubscribe`, { method: "POST" });
+    assert(manualUnsubNoHeaderRes.status === 400, "POST .../unsubscribe ohne List-Unsubscribe-Header sollte 400 liefern");
+
+    // Edge Case: unbekannte messageId -> 404.
+    const manualUnsubMissingRes = await fetch(`${base}/v1/messages/00000000-0000-0000-0000-000000000000/unsubscribe`, { method: "POST" });
+    assert(manualUnsubMissingRes.status === 404, "POST .../unsubscribe für unbekannte messageId sollte 404 liefern");
+
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam) end-to-end grün.");
   } finally {
     server.close();
   }

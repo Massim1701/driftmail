@@ -50,10 +50,15 @@ const FIXTURES: FetchedMail[] = [
     // "Received" enthält hier absichtlich eine IP aus der Beispiel-
     // "Botnetz"-Liste im IP-Reputations-Mock (siehe ipReputationMock.ts),
     // damit der "known_botnet"-Fall im Smoketest ohne echten Blocklist-
-    // Zugriff durchgetestet werden kann.
+    // Zugriff durchgetestet werden kann. "List-Unsubscribe" ist hier
+    // absichtlich vorhanden (WEB_INBOX.md 09.09. "Automatisches Abmelden
+    // bei Spam"): beweist im Smoketest, dass die automatische Abmeldung
+    // bei Phishing NICHT auslöst, obwohl ein syntaktisch gültiger Header
+    // vorliegt -- gilt laut Auftrag ausschließlich für classification='spam'.
     rawHeaders: {
       "Received-SPF": "fail",
       "Content-Type": "text/plain",
+      "List-Unsubscribe": "<mailto:fake-unsubscribe@sicherheit-konto-check.tk>",
       Received: "from unknown (unknown [185.220.101.7]) by mx.example.com",
     },
   },
@@ -114,7 +119,15 @@ const FIXTURES: FetchedMail[] = [
       "Spielen Sie jetzt im Online-Casino und sichern Sie sich Ihren Jackpot-Bonus — " +
       "einmalige Chance, jetzt kaufen!",
     receivedAt: daysAgo(3),
-    rawHeaders: { "Content-Type": "text/plain", "Received-SPF": "pass" },
+    // "List-Unsubscribe" (WEB_INBOX.md 09.09. "Automatisches Abmelden bei
+    // Spam", Punkt "Verhalten bei adult/gambling"): beweist im Smoketest,
+    // dass die automatische Abmeldung VOR dem Auto-Delete-Verwerfen läuft
+    // (messageId=null, da diese Mail nie eine messages-Zeile bekommt).
+    rawHeaders: {
+      "Content-Type": "text/plain",
+      "Received-SPF": "pass",
+      "List-Unsubscribe": "<https://casino-bonus-express.example/unsubscribe?id=42>",
+    },
   },
   {
     // integration (09.09.): demonstriert echte (nicht Mock-)Klassifikation

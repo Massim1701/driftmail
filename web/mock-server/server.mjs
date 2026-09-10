@@ -425,6 +425,17 @@ const server = createServer(async (req, res) => {
       return send(res, 200, entry);
     }
 
+    // POST /messages/{id}/unsubscribe (WEB_INBOX.md 09.09. "Automatische
+    // Abmeldung bei Spam", manueller Pfad) -- vereinfachter Mock: prüft nur
+    // das Flag hasListUnsubscribe statt echter Header-Syntax (siehe
+    // backend/README.md "Automatische Abmeldung bei Spam" für den echten
+    // Mechanismus), liefert wie das Backend status='pending_confirmation'.
+    if (req.method === "POST" && parts.length === 3 && parts[2] === "unsubscribe") {
+      if (!msg) return notFound(res);
+      if (msg.hasListUnsubscribe !== true) return badRequest(res, "Nachricht hat keinen gültigen List-Unsubscribe-Header");
+      return send(res, 200, { status: "pending_confirmation" });
+    }
+
     // POST /messages/{id}/move
     if (req.method === "POST" && parts.length === 3 && parts[2] === "move") {
       if (!msg) return notFound(res);

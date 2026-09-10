@@ -106,6 +106,23 @@ export interface DraftRecord {
   updatedAt: string;
 }
 
+// `unsubscribe_actions` (db-schema.sql, WEB_INBOX.md 09.09. "Automatisches
+// Abmelden bei Spam"). `messageId` ist null für die automatische Abmeldung
+// bei adult/gambling-Spam (Auto-Delete-Regel: dafür entsteht nie eine
+// messages-Zeile, die Abmeldung muss aber VOR dem Verwerfen laufen) --
+// `userId` ist deshalb direkt geführt statt nur über message_id ableitbar,
+// gleiches Prinzip wie bei SecurityAuditLogRecord.
+export interface UnsubscribeActionRecord {
+  id: string;
+  userId: string;
+  messageId: string | null;
+  method: "list_unsubscribe_header" | "manual";
+  listUnsubscribeHeaderValue: string | null;
+  status: "pending_confirmation" | "confirmed" | "rejected";
+  triggeredAt: string;
+  userConfirmedAt: string | null;
+}
+
 export interface MessageSecurityRecord {
   messageId: string;
   spfStatus: "pass" | "fail" | "none" | null;
@@ -269,6 +286,7 @@ export interface ApiMessageDetail extends ApiMessage {
   bodyText: string | null;
   security: ApiSecurityResult | null;
   quarantine: ApiQuarantineInfo | null;
+  canUnsubscribe: boolean;
 }
 
 export interface ApiMailSummary {

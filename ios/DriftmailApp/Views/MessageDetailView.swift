@@ -29,6 +29,8 @@ struct MessageDetailView: View {
     @State private var sentConfirmation: String?
     @State private var composeAttachments: [ComposeAttachment] = []
     @State private var showFileImporter = false
+    @State private var isUnsubscribing = false
+    @State private var unsubscribeStatus: UnsubscribeStatus?
 
     /// The folder the message currently sits in, looked up from
     /// `environment.folders` via `detail.folderId`. `nil` while folders or
@@ -174,6 +176,28 @@ struct MessageDetailView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(isLoadingDraft)
+                }
+            }
+
+            // Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.):
+            // manueller Abmelden-Button, unabhängig von der Klassifikation
+            // -- nur wenn die Nachricht einen gültigen List-Unsubscribe-
+            // Header hat (siehe backend/README.md).
+            if detail.canUnsubscribe {
+                if let unsubscribeStatus {
+                    Text(unsubscribeStatus == .pendingConfirmation ? "Abmeldung angestoßen" : "Abgemeldet")
+                        .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
+                        .foregroundStyle(DesignTokens.Color.success)
+                } else {
+                    Button {
+                        Task { await unsubscribe() }
+                    } label: {
+                        Label("Von Absender abmelden", systemImage: "envelope.badge.shield.half.filled")
+                            .font(.system(size: DesignTokens.Typography.Size.body))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isUnsubscribing)
                 }
             }
 
@@ -434,6 +458,20 @@ struct MessageDetailView: View {
 
         if let index = composeAttachments.firstIndex(where: { $0.id == entry.id }) {
             composeAttachments[index] = entry
+        }
+    }
+
+    /// `POST /messages/{messageId}/unsubscribe` — manueller Pfad (siehe
+    /// `APIClient.unsubscribeFromMessage`). Kein `loadDetail()` danach, da
+    /// sich `canUnsubscribe`/`folderId` dadurch nicht ändern -- nur der
+    /// lokale Status wird zum sofortigen Feedback aktualisiert.
+    private func unsubscribe() async {
+        isUnsubscribing = true
+        defer { isUnsubscribing = false }
+        do {
+            unsubscribeStatus = try await environment.apiClient.unsubscribeFromMessage(id: messageId)
+        } catch {
+            errorMessage = "Abmeldung fehlgeschlagen."
         }
     }
 

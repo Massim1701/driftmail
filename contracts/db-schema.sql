@@ -142,13 +142,28 @@ CREATE TABLE IF NOT EXISTS message_links (
   );
 
 -- ===== Unsubscribe (nur RFC 8058, nie Body-Link) =====
-
+--
+-- [2026-09-10] Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.
+-- "Automatisches Abmelden bei Spam"): zwei kleine Ergaenzungen, direkt am
+-- CREATE TABLE geaendert statt per ALTER TABLE (Repo-Konvention, siehe
+-- message_attachments weiter oben -- die Tabelle wurde bisher von keinem
+-- Code beschrieben, kein Bestand, der eine echte Migration braeuchte).
+-- 1. user_id neu: fuer adult/gambling-Spam gibt es (Auto-Delete-Regel)
+--    NIE eine messages-Zeile, ueber die sich der User sonst ableiten liesse
+--    (gleiches Problem wie bei security_audit_log, das userId deshalb
+--    ebenfalls direkt fuehrt statt nur ueber message_id abzuleiten).
+-- 2. message_id jetzt nullable, aus demselben Grund -- die automatische
+--    Abmeldung bei adult/gambling-Spam muss VOR dem Verwerfen laufen
+--    (Header steht beim Klassifikations-Durchlauf schon zur Verfuegung),
+--    ohne dass danach je eine Nachricht angelegt wird.
 CREATE TABLE IF NOT EXISTS unsubscribe_actions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
     method TEXT NOT NULL CHECK (method IN ('list_unsubscribe_header', 'manual')),
     list_unsubscribe_header_value TEXT,
     status TEXT NOT NULL DEFAULT 'pending_confirmation' CHECK (status IN ('pending_confirmation', 'confirmed', 'rejected')),
+    triggered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     user_confirmed_at TIMESTAMPTZ
   );
 

@@ -13,6 +13,7 @@ import type { MailAdapter } from "./types";
 import { FixtureMailAdapter } from "./fixtureAdapter";
 import { GmailAdapter } from "./gmailAdapter";
 import { ImapAdapter } from "./imapAdapter";
+import { parseListUnsubscribeHeader } from "./listUnsubscribe";
 import { store } from "../db/store";
 import type { AiAdapter } from "../ai/types";
 import {
@@ -80,6 +81,43 @@ async function resolveFolderId(classification: string, userId: string): Promise<
   return folder.id;
 }
 
+/** Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09. "Automatisches
+ * Abmelden bei Spam (statt nur manuell mit Rueckfrage)"): NUR bei
+ * classification='spam' (alle Subcategories: adult/gambling/generic/
+ * marketing), NIEMALS bei 'phishing' -- ein Phishing-Versender hat
+ * ohnehin meist keinen echten List-Unsubscribe-Header, und selbst wenn,
+ * wäre automatisches Vertrauen in dessen Header-Angaben ein Risiko (der
+ * Header selbst könnte Teil eines Trick-Musters sein). Anders als die
+ * manuelle Abmeldung (POST /messages/:id/unsubscribe,
+ * status='pending_confirmation') gilt die Spam-Klassifikation selbst hier
+ * schon als Bestätigung -> status='confirmed' direkt, keine Rückfrage.
+ * `userConfirmedAt` wird trotzdem gesetzt (Zeitpunkt der automatischen
+ * Bestätigung) statt null zu bleiben, damit jede 'confirmed'-Zeile einen
+ * Zeitstempel hat -- der Spaltenname passt nicht perfekt (kein Mensch hat
+ * hier geklickt), ein eigenes "system_confirmed_at"-Feld nur dafür wäre
+ * aber unnötiges Schema-Wachstum für dieses eine Detail.
+ *
+ * Aufrufer übergibt `messageId=null` für adult/gambling (Auto-Delete-Pfad,
+ * VOR dem Verwerfen aufgerufen, siehe dortiger Kommentar) bzw. die echte
+ * ID nach dem Persistieren für generic/marketing. */
+async function maybeAutoUnsubscribeFromSpam(
+  rawHeaders: Record<string, string>,
+  userId: string,
+  messageId: string | null,
+): Promise<void> {
+  const parsed = parseListUnsubscribeHeader(rawHeaders);
+  if (!parsed) return;
+  const now = new Date().toISOString();
+  await store.insertUnsubscribeAction({
+    userId,
+    messageId,
+    method: "list_unsubscribe_header",
+    listUnsubscribeHeaderValue: parsed.raw,
+    status: "confirmed",
+    userConfirmedAt: now,
+  });
+}
+
 export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, limit = 20): Promise<{ imported: number; autoDeleted: number }> {
   const adapter = adapterForAccount(account);
   // Echte Persistenz (Terminal 09.09.): `account.syncStatus` wird weiterhin
@@ -134,6 +172,10 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
       // `security_audit_log` (action 'auto_deleted_adult_gambling_spam'),
       // ohne Message-Referenz (messageId=null, da nie angelegt).
       if (security.classification === "spam" && (security.spamSubcategory === "adult" || security.spamSubcategory === "gambling")) {
+        // Automatische Abmeldung (WEB_INBOX.md 09.09.) VOR dem Verwerfen --
+        // der Header steht hier schon zur Verfügung, danach nicht mehr
+        // (keine messages-Zeile, aus der er sich später noch lesen ließe).
+        await maybeAutoUnsubscribeFromSpam(mail.rawHeaders, account.userId, null);
         await store.logSecurityAudit({
           userId: account.userId,
           messageId: null,
@@ -168,6 +210,11 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
 
       if (security.classification === "phishing") {
         await store.quarantineMessage(message.id, "Automatisch: Phishing-Klassifikation (Mock-KI)");
+      } else if (security.classification === "spam") {
+        // Automatische Abmeldung (WEB_INBOX.md 09.09.) -- adult/gambling
+        // erreichen diese Stelle nie (siehe Auto-Delete-Pfad oben), hier
+        // also nur generic/marketing-Spam, die normal persistiert wird.
+        await maybeAutoUnsubscribeFromSpam(mail.rawHeaders, account.userId, message.id);
       }
 
       // Vertragsdaten best-effort extrahieren (Mock).

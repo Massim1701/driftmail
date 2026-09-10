@@ -144,6 +144,20 @@ actor MockAPIClient: APIClient {
         _ = try await moveMessage(id: id, toFolderId: quarantaeneFolder.id)
     }
 
+    /// `POST /messages/{messageId}/unsubscribe` — Mock liefert direkt
+    /// `pending_confirmation`, analog zum echten Backend beim manuellen
+    /// Pfad (siehe backend/README.md "Automatische Abmeldung bei Spam").
+    func unsubscribeFromMessage(id: String) async throws -> UnsubscribeStatus {
+        await delay()
+        guard let message = db.messages.first(where: { $0.id == id }) else {
+            throw APIError.notFound
+        }
+        guard message.canUnsubscribe else {
+            throw APIError.forbidden
+        }
+        return .pendingConfirmation
+    }
+
     func moveMessage(id: String, toFolderId: String) async throws -> Message {
         await delay()
         guard let index = db.messages.firstIndex(where: { $0.id == id }) else {
@@ -241,7 +255,8 @@ actor MockAPIClient: APIClient {
                 folderId: gesendetFolder.id,
                 classification: .unclear,
                 bodyText: bodyText,
-                security: nil
+                security: nil,
+                canUnsubscribe: false
             )
             db.messages.append(sent)
         }

@@ -101,6 +101,12 @@
   display: flex;
   gap: var(--space-sm);
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.unsubscribe-status {
+  font-size: var(--font-size-small);
+  color: var(--color-success);
 }
 
 .btn {
