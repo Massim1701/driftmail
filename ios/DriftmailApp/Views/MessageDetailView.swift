@@ -151,20 +151,30 @@ struct MessageDetailView: View {
                 Button {
                     Task { await loadSummary() }
                 } label: {
-                    Label("Was wollen die von mir?", systemImage: "text.bubble")
+                    // Label-Umbenennung (WEB_INBOX.md 09.09. "Ordner-Umbau-
+                    // Eintrags", Punkt 2): reine UI-Textänderung, das Feld
+                    // heißt technisch weiterhin summaryText.
+                    Label("Inhalt", systemImage: "text.bubble")
                         .font(.system(size: DesignTokens.Typography.Size.body))
                 }
                 .buttonStyle(.bordered)
                 .disabled(isLoadingSummary)
 
-                Button {
-                    Task { await loadDraft() }
-                } label: {
-                    Label("Antwortentwurf", systemImage: "pencil")
-                        .font(.system(size: DesignTokens.Typography.Size.body))
+                // WEB_INBOX.md 09.09. "KORREKTUR der letzten Regel":
+                // ausgeblendet bei aktuellem Ordner spam (folderId-/
+                // systemKey-Check), nicht bei eingefrorenem
+                // classification='spam' -- Antworten auf Spam macht keinen
+                // Sinn, auf Phishing (Quarantäne) schon (Warnbanner oben).
+                if currentFolder?.systemKey != .spam {
+                    Button {
+                        Task { await loadDraft() }
+                    } label: {
+                        Label("Antwortentwurf", systemImage: "pencil")
+                            .font(.system(size: DesignTokens.Typography.Size.body))
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isLoadingDraft)
                 }
-                .buttonStyle(.bordered)
-                .disabled(isLoadingDraft)
             }
 
             if !environment.folders.isEmpty {

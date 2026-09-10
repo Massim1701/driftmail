@@ -100,6 +100,7 @@ export default function App() {
   const papierkorbFolder = useMemo(() => folders.find((f) => f.systemKey === "papierkorb"), [folders]);
   const sonstigesFolder = useMemo(() => folders.find((f) => f.systemKey === "sonstiges"), [folders]);
   const gesendetFolder = useMemo(() => folders.find((f) => f.systemKey === "gesendet"), [folders]);
+  const spamFolder = useMemo(() => folders.find((f) => f.systemKey === "spam"), [folders]);
 
   // POST /messages/send erfolgreich (WEB_INBOX.md 09.09. "KORREKTUR/
   // ERWEITERUNG des Ordner-Umbau-Eintrags"): das Backend hat lokal eine
@@ -286,6 +287,7 @@ export default function App() {
         folders={folders}
         quarantaeneFolderId={quarantaeneFolder?.id ?? null}
         papierkorbFolderId={papierkorbFolder?.id ?? null}
+        spamFolderId={spamFolder?.id ?? null}
         onQuarantined={handleQuarantined}
         onMoved={handleMoved}
         onDeleted={handleDeleted}

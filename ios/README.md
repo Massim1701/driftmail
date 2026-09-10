@@ -231,6 +231,35 @@ normaler Ordner). Kein interaktiver Klick-Test der `DraftListView` selbst
 (Öffnen/Löschen eines Entwurfs) — gleiche Werkzeug-Grenze wie bei den
 vorherigen Nachträgen.
 
+## [2026-09-10] Nachtrag: Antworten-Button bei Spam (Schritt 4)
+
+Contract-Nachtrag "KORREKTUR der letzten Regel" (WEB_INBOX.md 09.09.):
+der "Antwortentwurf"-Button in `Views/MessageDetailView.swift`
+(`actions(for:)`) wird jetzt ausgeblendet, wenn `currentFolder?.systemKey
+== .spam` — vorher gab es diese Einschränkung noch gar nicht (die
+ursprüngliche `classification`-basierte Regel aus WEB_INBOX.md war nie
+implementiert worden, nur spezifiziert). Gleiche Ordner-basierte Logik wie
+bereits bei `currentFolder?.systemKey == .quarantaene` (Warnbanner) und
+`.papierkorb` (Löschen-Button-Variante) — der Ordner-Check ist in dieser
+View bereits das etablierte Muster, keine neue Abstraktion nötig. Bei
+Quarantäne (Phishing) bleibt der Button bewusst sichtbar (Warnbanner wie
+bisher), da der User eine Phishing-Mail trotzdem sehen/melden können soll.
+
+**Kleiner Nachzügler gleich mit erledigt:** das Label "Was wollen die von
+mir?" hieß in iOS noch nicht "Inhalt" — die Umbenennung aus Schritt 3 war
+für iOS übersehen worden (nur Web hatte sie bekommen). Jetzt nachgezogen,
+gleiche Stelle.
+
+Kein Backend-/Contract-Change nötig (`Folder.systemKey` existierte
+bereits) — reine UI-Bedingung, wie in WEB_INBOX.md spezifiziert.
+
+**Tests:** `xcodebuild -destination 'generic/platform=iOS Simulator' build`
+**BUILD SUCCEEDED**. Kein interaktiver Klicktest (gleiche Werkzeug-Grenze
+wie bei den vorherigen Nachträgen) — die Web-Variante derselben Logik
+wurde im Browser end-to-end verifiziert (siehe `web/README.md`
+"Antworten-Button bei Spam"), die iOS-Implementierung folgt exakt demselben
+`folderId`/`systemKey`-Vergleichsprinzip gegen dasselbe API-Feld.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

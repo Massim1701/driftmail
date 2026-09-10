@@ -235,6 +235,26 @@ echte automatische Landezone (neue, normale Mail landet dort statt in
   künftigen Compose-Screen, werden aber aktuell von keiner Komponente
   aufgerufen).
 
+## Antworten-Button bei Spam (10.09., WEB_INBOX.md 09.09. "KORREKTUR der
+letzten Regel")
+
+"Antwortentwurf erstellen" wird in `MessageDetailPane.tsx` ausgeblendet,
+wenn die Nachricht sich **aktuell** im `spam`-Systemordner befindet
+(`message.folderId === spamFolderId`, neue Prop von `App.tsx` durchgereicht)
+— NICHT, wenn `classification === 'spam'` irgendwann mal galt. Verschiebt
+der User eine fälschlich einsortierte Mail manuell raus (z. B. nach
+"Eingang"), ist der Button sofort wieder da, ganz ohne neues Feld/neue
+Sonderlogik — die Bedingung hängt am aktuellen Ordner, nicht am
+eingefrorenen KI-Urteil. Gilt bewusst NICHT für Quarantäne (Phishing): dort
+bleibt der Button sichtbar (mit Warnbanner wie bisher), weil der User eine
+Phishing-Mail trotzdem sehen/melden können soll. Reine UI-Bedingung, kein
+Backend-/Contract-Change nötig (`folderId` existierte bereits).
+
+Verifiziert im Browser: Nachricht im Spam-Ordner → Button fehlt; per
+"In Ordner verschieben…" nach "Eingang" verschoben → Button erscheint
+sofort wieder, obwohl das (eingefrorene) `classification`-Badge weiterhin
+"Spam" zeigt.
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge

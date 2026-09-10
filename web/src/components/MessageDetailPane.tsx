@@ -51,6 +51,7 @@ export function MessageDetailPane({
   folders,
   quarantaeneFolderId,
   papierkorbFolderId,
+  spamFolderId,
   onQuarantined,
   onMoved,
   onDeleted,
@@ -62,6 +63,12 @@ export function MessageDetailPane({
   folders: Folder[];
   quarantaeneFolderId: string | null;
   papierkorbFolderId: string | null;
+  /** WEB_INBOX.md 09.09. "KORREKTUR der letzten Regel": der Antworten-
+   * Button wird ausgeblendet, wenn die Nachricht sich AKTUELL im
+   * spam-Systemordner befindet (folderId-Check), NICHT wenn irgendwann
+   * classification='spam' war -- verschiebt der User die Mail manuell
+   * raus, ist der Button sofort wieder da. */
+  spamFolderId: string | null;
   onQuarantined: (id: string) => void;
   onMoved: (id: string, folderId: string) => void;
   onDeleted: (id: string) => void;
@@ -105,6 +112,7 @@ export function MessageDetailPane({
 
   const isQuarantined = quarantaeneFolderId !== null && message.folderId === quarantaeneFolderId;
   const isInTrash = papierkorbFolderId !== null && message.folderId === papierkorbFolderId;
+  const isInSpam = spamFolderId !== null && message.folderId === spamFolderId;
 
   async function loadSummary() {
     if (!message) return;
@@ -305,9 +313,16 @@ export function MessageDetailPane({
         <button type="button" className="btn btn-secondary" onClick={loadSummary} disabled={summaryLoading}>
           {summaryLoading ? "Fasse zusammen…" : "Inhalt"}
         </button>
-        <button type="button" className="btn btn-secondary" onClick={loadDraft} disabled={draftLoading}>
-          {draftLoading ? "Erstelle Entwurf…" : "Antwortentwurf erstellen"}
-        </button>
+        {/* WEB_INBOX.md 09.09. "KORREKTUR der letzten Regel": ausgeblendet
+            bei aktuellem Ordner spam (folderId-Check), nicht bei
+            eingefrorenem classification='spam' -- Antworten auf Spam macht
+            keinen Sinn, auf Phishing (Quarantäne) schon (User kann die Mail
+            trotzdem sehen/melden, siehe Warnbanner oben). */}
+        {!isInSpam && (
+          <button type="button" className="btn btn-secondary" onClick={loadDraft} disabled={draftLoading}>
+            {draftLoading ? "Erstelle Entwurf…" : "Antwortentwurf erstellen"}
+          </button>
+        )}
         <select
           className="move-select"
           value=""
