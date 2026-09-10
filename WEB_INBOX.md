@@ -547,3 +547,10 @@ Kein Blocker fuer den simulierten/gemockten Teil der Auth-Arbeit -- kann paralle
 Gewuenschter Flow: Klick auf "Antworten" oeffnet SOFORT ein leeres (oder nur mit Zitat des Original-Threads vorausgefuelltes) Compose-Feld, in das der User direkt selbst tippen kann. Der KI-Entwurf (POST /messages/{id}/reply-draft) ist ein SEPARATER, optionaler Button/Icon INNERHALB des Compose-Screens (z.B. "KI-Vorschlag einfuegen"), nicht die einzige oder erste Moeglichkeit zu antworten. Deckt sich mit dem bereits bestehenden Prinzip "Compose-Text bleibt vollstaendig user-editierbar, KI-Entwurf ist nur Vorschlag" (SYNC.md 08.09.) -- das war schon als Grundsatz festgehalten, aber offenbar in der UI noch nicht so umgesetzt/wahrgenommen.
 
 Kein Contract-Bruch (beide Endpunkte /messages/send und /messages/{id}/reply-draft existieren unabhaengig voneinander bereits, reine UI-Frage: reply-draft darf nicht die Vorbedingung fuer den Zugriff aufs Compose-Feld sein). Kein Blocker, aber bitte zeitnah, ist eine spuerbare Einschraenkung im taeglichen Gebrauch.
+
+
+[2026-09-10] [offen] [Track C/F, kleine UX-Ergaenzung] — Massimo: "Rechnungen" ist als Ordnername negativ behaftet (klingt nach Kosten/Schulden), deckt ausserdem nicht ab, dass darin auch Vertraege und andere wichtige Unterlagen landen koennen. Kein System-Ordner-Comeback (wichtig/rechnungen bleiben bewusst entfernt, siehe fruehere Entscheidung) -- stattdessen ein besserer NAMENSVORSCHLAG, wenn der User selbst einen eigenen Ordner fuer sowas anlegt.
+
+Vorschlag: "Dokumente" als neutraler Sammelbegriff (deckt Rechnungen, Vertraege, sonstige wichtige Unterlagen ab, ohne negative Konnotation).
+
+Konkret in der UI: beim Anlegen eines neuen eigenen Ordners (POST /folders) koennte die UI 1-2 sinnvolle Namensvorschlaege als Chips/Quick-Picks anbieten statt eines leeren Textfelds, z.B. "Dokumente" als einer davon. Kein Contract-Change noetig (Ordnername ist ohnehin freier Text), reine Onboarding-/Leerzustand-UX-Verbesserung. Kein Blocker, kleine Sache fuer spaeter im Compose-/Ordner-Polish.
