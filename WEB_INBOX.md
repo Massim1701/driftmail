@@ -460,3 +460,15 @@ WICHTIG, Ausnahme: gilt NUR fuer classification='spam', NIEMALS fuer 'phishing'.
 Verhalten bei adult/gambling: diese Mails werden ohnehin nicht persistiert (Auto-Delete-Regel von vorhin) -- die automatische Abmeldung sollte trotzdem VOR dem Verwerfen ausgefuehrt werden (Header steht ja schon beim Klassifikations-Durchlauf zur Verfuegung), damit kuenftige Mails von diesem Absender idealerweise gar nicht erst kommen. Kein Blocker, aber bitte in der gleichen Pipeline-Stelle wie die Klassifikation selbst einbauen (Track A, mail/sync.ts bzw. Nachfolgemodul nach der Persistenz-Umstellung).
 
 Kein Contract-Bruch (unsubscribe_actions.status erlaubt bereits 'confirmed' als Wert). Reine Verhaltens-/Ablauf-Aenderung, kein neues Feld noetig.
+
+
+[2026-09-09] [offen] [PRIORITAET - naechster Schritt] [an alle betroffenen Tracks] — Persistenz ist fertig und verifiziert (danke, sehr gruendlich). Bitte jetzt mit dem naechsten Block weitermachen, es sind noch 6 zusammenhaengende Auftraege offen in dieser Datei, in dieser empfohlenen Reihenfolge (haengen z.T. voneinander ab):
+
+1. Senden-Endpunkt (POST /messages/send) -- groesste fehlende Kernfunktion, alles andere in diesem Block baut z.T. darauf auf
+2. Anhang-Upload/Scan (Erweiterung von 1)
+3. Ordner-Umbau final (eingang/entwuerfe/gesendet/sonstiges/quarantaene/spam/papierkorb) -- gesendet-Ordner braucht Punkt 1
+4. Antworten-Button-Korrektur (Ordner-Check statt Classification-Check)
+5. Automatische Abmeldung bei Spam
+6. Label-Umbenennung "Was wollen die von mir?" -> "Inhalt" (kleinste Aenderung, kann zwischendurch erledigt werden)
+
+Wie immer: eigene technische Reihenfolge/Aufteilung auf Tracks selbst entscheiden, wo sinnvoll abweichen, Begruendung wie gewohnt in SYNC.md dokumentieren.
