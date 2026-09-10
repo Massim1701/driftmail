@@ -554,3 +554,12 @@ Kein Contract-Bruch (beide Endpunkte /messages/send und /messages/{id}/reply-dra
 Vorschlag: "Dokumente" als neutraler Sammelbegriff (deckt Rechnungen, Vertraege, sonstige wichtige Unterlagen ab, ohne negative Konnotation).
 
 Konkret in der UI: beim Anlegen eines neuen eigenen Ordners (POST /folders) koennte die UI 1-2 sinnvolle Namensvorschlaege als Chips/Quick-Picks anbieten statt eines leeren Textfelds, z.B. "Dokumente" als einer davon. Kein Contract-Change noetig (Ordnername ist ohnehin freier Text), reine Onboarding-/Leerzustand-UX-Verbesserung. Kein Blocker, kleine Sache fuer spaeter im Compose-/Ordner-Polish.
+
+
+[2026-09-10] [offen] [Track C/F, UX-Fund von Massimo im echten Geraete-Test] — Wo aktuell oben "Driftmail" als App-Titel/Branding steht, soll stattdessen die E-Mail-Adresse des verbundenen Kontos stehen, damit der User immer sofort sieht, in welchem Postfach er sich befindet (besonders wichtig sobald mehrere Mail-Konten unterstuetzt werden, siehe mail_accounts-Tabelle, die das schon vorsieht).
+
+Vorschlag: Header/Navigationsleiste zeigt die emailAddress des aktuell aktiven MailAccount (aus GET /accounts) statt oder zusaetzlich zum App-Namen. Bei mehreren verbundenen Konten koennte das zugleich als Account-Switcher fungieren (Tap/Klick auf die Adresse oeffnet Kontenwahl) -- das waere ein natuerlicher Ort dafuer, aber kein Muss fuer diesen Auftrag, reicht erstmal nur die Anzeige.
+
+Passt zur bereits bestehenden Regel "kein driftmail-Branding in ausgehenden Mails" (WEB_INBOX.md 09.09.) -- gleiches Prinzip jetzt auch fuer die App-UI selbst: der User und sein Konto stehen im Vordergrund, nicht das Produkt.
+
+Kein Contract-Change noetig (emailAddress existiert bereits in MailAccount-Schema), reine UI-Aenderung. Kein Blocker.
