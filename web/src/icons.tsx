@@ -120,10 +120,10 @@ export function PlusIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 // FOLDER_ICONS: Icon-Keys aus contracts/design-tokens.json "systemFolders.defaults[].icon"
-// (inbox/file-text/send/shield-exclamation/trash/trash-2, "receipt"/"star"
+// (inbox/file-pencil/send/shield-exclamation/trash/trash-2, "receipt"/"star"
 // bleiben für Bestands-/eigene Ordner wie "Rechnungen" nutzbar) plus "folder"
 // aus "customFolder.defaultIcon" für benutzerdefinierte Ordner ohne eigenes
-// Icon. [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09.): file-text/send neu.
+// Icon. [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09.): file-pencil/send neu.
 export const FOLDER_ICONS: Record<string, (p: SVGProps<SVGSVGElement>) => ReactElement> = {
   star: StarIcon,
   inbox: InboxIcon,
@@ -132,7 +132,7 @@ export const FOLDER_ICONS: Record<string, (p: SVGProps<SVGSVGElement>) => ReactE
   trash: TrashIcon,
   "trash-2": Trash2Icon,
   folder: FolderIcon,
-  "file-text": FileTextIcon,
+  "file-pencil": FileTextIcon,
   send: SendIcon,
 };
 

@@ -98,7 +98,7 @@ private struct DraftRowView: View {
 #Preview {
     NavigationStack {
         DraftListView(folder: Folder(
-            id: "folder-entwuerfe", name: "Entwürfe", icon: "file-text",
+            id: "folder-entwuerfe", name: "Entwürfe", icon: "file-pencil",
             isSystem: true, systemKey: .entwuerfe, sortOrder: 1
         ))
     }

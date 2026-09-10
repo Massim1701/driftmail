@@ -540,7 +540,7 @@ export async function initStore(): Promise<void> {
 // System-Ordner. Reihenfolge hier = Sidebar-Reihenfolge (Vorschlag laut Auftrag).
 const SYSTEM_FOLDER_DEFAULTS: Array<{ systemKey: SystemFolderKey; name: string; icon: string }> = [
   { systemKey: "eingang", name: "Eingang", icon: "inbox" },
-  { systemKey: "entwuerfe", name: "Entwürfe", icon: "file-text" },
+  { systemKey: "entwuerfe", name: "Entwürfe", icon: "file-pencil" },
   { systemKey: "gesendet", name: "Gesendet", icon: "send" },
   { systemKey: "sonstiges", name: "Sonstiges", icon: "folder" },
   { systemKey: "quarantaene", name: "Quarantäne", icon: "shield-exclamation" },

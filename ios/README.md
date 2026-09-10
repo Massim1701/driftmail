@@ -170,7 +170,7 @@ Contract-Nachtrag "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags"
   `isDrafts`-Computed-Property (analog `isTrash`) markiert den
   "entwuerfe"-Ordner. `isRenamable` um `entwuerfe`/`gesendet` ergänzt.
 - **`DesignSystem/DesignTokens.swift`:** `SystemFolders.defaults` auf die
-  neue Liste + Icons (`file-text` Entwürfe, `send` Gesendet, `folder`
+  neue Liste + Icons (`file-pencil` Entwürfe, `send` Gesendet, `folder`
   Sonstiges statt `inbox`, das jetzt Eingang gehört) aktualisiert.
 - **`Networking/MockData/MockDatabase.json`:** `folder-wichtig` →
   `folder-eingang` (gleiche Nachrichten, neuer `systemKey`),

@@ -19,7 +19,7 @@
     {
       "id": "folder-entwuerfe",
       "name": "Entwürfe",
-      "icon": "file-text",
+      "icon": "file-pencil",
       "isSystem": true,
       "systemKey": "entwuerfe",
       "sortOrder": 1

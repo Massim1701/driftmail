@@ -97,7 +97,7 @@ enum DesignTokens {
         // Reihenfolge hier = Sidebar-Reihenfolge (Vorschlag laut Auftrag).
         static let defaults: [SystemDefault] = [
             SystemDefault(systemKey: .eingang, defaultLabel: "Eingang", icon: "inbox", usesDangerColor: false, isMuted: false, renamable: true),
-            SystemDefault(systemKey: .entwuerfe, defaultLabel: "Entwürfe", icon: "file-text", usesDangerColor: false, isMuted: false, renamable: false),
+            SystemDefault(systemKey: .entwuerfe, defaultLabel: "Entwürfe", icon: "file-pencil", usesDangerColor: false, isMuted: false, renamable: false),
             SystemDefault(systemKey: .gesendet, defaultLabel: "Gesendet", icon: "send", usesDangerColor: false, isMuted: false, renamable: false),
             SystemDefault(systemKey: .sonstiges, defaultLabel: "Sonstiges", icon: "folder", usesDangerColor: false, isMuted: false, renamable: true),
             SystemDefault(systemKey: .quarantaene, defaultLabel: "Quarantäne", icon: "shield-exclamation", usesDangerColor: true, isMuted: false, renamable: false),

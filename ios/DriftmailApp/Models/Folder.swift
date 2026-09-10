@@ -49,7 +49,7 @@ struct Folder: Codable, Identifiable, Hashable {
 
     /// SF Symbol standing in for the design-tokens.json icon keys
     /// ("star", "inbox", "receipt", "shield-exclamation", "trash",
-    /// "trash-2" für Papierkorb, "file-text" für Entwürfe, "send" für
+    /// "trash-2" für Papierkorb, "file-pencil" für Entwürfe, "send" für
     /// Gesendet — beide neu seit dem Ordner-Umbau 09.09.) plus
     /// `customFolder.defaultIcon` ("folder") for user-created folders.
     /// Falls back to the folder glyph for any icon key this build doesn't
@@ -62,7 +62,7 @@ struct Folder: Codable, Identifiable, Hashable {
         case "shield-exclamation": return "exclamationmark.shield.fill"
         case "trash": return "trash.fill"
         case "trash-2": return "trash.slash.fill"
-        case "file-text": return "doc.text.fill"
+        case "file-pencil": return "doc.text.fill"
         case "send": return "paperplane.fill"
         default: return "folder.fill"
         }

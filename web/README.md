@@ -197,7 +197,7 @@ echte automatische Landezone (neue, normale Mail landet dort statt in
   Sidebar-Zähler bis zum nächsten vollständigen Neuladen auf 0 stehen —
   das war ein echter, im Browser gefundener und behobener Bug beim
   Implementieren dieses Schritts, kein rein theoretisches Risiko.
-- Icons: `inbox` (eingang), `file-text` (entwürfe), `send` (gesendet) neu
+- Icons: `inbox` (eingang), `file-pencil` (entwürfe), `send` (gesendet) neu
   in `src/icons.tsx` ergänzt (fallen sonst auf `FolderIcon` zurück, siehe
   `FolderSidebar.tsx`).
 

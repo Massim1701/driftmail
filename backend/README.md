@@ -312,7 +312,7 @@ Enum-Strings auf `messages.folder`:
 - Jeder User bekommt beim Anlegen (`ensureDemoUser()` in `src/db/store.ts`)
   automatisch 7 System-Ordner (`is_system=true`), Namen/Icons/Reihenfolge
   1:1 aus `contracts/design-tokens.json` (`systemFolders.defaults`):
-  `eingang` (inbox), `entwuerfe` (file-text), `gesendet` (send),
+  `eingang` (inbox), `entwuerfe` (file-pencil), `gesendet` (send),
   `sonstiges` (folder), `quarantaene` (shield-exclamation), `spam`
   (trash), `papierkorb` (trash-2, seit dem Nachtrag vom 08.09., siehe
   Abschnitt "Papierkorb / Löschen" unten). **[2026-09-10] Ordner-Umbau**

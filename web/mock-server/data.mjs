@@ -35,7 +35,7 @@ export const folders = [
   {
     id: "f1000000-0000-0000-0000-000000000007",
     name: "Entwürfe",
-    icon: "file-text",
+    icon: "file-pencil",
     is_system: true,
     system_key: "entwuerfe",
     sort_order: 1,
