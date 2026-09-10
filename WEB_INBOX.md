@@ -563,3 +563,20 @@ Vorschlag: Header/Navigationsleiste zeigt die emailAddress des aktuell aktiven M
 Passt zur bereits bestehenden Regel "kein driftmail-Branding in ausgehenden Mails" (WEB_INBOX.md 09.09.) -- gleiches Prinzip jetzt auch fuer die App-UI selbst: der User und sein Konto stehen im Vordergrund, nicht das Produkt.
 
 Kein Contract-Change noetig (emailAddress existiert bereits in MailAccount-Schema), reine UI-Aenderung. Kein Blocker.
+
+
+[2026-09-10] [offen] [Track C/F, App-Icon/Logo-Design] — Massimo moechte ein neues App-Icon/Logo: ein GESCHLOSSENER Briefumschlag (klare Rand-/Umriss-Linie, nicht die klassische "offene Klappe"-Mail-Icon-Optik), mit dem Schriftzug "driftmail" halbtransparent (ca. 50% Deckkraft) im Hintergrund/auf dem Umschlag platziert. Farbe: Hellblau. Schrift: elegant, nicht die Standard-Systemschrift (in unseren Mockup-Versuchen kam Serif kursiv der Vorstellung am naechsten, aber final nicht bestaetigt).
+
+Wichtig: Die exakte Form/Randstaerke/Proportion konnten wir per Text-Hin-und-Her nicht zuverlaessig treffen (mehrere Iterationen, siehe Chat-Verlauf) -- bitte NICHT versuchen, das 1:1 aus dieser Beschreibung zu bauen, sondern als Ausgangspunkt nehmen und in einem echten Design-Tool (Figma, SF Symbols, o.ae.) 2-3 Varianten bauen und Massimo direkt zeigen (Screenshot/Export), damit er live reagieren kann statt ueber Textbeschreibung zu raten.
+
+Referenz-SVG als grober Ausgangspunkt (NICHT final, nur Idee):
+```svg
+<svg viewBox="0 0 680 320">
+  <path d="M120 110 L340 50 L560 110 L560 270 L120 270 Z" fill="#4A90D9" opacity="0.10" stroke="#4A90D9" stroke-width="6" stroke-linejoin="round"/>
+  <text x="340" y="242" text-anchor="middle" font-family="serif" font-style="italic" font-size="50" fill="#4A90D9" opacity="0.5">driftmail</text>
+</svg>
+```
+
+Zielverwendung: App-Icon (iOS AppIcon-Asset, Track C) und/oder Header-Logo im Web (Track F) -- bitte klaeren, ob beide dasselbe Icon nutzen oder getrennte Varianten noetig sind (App-Icon braucht meist ein Vollbild-Quadrat ohne Transparenz-Spielerei, das beschriebene Konzept mit Text im Hintergrund passt eher zu einem Header-Logo/Splash-Screen als zum App-Icon selbst -- bitte diese Unterscheidung selbst treffen und kurz in SYNC.md begruenden).
+
+Kein Blocker, kein Contract-Change. Reine Design-/Asset-Aufgabe.
