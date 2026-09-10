@@ -48,10 +48,19 @@ protocol APIClient {
     /// Eintrags von eben"): jede ID muss aus `uploadAttachment(...)`
     /// stammen und `scanStatus == .clean` gehabt haben, sonst wirft der
     /// Server 422 (`APIError.blocked`) — leeres Array, wenn keine Anhänge.
-    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String]) async throws -> String
+    /// `draftId` (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
+    /// Ordner-Umbau-Eintrags"): falls gesetzt, verwirft der Server den
+    /// Entwurf nach erfolgreichem Versand automatisch (intern).
+    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String
     /// `POST /attachments` — lädt eine Datei hoch und lässt sie sofort
     /// scannen (siehe backend/README.md "Anhänge").
     func uploadAttachment(filename: String, mimeType: String, data: Data) async throws -> AttachmentUploadResult
+    /// `GET /drafts` — Inhalt des "entwuerfe"-Systemordners (WEB_INBOX.md
+    /// 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags"), NICHT
+    /// `fetchMessages(...)`.
+    func fetchDrafts() async throws -> [Draft]
+    /// `DELETE /drafts/{draftId}` — Entwurf verwerfen.
+    func deleteDraft(id: String) async throws
     func fetchContracts() async throws -> [Contract]
     func confirmContract(_ contract: Contract) async throws
     func reportCapabilityCheck(_ capability: UserAiCapability) async throws

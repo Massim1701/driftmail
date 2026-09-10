@@ -23,12 +23,20 @@ CREATE TABLE IF NOT EXISTS mail_accounts (
 -- ===== Ordner (frei anlegbar, siehe SYNC.md "Contract-Aenderungen" 08.09.) =====
 --
 -- Ersetzt den vorherigen festen folder-Enum auf messages. Jeder User bekommt
--- bei Account-Anlage die 5 System-Ordner als Zeilen hier angelegt (Anwendungs-
+-- bei Account-Anlage die 7 System-Ordner als Zeilen hier angelegt (Anwendungs-
 -- logik, kein DB-Trigger) -- is_system=true schuetzt sie vor dem Loeschen,
 -- system_key bleibt stabil fuer Code, das gezielt z.B. "quarantaene" braucht,
--- auch wenn der User den Ordner umbenennt. quarantaene/spam sind NICHT
--- umbenennbar (siehe design-tokens.json systemFolders.defaults), das wird
--- app-seitig durchgesetzt, nicht per Constraint.
+-- auch wenn der User den Ordner umbenennt. quarantaene/spam/entwuerfe/gesendet
+-- sind NICHT umbenennbar (siehe design-tokens.json systemFolders.defaults),
+-- das wird app-seitig durchgesetzt, nicht per Constraint.
+--
+-- [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
+-- Ordner-Umbau-Eintrags"): system_key-Werte auf die neue 7er-Liste geaendert
+-- (wichtig/rechnungen entfallen, eingang/entwuerfe/gesendet neu) -- direkt am
+-- CREATE TABLE geaendert statt per ALTER TABLE (Repo-Konvention, siehe
+-- message_attachments weiter unten). Bestehende wichtig/rechnungen-Ordner +
+-- deren Nachrichten werden app-seitig migriert (siehe
+-- backend/src/db/store.ts migrateLegacySystemFolders()), nicht per SQL.
 
 CREATE TABLE IF NOT EXISTS folders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -36,7 +44,7 @@ CREATE TABLE IF NOT EXISTS folders (
     name TEXT NOT NULL,
     icon TEXT NOT NULL DEFAULT 'inbox',
     is_system BOOLEAN NOT NULL DEFAULT false,
-    system_key TEXT CHECK (system_key IN ('wichtig', 'sonstiges', 'rechnungen', 'quarantaene', 'spam', 'papierkorb')),
+    system_key TEXT CHECK (system_key IN ('eingang', 'entwuerfe', 'gesendet', 'sonstiges', 'quarantaene', 'spam', 'papierkorb')),
     sort_order INTEGER NOT NULL DEFAULT 0,
     UNIQUE (user_id, system_key)
   );
@@ -66,6 +74,31 @@ CREATE TABLE IF NOT EXISTS messages (
   );
 
 CREATE INDEX IF NOT EXISTS idx_messages_account_folder ON messages (mail_account_id, folder_id);
+
+-- ===== Entwuerfe (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
+-- Ordner-Umbau-Eintrags") =====
+--
+-- Bewusst GETRENNT von messages: ein Entwurf hat keine echte
+-- message_id_header eines Providers (messages ist auf empfangene/gesendete
+-- echte Mails ausgelegt, siehe UNIQUE-Constraint oben). Der "entwuerfe"-
+-- Systemordner in der UI zeigt den Inhalt dieser Tabelle, nicht messages.
+-- in_reply_to_message_id nullable (Entwurf kann eine neue Mail sein, nicht
+-- nur eine Antwort). Kein eigener Ordner-Bezug (folder_id) noetig -- jeder
+-- Entwurf eines Users landet implizit im entwuerfe-Systemordner des Kontos.
+
+CREATE TABLE IF NOT EXISTS drafts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    mail_account_id UUID NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
+    in_reply_to_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+    to_addresses TEXT[] NOT NULL DEFAULT '{}',
+    cc_addresses TEXT[] NOT NULL DEFAULT '{}',
+    subject TEXT,
+    body_text TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+CREATE INDEX IF NOT EXISTS idx_drafts_user ON drafts (user_id);
 
 -- ===== Security-Analyse (1:1 zu messages) =====
 

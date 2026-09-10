@@ -4,7 +4,7 @@
 // daher ist AiAdapterResult.source hier stets "cloud_fallback" — der
 // Mock-Server liefert diesen Wert bereits in MailSummary.source mit.
 
-import type { AttachmentScanStatus, Contract, Folder, MailAccount, MailSummary, Message, MessageDetail } from "./types";
+import type { AttachmentScanStatus, Contract, Draft, Folder, MailAccount, MailSummary, Message, MessageDetail } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
@@ -87,6 +87,7 @@ export const api = {
     subject?: string;
     bodyText: string;
     attachmentIds?: string[];
+    draftId?: string;
   }) => request<{ sentMessageId: string }>("/messages/send", { method: "POST", body: JSON.stringify(data) }),
 
   // POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
@@ -104,6 +105,21 @@ export const api = {
     }
     return (await res.json()) as { attachmentId: string; scanStatus: AttachmentScanStatus };
   },
+
+  // /drafts (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-
+  // Eintrags") -- zeigt im "entwuerfe"-Systemordner an, kommt NICHT aus
+  // listMessages(). `createDraft`/`updateDraft` sind für einen künftigen
+  // Compose-Screen vorbereitet (siehe App.tsx-Kommentar bei der
+  // Entwürfe-Ansicht) -- die aktuelle UI nutzt nur list/delete.
+  listDrafts: () => request<Draft[]>("/drafts"),
+
+  createDraft: (data: { inReplyToMessageId?: string; to?: string[]; cc?: string[]; subject?: string; bodyText?: string }) =>
+    request<Draft>("/drafts", { method: "POST", body: JSON.stringify(data) }),
+
+  updateDraft: (id: string, data: { to?: string[]; cc?: string[]; subject?: string; bodyText?: string }) =>
+    request<Draft>(`/drafts/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+
+  deleteDraft: (id: string) => request<unknown>(`/drafts/${id}`, { method: "DELETE" }),
 
   listContracts: () => request<Contract[]>("/contracts"),
 };

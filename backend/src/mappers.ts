@@ -3,6 +3,7 @@
 
 import type {
   ApiContract,
+  ApiDraft,
   ApiFolder,
   ApiMailAccount,
   ApiMailSummary,
@@ -11,6 +12,7 @@ import type {
   ApiQuarantineInfo,
   ApiSecurityResult,
   ContractRecord,
+  DraftRecord,
   FolderRecord,
   MailAccountRecord,
   MessageAiSummaryRecord,
@@ -86,6 +88,18 @@ export function toApiContract(c: ContractRecord): ApiContract {
     cancellationPeriodDays: c.cancellationPeriodDays,
     status: c.status,
     extractedConfidence: c.extractedConfidence,
+  };
+}
+
+export function toApiDraft(d: DraftRecord): ApiDraft {
+  return {
+    id: d.id,
+    inReplyToMessageId: d.inReplyToMessageId,
+    to: d.toAddresses,
+    cc: d.ccAddresses,
+    subject: d.subject,
+    bodyText: d.bodyText,
+    updatedAt: d.updatedAt,
   };
 }
 

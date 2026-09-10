@@ -355,8 +355,12 @@ paths:
         hat (siehe POST /attachments) -- kein Versand mit ungeprueften oder
         als gefaehrlich erkannten Anhaengen. Schreibt nach erfolgreichem
         Versand einen outgoing_send_log-Eintrag pro Empfaenger (to + cc) fuer
-        die Abuse-Erkennung. Siehe WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt"
-        + "Erweiterung des Send-Endpunkt-Eintrags von eben" (Anhaenge).
+        die Abuse-Erkennung, legt eine lokale messages-Zeile im
+        "gesendet"-Systemordner an (fuer sofortige UI-Sichtbarkeit) und
+        loescht (falls draftId gesetzt) den zugehoerigen Entwurf. Siehe
+        WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt" + "Erweiterung des
+        Send-Endpunkt-Eintrags von eben" (Anhaenge) + "KORREKTUR/ERWEITERUNG
+        des Ordner-Umbau-Eintrags" (gesendet-Ordner, draftId).
       requestBody:
         content:
           application/json:
@@ -386,6 +390,15 @@ paths:
                   description: >
                     IDs aus POST /attachments. Jede muss scan_status='clean'
                     haben, sonst 422 (keine Ausnahme).
+                draftId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: >
+                    Optional. Falls diese Mail aus einem Entwurf (POST/PATCH
+                    /drafts) stammt, wird dieser Entwurf nach erfolgreichem
+                    Versand automatisch geloescht (intern, kein separater
+                    DELETE /drafts/{draftId}-Aufruf noetig).
       responses:
         "200":
           description: Gesendet
@@ -444,6 +457,87 @@ paths:
                     enum: [pending, clean, malicious, blocked_type, scan_failed]
         "400":
           description: Keine Datei mitgeschickt
+
+  /drafts:
+    get:
+      summary: Entwuerfe des Users auflisten (Inhalt des "entwuerfe"-Systemordners)
+      responses:
+        "200":
+          description: Liste der Entwuerfe
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Draft"
+    post:
+      summary: >
+        Neuen (leeren oder vorbefuellten) Entwurf anlegen -- beim Start
+        eines Compose-Vorgangs (neue Mail oder Antwort). Siehe WEB_INBOX.md
+        09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags".
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                inReplyToMessageId: { type: string, format: uuid, nullable: true }
+                to:
+                  type: array
+                  items: { type: string }
+                cc:
+                  type: array
+                  items: { type: string }
+                subject: { type: string }
+                bodyText: { type: string }
+      responses:
+        "200":
+          description: Angelegter Entwurf
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Draft"
+
+  /drafts/{draftId}:
+    parameters:
+      - name: draftId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: Laufendes Speichern waehrend des Tippens oder beim Verlassen des Compose-Screens
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to:
+                  type: array
+                  items: { type: string }
+                cc:
+                  type: array
+                  items: { type: string }
+                subject: { type: string }
+                bodyText: { type: string }
+      responses:
+        "200":
+          description: Aktualisierter Entwurf
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Draft"
+        "404":
+          description: Entwurf nicht gefunden
+    delete:
+      summary: Entwurf verwerfen (Auto-Loeschung nach erfolgreichem Senden, siehe POST /messages/send draftId)
+      responses:
+        "200":
+          description: Geloescht
+        "404":
+          description: Entwurf nicht gefunden
 
   /signatures:
     get:
@@ -614,8 +708,23 @@ components:
         systemKey:
           type: string
           nullable: true
-          enum: [wichtig, sonstiges, rechnungen, quarantaene, spam, papierkorb]
+          enum: [eingang, entwuerfe, gesendet, sonstiges, quarantaene, spam, papierkorb]
         sortOrder: { type: integer }
+
+    Draft:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        inReplyToMessageId: { type: string, format: uuid, nullable: true }
+        to:
+          type: array
+          items: { type: string }
+        cc:
+          type: array
+          items: { type: string }
+        subject: { type: string, nullable: true }
+        bodyText: { type: string, nullable: true }
+        updatedAt: { type: string, format: date-time }
 
     MailAccount:
       type: object

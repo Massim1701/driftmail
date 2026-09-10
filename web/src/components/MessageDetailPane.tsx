@@ -55,6 +55,7 @@ export function MessageDetailPane({
   onMoved,
   onDeleted,
   onPermanentlyDeleted,
+  onSent,
 }: {
   message: MessageDetail | null;
   loading: boolean;
@@ -65,6 +66,10 @@ export function MessageDetailPane({
   onMoved: (id: string, folderId: string) => void;
   onDeleted: (id: string) => void;
   onPermanentlyDeleted: (id: string) => void;
+  /** POST /messages/send war erfolgreich -- die Mail liegt jetzt lokal im
+   * "gesendet"-Ordner (siehe backend/README.md "Versand"). App.tsx nutzt
+   * das, um den Ordner-Zähler/-Inhalt neu zu laden. */
+  onSent: () => void;
 }) {
   const [summary, setSummary] = useState<MailSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -211,6 +216,7 @@ export function MessageDetailPane({
       setSent(true);
       setDraft(null);
       setAttachments([]);
+      onSent();
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
         const body = err.body as { reason?: string } | undefined;
@@ -294,8 +300,10 @@ export function MessageDetailPane({
             {permanentlyDeleting ? "Lösche…" : "Endgültig löschen"}
           </button>
         )}
+        {/* Label-Umbenennung (WEB_INBOX.md 09.09. "Ordner-Umbau-Eintrags", Punkt 2):
+            reine UI-Textänderung, das Feld heißt technisch weiterhin summaryText. */}
         <button type="button" className="btn btn-secondary" onClick={loadSummary} disabled={summaryLoading}>
-          {summaryLoading ? "Fasse zusammen…" : "Was wollen die von mir?"}
+          {summaryLoading ? "Fasse zusammen…" : "Inhalt"}
         </button>
         <button type="button" className="btn btn-secondary" onClick={loadDraft} disabled={draftLoading}>
           {draftLoading ? "Erstelle Entwurf…" : "Antwortentwurf erstellen"}

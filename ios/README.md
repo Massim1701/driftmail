@@ -159,6 +159,78 @@ den iOS-Simulator zur Verfügung stand — ehrlich so dokumentiert statt als
 vollständig getestet behauptet (anders als der Web-Client, dort lief der
 komplette Flow inkl. Datei-Upload per Browser-Automation durch).
 
+## [2026-09-10] Nachtrag: Ordner-Umbau + Entwürfe (Schritt 3)
+
+Contract-Nachtrag "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags"
+(WEB_INBOX.md 09.09.): Standard-Ordner-Liste geändert.
+
+- **`Models/Folder.swift`:** `SystemFolderKey` auf die neue 7er-Liste
+  geändert (`eingang`/`entwuerfe`/`gesendet`/`sonstiges`/`quarantaene`/
+  `spam`/`papierkorb`, `wichtig`/`rechnungen` entfallen). Neue
+  `isDrafts`-Computed-Property (analog `isTrash`) markiert den
+  "entwuerfe"-Ordner. `isRenamable` um `entwuerfe`/`gesendet` ergänzt.
+- **`DesignSystem/DesignTokens.swift`:** `SystemFolders.defaults` auf die
+  neue Liste + Icons (`file-text` Entwürfe, `send` Gesendet, `folder`
+  Sonstiges statt `inbox`, das jetzt Eingang gehört) aktualisiert.
+- **`Networking/MockData/MockDatabase.json`:** `folder-wichtig` →
+  `folder-eingang` (gleiche Nachrichten, neuer `systemKey`),
+  `folder-rechnungen` bleibt unter derselben `id` bestehen, aber als
+  normaler benutzerdefinierter Ordner (`isSystem: false`,
+  `systemKey: null`) — analog zur Migration, die das echte Backend zur
+  Laufzeit macht (`migrateLegacySystemFolders()`, `backend/src/db/store.ts`),
+  hier einmalig direkt in den Testdaten nachvollzogen. Neue leere
+  `folder-entwuerfe`/`folder-gesendet`-Einträge.
+- **`Models/Draft.swift`** (neu, `PBXBuildFile`/`PBXFileReference`
+  manuell registriert wie bei `Attachment.swift`): mirrors
+  `components/schemas/Draft`.
+- **`APIClient`:** `sendMessage(...)` bekommt einen neuen Parameter
+  `draftId: String?` (bei Erfolg verwirft der Server den Entwurf
+  automatisch, falls gesetzt — bestehender Aufruf in `MessageDetailView`
+  übergibt `nil`, da diese App keinen "aus Entwurf gestartet"-Zustand
+  kennt). Neue Methoden `fetchDrafts()`/`deleteDraft(id:)` — bewusst KEIN
+  `createDraft`/`updateDraft` in diesem Client (anders als `web/src/api.ts`,
+  das beide für einen künftigen Compose-Screen vorhält): ohne jeden
+  Aufrufer hätte die Pflicht-Protokollmethode nur totes Gerüst in
+  `MockAPIClient`/`RemoteAPIClient` erzeugt.
+- **`Views/DraftListView.swift`** (neu): zeigt den "entwuerfe"-Ordner via
+  `GET /drafts`, NICHT `fetchMessages(...)`. Bewusst nur Liste (Empfänger/
+  Betreff/Vorschau) + Swipe-to-Delete, kein Bearbeiten — ein Entwurfs-Editor
+  bräuchte einen eigenen Compose-Screen ("neue Mail verfassen"), der auch
+  nach diesem Schritt nicht Teil der App ist. `MockAPIClient` liefert dafür
+  einen einzelnen fest verdrahteten Beispiel-Entwurf (kein
+  `MockDatabase.json`-Pendant, da nie vorab geseedet, siehe Code-Kommentar),
+  damit die Ansicht beim ersten Start etwas zeigt statt dauerhaft leer zu
+  sein.
+- **`Views/FolderListView.swift`:** `navigationDestination` routet
+  `folder.isDrafts` auf `DraftListView` statt `InboxListView`. Der
+  Sidebar-Zähler holt sich für den Entwürfe-Ordner zusätzlich
+  `fetchDrafts().count` (der normale `GET /messages`-Zähler wäre für
+  diesen Ordner sonst immer 0).
+- **`MockAPIClient.sendMessage(...)`** legt nach einem erfolgreichen
+  Versand zusätzlich eine lokale `MessageDetail` im "gesendet"-Ordner an
+  (analog zum echten Backend) und entfernt den referenzierten Entwurf,
+  falls `draftId` gesetzt war.
+- **Bekannte, bewusst nicht behobene Grenze:** anders als im Web-Client
+  (dort per `onSent`-Callback gefixt, siehe `web/README.md` "Ordner-Umbau")
+  aktualisiert sich der "Gesendet"-Zähler in `FolderListView` NICHT
+  automatisch, wenn der User nach einem Versand von `MessageDetailView`
+  zur Ordnerliste zurücknavigiert — `FolderListView` bleibt als
+  `NavigationStack`-Root im Hintergrund bestehen, ihr `.task` feuert beim
+  Zurücknavigieren nicht erneut. Der bestehende Pull-to-refresh
+  (`.refreshable { loadFoldersAndCounts(forceRefresh: true) }`) ist der
+  Workaround. Eine echte Lösung bräuchte geteilten State (z.B. Zähler in
+  `AppEnvironment` statt lokal in `FolderListView`) — außerhalb des
+  Aufwands, der für diesen Schritt angemessen war, hier bewusst
+  dokumentiert statt stillschweigend liegen gelassen.
+
+**Tests:** `xcodebuild` gegen beide Simulator-Ziele **BUILD SUCCEEDED**,
+App installiert/gestartet, Screenshot verifiziert (alle 9 Ordner in
+korrekter Reihenfolge mit korrekten Icons/Zählern, insbesondere
+"Entwürfe: 1" und "Rechnungen" jetzt ohne Badge-Sonderbehandlung als
+normaler Ordner). Kein interaktiver Klick-Test der `DraftListView` selbst
+(Öffnen/Löschen eines Entwurfs) — gleiche Werkzeug-Grenze wie bei den
+vorherigen Nachträgen.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

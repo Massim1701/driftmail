@@ -13,34 +13,48 @@ export const accounts = [
 ];
 
 // ---- Ordner ----
-// 5 System-Ordner (is_system=true, system_key gesetzt, wie contracts/db-schema.sql
-// "folders" + contracts/design-tokens.json "systemFolders.defaults") plus ein
-// Beispiel-Ordner, den der User selbst angelegt hat (is_system=false,
+// 7 System-Ordner (is_system=true, system_key gesetzt, wie contracts/db-schema.sql
+// "folders" + contracts/design-tokens.json "systemFolders.defaults") plus zwei
+// Beispiel-Ordner, die der User selbst angelegt hat (is_system=false,
 // system_key=null), um zu zeigen dass eigene Ordner unterstützt werden.
+//
+// [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
+// Ordner-Umbau-Eintrags"): "wichtig" -> "eingang" (echte automatische
+// Landezone statt "sonstiges"), "rechnungen" ist jetzt ein normaler
+// benutzerdefinierter Ordner (kein System-Ordner mehr, User kann sowas
+// selbst anlegen), "entwuerfe"/"gesendet" sind neu.
 export const folders = [
   {
     id: "f1000000-0000-0000-0000-000000000001",
-    name: "Wichtig",
-    icon: "star",
+    name: "Eingang",
+    icon: "inbox",
     is_system: true,
-    system_key: "wichtig",
+    system_key: "eingang",
     sort_order: 0,
+  },
+  {
+    id: "f1000000-0000-0000-0000-000000000007",
+    name: "Entwürfe",
+    icon: "file-text",
+    is_system: true,
+    system_key: "entwuerfe",
+    sort_order: 1,
+  },
+  {
+    id: "f1000000-0000-0000-0000-000000000008",
+    name: "Gesendet",
+    icon: "send",
+    is_system: true,
+    system_key: "gesendet",
+    sort_order: 2,
   },
   {
     id: "f1000000-0000-0000-0000-000000000002",
     name: "Sonstiges",
-    icon: "inbox",
+    icon: "folder",
     is_system: true,
     system_key: "sonstiges",
-    sort_order: 1,
-  },
-  {
-    id: "f1000000-0000-0000-0000-000000000003",
-    name: "Rechnungen",
-    icon: "receipt",
-    is_system: true,
-    system_key: "rechnungen",
-    sort_order: 2,
+    sort_order: 3,
   },
   {
     id: "f1000000-0000-0000-0000-000000000004",
@@ -48,7 +62,7 @@ export const folders = [
     icon: "shield-exclamation",
     is_system: true,
     system_key: "quarantaene",
-    sort_order: 3,
+    sort_order: 4,
   },
   {
     id: "f1000000-0000-0000-0000-000000000005",
@@ -56,10 +70,10 @@ export const folders = [
     icon: "trash",
     is_system: true,
     system_key: "spam",
-    sort_order: 4,
+    sort_order: 5,
   },
   // Nachtrag 08.09. (WEB_INBOX.md "Fehlende Basis-Funktion entdeckt", Contract-Commit
-  // 156f0fd): 6. System-Ordner für manuelles Löschen (soft delete), analog zu Gmail --
+  // 156f0fd): System-Ordner für manuelles Löschen (soft delete), analog zu Gmail --
   // nicht umbenennbar/löschbar wie quarantaene/spam.
   {
     id: "f1000000-0000-0000-0000-000000000006",
@@ -67,7 +81,7 @@ export const folders = [
     icon: "trash-2",
     is_system: true,
     system_key: "papierkorb",
-    sort_order: 5,
+    sort_order: 6,
   },
   // Beispiel für einen benutzerdefinierten Ordner (icon = customFolder.defaultIcon
   // aus design-tokens.json, weil der User beim Anlegen kein eigenes Icon gewählt hat).
@@ -77,7 +91,18 @@ export const folders = [
     icon: "folder",
     is_system: false,
     system_key: null,
-    sort_order: 6,
+    sort_order: 7,
+  },
+  // War bis zum Ordner-Umbau (09.09.) ein System-Ordner -- jetzt ein
+  // normaler benutzerdefinierter, id bewusst unverändert (bestehende
+  // Nachrichten bleiben unter derselben folderId auffindbar).
+  {
+    id: "f1000000-0000-0000-0000-000000000003",
+    name: "Rechnungen",
+    icon: "receipt",
+    is_system: false,
+    system_key: null,
+    sort_order: 8,
   },
 ];
 
@@ -102,7 +127,7 @@ export function folderBySystemKey(key) {
 
 // System-Ordner, bei denen Umbenennen/Icon-Ändern/Löschen serverseitig
 // abgelehnt wird (1:1 "renamable": false in design-tokens.json "systemFolders.defaults").
-const NOT_RENAMABLE_SYSTEM_KEYS = new Set(["quarantaene", "spam", "papierkorb"]);
+const NOT_RENAMABLE_SYSTEM_KEYS = new Set(["quarantaene", "spam", "papierkorb", "entwuerfe", "gesendet"]);
 
 export function isRenamable(folder) {
   if (!folder.is_system) return true;
@@ -173,9 +198,11 @@ function securityPhishing() {
   };
 }
 
-const WICHTIG = folderBySystemKey("wichtig").id;
+const EINGANG = folderBySystemKey("eingang").id;
 const SONSTIGES = folderBySystemKey("sonstiges").id;
-const RECHNUNGEN = folderBySystemKey("rechnungen").id;
+// Kein System-Ordner mehr seit dem Ordner-Umbau (09.09.) -- deshalb fester
+// id-String statt folderBySystemKey("rechnungen") (liefert jetzt undefined).
+const RECHNUNGEN = "f1000000-0000-0000-0000-000000000003";
 const QUARANTAENE = folderBySystemKey("quarantaene").id;
 const SPAM = folderBySystemKey("spam").id;
 const PAPIERKORB = folderBySystemKey("papierkorb").id;
@@ -183,14 +210,14 @@ const FAMILIE = "f2000000-0000-0000-0000-000000000001";
 
 // message: { id, fromAddress, fromDisplayName, subject, receivedAt, folderId, classification, bodyText, security }
 export const messages = [
-  // ---- wichtig ----
+  // ---- eingang ----
   {
     id: "b1000000-0000-0000-0000-000000000001",
     fromAddress: "hr@arbeitgeber-gmbh.de",
     fromDisplayName: "Arbeitgeber GmbH – Personal",
     subject: "Ihre Gehaltsabrechnung für August",
     receivedAt: "2026-09-07T08:12:00Z",
-    folderId: WICHTIG,
+    folderId: EINGANG,
     security: securityOk(),
     bodyText:
       "Hallo Massimo,\n\nanbei Ihre Gehaltsabrechnung für August. Bei Rückfragen wenden Sie sich gerne an die Personalabteilung.\n\nViele Grüße\nIhre Personalabteilung",
@@ -201,7 +228,7 @@ export const messages = [
     fromDisplayName: "Zahnarztpraxis Müller",
     subject: "Terminerinnerung: 12.09. 10:30 Uhr",
     receivedAt: "2026-09-06T17:40:00Z",
-    folderId: WICHTIG,
+    folderId: EINGANG,
     security: securityOk(),
     bodyText:
       "Guten Tag,\n\nwir erinnern Sie an Ihren Termin am 12.09.2026 um 10:30 Uhr. Bitte kommen Sie 10 Minuten früher.\n\nIhre Praxis Müller",
@@ -212,7 +239,7 @@ export const messages = [
     fromDisplayName: "Notariat Weber",
     subject: "Unterlagen zur Unterschrift bereit",
     receivedAt: "2026-09-05T09:03:00Z",
-    folderId: WICHTIG,
+    folderId: EINGANG,
     security: securityOk(),
     bodyText:
       "Sehr geehrter Herr Manca,\n\ndie besprochenen Unterlagen liegen zur Unterschrift bereit. Bitte vereinbaren Sie einen Termin in unserer Kanzlei.\n\nMit freundlichen Grüßen\nNotariat Weber",
@@ -463,31 +490,34 @@ export const contracts = [
   },
 ];
 
+// "Rechnungen" ist seit dem Ordner-Umbau (09.09.) kein System-Ordner mehr
+// (systemKeyOfMessage() liefert dafür null) -- die Demo-Sonderbehandlung
+// (Deadline/actionRequired) prüft deshalb direkt gegen die feste folderId
+// statt gegen einen system_key.
 export function summaryFor(msg) {
-  const systemKey = systemKeyOfMessage(msg);
+  const isRechnung = msg.folderId === RECHNUNGEN;
   const actionRequired =
-    msg.security.classification === "phishing" || msg.security.classification === "spam"
-      ? false
-      : systemKey === "rechnungen";
+    msg.security.classification === "phishing" || msg.security.classification === "spam" ? false : isRechnung;
   return {
     summaryText: shortSummary(msg),
     actionRequired,
     actionDescription: actionRequired
       ? "Prüfen, ob eine Kündigungsfrist läuft oder eine Zahlung fällig ist."
       : null,
-    deadline: systemKey === "rechnungen" ? "2026-09-15" : null,
+    deadline: isRechnung ? "2026-09-15" : null,
     source: "cloud_fallback",
   };
 }
 
 function shortSummary(msg) {
+  if (msg.folderId === RECHNUNGEN) {
+    return "Rechnung bzw. Abbuchung, ggf. mit automatischer Vertragsverlängerung.";
+  }
   switch (systemKeyOfMessage(msg)) {
     case "quarantaene":
       return "Verdächtige Mail mit Aufforderung, sofort persönliche oder Bankdaten preiszugeben.";
     case "spam":
       return "Werbe-/Massenmail ohne relevanten Inhalt für dich.";
-    case "rechnungen":
-      return "Rechnung bzw. Abbuchung, ggf. mit automatischer Vertragsverlängerung.";
     default:
       return msg.subject;
   }

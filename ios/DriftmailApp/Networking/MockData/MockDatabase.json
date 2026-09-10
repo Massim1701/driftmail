@@ -9,28 +9,36 @@
   ],
   "folders": [
     {
-      "id": "folder-wichtig",
-      "name": "Wichtig",
-      "icon": "star",
+      "id": "folder-eingang",
+      "name": "Eingang",
+      "icon": "inbox",
       "isSystem": true,
-      "systemKey": "wichtig",
+      "systemKey": "eingang",
       "sortOrder": 0
+    },
+    {
+      "id": "folder-entwuerfe",
+      "name": "Entwürfe",
+      "icon": "file-text",
+      "isSystem": true,
+      "systemKey": "entwuerfe",
+      "sortOrder": 1
+    },
+    {
+      "id": "folder-gesendet",
+      "name": "Gesendet",
+      "icon": "send",
+      "isSystem": true,
+      "systemKey": "gesendet",
+      "sortOrder": 2
     },
     {
       "id": "folder-sonstiges",
       "name": "Sonstiges",
-      "icon": "inbox",
+      "icon": "folder",
       "isSystem": true,
       "systemKey": "sonstiges",
-      "sortOrder": 1
-    },
-    {
-      "id": "folder-rechnungen",
-      "name": "Rechnungen",
-      "icon": "receipt",
-      "isSystem": true,
-      "systemKey": "rechnungen",
-      "sortOrder": 2
+      "sortOrder": 3
     },
     {
       "id": "folder-quarantaene",
@@ -38,7 +46,7 @@
       "icon": "shield-exclamation",
       "isSystem": true,
       "systemKey": "quarantaene",
-      "sortOrder": 3
+      "sortOrder": 4
     },
     {
       "id": "folder-spam",
@@ -46,7 +54,7 @@
       "icon": "trash",
       "isSystem": true,
       "systemKey": "spam",
-      "sortOrder": 4
+      "sortOrder": 5
     },
     {
       "id": "folder-papierkorb",
@@ -54,7 +62,7 @@
       "icon": "trash-2",
       "isSystem": true,
       "systemKey": "papierkorb",
-      "sortOrder": 5
+      "sortOrder": 6
     },
     {
       "id": "folder-familie",
@@ -62,7 +70,15 @@
       "icon": "folder",
       "isSystem": false,
       "systemKey": null,
-      "sortOrder": 6
+      "sortOrder": 7
+    },
+    {
+      "id": "folder-rechnungen",
+      "name": "Rechnungen",
+      "icon": "receipt",
+      "isSystem": false,
+      "systemKey": null,
+      "sortOrder": 8
     }
   ],
   "messages": [
@@ -72,7 +88,7 @@
       "fromDisplayName": "Anna Weber",
       "subject": "Projektupdate bis Freitag benötigt",
       "receivedAt": "2026-09-08T08:12:00Z",
-      "folderId": "folder-wichtig",
+      "folderId": "folder-eingang",
       "classification": "safe",
       "bodyText": "Hallo, bitte schick mir bis Freitag ein kurzes Update zum Projektstand. Danke!",
       "security": {
@@ -95,7 +111,7 @@
       "fromDisplayName": "Kanzlei Müller",
       "subject": "Unterlagen für die Steuererklärung",
       "receivedAt": "2026-09-07T14:30:00Z",
-      "folderId": "folder-wichtig",
+      "folderId": "folder-eingang",
       "classification": "safe",
       "bodyText": "Guten Tag, bitte reichen Sie die fehlenden Belege bis zum 30.09. nach.",
       "security": {

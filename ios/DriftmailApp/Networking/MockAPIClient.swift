@@ -26,6 +26,25 @@ actor MockAPIClient: APIClient {
     /// immer erst zur Laufzeit hochgeladen werden.
     private var uploadedAttachments: [String: AttachmentScanStatus] = [:]
 
+    /// `/drafts` (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
+    /// Ordner-Umbau-Eintrags") -- kein Contract-Pendant in
+    /// MockDatabase.json (kein `POST /drafts`/`PATCH /drafts/{id}` in
+    /// diesem Client, siehe README "Entwürfe" -- kein Compose-Screen in
+    /// diesem Schritt), deshalb ein einzelner fest verdrahteter
+    /// Beispiel-Entwurf, damit die "entwuerfe"-Ansicht trotzdem etwas
+    /// zeigt statt immer leer zu sein.
+    private var drafts: [Draft] = [
+        Draft(
+            id: "draft-001",
+            inReplyToMessageId: nil,
+            to: ["kollege@example.com"],
+            cc: [],
+            subject: "Noch offen: Rückmeldung zum Angebot",
+            bodyText: "Hallo, ich wollte noch kurz nachfragen, ob...",
+            updatedAt: Date(timeIntervalSinceNow: -3600)
+        ),
+    ]
+
     init(bundle: Bundle = .main) {
         guard
             let url = bundle.url(forResource: "MockDatabase", withExtension: "json"),
@@ -197,7 +216,10 @@ actor MockAPIClient: APIClient {
     /// nach) — simuliert nur den Erfolgsfall mit einer erfundenen
     /// `sentMessageId`, analog zu `requestReplyDraft` oben. Anhang-Gate
     /// (WEB_INBOX.md 09.09.) läuft aber echt, gegen `uploadedAttachments`.
-    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String]) async throws -> String {
+    /// Legt zusätzlich (Ordner-Umbau 09.09.) eine lokale `MessageDetail` im
+    /// "gesendet"-Ordner an und verwirft den `draftId`-Entwurf, falls
+    /// gesetzt -- analog zum echten Backend.
+    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String {
         await delay()
         guard db.messages.contains(where: { $0.id == inReplyToMessageId }) else {
             throw APIError.notFound
@@ -206,7 +228,29 @@ actor MockAPIClient: APIClient {
             guard let status = uploadedAttachments[attachmentId] else { throw APIError.notFound }
             guard status == .clean else { throw APIError.blocked(reason: "Anhang ist nicht freigegeben (Status: \(status.rawValue))") }
         }
-        return "mock-sent-\(UUID().uuidString)"
+        let sentMessageId = "mock-sent-\(UUID().uuidString)"
+
+        if let gesendetFolder = db.folders.first(where: { $0.systemKey == .gesendet }) {
+            let accountEmail = db.accounts.first?.emailAddress ?? "ich@example.com"
+            let sent = MessageDetail(
+                id: sentMessageId,
+                fromAddress: accountEmail,
+                fromDisplayName: nil,
+                subject: subject,
+                receivedAt: Date(),
+                folderId: gesendetFolder.id,
+                classification: .unclear,
+                bodyText: bodyText,
+                security: nil
+            )
+            db.messages.append(sent)
+        }
+
+        if let draftId {
+            drafts.removeAll { $0.id == draftId }
+        }
+
+        return sentMessageId
     }
 
     /// `POST /attachments`, Mock: kein echter Scan-Dienst -- dieselbe
@@ -228,6 +272,19 @@ actor MockAPIClient: APIClient {
         let attachmentId = UUID().uuidString
         uploadedAttachments[attachmentId] = status
         return AttachmentUploadResult(attachmentId: attachmentId, scanStatus: status)
+    }
+
+    /// `GET /drafts`, Mock: siehe `drafts`-Kommentar oben.
+    func fetchDrafts() async throws -> [Draft] {
+        await delay()
+        return drafts.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    /// `DELETE /drafts/{draftId}`.
+    func deleteDraft(id: String) async throws {
+        await delay()
+        guard drafts.contains(where: { $0.id == id }) else { throw APIError.notFound }
+        drafts.removeAll { $0.id == id }
     }
 
     func fetchContracts() async throws -> [Contract] {

@@ -5,9 +5,11 @@
 
 // Systemordner-Schlüssel (folders.system_key in db-schema.sql). Ordner selbst
 // sind jetzt benutzerdefinierte Objekte (siehe Folder unten) — dies ist nur
-// noch der optionale Marker, welcher der 5 Standard-Ordner ein Folder-Objekt
-// ist (null bei eigenen Ordnern).
-export type SystemFolderKey = "wichtig" | "sonstiges" | "rechnungen" | "quarantaene" | "spam" | "papierkorb";
+// noch der optionale Marker, welcher der 7 Standard-Ordner ein Folder-Objekt
+// ist (null bei eigenen Ordnern). [2026-09-10] Ordner-Umbau (WEB_INBOX.md
+// 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags"): wichtig/
+// rechnungen entfallen, eingang/entwuerfe/gesendet sind neu.
+export type SystemFolderKey = "eingang" | "entwuerfe" | "gesendet" | "sonstiges" | "quarantaene" | "spam" | "papierkorb";
 
 // POST /attachments Ergebnis (WEB_INBOX.md 09.09. "Erweiterung des
 // Send-Endpunkt-Eintrags von eben").
@@ -60,6 +62,19 @@ export interface SecurityResult {
 export interface MessageDetail extends Message {
   bodyText: string;
   security: SecurityResult;
+}
+
+// GET/POST /drafts, PATCH/DELETE /drafts/{id} (WEB_INBOX.md 09.09.
+// "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags"). Zeigt im
+// "entwuerfe"-Systemordner an, kommt aber NICHT aus GET /messages.
+export interface Draft {
+  id: string;
+  inReplyToMessageId: string | null;
+  to: string[];
+  cc: string[];
+  subject: string | null;
+  bodyText: string | null;
+  updatedAt: string;
 }
 
 export interface MailSummary {

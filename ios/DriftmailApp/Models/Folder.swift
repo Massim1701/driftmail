@@ -5,10 +5,22 @@ import SwiftUI
 /// contracts/design-tokens.json / `folders.system_key` in db-schema.sql.
 /// A user's system folders are seeded by the backend with these keys;
 /// custom (user-created) folders have `systemKey == nil`.
+///
+/// [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
+/// Ordner-Umbau-Eintrags"): `wichtig`/`rechnungen` entfallen als
+/// System-Ordner (der User kann beides weiterhin als eigenen Ordner
+/// anlegen), `eingang`/`entwuerfe`/`gesendet` sind neu.
 enum SystemFolderKey: String, Codable, CaseIterable, Hashable {
-    case wichtig
+    /// Echte automatische Landezone für neue, normale Mail (ersetzt
+    /// `wichtig`). Umbenennbar wie zuvor `sonstiges`/`wichtig`.
+    case eingang
+    /// Nicht umbenennbar/löschbar. Zeigt `GET /drafts`, NICHT
+    /// `GET /messages` (siehe `APIClient.fetchDrafts`).
+    case entwuerfe
+    /// Nicht umbenennbar/löschbar. Enthält lokale `Message`-Zeilen, die das
+    /// Backend nach einem erfolgreichen `POST /messages/send` selbst anlegt.
+    case gesendet
     case sonstiges
-    case rechnungen
     case quarantaene
     case spam
     /// [2026-09-08] Neu (WEB_INBOX.md "Fehlende Basis-Funktion entdeckt",
@@ -37,10 +49,11 @@ struct Folder: Codable, Identifiable, Hashable {
 
     /// SF Symbol standing in for the design-tokens.json icon keys
     /// ("star", "inbox", "receipt", "shield-exclamation", "trash",
-    /// "trash-2" für Papierkorb) plus `customFolder.defaultIcon` ("folder")
-    /// for user-created folders. Falls back to the folder glyph for any
-    /// icon key this build doesn't know yet (e.g. a newer icon added
-    /// server-side).
+    /// "trash-2" für Papierkorb, "file-text" für Entwürfe, "send" für
+    /// Gesendet — beide neu seit dem Ordner-Umbau 09.09.) plus
+    /// `customFolder.defaultIcon` ("folder") for user-created folders.
+    /// Falls back to the folder glyph for any icon key this build doesn't
+    /// know yet (e.g. a newer icon added server-side).
     var systemImage: String {
         switch icon {
         case "star": return "star.fill"
@@ -49,6 +62,8 @@ struct Folder: Codable, Identifiable, Hashable {
         case "shield-exclamation": return "exclamationmark.shield.fill"
         case "trash": return "trash.fill"
         case "trash-2": return "trash.slash.fill"
+        case "file-text": return "doc.text.fill"
+        case "send": return "paperplane.fill"
         default: return "folder.fill"
         }
     }
@@ -61,10 +76,13 @@ struct Folder: Codable, Identifiable, Hashable {
     var isMuted: Bool { systemKey == .spam }
 
     /// design-tokens.json `systemFolders.defaults[].renamable`: every
-    /// folder can be renamed except quarantaene/spam/papierkorb (custom
-    /// folders are always renamable, they just don't carry `renamable` in
-    /// the token file since it's implied).
-    var isRenamable: Bool { systemKey != .quarantaene && systemKey != .spam && systemKey != .papierkorb }
+    /// folder can be renamed except quarantaene/spam/papierkorb/entwuerfe/
+    /// gesendet (custom folders are always renamable, they just don't
+    /// carry `renamable` in the token file since it's implied).
+    var isRenamable: Bool {
+        systemKey != .quarantaene && systemKey != .spam && systemKey != .papierkorb
+            && systemKey != .entwuerfe && systemKey != .gesendet
+    }
 
     /// api-spec.yaml `DELETE /folders/{folderId}`: "System-Ordner nicht
     /// löschbar" — only user-created folders can be removed.
@@ -74,4 +92,9 @@ struct Folder: Codable, Identifiable, Hashable {
     /// 08.09. "Fehlende Basis-Funktion entdeckt"). Zeigt an, wo zusätzlich
     /// "Endgültig löschen" angeboten wird.
     var isTrash: Bool { systemKey == .papierkorb }
+
+    /// Der Entwürfe-Ordner (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
+    /// Ordner-Umbau-Eintrags"). Zeigt an, wo `InboxListView` `GET /drafts`
+    /// statt `GET /messages` lädt (siehe `DraftListView`).
+    var isDrafts: Bool { systemKey == .entwuerfe }
 }

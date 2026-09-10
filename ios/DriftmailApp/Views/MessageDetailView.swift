@@ -386,7 +386,8 @@ struct MessageDetailView: View {
                 to: [detail.fromAddress],
                 subject: subject,
                 bodyText: draft,
-                attachmentIds: attachmentIds
+                attachmentIds: attachmentIds,
+                draftId: nil
             )
             sentConfirmation = detail.fromAddress
             self.draft = nil

@@ -1,0 +1,17 @@
+.draft-row {
+  cursor: default;
+}
+
+.draft-preview {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.draft-delete {
+  align-self: flex-end;
+  margin-top: var(--space-xs);
+}

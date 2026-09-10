@@ -86,13 +86,14 @@ struct RemoteAPIClient: APIClient {
     /// true`) ein erwarteter, vom Erfolgsfall inhaltlich verschiedener
     /// Ausgang ist (siehe `APIError.blocked`), keine generische
     /// Netzwerk-/Decoding-Fehlerbedingung.
-    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String]) async throws -> String {
+    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String {
         struct Body: Encodable {
             let inReplyToMessageId: String
             let to: [String]
             let subject: String?
             let bodyText: String
             let attachmentIds: [String]
+            let draftId: String?
         }
         struct SendResponse: Decodable { let sentMessageId: String }
         struct BlockedResponse: Decodable { let blocked: Bool; let reason: String? }
@@ -100,7 +101,7 @@ struct RemoteAPIClient: APIClient {
         var request = URLRequest(url: baseURL.appendingPathComponent("/messages/send"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(Body(inReplyToMessageId: inReplyToMessageId, to: to, subject: subject, bodyText: bodyText, attachmentIds: attachmentIds))
+        request.httpBody = try JSONEncoder().encode(Body(inReplyToMessageId: inReplyToMessageId, to: to, subject: subject, bodyText: bodyText, attachmentIds: attachmentIds, draftId: draftId))
 
         let data: Data
         let response: URLResponse
@@ -146,6 +147,16 @@ struct RemoteAPIClient: APIClient {
         } catch {
             throw APIError.network(error)
         }
+    }
+
+    /// `GET /drafts` — Inhalt des "entwuerfe"-Systemordners.
+    func fetchDrafts() async throws -> [Draft] {
+        try await get("/drafts")
+    }
+
+    /// `DELETE /drafts/{draftId}`.
+    func deleteDraft(id: String) async throws {
+        try await delete("/drafts/\(id)")
     }
 
     func fetchContracts() async throws -> [Contract] {

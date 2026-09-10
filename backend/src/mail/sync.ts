@@ -65,9 +65,12 @@ export function adapterForAccount(account: MailAccountRecord): MailAdapter {
 /** Ermittelt die Ziel-Ordner-ID für eine frisch importierte Nachricht anhand
  * der Mock-Klassifikation. Löst gegen die System-Ordner des Kontobesitzers
  * auf (folders.system_key, siehe ensureDemoUser) statt gegen einen festen
- * Enum-String — Contract-Änderung, siehe SYNC.md Commit 734781e. */
+ * Enum-String — Contract-Änderung, siehe SYNC.md Commit 734781e.
+ * [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09.): normale Mail landet jetzt
+ * in "eingang" (echte automatische Landezone) statt "sonstiges" (nur noch
+ * manuell nutzbar, keine Auto-Zuordnung mehr). */
 async function resolveFolderId(classification: string, userId: string): Promise<string> {
-  const key: SystemFolderKey = classification === "phishing" || classification === "spam" ? "spam" : "sonstiges";
+  const key: SystemFolderKey = classification === "phishing" || classification === "spam" ? "spam" : "eingang";
   const folder = await store.getSystemFolder(userId, key);
   if (!folder) {
     throw new Error(

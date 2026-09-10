@@ -49,7 +49,14 @@ struct FolderListView: View {
                 }
             }
             .navigationDestination(for: Folder.self) { folder in
-                InboxListView(folder: folder)
+                // "entwuerfe" zeigt GET /drafts, nicht GET /messages (siehe
+                // Folder.isDrafts, WEB_INBOX.md 09.09. "KORREKTUR/
+                // ERWEITERUNG des Ordner-Umbau-Eintrags").
+                if folder.isDrafts {
+                    DraftListView(folder: folder)
+                } else {
+                    InboxListView(folder: folder)
+                }
             }
             .overlay {
                 if isLoading && environment.folders.isEmpty {
@@ -82,6 +89,15 @@ struct FolderListView: View {
             counts = Dictionary(grouping: all, by: \.folderId).mapValues(\.count)
         } catch {
             counts = [:]
+        }
+        // "entwuerfe" kommt aus GET /drafts, nicht GET /messages -- der
+        // Zähler oben würde sonst immer 0 zeigen (siehe Folder.isDrafts).
+        if let entwuerfeFolder = environment.folders.first(where: { $0.isDrafts }) {
+            do {
+                counts[entwuerfeFolder.id] = try await environment.apiClient.fetchDrafts().count
+            } catch {
+                counts[entwuerfeFolder.id] = 0
+            }
         }
     }
 

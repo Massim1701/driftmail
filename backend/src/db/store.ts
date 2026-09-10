@@ -19,6 +19,7 @@ import { randomUUID } from "node:crypto";
 import { PostgresStore } from "./postgresStore";
 import type {
   ContractRecord,
+  DraftRecord,
   FolderRecord,
   MailAccountRecord,
   MessageAiSummaryRecord,
@@ -111,6 +112,17 @@ export interface Store {
   /** Trägt nach erfolgreichem Versand die neu entstandene messageId auf die
    * (vorher nur per uploadedByUserId zugeordneten) Anhänge nach. */
   linkAttachmentsToMessage(ids: string[], messageId: string): Promise<void>;
+
+  // ----- Entwürfe (POST/GET /drafts, PATCH/DELETE /drafts/{id}, WEB_INBOX.md
+  // 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags") -----
+  createDraft(input: Omit<DraftRecord, "id" | "updatedAt">): Promise<DraftRecord>;
+  listDrafts(userId: string): Promise<DraftRecord[]>;
+  getDraft(id: string): Promise<DraftRecord | undefined>;
+  updateDraft(
+    id: string,
+    patch: Partial<Pick<DraftRecord, "toAddresses" | "ccAddresses" | "subject" | "bodyText">>,
+  ): Promise<DraftRecord | undefined>;
+  deleteDraft(id: string): Promise<boolean>;
 }
 
 /** In-Memory-Implementierung (Standard, wenn DATABASE_URL nicht gesetzt ist).
@@ -133,6 +145,8 @@ export class InMemoryStore implements Store {
   contracts: ContractRecord[] = [];
   messageAiSummary: Map<string, MessageAiSummaryRecord> = new Map(); // key: messageId
   userAiCapability: Map<string, UserAiCapabilityRecord> = new Map(); // key: userId:platform
+  // `drafts` (db-schema.sql) -- siehe DraftRecord-Kommentar in types.ts.
+  drafts: DraftRecord[] = [];
 
   // ----- Externe Lookup-Adapter (SYNC.md 08.09., Web-Antwort "vier externe
   // Lookups") -----
@@ -458,6 +472,43 @@ export class InMemoryStore implements Store {
       if (ids.includes(attachment.id)) attachment.messageId = messageId;
     }
   }
+
+  // ----- Entwürfe -----
+
+  async createDraft(input: Omit<DraftRecord, "id" | "updatedAt">): Promise<DraftRecord> {
+    const record: DraftRecord = { id: randomUUID(), updatedAt: new Date().toISOString(), ...input };
+    this.drafts.push(record);
+    return record;
+  }
+
+  async listDrafts(userId: string): Promise<DraftRecord[]> {
+    return this.drafts.filter((d) => d.userId === userId).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+  }
+
+  async getDraft(id: string): Promise<DraftRecord | undefined> {
+    return this.drafts.find((d) => d.id === id);
+  }
+
+  async updateDraft(
+    id: string,
+    patch: Partial<Pick<DraftRecord, "toAddresses" | "ccAddresses" | "subject" | "bodyText">>,
+  ): Promise<DraftRecord | undefined> {
+    const draft = await this.getDraft(id);
+    if (!draft) return undefined;
+    if (patch.toAddresses !== undefined) draft.toAddresses = patch.toAddresses;
+    if (patch.ccAddresses !== undefined) draft.ccAddresses = patch.ccAddresses;
+    if (patch.subject !== undefined) draft.subject = patch.subject;
+    if (patch.bodyText !== undefined) draft.bodyText = patch.bodyText;
+    draft.updatedAt = new Date().toISOString();
+    return draft;
+  }
+
+  async deleteDraft(id: string): Promise<boolean> {
+    const idx = this.drafts.findIndex((d) => d.id === id);
+    if (idx === -1) return false;
+    this.drafts.splice(idx, 1);
+    return true;
+  }
 }
 
 // `pg.Pool` baut beim Konstruieren keine Verbindung auf (lazy connect bei
@@ -481,19 +532,70 @@ export async function initStore(): Promise<void> {
 }
 
 // Default-Namen/Icons/Reihenfolge der System-Ordner — gespiegelt aus
-// contracts/design-tokens.json ("systemFolders.defaults"). quarantaene, spam
-// und papierkorb sind laut Contract nicht umbenennbar (siehe routes/folders.ts).
-// "papierkorb" kam mit dem Soft-Delete-Contract-Nachtrag dazu (WEB_INBOX.md
-// 08.09. "Fehlende Basis-Funktion entdeckt", Commit 156f0fd) — jetzt 6 statt
-// 5 System-Ordner.
+// contracts/design-tokens.json ("systemFolders.defaults"). quarantaene, spam,
+// papierkorb, entwuerfe und gesendet sind laut Contract nicht umbenennbar
+// (siehe routes/folders.ts). [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09.
+// "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags"): wichtig/rechnungen
+// entfallen, eingang/entwuerfe/gesendet sind neu — jetzt 7 statt 6
+// System-Ordner. Reihenfolge hier = Sidebar-Reihenfolge (Vorschlag laut Auftrag).
 const SYSTEM_FOLDER_DEFAULTS: Array<{ systemKey: SystemFolderKey; name: string; icon: string }> = [
-  { systemKey: "wichtig", name: "Wichtig", icon: "star" },
-  { systemKey: "sonstiges", name: "Sonstiges", icon: "inbox" },
-  { systemKey: "rechnungen", name: "Rechnungen", icon: "receipt" },
+  { systemKey: "eingang", name: "Eingang", icon: "inbox" },
+  { systemKey: "entwuerfe", name: "Entwürfe", icon: "file-text" },
+  { systemKey: "gesendet", name: "Gesendet", icon: "send" },
+  { systemKey: "sonstiges", name: "Sonstiges", icon: "folder" },
   { systemKey: "quarantaene", name: "Quarantäne", icon: "shield-exclamation" },
   { systemKey: "spam", name: "Spam", icon: "trash" },
   { systemKey: "papierkorb", name: "Papierkorb", icon: "trash-2" },
 ];
+
+// Alte System-Ordner (vor dem Ordner-Umbau), die als System-Ordner entfallen
+// -- Nachrichten darin wandern nach "eingang", die Ordner-Zeilen selbst
+// werden entfernt (gleiches Prinzip wie beim Löschen eines eigenen Ordners,
+// siehe deleteFolder()-Aufrufer in routes/folders.ts).
+// `as string[]` statt `SystemFolderKey[]`: diese beiden Werte sind laut
+// aktuellem Contract gar keine gueltigen SystemFolderKey-Werte mehr -- das
+// ist hier bewusst so, weil zur Laufzeit echte Bestandsdaten von VOR dem
+// Ordner-Umbau genau diese (inzwischen ungueltigen) Strings enthalten
+// koennen. Der Vergleich unten arbeitet deshalb auf String-Ebene.
+const LEGACY_SYSTEM_FOLDER_KEYS: string[] = ["wichtig", "rechnungen"];
+
+/** Migriert einen User von der alten 6-Ordner- auf die neue 7-Ordner-Struktur
+ * (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags").
+ * Idempotent -- für neu angelegte User (die die neuen Defaults schon über
+ * `ensureDemoUser()` bekommen haben) sind beide Schritte No-Ops. Kein
+ * SQL-Migrationstool (siehe db-schema.sql-Kommentar), stattdessen
+ * Anwendungslogik wie beim Löschen eines Ordners. */
+async function migrateLegacySystemFolders(userId: string): Promise<void> {
+  const folders = await store.listFolders(userId);
+  const bySystemKey = new Map(folders.filter((f) => f.systemKey).map((f) => [f.systemKey as SystemFolderKey, f]));
+
+  // Schritt 1: neue Pflicht-System-Ordner nachrüsten, falls sie fehlen (User
+  // von vor dem Umbau hatte nur die alten 6).
+  for (const [index, def] of SYSTEM_FOLDER_DEFAULTS.entries()) {
+    if (bySystemKey.has(def.systemKey)) continue;
+    const created = await store.createFolder({
+      userId,
+      name: def.name,
+      icon: def.icon,
+      isSystem: true,
+      systemKey: def.systemKey,
+      sortOrder: index,
+    });
+    bySystemKey.set(def.systemKey, created);
+  }
+
+  // Schritt 2: wichtig/rechnungen (falls vorhanden) -- Nachrichten nach
+  // "eingang" verschieben, Ordner-Zeile entfernen.
+  const eingang = bySystemKey.get("eingang");
+  if (!eingang) return; // sollte nach Schritt 1 nie passieren
+  for (const legacyKey of LEGACY_SYSTEM_FOLDER_KEYS) {
+    const legacy = folders.find((f) => f.systemKey === legacyKey);
+    if (!legacy) continue;
+    const messages = await store.listMessages({ folderId: legacy.id });
+    for (const m of messages) await store.moveMessage(m.id, eingang.id);
+    await store.deleteFolder(legacy.id);
+  }
+}
 
 /** Legt einen Demo-User + Demo-Konto + die System-Ordner an, falls noch
  * keine existieren. Wird beim Serverstart aufgerufen, damit die API sofort
@@ -526,6 +628,12 @@ export async function ensureDemoUser(): Promise<{ user: User; account: MailAccou
         sortOrder: index,
       });
     }
+  } else {
+    // Bestehender User (von vor dem Ordner-Umbau) -- neue Pflicht-Ordner
+    // nachrüsten + wichtig/rechnungen auflösen. Im `length === 0`-Zweig
+    // oben nicht nötig, da SYSTEM_FOLDER_DEFAULTS für neue User bereits die
+    // neue Liste ist.
+    await migrateLegacySystemFolders(user.id);
   }
 
   // Demo-Seed für den Empfänger-Reputations-Lookup (src/lookups/

@@ -5,6 +5,7 @@ import { messagesRouter } from "./routes/messages";
 import { contractsRouter } from "./routes/contracts";
 import { capabilityRouter } from "./routes/capability";
 import { attachmentsRouter } from "./routes/attachments";
+import { draftsRouter } from "./routes/drafts";
 import { internalRouter } from "./routes/internal";
 
 export function createApp() {
@@ -20,6 +21,7 @@ export function createApp() {
   v1.use(contractsRouter);
   v1.use(capabilityRouter);
   v1.use(attachmentsRouter);
+  v1.use(draftsRouter);
   app.use("/v1", v1);
 
   // Betriebs-/Test-Hilfsmittel, kein Contract-Bestandteil.

@@ -53,11 +53,12 @@
     "xl": 20
   },
   "systemFolders": {
-    "note": "Default-Namen fuer die 5 System-Ordner (folders.system_key in db-schema.sql). Alle bis auf quarantaene/spam sind vom User umbenennbar -- deshalb 'defaultLabel' statt 'label': das ist der Name bei Anlage, nicht zwingend der aktuelle.",
+    "note": "Default-Namen fuer die 7 System-Ordner (folders.system_key in db-schema.sql). [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09. 'KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags'): wichtig/rechnungen entfallen als System-Ordner (User kann beides als eigenen Ordner selbst anlegen), eingang ersetzt wichtig als automatische Landezone fuer neue, normale Mail, entwuerfe/gesendet sind neu dazugekommen. Reihenfolge hier = Sidebar-Reihenfolge (Vorschlag laut Auftrag). Alle bis auf quarantaene/spam/entwuerfe/gesendet sind vom User umbenennbar -- deshalb 'defaultLabel' statt 'label': das ist der Name bei Anlage, nicht zwingend der aktuelle.",
     "defaults": [
-      { "systemKey": "wichtig", "defaultLabel": "Wichtig", "icon": "star", "renamable": true },
-      { "systemKey": "sonstiges", "defaultLabel": "Sonstiges", "icon": "inbox", "renamable": true },
-      { "systemKey": "rechnungen", "defaultLabel": "Rechnungen", "icon": "receipt", "renamable": true },
+      { "systemKey": "eingang", "defaultLabel": "Eingang", "icon": "inbox", "renamable": true },
+      { "systemKey": "entwuerfe", "defaultLabel": "Entwürfe", "icon": "file-text", "renamable": false },
+      { "systemKey": "gesendet", "defaultLabel": "Gesendet", "icon": "send", "renamable": false },
+      { "systemKey": "sonstiges", "defaultLabel": "Sonstiges", "icon": "folder", "renamable": true },
       { "systemKey": "quarantaene", "defaultLabel": "Quarantäne", "icon": "shield-exclamation", "colorRole": "danger", "renamable": false },
       { "systemKey": "spam", "defaultLabel": "Spam", "icon": "trash", "muted": true, "renamable": false },
       { "systemKey": "papierkorb", "defaultLabel": "Papierkorb", "icon": "trash-2", "renamable": false }

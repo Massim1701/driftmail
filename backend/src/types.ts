@@ -13,9 +13,12 @@ export type SyncStatus = "pending" | "syncing" | "ok" | "error";
 // System-Ordner (folders.system_key) — Nachrichten zeigen jetzt per
 // folder_id auf eine echte Ordner-Zeile statt auf diesen String.
 // "papierkorb" kam mit dem Papierkorb-/Soft-Delete-Contract-Nachtrag dazu
-// (WEB_INBOX.md 08.09. "Fehlende Basis-Funktion entdeckt", Commit 156f0fd)
-// — inzwischen 6 statt 5 System-Ordner, siehe ensureDemoUser() in db/store.ts.
-export type SystemFolderKey = "wichtig" | "sonstiges" | "rechnungen" | "quarantaene" | "spam" | "papierkorb";
+// (WEB_INBOX.md 08.09. "Fehlende Basis-Funktion entdeckt", Commit 156f0fd).
+// [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
+// Ordner-Umbau-Eintrags"): "wichtig"/"rechnungen" entfallen als System-Ordner,
+// "eingang"/"entwuerfe"/"gesendet" sind neu -- jetzt 7 System-Ordner, siehe
+// ensureDemoUser()/migrateLegacySystemFolders() in db/store.ts.
+export type SystemFolderKey = "eingang" | "entwuerfe" | "gesendet" | "sonstiges" | "quarantaene" | "spam" | "papierkorb";
 export type Classification = "safe" | "spam" | "phishing" | "unclear";
 export type ContractStatus = "active" | "cancelled" | "expired" | "needs_review";
 export type AiSource = "on_device" | "cloud_fallback";
@@ -85,6 +88,22 @@ export interface MessageAttachmentRecord {
   scanStatus: "pending" | "clean" | "malicious" | "blocked_type" | "scan_failed";
   isDangerousType: boolean;
   scannedAt: string | null;
+}
+
+// `drafts` (db-schema.sql, WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
+// Ordner-Umbau-Eintrags") -- bewusst getrennt von MessageRecord, siehe
+// Kommentar dort. Zeigt im "entwuerfe"-Systemordner an, hat aber keinen
+// eigenen folderId-Bezug (jeder Entwurf eines Users gehört implizit dorthin).
+export interface DraftRecord {
+  id: string;
+  userId: string;
+  mailAccountId: string;
+  inReplyToMessageId: string | null;
+  toAddresses: string[];
+  ccAddresses: string[];
+  subject: string | null;
+  bodyText: string | null;
+  updatedAt: string;
 }
 
 export interface MessageSecurityRecord {
@@ -210,6 +229,16 @@ export interface ApiMessage {
   receivedAt: string;
   folderId: string;
   classification: Classification;
+}
+
+export interface ApiDraft {
+  id: string;
+  inReplyToMessageId: string | null;
+  to: string[];
+  cc: string[];
+  subject: string | null;
+  bodyText: string | null;
+  updatedAt: string;
 }
 
 export interface ApiSecurityResult {

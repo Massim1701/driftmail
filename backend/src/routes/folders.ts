@@ -9,10 +9,11 @@ import type { SystemFolderKey } from "../types";
 
 export const foldersRouter = Router();
 
-// quarantaene/spam/papierkorb sind laut design-tokens.json
+// quarantaene/spam/papierkorb/entwuerfe/gesendet sind laut design-tokens.json
 // (systemFolders.defaults, renamable: false) nicht umbenennbar — API lehnt
-// PATCH auf `name` für diese drei mit 400 ab.
-const NOT_RENAMABLE: SystemFolderKey[] = ["quarantaene", "spam", "papierkorb"];
+// PATCH auf `name` für diese mit 400 ab. [2026-09-10] Ordner-Umbau
+// (WEB_INBOX.md 09.09.): entwuerfe/gesendet ergänzt.
+const NOT_RENAMABLE: SystemFolderKey[] = ["quarantaene", "spam", "papierkorb", "entwuerfe", "gesendet"];
 
 // design-tokens.json: customFolder.defaultIcon
 const CUSTOM_FOLDER_DEFAULT_ICON = "folder";

@@ -167,28 +167,50 @@ messagesRouter.post("/messages/send", async (req, res) => {
     return res.status(502).json({ error: "Versand beim Mail-Provider fehlgeschlagen" });
   }
 
-  // TODO(Anhänge, WEB_INBOX.md 09.09.): zwei Folgeschritte fehlen hier noch
-  // bewusst, beide außerhalb des Scans dieses Schritts (siehe
-  // backend/README.md "Anhänge"):
-  // 1. Die Bytes der geprüften Anhänge werden NICHT tatsächlich in die
-  //    ausgehende Mail eingebettet (kein Objektspeicher vorhanden, aus dem
-  //    sie beim Versand gelesen werden könnten, siehe routes/attachments.ts)
-  //    -- der obige Check stellt nur sicher, dass keine ungeprüften/
-  //    gefährlichen Anhänge "mitgeschickt" werden dürfen.
-  // 2. `store.linkAttachmentsToMessage(attachmentIds, ...)` kann hier noch
-  //    nicht aufgerufen werden, weil es (noch) keine lokale messages-Zeile
-  //    für eine gesendete Mail gibt -- der "gesendet"-Systemordner ist Teil
-  //    des noch offenen Ordner-Umbaus (WEB_INBOX.md, nächster priorisierter
-  //    Schritt). Sobald der existiert, hier nachziehen.
+  // Lokale messages-Zeile im "gesendet"-Systemordner (WEB_INBOX.md 09.09.
+  // "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags") -- fuer sofortige
+  // UI-Sichtbarkeit, zusaetzlich zum eigentlichen Versand ueber die
+  // Provider-API oben. messageIdHeader ist synthetisch (kein echter
+  // RFC822-Header eines empfangenen Providers vorhanden), providerMessageId
+  // ist die tatsaechliche sentMessageId. Keine message_security-Zeile --
+  // eigene ausgehende Mail wird nicht klassifiziert, GET .../id liefert
+  // dafuer korrekt classification="unclear"/security=null (siehe mappers.ts).
+  const gesendet = await store.getSystemFolder(account.userId, "gesendet");
+  if (gesendet) {
+    const sentMessage = await store.insertMessage({
+      mailAccountId: account.id,
+      messageIdHeader: `sent-${sentMessageId}`,
+      providerMessageId: sentMessageId,
+      fromAddress: account.emailAddress,
+      fromDisplayName: null,
+      replyToAddress: null,
+      subject,
+      bodyText,
+      receivedAt: new Date().toISOString(),
+      folderId: gesendet.id,
+      rawHeaders: null,
+    });
+    // TODO (bewusst offen, siehe backend/README.md "Anhänge"): die Bytes der
+    // geprüften Anhänge werden NICHT tatsächlich in die ausgehende Mail
+    // eingebettet (kein Objektspeicher vorhanden, aus dem sie beim Versand
+    // gelesen werden könnten, siehe routes/attachments.ts) -- nur die
+    // Verknüpfung mit der jetzt existierenden gesendet-Nachricht läuft echt.
+    if (attachmentIds.length > 0) await store.linkAttachmentsToMessage(attachmentIds, sentMessage.id);
+  }
+
+  // Entwurf verwerfen, falls diese Mail aus einem stammte (WEB_INBOX.md
+  // 09.09.) -- best effort, kein Fehler, falls der Entwurf schon nicht mehr
+  // existiert (z.B. doppelter Klick).
+  const draftId = typeof body.draftId === "string" ? body.draftId : null;
+  if (draftId) await store.deleteDraft(draftId);
 
   // outgoing_send_log-Eintrag je Empfänger (to + cc) -- Grundlage für
   // recipientReputation (store.hasSentTo) und eine künftige Bot/Human-
   // Missbrauchserkennung (send_abuse_flags-Tabelle existiert bereits im
   // Schema, Logik dafür ist noch nicht umgesetzt, siehe WEB_INBOX.md).
-  const { user } = await ensureDemoUser();
   const recipients = Array.from(new Set([...to, ...cc].map((a) => a.toLowerCase())));
   for (const recipientAddress of recipients) {
-    await store.recordOutgoingSend({ userId: user.id, recipientAddress });
+    await store.recordOutgoingSend({ userId: account.userId, recipientAddress });
   }
 
   res.status(200).json({ sentMessageId });

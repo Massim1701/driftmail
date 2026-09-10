@@ -163,8 +163,9 @@ struct QuarantineWarningView: View {
 }
 
 /// Minimal stand-in for `ContentUnavailableView` so this file doesn't
-/// require a specific SDK version beyond what's already targeted.
-private struct ContentUnavailableCompat: View {
+/// require a specific SDK version beyond what's already targeted. Not
+/// `private` -- reused by `DraftListView` for the "entwuerfe"-Ordner.
+struct ContentUnavailableCompat: View {
     let title: String
     let systemImage: String
 

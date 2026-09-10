@@ -237,6 +237,15 @@ curl -X POST http://localhost:3000/v1/capability-check \
   `content`-Spalte im Contract), deshalb wird ein geprüfter Anhang aktuell
   auch nicht tatsächlich in die ausgehende Mail eingebettet. Siehe eigener
   Abschnitt "Anhänge" unten.
+- **Entwürfe** (neu, `GET`/`POST /drafts`, `PATCH`/`DELETE
+  /drafts/{draftId}`, `src/routes/drafts.ts`): echte CRUD-Persistenz
+  (eigene `drafts`-Tabelle), Endpunkte selbst sind Contract-vollständig und
+  getestet. Kein Compose-Screen in Web/iOS, der sie aufruft — siehe eigener
+  Abschnitt "Entwürfe" unten.
+- **Ordner-Umbau** (`eingang`/`entwuerfe`/`gesendet` ersetzen
+  `wichtig`/`rechnungen`, `src/db/store.ts` `migrateLegacySystemFolders()`):
+  echte Migration bestehender User beim nächsten `ensureDemoUser()`-Aufruf,
+  keine simulierte/gemockte Logik. Siehe Abschnitt "Ordner (benutzerdefiniert)".
 
 ## Auto-Delete: adult/gambling-Spam
 
@@ -301,20 +310,34 @@ Ordner eigene Datensätze (Tabelle `folders`) statt eines festen
 Enum-Strings auf `messages.folder`:
 
 - Jeder User bekommt beim Anlegen (`ensureDemoUser()` in `src/db/store.ts`)
-  automatisch 6 System-Ordner (`is_system=true`), Namen/Icons/Reihenfolge
+  automatisch 7 System-Ordner (`is_system=true`), Namen/Icons/Reihenfolge
   1:1 aus `contracts/design-tokens.json` (`systemFolders.defaults`):
-  `wichtig` (star), `sonstiges` (inbox), `rechnungen` (receipt),
-  `quarantaene` (shield-exclamation), `spam` (trash), `papierkorb`
-  (trash-2, seit dem Nachtrag vom 08.09., siehe Abschnitt "Papierkorb /
-  Löschen" unten).
+  `eingang` (inbox), `entwuerfe` (file-text), `gesendet` (send),
+  `sonstiges` (folder), `quarantaene` (shield-exclamation), `spam`
+  (trash), `papierkorb` (trash-2, seit dem Nachtrag vom 08.09., siehe
+  Abschnitt "Papierkorb / Löschen" unten). **[2026-09-10] Ordner-Umbau**
+  (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags"):
+  `wichtig`/`rechnungen` sind keine System-Ordner mehr (der User kann
+  beides weiterhin als eigenen Ordner anlegen), `eingang` ersetzt
+  `wichtig` als echte automatische Landezone für neue, normale Mail
+  (`mail/sync.ts` `resolveFolderId()`), `entwuerfe`/`gesendet` sind neu
+  (siehe eigener Abschnitt "Entwürfe" unten). Bestehende User (die schon
+  die alten 6 System-Ordner hatten) werden bei jedem `ensureDemoUser()`-
+  Aufruf automatisch migriert (`migrateLegacySystemFolders()`): fehlende
+  neue Pflicht-Ordner werden nachgerüstet, Nachrichten aus `wichtig`/
+  `rechnungen` wandern nach `eingang`, die beiden alten Ordner-Zeilen
+  werden entfernt — gleiches Prinzip wie beim Löschen eines eigenen
+  Ordners (Nachrichten gehen nie verloren), keine separate SQL-Migration
+  nötig (kein Migrationstool in diesem Stand, siehe `db-schema.sql`-
+  Kommentar).
 - Eigene Ordner (`POST /folders`) haben `is_system=false`,
   `system_key=null` und als Default-Icon `folder`
   (`contracts/design-tokens.json` → `customFolder.defaultIcon`).
 - `PATCH /folders/:folderId`: Name/Icon/Reihenfolge änderbar. Ausnahme:
-  `quarantaene`, `spam` und `papierkorb` sind laut Design-Token
-  (`renamable: false`) **nicht umbenennbar** — ein `PATCH` mit `name` auf
-  diese drei liefert `400`. Icon/Reihenfolge bleiben bei diesen drei
-  änderbar, da der Contract dazu nichts einschränkt.
+  `quarantaene`, `spam`, `papierkorb`, `entwuerfe` und `gesendet` sind laut
+  Design-Token (`renamable: false`) **nicht umbenennbar** — ein `PATCH`
+  mit `name` auf diese fünf liefert `400`. Icon/Reihenfolge bleiben bei
+  diesen fünf änderbar, da der Contract dazu nichts einschränkt.
 - `DELETE /folders/:folderId`: System-Ordner (`is_system=true`) sind nicht
   löschbar (`400`).
 - **Design-Entscheidung (nicht im Contract geregelt), 2026-09-08:**
@@ -507,11 +530,21 @@ wie beim Lesen — siehe "Was ist echt, was ist Mock/Stub" unten).
    `no_read_before_reply`/`phishing_content` ist **nicht** Teil dieses
    Schritts und noch offen).
 
-**Bewusst nicht Teil dieses Schritts:** kein lokaler `messages`-Eintrag im
-"gesendet"-Ordner (der Ordner selbst existiert noch nicht, siehe
-`WEB_INBOX.md` "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags" — hängt laut
-Web explizit von diesem Endpunkt ab, nicht umgekehrt). Anhänge: siehe eigener
-Abschnitt "Anhänge" unten.
+5. **[2026-09-10] Nachtrag (Ordner-Umbau, WEB_INBOX.md 09.09. "KORREKTUR/
+   ERWEITERUNG des Ordner-Umbau-Eintrags"):** eine lokale `messages`-Zeile
+   im "gesendet"-Systemordner wird jetzt tatsächlich angelegt (`folderId`
+   = `gesendet`, `providerMessageId` = `sentMessageId`, keine
+   `message_security`-Zeile — eine eigene ausgehende Mail wird nicht
+   klassifiziert, `GET /messages/{id}` liefert dafür korrekt
+   `classification: "unclear"`/`security: null`). Attachments werden per
+   `store.linkAttachmentsToMessage()` mit dieser neuen Nachricht
+   verknüpft (vorher unmöglich, weil es noch keine passende `messages`-
+   Zeile gab, siehe "Anhänge" unten). Optionales Request-Feld `draftId`:
+   falls gesetzt, wird der referenzierte Entwurf nach erfolgreichem
+   Versand automatisch gelöscht (`store.deleteDraft()`, best effort, kein
+   Fehler falls schon nicht mehr vorhanden).
+
+Anhänge: siehe eigener Abschnitt "Anhänge" unten.
 
 **Tests:** `src/smoketest.ts` deckt eine neue Mail (200 + `sentMessageId`,
 `outgoing_send_log`-Eintrag über `hasSentTo` geprüft), eine Antwort (nur
@@ -519,6 +552,42 @@ Abschnitt "Anhänge" unten.
 ohne `inReplyToMessageId` (400), unbekannte `inReplyToMessageId` (404) sowie
 den serverseitigen Phishing-Block (Dringlichkeit + Zugangsdaten-Anfrage, 422,
 kein `outgoing_send_log`-Eintrag) ab.
+
+## Entwürfe (`GET`/`POST /drafts`, `PATCH`/`DELETE /drafts/{draftId}`)
+
+Seit `WEB_INBOX.md` 09.09. ("KORREKTUR/ERWEITERUNG des Ordner-Umbau-
+Eintrags"): eigene `drafts`-Tabelle, bewusst getrennt von `messages` (ein
+Entwurf hat keine echte `message_id_header` eines Providers — `messages`
+ist auf empfangene/gesendete echte Mails ausgelegt, siehe UNIQUE-Constraint
+dort). Der "entwuerfe"-Systemordner in der UI zeigt den Inhalt dieser
+Tabelle, nicht `GET /messages`.
+
+- `POST /drafts`: legt einen neuen (leeren oder vorbefüllten) Entwurf an.
+  Anders als `POST /messages/send` (dort `accountId` ODER
+  `inReplyToMessageId` erforderlich) reicht hier immer der Demo-User selbst
+  — dieser Skeleton kennt ohnehin nur ein einziges Konto pro User
+  (`ensureDemoUser()`), ein eigenes `accountId`-Feld im Request wäre
+  redundant. Validiert `inReplyToMessageId` gegen `store.getMessage()`,
+  falls gesetzt (404 sonst).
+- `PATCH /drafts/{draftId}`: laufendes Speichern während des Tippens —
+  jedes Feld optional, nur mitgeschickte Felder werden überschrieben.
+- `DELETE /drafts/{draftId}`: Entwurf verwerfen. Wird auch **intern** von
+  `POST /messages/send` aufgerufen, wenn dort `draftId` mitgegeben wurde
+  (siehe Abschnitt "Versand" oben) — kein separater Client-Aufruf nötig.
+- **Bewusst nicht Teil dieses Schritts:** kein "Neue Mail verfassen"-
+  Compose-Screen in Web/iOS, der `POST /drafts` beim Start eines
+  Compose-Vorgangs aufrufen und `PATCH /drafts/{draftId}` als Autosave
+  während des Tippens nutzen würde — die Endpunkte sind Contract-vollständig
+  und getestet, aber aktuell von keiner Client-UI konsumiert (Web/iOS zeigen
+  den "entwuerfe"-Ordner nur lesend + mit Löschen, siehe `web/README.md`/
+  `ios/README.md`).
+
+**Tests:** `src/smoketest.ts` deckt Anlegen (inkl. `subject`-Übernahme),
+`PATCH` (Feld-Update + unverändertes `subject` ohne erneutes Mitschicken),
+`GET`-Liste, automatisches Verwerfen nach `POST /messages/send` mit
+`draftId` (per anschließendem `PATCH` auf dieselbe `draftId` verifiziert,
+das dann 404 liefert) sowie `PATCH`/`DELETE` auf unbekannte `draftId` (404
+je) ab.
 
 ## Anhänge (`POST /attachments` + `POST /messages/send` `attachmentIds`)
 
@@ -560,25 +629,25 @@ alles andere → `clean`. `scan_failed` wird vom Mock nie geliefert (kein
 echter Dienst, der fehlschlagen könnte) — der Enum-Wert existiert im
 Contract für eine spätere echte Anbindung.
 
-**Zwei bewusste, dokumentierte Grenzen dieses Schritts (kein Blocker, aber
+**Eine bewusste, dokumentierte Grenze dieses Schritts (kein Blocker, aber
 nicht stillschweigend als "fertig" markiert):**
 
-1. **Der Dateiinhalt selbst wird nicht gespeichert.** `message_attachments`
-   hat laut Contract keine `content`-Spalte (eine echte Implementierung
-   würde Objektspeicher wie S3 nutzen, kein DB-Feld) — der Scan läuft daher
-   nur gegen Metadaten (Dateiname/MIME-Typ/Größe), nicht gegen den
-   tatsächlichen Byte-Inhalt. Folge: `POST /messages/send` bettet geprüfte
-   Anhänge aktuell **nicht tatsächlich** in die ausgehende Mail ein (die
-   Bytes sind nach dem Upload-Request nicht mehr vorhanden) — der Endpunkt
-   stellt nur sicher, dass kein ungeprüfter/gefährlicher Anhang "mitgeschickt"
-   werden darf. Echte Speicherung + MIME-Einbettung beim Versand ist ein
-   späterer Schritt.
-2. **`store.linkAttachmentsToMessage()`** (Store-Methode existiert bereits)
-   wird nach einem erfolgreichen Versand noch nicht aufgerufen — dafür
-   bräuchte es eine lokale `messages`-Zeile für die gesendete Mail, die es
-   erst mit dem "gesendet"-Systemordner geben wird (nächster priorisierter
-   Schritt laut `WEB_INBOX.md`, noch offen). `TODO`-Kommentar an der
-   entsprechenden Stelle in `routes/messages.ts`.
+**Der Dateiinhalt selbst wird nicht gespeichert.** `message_attachments`
+hat laut Contract keine `content`-Spalte (eine echte Implementierung
+würde Objektspeicher wie S3 nutzen, kein DB-Feld) — der Scan läuft daher
+nur gegen Metadaten (Dateiname/MIME-Typ/Größe), nicht gegen den
+tatsächlichen Byte-Inhalt. Folge: `POST /messages/send` bettet geprüfte
+Anhänge aktuell **nicht tatsächlich** in die ausgehende Mail ein (die
+Bytes sind nach dem Upload-Request nicht mehr vorhanden) — der Endpunkt
+stellt nur sicher, dass kein ungeprüfter/gefährlicher Anhang "mitgeschickt"
+werden darf. Echte Speicherung + MIME-Einbettung beim Versand ist ein
+späterer Schritt.
+
+**[2026-09-10] Nachgezogen (Ordner-Umbau, WEB_INBOX.md 09.09.):**
+`store.linkAttachmentsToMessage()` wird jetzt tatsächlich aufgerufen —
+seit der "gesendet"-Systemordner existiert, gibt es die dafür nötige
+lokale `messages`-Zeile (siehe Abschnitt "Versand" oben, Punkt 5). Der
+`TODO`-Kommentar dazu in `routes/messages.ts` ist entfernt.
 
 **Tests:** `src/smoketest.ts` deckt Upload einer unauffälligen Datei
 (`clean`), einer Datei mit gefährlicher Endung (`blocked_type`), des

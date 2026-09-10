@@ -8,6 +8,7 @@ import { syncAccount } from "./mail/sync";
 import { aiAdapter } from "./ai";
 import { domainReputationLookup, extractIbanCandidates, ibanHistoryCheck } from "./lookups";
 import type { Server } from "node:http";
+import type { SystemFolderKey } from "./types";
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`Smoketest fehlgeschlagen: ${msg}`);
@@ -54,18 +55,30 @@ async function main() {
     const accounts = await accountsRes.json();
     assert(Array.isArray(accounts) && accounts.length > 0, "mind. 1 Konto erwartet");
 
-    // Ordner: 6 System-Ordner müssen für den Demo-User existieren
+    // Ordner: 7 System-Ordner müssen für den Demo-User existieren
     // (Contract-Änderung "benutzerdefinierte Ordner", SYNC.md Commit 734781e;
     // "papierkorb" kam per Nachtrag dazu, WEB_INBOX.md 08.09. "Fehlende
-    // Basis-Funktion entdeckt", Commit 156f0fd).
+    // Basis-Funktion entdeckt", Commit 156f0fd; Ordner-Umbau 09.09.
+    // "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags": wichtig/rechnungen
+    // entfallen, eingang/entwuerfe/gesendet neu).
     const foldersRes = await fetch(`${base}/v1/folders`);
     assert(foldersRes.status === 200, "GET /v1/folders sollte 200 liefern");
     const folders = (await foldersRes.json()) as Array<Record<string, unknown>>;
-    assert(Array.isArray(folders) && folders.length === 6, "genau 6 System-Ordner erwartet");
+    assert(Array.isArray(folders) && folders.length === 7, "genau 7 System-Ordner erwartet");
+    const eingangFolder = folders.find((f) => f.systemKey === "eingang");
+    const entwuerfeFolder = folders.find((f) => f.systemKey === "entwuerfe");
+    const gesendetFolder = folders.find((f) => f.systemKey === "gesendet") as Record<string, unknown>;
     const spamFolder = folders.find((f) => f.systemKey === "spam");
     const sonstigesFolder = folders.find((f) => f.systemKey === "sonstiges");
     const papierkorbFolder = folders.find((f) => f.systemKey === "papierkorb") as Record<string, unknown>;
-    assert(!!spamFolder && !!sonstigesFolder && !!papierkorbFolder, "System-Ordner 'spam', 'sonstiges' und 'papierkorb' erwartet");
+    assert(
+      !!eingangFolder && !!entwuerfeFolder && !!gesendetFolder && !!spamFolder && !!sonstigesFolder && !!papierkorbFolder,
+      "System-Ordner 'eingang', 'entwuerfe', 'gesendet', 'spam', 'sonstiges' und 'papierkorb' erwartet",
+    );
+    assert(
+      !folders.some((f) => f.systemKey === "wichtig" || f.systemKey === "rechnungen"),
+      "'wichtig'/'rechnungen' sollten nach dem Ordner-Umbau nicht mehr als System-Ordner existieren",
+    );
 
     const messagesRes = await fetch(`${base}/v1/messages`);
     const messages = await messagesRes.json();
@@ -416,6 +429,106 @@ async function main() {
     });
     assert(sendWithUnknownAttachmentRes.status === 400, "POST /v1/messages/send mit unbekannter attachmentId sollte 400 liefern");
 
+    // "Gesendet"-Ordner (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
+    // Ordner-Umbau-Eintrags"): jeder erfolgreiche Versand oben (sendRes,
+    // sendReplyRes, sendWithCleanAttachmentRes) sollte eine lokale
+    // messages-Zeile dort hinterlassen haben.
+    const gesendetMessagesRes = await fetch(`${base}/v1/messages?folderId=${gesendetFolder.id}`);
+    const gesendetMessages = (await gesendetMessagesRes.json()) as Array<Record<string, unknown>>;
+    assert(gesendetMessages.length >= 3, "mindestens 3 lokale Nachrichten im 'gesendet'-Ordner erwartet (3 erfolgreiche Sends oben)");
+
+    // ----- Entwürfe (POST/GET /drafts, PATCH/DELETE /drafts/{id}, WEB_INBOX.md
+    // 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags") -----
+    const createDraftRes = await fetch(`${base}/v1/drafts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: ["neuer-kontakt@example.com"], subject: "Testentwurf", bodyText: "Erster Satz." }),
+    });
+    assert(createDraftRes.status === 200, "POST /v1/drafts sollte 200 liefern");
+    const draftRecord = (await createDraftRes.json()) as Record<string, unknown>;
+    assert(typeof draftRecord.id === "string", "Draft sollte eine id haben");
+    assert(draftRecord.subject === "Testentwurf", "Draft sollte den gesendeten subject übernehmen");
+
+    const patchDraftRes = await fetch(`${base}/v1/drafts/${draftRecord.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bodyText: "Erster Satz. Zweiter Satz." }),
+    });
+    assert(patchDraftRes.status === 200, "PATCH /v1/drafts/:id sollte 200 liefern");
+    const patchedDraft = (await patchDraftRes.json()) as Record<string, unknown>;
+    assert(patchedDraft.bodyText === "Erster Satz. Zweiter Satz.", "PATCH sollte bodyText aktualisieren");
+    assert(patchedDraft.subject === "Testentwurf", "PATCH ohne subject-Feld sollte subject unverändert lassen");
+
+    const listDraftsRes = await fetch(`${base}/v1/drafts`);
+    const draftsList = (await listDraftsRes.json()) as Array<Record<string, unknown>>;
+    assert(draftsList.some((d) => d.id === draftRecord.id), "GET /v1/drafts sollte den angelegten Entwurf enthalten");
+
+    // Versand mit draftId -- der Entwurf muss danach automatisch verworfen sein.
+    const sendFromDraftRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: account.id,
+        draftId: draftRecord.id,
+        to: ["neuer-kontakt@example.com"],
+        subject: "Testentwurf",
+        bodyText: "Erster Satz. Zweiter Satz. Fertig.",
+      }),
+    });
+    assert(sendFromDraftRes.status === 200, "POST /v1/messages/send mit draftId sollte 200 liefern");
+    const patchDeletedDraftRes = await fetch(`${base}/v1/drafts/${draftRecord.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    assert(patchDeletedDraftRes.status === 404, "Entwurf sollte nach erfolgreichem Versand (draftId) automatisch gelöscht sein");
+
+    // Edge Cases: PATCH/DELETE auf unbekannte draftId -> 404.
+    const patchUnknownDraftRes = await fetch(`${base}/v1/drafts/00000000-0000-0000-0000-000000000000`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bodyText: "x" }),
+    });
+    assert(patchUnknownDraftRes.status === 404, "PATCH /v1/drafts/:id für unbekannte id sollte 404 liefern");
+    const deleteUnknownDraftRes = await fetch(`${base}/v1/drafts/00000000-0000-0000-0000-000000000000`, { method: "DELETE" });
+    assert(deleteUnknownDraftRes.status === 404, "DELETE /v1/drafts/:id für unbekannte id sollte 404 liefern");
+
+    // ----- Ordner-Umbau-Migration (migrateLegacySystemFolders(), WEB_INBOX.md
+    // 09.09.): simuliert einen Bestandsuser von VOR dem Umbau (eigene
+    // "wichtig"-Systemordner-Zeile + eine Nachricht darin) und prüft, dass
+    // der nächste ensureDemoUser()-Aufruf (wie er bei jedem Request passiert)
+    // die Nachricht nach "eingang" verschiebt und den Ordner entfernt. Cast
+    // auf SystemFolderKey nötig, weil "wichtig" laut aktuellem Contract kein
+    // gültiger Wert mehr ist -- genau das simuliert hier echte Altdaten.
+    const legacyWichtigFolder = await store.createFolder({
+      userId: account.userId,
+      name: "Wichtig",
+      icon: "star",
+      isSystem: true,
+      systemKey: "wichtig" as unknown as SystemFolderKey,
+      sortOrder: 99,
+    });
+    const legacyMessage = await store.insertMessage({
+      mailAccountId: account.id,
+      messageIdHeader: "<legacy-migration-test@example.com>",
+      providerMessageId: null,
+      fromAddress: "alt@example.com",
+      fromDisplayName: null,
+      replyToAddress: null,
+      subject: "Alte Mail im wichtig-Ordner",
+      bodyText: "Text",
+      receivedAt: new Date().toISOString(),
+      folderId: legacyWichtigFolder.id,
+      rawHeaders: null,
+    });
+    await ensureDemoUser(); // triggert migrateLegacySystemFolders() (Store hat bereits Ordner -> else-Zweig)
+    const migratedMessage = await store.getMessage(legacyMessage.id);
+    assert(migratedMessage !== undefined, "Nachricht aus dem alten 'wichtig'-Ordner darf nicht verloren gehen");
+    assert(migratedMessage!.folderId === eingangFolder!.id, "Nachricht aus 'wichtig' sollte nach der Migration in 'eingang' liegen");
+    const foldersAfterMigrationRes = await fetch(`${base}/v1/folders`);
+    const foldersAfterMigration = (await foldersAfterMigrationRes.json()) as Array<Record<string, unknown>>;
+    assert(!foldersAfterMigration.some((f) => f.systemKey === "wichtig"), "'wichtig'-Ordner sollte nach der Migration entfernt sein");
+
     // ----- Externe Lookup-Adapter (SYNC.md 08.09., Web-Antwort auf die vier
     // "wer macht den externen Lookup"-Fragen): src/lookups/*. Jeder der vier
     // Lookups läuft als Nachbearbeitungsschritt NACH analyzeMail() (Sync) bzw.
@@ -541,7 +654,7 @@ async function main() {
       "Empfänger-Domain, die schon als Phishing-Absender aufgefallen ist, sollte recipientReputation='flagged' liefern",
     );
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Externe Lookup-Adapter) end-to-end grün.");
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter) end-to-end grün.");
   } finally {
     server.close();
   }

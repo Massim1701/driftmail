@@ -84,6 +84,24 @@ export function FolderIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function FileTextIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8z" />
+      <path d="M14 3v5h5M8.5 13h7M8.5 16.5h7" />
+    </Svg>
+  );
+}
+
+export function SendIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M3.5 12 20.5 4l-6 16-3-6.5z" />
+      <path d="M20.5 4 11.5 13.5" />
+    </Svg>
+  );
+}
+
 export function PencilIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Svg {...props}>
@@ -102,8 +120,10 @@ export function PlusIcon(props: SVGProps<SVGSVGElement>) {
 }
 
 // FOLDER_ICONS: Icon-Keys aus contracts/design-tokens.json "systemFolders.defaults[].icon"
-// (star/inbox/receipt/shield-exclamation/trash/trash-2) plus "folder" aus
-// "customFolder.defaultIcon" für benutzerdefinierte Ordner ohne eigenes Icon.
+// (inbox/file-text/send/shield-exclamation/trash/trash-2, "receipt"/"star"
+// bleiben für Bestands-/eigene Ordner wie "Rechnungen" nutzbar) plus "folder"
+// aus "customFolder.defaultIcon" für benutzerdefinierte Ordner ohne eigenes
+// Icon. [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09.): file-text/send neu.
 export const FOLDER_ICONS: Record<string, (p: SVGProps<SVGSVGElement>) => ReactElement> = {
   star: StarIcon,
   inbox: InboxIcon,
@@ -112,6 +132,8 @@ export const FOLDER_ICONS: Record<string, (p: SVGProps<SVGSVGElement>) => ReactE
   trash: TrashIcon,
   "trash-2": Trash2Icon,
   folder: FolderIcon,
+  "file-text": FileTextIcon,
+  send: SendIcon,
 };
 
 export function CheckShieldIcon(props: SVGProps<SVGSVGElement>) {

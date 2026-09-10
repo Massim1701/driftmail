@@ -23,6 +23,7 @@ import { join } from "node:path";
 import type { Store } from "./store";
 import type {
   ContractRecord,
+  DraftRecord,
   FolderRecord,
   MailAccountRecord,
   MessageAiSummaryRecord,
@@ -175,6 +176,20 @@ function rowToOutgoingSendLog(r: any): OutgoingSendLogRecord {
     sentAt: r.sent_at,
     timeSinceDraftShownMs: r.time_since_draft_shown_ms,
     wasNewRecipient: r.was_new_recipient,
+  };
+}
+
+function rowToDraft(r: any): DraftRecord {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    mailAccountId: r.mail_account_id,
+    inReplyToMessageId: r.in_reply_to_message_id,
+    toAddresses: r.to_addresses ?? [],
+    ccAddresses: r.cc_addresses ?? [],
+    subject: r.subject,
+    bodyText: r.body_text,
+    updatedAt: r.updated_at,
   };
 }
 
@@ -728,5 +743,50 @@ export class PostgresStore implements Store {
   async linkAttachmentsToMessage(ids: string[], messageId: string): Promise<void> {
     if (ids.length === 0) return;
     await this.pool.query("UPDATE message_attachments SET message_id = $2 WHERE id = ANY($1::uuid[])", [ids, messageId]);
+  }
+
+  // ----- Entwürfe -----
+
+  async createDraft(input: Omit<DraftRecord, "id" | "updatedAt">): Promise<DraftRecord> {
+    const { rows } = await this.pool.query(
+      `INSERT INTO drafts (user_id, mail_account_id, in_reply_to_message_id, to_addresses, cc_addresses, subject, body_text)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [input.userId, input.mailAccountId, input.inReplyToMessageId, input.toAddresses, input.ccAddresses, input.subject, input.bodyText],
+    );
+    return rowToDraft(rows[0]);
+  }
+
+  async listDrafts(userId: string): Promise<DraftRecord[]> {
+    const { rows } = await this.pool.query("SELECT * FROM drafts WHERE user_id = $1 ORDER BY updated_at DESC", [userId]);
+    return rows.map(rowToDraft);
+  }
+
+  async getDraft(id: string): Promise<DraftRecord | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM drafts WHERE id = $1", [id]);
+    return rows[0] ? rowToDraft(rows[0]) : undefined;
+  }
+
+  async updateDraft(
+    id: string,
+    patch: Partial<Pick<DraftRecord, "toAddresses" | "ccAddresses" | "subject" | "bodyText">>,
+  ): Promise<DraftRecord | undefined> {
+    const { rows } = await this.pool.query(
+      `UPDATE drafts SET
+         to_addresses = COALESCE($2, to_addresses),
+         cc_addresses = COALESCE($3, cc_addresses),
+         subject = COALESCE($4, subject),
+         body_text = COALESCE($5, body_text),
+         updated_at = now()
+       WHERE id = $1
+       RETURNING *`,
+      [id, patch.toAddresses ?? null, patch.ccAddresses ?? null, patch.subject ?? null, patch.bodyText ?? null],
+    );
+    return rows[0] ? rowToDraft(rows[0]) : undefined;
+  }
+
+  async deleteDraft(id: string): Promise<boolean> {
+    const { rowCount } = await this.pool.query("DELETE FROM drafts WHERE id = $1", [id]);
+    return (rowCount ?? 0) > 0;
   }
 }

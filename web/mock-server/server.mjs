@@ -32,6 +32,21 @@ const capabilityLog = [];
 // Eintrags von eben") -- nur Metadaten, kein Dateiinhalt (siehe
 // backend/README.md "Anhänge", gleiche Grenze wie im echten Backend).
 const attachments = [];
+// /drafts (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-
+// Eintrags") -- { id, inReplyToMessageId, to, cc, subject, bodyText, updatedAt }.
+const drafts = [];
+
+function draftSummary(d) {
+  return {
+    id: d.id,
+    inReplyToMessageId: d.inReplyToMessageId,
+    to: d.to,
+    cc: d.cc,
+    subject: d.subject,
+    bodyText: d.bodyText,
+    updatedAt: d.updatedAt,
+  };
+}
 
 function send(res, status, body) {
   const json = JSON.stringify(body ?? null);
@@ -255,7 +270,87 @@ const server = createServer(async (req, res) => {
         return send(res, 422, { blocked: true, reason: `Anhang "${attachment.filename}" ist nicht freigegeben (Status: ${attachment.scanStatus})` });
       }
     }
-    return send(res, 200, { sentMessageId: randomUUID() });
+
+    const sentMessageId = randomUUID();
+    // Lokale messages-Zeile im "gesendet"-Systemordner (Ordner-Umbau,
+    // WEB_INBOX.md 09.09.), analog zum echten Backend -- für sofortige
+    // UI-Sichtbarkeit im Web-Mock-Server-Betrieb.
+    const gesendetFolder = folderBySystemKey("gesendet");
+    if (gesendetFolder) {
+      messages.push({
+        id: sentMessageId,
+        fromAddress: accounts[0]?.emailAddress ?? "ich@example.com",
+        fromDisplayName: null,
+        subject: typeof body.subject === "string" ? body.subject : "",
+        receivedAt: new Date().toISOString(),
+        folderId: gesendetFolder.id,
+        // Eigene ausgehende Mail wird nicht klassifiziert (analog zum echten
+        // Backend, das dafür keine message_security-Zeile anlegt) --
+        // messageSummary()/messageDetail() lesen classification direkt aus
+        // diesem Objekt, deshalb hier ein neutraler Platzhalter.
+        security: {
+          spfStatus: "pass",
+          dkimStatus: "pass",
+          dmarcStatus: "pass",
+          senderDomainAgeDays: null,
+          domainReputationScore: null,
+          homoglyphDetected: false,
+          linkMismatchDetected: false,
+          urgencyLanguageScore: null,
+          containsNewIban: false,
+          classification: "unclear",
+          confidenceScore: 0,
+        },
+        bodyText,
+      });
+    }
+
+    // Entwurf verwerfen, falls diese Mail aus einem stammte (best effort).
+    if (typeof body.draftId === "string") {
+      const idx = drafts.findIndex((d) => d.id === body.draftId);
+      if (idx !== -1) drafts.splice(idx, 1);
+    }
+
+    return send(res, 200, { sentMessageId });
+  }
+
+  // /drafts (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-
+  // Eintrags") -- vereinfachter Mock, kein mailAccountId-Tracking (dieser
+  // Mock-Server kennt ohnehin nur ein einziges Konto).
+  if (req.method === "GET" && parts.length === 1 && parts[0] === "drafts") {
+    return send(res, 200, drafts.slice().sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)).map(draftSummary));
+  }
+  if (req.method === "POST" && parts.length === 1 && parts[0] === "drafts") {
+    const body = (await readJsonBody(req)) ?? {};
+    const record = {
+      id: randomUUID(),
+      inReplyToMessageId: typeof body.inReplyToMessageId === "string" ? body.inReplyToMessageId : null,
+      to: Array.isArray(body.to) ? body.to.filter((x) => typeof x === "string") : [],
+      cc: Array.isArray(body.cc) ? body.cc.filter((x) => typeof x === "string") : [],
+      subject: typeof body.subject === "string" ? body.subject : null,
+      bodyText: typeof body.bodyText === "string" ? body.bodyText : null,
+      updatedAt: new Date().toISOString(),
+    };
+    drafts.push(record);
+    return send(res, 200, draftSummary(record));
+  }
+  if (parts.length === 2 && parts[0] === "drafts") {
+    const draft = drafts.find((d) => d.id === parts[1]);
+    if (req.method === "PATCH") {
+      if (!draft) return notFound(res);
+      const body = (await readJsonBody(req)) ?? {};
+      if (Array.isArray(body.to)) draft.to = body.to.filter((x) => typeof x === "string");
+      if (Array.isArray(body.cc)) draft.cc = body.cc.filter((x) => typeof x === "string");
+      if (typeof body.subject === "string") draft.subject = body.subject;
+      if (typeof body.bodyText === "string") draft.bodyText = body.bodyText;
+      draft.updatedAt = new Date().toISOString();
+      return send(res, 200, draftSummary(draft));
+    }
+    if (req.method === "DELETE") {
+      if (!draft) return notFound(res);
+      drafts.splice(drafts.indexOf(draft), 1);
+      return send(res, 200, { deleted: true });
+    }
   }
 
   // POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
@@ -389,5 +484,5 @@ function buildDraft(msg) {
 
 server.listen(PORT, () => {
   console.log(`driftmail mock-server läuft auf http://localhost:${PORT}`);
-  console.log(`Beispiel: http://localhost:${PORT}/messages?folderId=${folderBySystemKey("wichtig").id}`);
+  console.log(`Beispiel: http://localhost:${PORT}/messages?folderId=${folderBySystemKey("eingang").id}`);
 });

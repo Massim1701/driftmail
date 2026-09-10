@@ -91,10 +91,15 @@ enum DesignTokens {
             let renamable: Bool
         }
 
+        // [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09. "KORREKTUR/
+        // ERWEITERUNG des Ordner-Umbau-Eintrags"): wichtig/rechnungen
+        // entfallen als System-Ordner, eingang/entwuerfe/gesendet sind neu.
+        // Reihenfolge hier = Sidebar-Reihenfolge (Vorschlag laut Auftrag).
         static let defaults: [SystemDefault] = [
-            SystemDefault(systemKey: .wichtig, defaultLabel: "Wichtig", icon: "star", usesDangerColor: false, isMuted: false, renamable: true),
-            SystemDefault(systemKey: .sonstiges, defaultLabel: "Sonstiges", icon: "inbox", usesDangerColor: false, isMuted: false, renamable: true),
-            SystemDefault(systemKey: .rechnungen, defaultLabel: "Rechnungen", icon: "receipt", usesDangerColor: false, isMuted: false, renamable: true),
+            SystemDefault(systemKey: .eingang, defaultLabel: "Eingang", icon: "inbox", usesDangerColor: false, isMuted: false, renamable: true),
+            SystemDefault(systemKey: .entwuerfe, defaultLabel: "Entwürfe", icon: "file-text", usesDangerColor: false, isMuted: false, renamable: false),
+            SystemDefault(systemKey: .gesendet, defaultLabel: "Gesendet", icon: "send", usesDangerColor: false, isMuted: false, renamable: false),
+            SystemDefault(systemKey: .sonstiges, defaultLabel: "Sonstiges", icon: "folder", usesDangerColor: false, isMuted: false, renamable: true),
             SystemDefault(systemKey: .quarantaene, defaultLabel: "Quarantäne", icon: "shield-exclamation", usesDangerColor: true, isMuted: false, renamable: false),
             SystemDefault(systemKey: .spam, defaultLabel: "Spam", icon: "trash", usesDangerColor: false, isMuted: true, renamable: false),
             // [2026-09-08] Neu: Papierkorb (soft-delete-Ziel), siehe
