@@ -1,7 +1,11 @@
 {
   "meta": {
     "note": "Track 0 Contract. Alle Plattformen (iOS/Android/Windows/Web) referenzieren diese Werte, damit die App überall gleich aussieht. Standard-Theme ist hell; dunkel und system folgen demselben Schema.",
-    "themes": ["hell", "dunkel", "system"]
+    "themes": [
+      "hell",
+      "dunkel",
+      "system"
+    ]
   },
   "color": {
     "accent": "#1D9E75",
@@ -53,14 +57,52 @@
     "xl": 20
   },
   "systemFolders": {
-    "note": "Default-Namen fuer die 5 System-Ordner (folders.system_key in db-schema.sql). Alle bis auf quarantaene/spam sind vom User umbenennbar -- deshalb 'defaultLabel' statt 'label': das ist der Name bei Anlage, nicht zwingend der aktuelle.",
+    "note": "Default-Namen fuer die System-Ordner (folders.system_key in db-schema.sql). eingang und sonstiges sind vom User umbenennbar, alle anderen nicht (entwuerfe/gesendet/quarantaene/spam/papierkorb). eingang ist die automatische Landezone fuer neue, nicht als spam/phishing eingestufte Mail (ersetzt die vormalige Rolle von 'sonstiges'). wichtig/rechnungen wurden als System-Ordner entfernt -- der User kann beides als eigenen Ordner selbst anlegen.",
     "defaults": [
-      { "systemKey": "wichtig", "defaultLabel": "Wichtig", "icon": "star", "renamable": true },
-      { "systemKey": "sonstiges", "defaultLabel": "Sonstiges", "icon": "inbox", "renamable": true },
-      { "systemKey": "rechnungen", "defaultLabel": "Rechnungen", "icon": "receipt", "renamable": true },
-      { "systemKey": "quarantaene", "defaultLabel": "Quarantäne", "icon": "shield-exclamation", "colorRole": "danger", "renamable": false },
-      { "systemKey": "spam", "defaultLabel": "Spam", "icon": "trash", "muted": true, "renamable": false },
-      { "systemKey": "papierkorb", "defaultLabel": "Papierkorb", "icon": "trash-2", "renamable": false }
+      {
+        "systemKey": "eingang",
+        "defaultLabel": "Eingang",
+        "icon": "inbox",
+        "renamable": true
+      },
+      {
+        "systemKey": "entwuerfe",
+        "defaultLabel": "Entwürfe",
+        "icon": "file-pencil",
+        "renamable": false
+      },
+      {
+        "systemKey": "gesendet",
+        "defaultLabel": "Gesendet",
+        "icon": "send",
+        "renamable": false
+      },
+      {
+        "systemKey": "sonstiges",
+        "defaultLabel": "Sonstiges",
+        "icon": "folder",
+        "renamable": true
+      },
+      {
+        "systemKey": "quarantaene",
+        "defaultLabel": "Quarantäne",
+        "icon": "shield-exclamation",
+        "colorRole": "danger",
+        "renamable": false
+      },
+      {
+        "systemKey": "spam",
+        "defaultLabel": "Spam",
+        "icon": "trash",
+        "muted": true,
+        "renamable": false
+      },
+      {
+        "systemKey": "papierkorb",
+        "defaultLabel": "Papierkorb",
+        "icon": "trash-2",
+        "renamable": false
+      }
     ]
   },
   "customFolder": {
