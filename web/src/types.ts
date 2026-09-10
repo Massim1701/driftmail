@@ -9,6 +9,10 @@
 // ist (null bei eigenen Ordnern).
 export type SystemFolderKey = "wichtig" | "sonstiges" | "rechnungen" | "quarantaene" | "spam" | "papierkorb";
 
+// POST /attachments Ergebnis (WEB_INBOX.md 09.09. "Erweiterung des
+// Send-Endpunkt-Eintrags von eben").
+export type AttachmentScanStatus = "pending" | "clean" | "malicious" | "blocked_type" | "scan_failed";
+
 export interface Folder {
   id: string;
   name: string;

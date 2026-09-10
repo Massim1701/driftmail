@@ -22,6 +22,7 @@ import type {
   FolderRecord,
   MailAccountRecord,
   MessageAiSummaryRecord,
+  MessageAttachmentRecord,
   MessageRecord,
   MessageSecurityRecord,
   OutgoingSendLogRecord,
@@ -102,6 +103,14 @@ export interface Store {
   // ----- Ausgehende Sends (Grundlage für recipientReputation) -----
   hasSentTo(userId: string, recipientAddress: string): Promise<boolean>;
   recordOutgoingSend(input: { userId: string; recipientAddress: string; timeSinceDraftShownMs?: number | null }): Promise<OutgoingSendLogRecord>;
+
+  // ----- Anhänge (POST /attachments + POST /messages/send, WEB_INBOX.md
+  // 09.09. "Erweiterung des Send-Endpunkt-Eintrags von eben") -----
+  insertAttachment(input: Omit<MessageAttachmentRecord, "id">): Promise<MessageAttachmentRecord>;
+  getAttachment(id: string): Promise<MessageAttachmentRecord | undefined>;
+  /** Trägt nach erfolgreichem Versand die neu entstandene messageId auf die
+   * (vorher nur per uploadedByUserId zugeordneten) Anhänge nach. */
+  linkAttachmentsToMessage(ids: string[], messageId: string): Promise<void>;
 }
 
 /** In-Memory-Implementierung (Standard, wenn DATABASE_URL nicht gesetzt ist).
@@ -135,6 +144,9 @@ export class InMemoryStore implements Store {
   // `outgoing_send_log` (db-schema.sql, Commit a5432e6) -- Grundlage für den
   // Empfänger-Reputations-Lookup (siehe src/lookups/recipientReputationMock.ts).
   outgoingSendLog: OutgoingSendLogRecord[] = [];
+  // `message_attachments` (db-schema.sql) -- siehe MessageAttachmentRecord-
+  // Kommentar in types.ts.
+  messageAttachments: MessageAttachmentRecord[] = [];
 
   // ----- Users / Accounts -----
 
@@ -427,6 +439,24 @@ export class InMemoryStore implements Store {
     };
     this.outgoingSendLog.push(record);
     return record;
+  }
+
+  // ----- Anhänge -----
+
+  async insertAttachment(input: Omit<MessageAttachmentRecord, "id">): Promise<MessageAttachmentRecord> {
+    const record: MessageAttachmentRecord = { id: randomUUID(), ...input };
+    this.messageAttachments.push(record);
+    return record;
+  }
+
+  async getAttachment(id: string): Promise<MessageAttachmentRecord | undefined> {
+    return this.messageAttachments.find((a) => a.id === id);
+  }
+
+  async linkAttachmentsToMessage(ids: string[], messageId: string): Promise<void> {
+    for (const attachment of this.messageAttachments) {
+      if (ids.includes(attachment.id)) attachment.messageId = messageId;
+    }
   }
 }
 

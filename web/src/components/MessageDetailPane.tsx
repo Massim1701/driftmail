@@ -1,8 +1,39 @@
-import { useEffect, useState } from "react";
-import type { Folder, MailSummary, MessageDetail } from "../types";
+import { useEffect, useRef, useState } from "react";
+import type { AttachmentScanStatus, Folder, MailSummary, MessageDetail } from "../types";
 import { api, ApiError } from "../api";
 import { SecurityBadge, SecurityDetails } from "./SecurityBadge";
 import "./MessageDetailPane.css";
+
+// POST /attachments läuft synchron (siehe backend/README.md "Anhänge"),
+// "uploading"/"error" sind reiner Client-Zustand während des Requests,
+// nicht Teil des Backend-Enums.
+type AttachmentUiStatus = AttachmentScanStatus | "uploading" | "error";
+
+interface ComposeAttachment {
+  localId: string;
+  file: File;
+  attachmentId: string | null;
+  status: AttachmentUiStatus;
+}
+
+function attachmentStatusLabel(status: AttachmentUiStatus): string {
+  switch (status) {
+    case "uploading":
+      return "Wird hochgeladen…";
+    case "pending":
+      return "Wird geprüft…";
+    case "clean":
+      return "Geprüft";
+    case "malicious":
+      return "Gefährlich — wird nicht gesendet";
+    case "blocked_type":
+      return "Dateityp nicht erlaubt";
+    case "scan_failed":
+      return "Prüfung fehlgeschlagen";
+    case "error":
+      return "Hochladen fehlgeschlagen";
+  }
+}
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("de-DE", {
@@ -47,6 +78,8 @@ export function MessageDetailPane({
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Beim Wechsel der Nachricht abgeleiteten Zustand zurücksetzen
   useEffect(() => {
@@ -55,6 +88,7 @@ export function MessageDetailPane({
     setSendError(null);
     setSent(false);
     setShowDetails(false);
+    setAttachments([]);
   }, [message?.id]);
 
   if (loading) {
@@ -121,8 +155,44 @@ export function MessageDetailPane({
     }
   }
 
+  // POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
+  // Eintrags von eben") -- jede ausgewählte Datei wird sofort einzeln
+  // hochgeladen/gescannt, der Sichtbarkeits-Zustand pro Datei (Spinner ->
+  // Ergebnis) ist rein lokal, siehe AttachmentUiStatus.
+  async function handleFilesSelected(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const newItems: ComposeAttachment[] = Array.from(files).map((file) => ({
+      localId: crypto.randomUUID(),
+      file,
+      attachmentId: null,
+      status: "uploading",
+    }));
+    setAttachments((prev) => [...prev, ...newItems]);
+
+    for (const item of newItems) {
+      try {
+        const result = await api.uploadAttachment(item.file);
+        setAttachments((prev) =>
+          prev.map((a) => (a.localId === item.localId ? { ...a, attachmentId: result.attachmentId, status: result.scanStatus } : a)),
+        );
+      } catch {
+        setAttachments((prev) => prev.map((a) => (a.localId === item.localId ? { ...a, status: "error" } : a)));
+      }
+    }
+  }
+
+  function removeAttachment(localId: string) {
+    setAttachments((prev) => prev.filter((a) => a.localId !== localId));
+  }
+
+  // Solange ein Anhang noch hochgeladen/geprüft wird oder nicht 'clean' ist,
+  // bleibt Senden blockiert (WEB_INBOX.md-Vorgabe) -- ohne diese Prüfung
+  // könnte z.B. ein noch als 'malicious' erkannter Anhang durch einen
+  // erneuten Klick versehentlich mitgesendet werden.
+  const hasBlockingAttachment = attachments.some((a) => a.status !== "clean");
+
   async function handleSend() {
-    if (!message || !draft || !draft.trim()) return;
+    if (!message || !draft || !draft.trim() || hasBlockingAttachment) return;
     setSending(true);
     setSendError(null);
     try {
@@ -136,9 +206,11 @@ export function MessageDetailPane({
         to: [message.fromAddress],
         subject,
         bodyText: draft,
+        attachmentIds: attachments.map((a) => a.attachmentId).filter((id): id is string => id !== null),
       });
       setSent(true);
       setDraft(null);
+      setAttachments([]);
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
         const body = err.body as { reason?: string } | undefined;
@@ -274,9 +346,48 @@ export function MessageDetailPane({
             }}
             rows={6}
           />
+
+          {attachments.length > 0 && (
+            <ul className="attachment-list">
+              {attachments.map((a) => (
+                <li key={a.localId} className={`attachment-item attachment-status-${a.status}`}>
+                  <span className="attachment-filename">{a.file.name}</span>
+                  <span className="attachment-status">{attachmentStatusLabel(a.status)}</span>
+                  <button
+                    type="button"
+                    className="link-button attachment-remove"
+                    onClick={() => removeAttachment(a.localId)}
+                    aria-label={`${a.file.name} entfernen`}
+                  >
+                    Entfernen
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => {
+              handleFilesSelected(e.target.files);
+              e.target.value = "";
+            }}
+          />
+
           {sendError && <p className="send-error">{sendError}</p>}
           <div className="detail-actions">
-            <button type="button" className="btn btn-primary" onClick={handleSend} disabled={sending || !draft.trim()}>
+            <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
+              Anhang hinzufügen
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSend}
+              disabled={sending || !draft.trim() || hasBlockingAttachment}
+            >
               {sending ? "Sende…" : "Senden"}
             </button>
           </div>

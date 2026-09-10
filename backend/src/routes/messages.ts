@@ -133,6 +133,30 @@ messagesRouter.post("/messages/send", async (req, res) => {
     });
   }
 
+  // Anhänge (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-Eintrags von
+  // eben"): jede mitgegebene attachmentId muss existieren UND
+  // scan_status='clean' haben, sonst 422 -- gleiche Fehlerform wie der
+  // Phishing-Block oben (siehe api-spec.yaml). Keine Ausnahme, auch nicht
+  // für 'pending' (Scan noch nicht fertig, siehe attachmentScanMock.ts --
+  // dieser Mock läuft synchron, 'pending' kann hier praktisch nie
+  // vorkommen, die Prüfung bleibt trotzdem für eine spätere asynchrone
+  // Scan-Anbindung korrekt).
+  const attachmentIds: string[] = Array.isArray(body.attachmentIds)
+    ? body.attachmentIds.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0)
+    : [];
+  for (const attachmentId of attachmentIds) {
+    const attachment = await store.getAttachment(attachmentId);
+    if (!attachment) {
+      return res.status(400).json({ error: `unbekannte attachmentId: ${attachmentId}` });
+    }
+    if (attachment.scanStatus !== "clean") {
+      return res.status(422).json({
+        blocked: true,
+        reason: `Anhang "${attachment.filename}" ist nicht freigegeben (Status: ${attachment.scanStatus})`,
+      });
+    }
+  }
+
   const adapter = adapterForAccount(account);
   let sentMessageId: string;
   try {
@@ -142,6 +166,20 @@ messagesRouter.post("/messages/send", async (req, res) => {
     console.error("Versand beim Mail-Provider fehlgeschlagen:", err);
     return res.status(502).json({ error: "Versand beim Mail-Provider fehlgeschlagen" });
   }
+
+  // TODO(Anhänge, WEB_INBOX.md 09.09.): zwei Folgeschritte fehlen hier noch
+  // bewusst, beide außerhalb des Scans dieses Schritts (siehe
+  // backend/README.md "Anhänge"):
+  // 1. Die Bytes der geprüften Anhänge werden NICHT tatsächlich in die
+  //    ausgehende Mail eingebettet (kein Objektspeicher vorhanden, aus dem
+  //    sie beim Versand gelesen werden könnten, siehe routes/attachments.ts)
+  //    -- der obige Check stellt nur sicher, dass keine ungeprüften/
+  //    gefährlichen Anhänge "mitgeschickt" werden dürfen.
+  // 2. `store.linkAttachmentsToMessage(attachmentIds, ...)` kann hier noch
+  //    nicht aufgerufen werden, weil es (noch) keine lokale messages-Zeile
+  //    für eine gesendete Mail gibt -- der "gesendet"-Systemordner ist Teil
+  //    des noch offenen Ordner-Umbaus (WEB_INBOX.md, nächster priorisierter
+  //    Schritt). Sobald der existiert, hier nachziehen.
 
   // outgoing_send_log-Eintrag je Empfänger (to + cc) -- Grundlage für
   // recipientReputation (store.hasSentTo) und eine künftige Bot/Human-

@@ -56,3 +56,17 @@ export type RecipientReputation = "safe" | "unknown" | "flagged";
 export interface RecipientReputationLookup {
   lookup(userId: string, recipientAddress: string | null): Promise<RecipientReputation>;
 }
+
+export type AttachmentScanStatus = "pending" | "clean" | "malicious" | "blocked_type" | "scan_failed";
+
+export interface AttachmentScanResult {
+  scanStatus: AttachmentScanStatus;
+  isDangerousType: boolean;
+}
+
+/** Reale Implementierung: echter Virenscan-Dienst (z.B. ClamAV/VirusTotal),
+ * siehe WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-Eintrags von
+ * eben". Mock: einfache Dateiendungs-Prüfung, siehe attachmentScanMock.ts. */
+export interface AttachmentScanner {
+  scan(input: { filename: string; mimeType: string | null; sizeBytes: number }): Promise<AttachmentScanResult>;
+}

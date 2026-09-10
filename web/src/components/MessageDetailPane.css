@@ -210,6 +210,53 @@
   resize: vertical;
 }
 
+.attachment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-page);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-small);
+}
+
+.attachment-filename {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+}
+
+.attachment-status {
+  color: var(--color-text-secondary);
+}
+
+.attachment-status-malicious .attachment-status,
+.attachment-status-blocked_type .attachment-status,
+.attachment-status-error .attachment-status {
+  color: var(--color-danger-text);
+  font-weight: var(--font-weight-medium);
+}
+
+.attachment-status-clean .attachment-status {
+  color: var(--color-success);
+}
+
+.attachment-remove {
+  color: var(--color-text-muted);
+}
+
 .detail-body {
   font-size: var(--font-size-body-lg);
   color: var(--color-text-primary);

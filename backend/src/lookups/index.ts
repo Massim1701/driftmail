@@ -5,16 +5,18 @@
 // src/routes/messages.ts) kennen nur die Interfaces aus ./types.
 
 import { store } from "../db/store";
+import { MockAttachmentScanner } from "./attachmentScanMock";
 import { MockDomainReputationLookup } from "./domainReputationMock";
 import { StoreIbanHistoryCheck } from "./ibanHistoryCheck";
 import { MockIpReputationLookup } from "./ipReputationMock";
 import { MockRecipientReputationLookup } from "./recipientReputationMock";
-import type { DomainReputationLookup, IbanHistoryCheck, IpReputationLookup, RecipientReputationLookup } from "./types";
+import type { AttachmentScanner, DomainReputationLookup, IbanHistoryCheck, IpReputationLookup, RecipientReputationLookup } from "./types";
 
 export const domainReputationLookup: DomainReputationLookup = new MockDomainReputationLookup();
 export const ipReputationLookup: IpReputationLookup = new MockIpReputationLookup();
 export const ibanHistoryCheck: IbanHistoryCheck = new StoreIbanHistoryCheck(store);
 export const recipientReputationLookup: RecipientReputationLookup = new MockRecipientReputationLookup(store);
+export const attachmentScanner: AttachmentScanner = new MockAttachmentScanner();
 
 export { extractSendingIp } from "./ipReputationMock";
 export { extractIbanCandidates } from "./ibanHistoryCheck";

@@ -20,6 +20,7 @@
 		68DAA2A9E031687D45B1E6BC /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26BF4D41872D36E3E90EE82D /* AppEnvironment.swift */; };
 		7979DDB83341C15C4272062F /* InboxListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CB465B688F6688D8153A4F2 /* InboxListView.swift */; };
 		7CFCD8D197C22326C72A6B12 /* Contract.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6044B79C9FE8B86319E5853 /* Contract.swift */; };
+		C36254E4E64800CBC3B9774C /* Attachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9CC1ECB93390689E513E91 /* Attachment.swift */; };
 		8A8D0C8E3457F9AC7D2B1820 /* MessageDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DE3EBBE042341A42507CDDD /* MessageDetailView.swift */; };
 		8C6EE9C71D6DEDF2C921C895 /* Message.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EEFBE0EFB24A881316C051F /* Message.swift */; };
 		A99B2BB98A8838E891FA333E /* MailAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F1D97854BA9AAB832DF815 /* MailAccount.swift */; };
@@ -34,6 +35,7 @@
 
 /* Begin PBXFileReference section */
 		09F1D97854BA9AAB832DF815 /* MailAccount.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MailAccount.swift; sourceTree = "<group>"; };
+		6A9CC1ECB93390689E513E91 /* Attachment.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Attachment.swift; sourceTree = "<group>"; };
 		0CB465B688F6688D8153A4F2 /* InboxListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InboxListView.swift; sourceTree = "<group>"; };
 		0DE3EBBE042341A42507CDDD /* MessageDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageDetailView.swift; sourceTree = "<group>"; };
 		0EEFBE0EFB24A881316C051F /* Message.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Message.swift; sourceTree = "<group>"; };
@@ -103,6 +105,7 @@
 			isa = PBXGroup;
 			children = (
 				A3467EF332535F3D4020CD77 /* Classification.swift */,
+				6A9CC1ECB93390689E513E91 /* Attachment.swift */,
 				F6044B79C9FE8B86319E5853 /* Contract.swift */,
 				7E694A0F7D60CC52D976EDB1 /* Folder.swift */,
 				09F1D97854BA9AAB832DF815 /* MailAccount.swift */,
@@ -278,6 +281,7 @@
 				DA8E86676314DFDDD036B6AF /* DriftmailApp.swift in Sources */,
 				13433A55E04668BCDD55BE65 /* DesignTokens.swift in Sources */,
 				4DE709219BA100DA0A5740EC /* Classification.swift in Sources */,
+				C36254E4E64800CBC3B9774C /* Attachment.swift in Sources */,
 				7CFCD8D197C22326C72A6B12 /* Contract.swift in Sources */,
 				C8775F473A75CFDDE2C1B571 /* Folder.swift in Sources */,
 				A99B2BB98A8838E891FA333E /* MailAccount.swift in Sources */,

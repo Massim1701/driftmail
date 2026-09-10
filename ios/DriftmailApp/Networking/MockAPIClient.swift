@@ -20,6 +20,12 @@ actor MockAPIClient: APIClient {
     /// even against local mock data.
     private let simulatedLatencyNanoseconds: UInt64 = 250_000_000
 
+    /// `POST /attachments`-Ergebnisse (WEB_INBOX.md 09.09.) -- rein
+    /// In-Memory, kein Contract-Pendant in MockDatabase.json nötig, da
+    /// Anhänge nie über einen initialen Seed-Zustand existieren, sondern
+    /// immer erst zur Laufzeit hochgeladen werden.
+    private var uploadedAttachments: [String: AttachmentScanStatus] = [:]
+
     init(bundle: Bundle = .main) {
         guard
             let url = bundle.url(forResource: "MockDatabase", withExtension: "json"),
@@ -189,13 +195,39 @@ actor MockAPIClient: APIClient {
     /// `POST /messages/send`, Mock: kein echter Provider-Versand, kein
     /// Phishing-Check (der Mock bildet `checkDraftForPhishing()` nirgends
     /// nach) — simuliert nur den Erfolgsfall mit einer erfundenen
-    /// `sentMessageId`, analog zu `requestReplyDraft` oben.
-    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String) async throws -> String {
+    /// `sentMessageId`, analog zu `requestReplyDraft` oben. Anhang-Gate
+    /// (WEB_INBOX.md 09.09.) läuft aber echt, gegen `uploadedAttachments`.
+    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String]) async throws -> String {
         await delay()
         guard db.messages.contains(where: { $0.id == inReplyToMessageId }) else {
             throw APIError.notFound
         }
+        for attachmentId in attachmentIds {
+            guard let status = uploadedAttachments[attachmentId] else { throw APIError.notFound }
+            guard status == .clean else { throw APIError.blocked(reason: "Anhang ist nicht freigegeben (Status: \(status.rawValue))") }
+        }
         return "mock-sent-\(UUID().uuidString)"
+    }
+
+    /// `POST /attachments`, Mock: kein echter Scan-Dienst -- dieselbe
+    /// einfache Dateiendungs-Heuristik wie
+    /// backend/src/lookups/attachmentScanMock.ts, dupliziert statt geteilt
+    /// (unterschiedliche Sprachen/Prozesse, kein gemeinsames Package).
+    func uploadAttachment(filename: String, mimeType: String, data: Data) async throws -> AttachmentUploadResult {
+        await delay()
+        let dangerousExtensions: Set<String> = ["exe", "bat", "cmd", "com", "scr", "pif", "msi", "js", "jse", "vbs", "vbe", "ws", "wsf", "ps1", "jar", "docm", "xlsm", "pptm", "dotm", "xltm"]
+        let lowerFilename = filename.lowercased()
+        let status: AttachmentScanStatus
+        if lowerFilename.contains("virus") || lowerFilename.contains("malware") {
+            status = .malicious
+        } else if let ext = filename.split(separator: ".").last, dangerousExtensions.contains(String(ext).lowercased()) {
+            status = .blockedType
+        } else {
+            status = .clean
+        }
+        let attachmentId = UUID().uuidString
+        uploadedAttachments[attachmentId] = status
+        return AttachmentUploadResult(attachmentId: attachmentId, scanStatus: status)
     }
 
     func fetchContracts() async throws -> [Contract] {

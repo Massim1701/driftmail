@@ -220,15 +220,26 @@ CREATE TABLE IF NOT EXISTS user_ai_preference (
 
 -- ===== Sicherheit: Anhang-Scan =====
 
+-- [2026-09-10] WEB_INBOX.md "Erweiterung des Send-Endpunkt-Eintrags": message_id
+-- ist jetzt nullable + neue Spalte uploaded_by_user_id, damit ein Anhang
+-- gescannt werden kann, BEVOR die gesendete Mail als messages-Zeile existiert
+-- (Upload-Reihenfolge bei POST /attachments, vor POST /messages/send). Bei
+-- eingehenden Anhängen (empfangene Mail) bleibt message_id wie bisher gesetzt,
+-- uploaded_by_user_id null. Direkt am CREATE TABLE geändert statt per ALTER
+-- TABLE (Repo-Konvention, siehe z.B. messages.provider_message_id weiter
+-- oben) -- die Tabelle wurde bisher von keinem Code beschrieben, es gibt
+-- also keinen Bestand, der eine echte Migration bräuchte.
 CREATE TABLE IF NOT EXISTS message_attachments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
+    uploaded_by_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     filename TEXT NOT NULL,
     mime_type TEXT,
     size_bytes INTEGER,
     scan_status TEXT NOT NULL DEFAULT 'pending' CHECK (scan_status IN ('pending', 'clean', 'malicious', 'blocked_type', 'scan_failed')),
     is_dangerous_type BOOLEAN NOT NULL DEFAULT false,
-    scanned_at TIMESTAMPTZ
+    scanned_at TIMESTAMPTZ,
+    CONSTRAINT message_attachments_owner_check CHECK (message_id IS NOT NULL OR uploaded_by_user_id IS NOT NULL)
   );
 
 -- ===== Sicherheit: Tracking-Schutz (Spionage-Pixel) =====

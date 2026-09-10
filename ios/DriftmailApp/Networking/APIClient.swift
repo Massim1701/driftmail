@@ -44,7 +44,14 @@ protocol APIClient {
     /// wenn der serverseitige Phishing-Check den Versand verhindert hat
     /// (422, siehe api-spec.yaml). [2026-09-09] WEB_INBOX.md "Fehlender
     /// Senden-Endpunkt".
-    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String) async throws -> String
+    /// `attachmentIds` (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
+    /// Eintrags von eben"): jede ID muss aus `uploadAttachment(...)`
+    /// stammen und `scanStatus == .clean` gehabt haben, sonst wirft der
+    /// Server 422 (`APIError.blocked`) — leeres Array, wenn keine Anhänge.
+    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String]) async throws -> String
+    /// `POST /attachments` — lädt eine Datei hoch und lässt sie sofort
+    /// scannen (siehe backend/README.md "Anhänge").
+    func uploadAttachment(filename: String, mimeType: String, data: Data) async throws -> AttachmentUploadResult
     func fetchContracts() async throws -> [Contract]
     func confirmContract(_ contract: Contract) async throws
     func reportCapabilityCheck(_ capability: UserAiCapability) async throws

@@ -69,6 +69,24 @@ export interface MessageRecord {
   rawHeaders: Record<string, string> | null;
 }
 
+// `message_attachments` (db-schema.sql, WEB_INBOX.md 09.09. "Erweiterung
+// des Send-Endpunkt-Eintrags von eben"). `messageId` ist null zwischen
+// Upload (POST /attachments) und erfolgreichem Versand -- `uploadedByUserId`
+// identifiziert den Anhang in dieser Phase stattdessen. Nach POST
+// /messages/send wird `messageId` auf die neu entstandene gesendete
+// Nachricht nachgetragen (siehe routes/messages.ts).
+export interface MessageAttachmentRecord {
+  id: string;
+  messageId: string | null;
+  uploadedByUserId: string | null;
+  filename: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  scanStatus: "pending" | "clean" | "malicious" | "blocked_type" | "scan_failed";
+  isDangerousType: boolean;
+  scannedAt: string | null;
+}
+
 export interface MessageSecurityRecord {
   messageId: string;
   spfStatus: "pass" | "fail" | "none" | null;

@@ -26,6 +26,7 @@ import type {
   FolderRecord,
   MailAccountRecord,
   MessageAiSummaryRecord,
+  MessageAttachmentRecord,
   MessageRecord,
   MessageSecurityRecord,
   OutgoingSendLogRecord,
@@ -174,6 +175,20 @@ function rowToOutgoingSendLog(r: any): OutgoingSendLogRecord {
     sentAt: r.sent_at,
     timeSinceDraftShownMs: r.time_since_draft_shown_ms,
     wasNewRecipient: r.was_new_recipient,
+  };
+}
+
+function rowToMessageAttachment(r: any): MessageAttachmentRecord {
+  return {
+    id: r.id,
+    messageId: r.message_id,
+    uploadedByUserId: r.uploaded_by_user_id,
+    filename: r.filename,
+    mimeType: r.mime_type,
+    sizeBytes: r.size_bytes,
+    scanStatus: r.scan_status,
+    isDangerousType: r.is_dangerous_type,
+    scannedAt: r.scanned_at,
   };
 }
 
@@ -681,5 +696,37 @@ export class PostgresStore implements Store {
       [input.userId, input.recipientAddress, input.timeSinceDraftShownMs ?? null, wasNewRecipient],
     );
     return rowToOutgoingSendLog(rows[0]);
+  }
+
+  // ----- Anhänge -----
+
+  async insertAttachment(input: Omit<MessageAttachmentRecord, "id">): Promise<MessageAttachmentRecord> {
+    const { rows } = await this.pool.query(
+      `INSERT INTO message_attachments
+         (message_id, uploaded_by_user_id, filename, mime_type, size_bytes, scan_status, is_dangerous_type, scanned_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        input.messageId,
+        input.uploadedByUserId,
+        input.filename,
+        input.mimeType,
+        input.sizeBytes,
+        input.scanStatus,
+        input.isDangerousType,
+        input.scannedAt,
+      ],
+    );
+    return rowToMessageAttachment(rows[0]);
+  }
+
+  async getAttachment(id: string): Promise<MessageAttachmentRecord | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM message_attachments WHERE id = $1", [id]);
+    return rows[0] ? rowToMessageAttachment(rows[0]) : undefined;
+  }
+
+  async linkAttachmentsToMessage(ids: string[], messageId: string): Promise<void> {
+    if (ids.length === 0) return;
+    await this.pool.query("UPDATE message_attachments SET message_id = $2 WHERE id = ANY($1::uuid[])", [ids, messageId]);
   }
 }

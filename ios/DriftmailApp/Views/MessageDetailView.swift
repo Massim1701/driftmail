@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// GET /messages/{messageId} — full message + security analysis, plus the
 /// on-demand actions from api-spec.yaml: /summary, /reply-draft and /move.
@@ -26,6 +27,8 @@ struct MessageDetailView: View {
     @State private var isSending = false
     @State private var sendBlockedReason: String?
     @State private var sentConfirmation: String?
+    @State private var composeAttachments: [ComposeAttachment] = []
+    @State private var showFileImporter = false
 
     /// The folder the message currently sits in, looked up from
     /// `environment.folders` via `detail.folderId`. `nil` while folders or
@@ -33,6 +36,13 @@ struct MessageDetailView: View {
     private var currentFolder: Folder? {
         guard let detail else { return nil }
         return environment.folders.first { $0.id == detail.folderId }
+    }
+
+    /// Solange ein Anhang noch hochgeladen/geprüft wird, fehlgeschlagen ist
+    /// oder nicht `.clean` ist, bleibt Senden blockiert (WEB_INBOX.md
+    /// 09.09. "Erweiterung des Send-Endpunkt-Eintrags von eben").
+    private var hasBlockingAttachment: Bool {
+        composeAttachments.contains { !$0.status.isClean }
     }
 
     var body: some View {
@@ -112,6 +122,11 @@ struct MessageDetailView: View {
             Button("Abbrechen", role: .cancel) {}
         } message: {
             Text("Diese Nachricht wird unwiderruflich gelöscht und kann nicht wiederhergestellt werden.")
+        }
+        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            if case .success(let urls) = result {
+                for url in urls { Task { await uploadAttachment(from: url) } }
+            }
         }
     }
 
@@ -253,21 +268,64 @@ struct MessageDetailView: View {
                 .frame(minHeight: 120)
                 .scrollContentBackground(.hidden)
 
+            if !composeAttachments.isEmpty {
+                VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
+                    ForEach(composeAttachments) { attachment in
+                        HStack(spacing: DesignTokens.Spacing.sm) {
+                            Text(attachment.filename)
+                                .font(.system(size: DesignTokens.Typography.Size.small))
+                                .foregroundStyle(DesignTokens.Color.textPrimary)
+                                .lineLimit(1)
+                            Spacer()
+                            Text(attachment.status.label)
+                                .font(.system(size: DesignTokens.Typography.Size.caption, weight: .medium))
+                                .foregroundStyle(attachment.status.isClean ? DesignTokens.Color.success : DesignTokens.Color.dangerText)
+                            Button {
+                                composeAttachments.removeAll { $0.id == attachment.id }
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(DesignTokens.Color.textMuted)
+                            }
+                        }
+                        .padding(.horizontal, DesignTokens.Spacing.sm)
+                        .padding(.vertical, DesignTokens.Spacing.xs)
+                        .background(
+                            RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
+                                .fill(DesignTokens.Color.surfacePage)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
+                                        .stroke(DesignTokens.Color.border, lineWidth: 1)
+                                )
+                        )
+                    }
+                }
+            }
+
             if let sendBlockedReason {
                 Text(sendBlockedReason)
                     .font(.system(size: DesignTokens.Typography.Size.small))
                     .foregroundStyle(DesignTokens.Color.dangerText)
             }
 
-            Button {
-                Task { await send(to: detail) }
-            } label: {
-                Text(isSending ? "Sende…" : "Senden")
-                    .font(.system(size: DesignTokens.Typography.Size.body))
-                    .frame(maxWidth: .infinity)
+            HStack(spacing: DesignTokens.Spacing.sm) {
+                Button {
+                    showFileImporter = true
+                } label: {
+                    Label("Anhang hinzufügen", systemImage: "paperclip")
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    Task { await send(to: detail) }
+                } label: {
+                    Text(isSending ? "Sende…" : "Senden")
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isSending || (draft ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasBlockingAttachment)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(isSending || (draft ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(DesignTokens.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -316,23 +374,55 @@ struct MessageDetailView: View {
     /// Header aus `messageId` ab (siehe `APIClient.sendMessage`).
     private func send(to detail: MessageDetail) async {
         guard let draft, !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !hasBlockingAttachment else { return }
         isSending = true
         sendBlockedReason = nil
         defer { isSending = false }
         let subject = detail.subject.map { $0.lowercased().hasPrefix("re:") ? $0 : "Re: \($0)" } ?? ""
+        let attachmentIds = composeAttachments.compactMap(\.attachmentId)
         do {
             _ = try await environment.apiClient.sendMessage(
                 inReplyToMessageId: messageId,
                 to: [detail.fromAddress],
                 subject: subject,
-                bodyText: draft
+                bodyText: draft,
+                attachmentIds: attachmentIds
             )
             sentConfirmation = detail.fromAddress
             self.draft = nil
+            composeAttachments = []
         } catch APIError.blocked(let reason) {
             sendBlockedReason = reason ?? "Versand wurde aus Sicherheitsgründen blockiert."
         } catch {
             errorMessage = "Versand fehlgeschlagen. Bitte später erneut versuchen."
+        }
+    }
+
+    /// `POST /attachments` — liest die vom `.fileImporter` gelieferte
+    /// (security-scoped) URL, lädt sie hoch und trägt das Scan-Ergebnis in
+    /// `composeAttachments` ein. Ein separater `ComposeAttachment`-Eintrag
+    /// je Datei, damit Uploads parallel laufen können, ohne sich
+    /// gegenseitig zu blockieren.
+    private func uploadAttachment(from url: URL) async {
+        let filename = url.lastPathComponent
+        var entry = ComposeAttachment(filename: filename, status: .uploading)
+        composeAttachments.append(entry)
+
+        let accessing = url.startAccessingSecurityScopedResource()
+        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let mimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+            let result = try await environment.apiClient.uploadAttachment(filename: filename, mimeType: mimeType, data: data)
+            entry.attachmentId = result.attachmentId
+            entry.status = .scanned(result.scanStatus)
+        } catch {
+            entry.status = .error
+        }
+
+        if let index = composeAttachments.firstIndex(where: { $0.id == entry.id }) {
+            composeAttachments[index] = entry
         }
     }
 
@@ -387,6 +477,39 @@ struct MessageDetailView: View {
             errorMessage = "Endgültiges Löschen fehlgeschlagen."
         }
     }
+}
+
+/// POST /attachments läuft synchron (siehe backend/README.md "Anhänge"),
+/// "uploading"/"error" sind reiner Client-Zustand während des Requests,
+/// nicht Teil des Backend-Enums (`AttachmentScanStatus`, Models/Attachment.swift).
+enum ComposeAttachmentUiStatus: Equatable {
+    case uploading
+    case scanned(AttachmentScanStatus)
+    case error
+
+    var label: String {
+        switch self {
+        case .uploading: return "Wird hochgeladen…"
+        case .error: return "Hochladen fehlgeschlagen"
+        case .scanned(.pending): return "Wird geprüft…"
+        case .scanned(.clean): return "Geprüft"
+        case .scanned(.malicious): return "Gefährlich — wird nicht gesendet"
+        case .scanned(.blockedType): return "Dateityp nicht erlaubt"
+        case .scanned(.scanFailed): return "Prüfung fehlgeschlagen"
+        }
+    }
+
+    var isClean: Bool {
+        if case .scanned(.clean) = self { return true }
+        return false
+    }
+}
+
+struct ComposeAttachment: Identifiable {
+    let id = UUID()
+    let filename: String
+    var attachmentId: String?
+    var status: ComposeAttachmentUiStatus
 }
 
 private struct SourceTag: View {

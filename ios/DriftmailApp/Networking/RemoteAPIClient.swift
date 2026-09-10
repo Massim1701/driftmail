@@ -86,12 +86,13 @@ struct RemoteAPIClient: APIClient {
     /// true`) ein erwarteter, vom Erfolgsfall inhaltlich verschiedener
     /// Ausgang ist (siehe `APIError.blocked`), keine generische
     /// Netzwerk-/Decoding-Fehlerbedingung.
-    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String) async throws -> String {
+    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String]) async throws -> String {
         struct Body: Encodable {
             let inReplyToMessageId: String
             let to: [String]
             let subject: String?
             let bodyText: String
+            let attachmentIds: [String]
         }
         struct SendResponse: Decodable { let sentMessageId: String }
         struct BlockedResponse: Decodable { let blocked: Bool; let reason: String? }
@@ -99,7 +100,7 @@ struct RemoteAPIClient: APIClient {
         var request = URLRequest(url: baseURL.appendingPathComponent("/messages/send"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(Body(inReplyToMessageId: inReplyToMessageId, to: to, subject: subject, bodyText: bodyText))
+        request.httpBody = try JSONEncoder().encode(Body(inReplyToMessageId: inReplyToMessageId, to: to, subject: subject, bodyText: bodyText, attachmentIds: attachmentIds))
 
         let data: Data
         let response: URLResponse
@@ -117,6 +118,33 @@ struct RemoteAPIClient: APIClient {
             return try decoder.decode(SendResponse.self, from: data).sentMessageId
         } catch let error as DecodingError {
             throw APIError.decodingFailed(error)
+        }
+    }
+
+    /// `POST /attachments` — `multipart/form-data` statt JSON, deshalb ein
+    /// von Hand gebautes Multipart-Body (kein `post()`-Helper hier, der
+    /// setzt immer `Content-Type: application/json`).
+    func uploadAttachment(filename: String, mimeType: String, data: Data) async throws -> AttachmentUploadResult {
+        let boundary = "driftmail-\(UUID().uuidString)"
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(data)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("/attachments"))
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+
+        do {
+            let (responseData, _) = try await session.data(for: request)
+            return try decoder.decode(AttachmentUploadResult.self, from: responseData)
+        } catch let error as DecodingError {
+            throw APIError.decodingFailed(error)
+        } catch {
+            throw APIError.network(error)
         }
     }
 

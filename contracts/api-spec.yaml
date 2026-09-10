@@ -350,9 +350,13 @@ paths:
         Sendet eine Mail (neu oder Antwort). Loest VOR dem eigentlichen Versand
         den Phishing-Check aus (dieselbe Logik wie POST
         /messages/draft/phishing-check, serverseitig auf bodyText angewendet),
-        blocked=true verhindert das Senden (422). Schreibt nach erfolgreichem
+        blocked=true verhindert das Senden (422). Lehnt ausserdem ab (422),
+        wenn irgendeine mitgegebene attachmentId nicht scan_status='clean'
+        hat (siehe POST /attachments) -- kein Versand mit ungeprueften oder
+        als gefaehrlich erkannten Anhaengen. Schreibt nach erfolgreichem
         Versand einen outgoing_send_log-Eintrag pro Empfaenger (to + cc) fuer
-        die Abuse-Erkennung. Siehe WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt".
+        die Abuse-Erkennung. Siehe WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt"
+        + "Erweiterung des Send-Endpunkt-Eintrags von eben" (Anhaenge).
       requestBody:
         content:
           application/json:
@@ -376,6 +380,12 @@ paths:
                   items: { type: string }
                 subject: { type: string }
                 bodyText: { type: string }
+                attachmentIds:
+                  type: array
+                  items: { type: string, format: uuid }
+                  description: >
+                    IDs aus POST /attachments. Jede muss scan_status='clean'
+                    haben, sonst 422 (keine Ausnahme).
       responses:
         "200":
           description: Gesendet
@@ -386,7 +396,9 @@ paths:
                 properties:
                   sentMessageId: { type: string }
         "422":
-          description: Blockiert (Phishing-Check hat blocked=true geliefert)
+          description: >
+            Blockiert -- entweder der Phishing-Check (blocked=true) oder ein
+            mitgegebener Anhang ohne scan_status='clean' (gleiche Response-Form).
           content:
             application/json:
               schema:
@@ -398,6 +410,40 @@ paths:
           description: Ungueltige Eingabe (z.B. weder accountId noch inReplyToMessageId, kein Empfaenger)
         "502":
           description: Versand beim Mail-Provider fehlgeschlagen
+
+  /attachments:
+    post:
+      summary: >
+        Datei hochladen und sofort scannen (vor dem eigentlichen Senden).
+        Muss scan_status='clean' liefern, bevor die attachmentId bei
+        POST /messages/send verwendet werden darf. Siehe WEB_INBOX.md 09.09.
+        "Erweiterung des Send-Endpunkt-Eintrags von eben". Scan-Logik selbst
+        (was genau 'malicious'/'blocked_type' ausloest) ist bewusst noch
+        einfach gehalten (siehe backend/README.md) -- ein spaeterer Schritt
+        analog zu den externen Lookup-Adaptern.
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Hochgeladen, Scan-Ergebnis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attachmentId: { type: string, format: uuid }
+                  scanStatus:
+                    type: string
+                    enum: [pending, clean, malicious, blocked_type, scan_failed]
+        "400":
+          description: Keine Datei mitgeschickt
 
   /signatures:
     get:

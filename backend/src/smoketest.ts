@@ -344,6 +344,78 @@ async function main() {
     });
     assert(sendReplyMissingRes.status === 404, "POST /v1/messages/send mit unbekannter inReplyToMessageId sollte 404 liefern");
 
+    // POST /attachments + Anhang-Gate bei POST /messages/send (WEB_INBOX.md
+    // 09.09. "Erweiterung des Send-Endpunkt-Eintrags von eben"). Fall 1:
+    // unauffällige Datei -> 200, scanStatus 'clean'.
+    async function uploadAttachment(filename: string, content: string): Promise<{ status: number; attachmentId?: string; scanStatus?: string }> {
+      const form = new FormData();
+      form.append("file", new Blob([content], { type: "text/plain" }), filename);
+      const res = await fetch(`${base}/v1/attachments`, { method: "POST", body: form });
+      const json = res.status === 200 ? ((await res.json()) as Record<string, unknown>) : undefined;
+      return { status: res.status, attachmentId: json?.attachmentId as string | undefined, scanStatus: json?.scanStatus as string | undefined };
+    }
+
+    const cleanUpload = await uploadAttachment("rechnung.pdf", "Beispielinhalt, keine echte PDF-Struktur nötig für den Mock-Scan.");
+    assert(cleanUpload.status === 200, "POST /v1/attachments (unauffällige Datei) sollte 200 liefern");
+    assert(cleanUpload.scanStatus === "clean", "unauffällige Datei sollte scanStatus 'clean' liefern");
+
+    // Fall 2: gefährliche Dateiendung -> 'blocked_type' (Dateityp-Prüfung,
+    // siehe attachmentScanMock.ts).
+    const blockedTypeUpload = await uploadAttachment("installer.exe", "fake-binary-content");
+    assert(blockedTypeUpload.status === 200, "POST /v1/attachments (gefährliche Endung) sollte trotzdem 200 liefern (Scan-Ergebnis im Body, kein HTTP-Fehler)");
+    assert(blockedTypeUpload.scanStatus === "blocked_type", "installer.exe sollte scanStatus 'blocked_type' liefern");
+
+    // Fall 3: deterministischer 'malicious'-Test-Trigger (Dateiname enthält
+    // 'virus', siehe attachmentScanMock.ts -- kein echter Signatur-Scan).
+    const maliciousUpload = await uploadAttachment("rechnung-virus.pdf", "content");
+    assert(maliciousUpload.scanStatus === "malicious", "Dateiname mit 'virus' sollte scanStatus 'malicious' liefern");
+
+    // Fall 4: kein Datei-Feld -> 400 (Edge Case).
+    const noFileRes = await fetch(`${base}/v1/attachments`, { method: "POST", body: new FormData() });
+    assert(noFileRes.status === 400, "POST /v1/attachments ohne Datei sollte 400 liefern");
+
+    // Fall 5: Versand MIT einem 'clean' Anhang -> 200 (Anhang erlaubt).
+    const sendWithCleanAttachmentRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: account.id,
+        to: ["kollegin@example.com"],
+        bodyText: "Anbei die Rechnung.",
+        attachmentIds: [cleanUpload.attachmentId],
+      }),
+    });
+    assert(sendWithCleanAttachmentRes.status === 200, "POST /v1/messages/send mit 'clean' Anhang sollte 200 liefern");
+
+    // Fall 6: Versand MIT einem NICHT 'clean' Anhang -> 422, blocked=true,
+    // kein Versand (gleiche Fehlerform wie der Phishing-Block).
+    const sendWithBlockedAttachmentRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: account.id,
+        to: ["kollegin@example.com"],
+        bodyText: "Anbei die Installationsdatei.",
+        attachmentIds: [blockedTypeUpload.attachmentId],
+      }),
+    });
+    assert(sendWithBlockedAttachmentRes.status === 422, "POST /v1/messages/send mit nicht-'clean' Anhang sollte 422 liefern");
+    const sendWithBlockedAttachmentBody = (await sendWithBlockedAttachmentRes.json()) as Record<string, unknown>;
+    assert(sendWithBlockedAttachmentBody.blocked === true, "geblockter Anhang-Versand sollte blocked=true liefern");
+
+    // Fall 7: unbekannte attachmentId -> 400 (Edge Case).
+    const sendWithUnknownAttachmentRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: account.id,
+        to: ["kollegin@example.com"],
+        bodyText: "Text",
+        attachmentIds: ["00000000-0000-0000-0000-000000000000"],
+      }),
+    });
+    assert(sendWithUnknownAttachmentRes.status === 400, "POST /v1/messages/send mit unbekannter attachmentId sollte 400 liefern");
+
     // ----- Externe Lookup-Adapter (SYNC.md 08.09., Web-Antwort auf die vier
     // "wer macht den externen Lookup"-Fragen): src/lookups/*. Jeder der vier
     // Lookups läuft als Nachbearbeitungsschritt NACH analyzeMail() (Sync) bzw.
@@ -469,7 +541,7 @@ async function main() {
       "Empfänger-Domain, die schon als Phishing-Absender aufgefallen ist, sollte recipientReputation='flagged' liefern",
     );
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Externe Lookup-Adapter) end-to-end grün.");
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Externe Lookup-Adapter) end-to-end grün.");
   } finally {
     server.close();
   }

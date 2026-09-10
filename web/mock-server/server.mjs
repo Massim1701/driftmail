@@ -28,6 +28,10 @@ const PORT = process.env.MOCK_PORT ? Number(process.env.MOCK_PORT) : 4000;
 // In-Memory-Mutationen (gehen beim Neustart verloren, das reicht für den Skeleton-Zweck)
 const quarantineLog = [];
 const capabilityLog = [];
+// POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
+// Eintrags von eben") -- nur Metadaten, kein Dateiinhalt (siehe
+// backend/README.md "Anhänge", gleiche Grenze wie im echten Backend).
+const attachments = [];
 
 function send(res, status, body) {
   const json = JSON.stringify(body ?? null);
@@ -70,6 +74,56 @@ async function readJsonBody(req) {
   } catch {
     return null;
   }
+}
+
+// Minimaler multipart/form-data-Parser für das "file"-Feld von
+// POST /attachments -- bewusst handgerollt statt einer Library (Mock-Server-
+// Prinzip "ohne externe Abhängigkeiten", siehe Kopfkommentar). Liefert nur
+// Dateiname + Größe, keinen Inhalt (der wird ohnehin nicht gespeichert,
+// siehe backend/README.md "Anhänge").
+async function readMultipartFile(req, contentType) {
+  const boundaryMatch = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType || "");
+  const boundary = boundaryMatch ? boundaryMatch[1] || boundaryMatch[2] : null;
+  if (!boundary) return null;
+
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const buffer = Buffer.concat(chunks);
+  const boundaryBuf = Buffer.from(`--${boundary}`);
+
+  let start = buffer.indexOf(boundaryBuf);
+  while (start !== -1) {
+    const next = buffer.indexOf(boundaryBuf, start + boundaryBuf.length);
+    if (next === -1) break;
+    const part = buffer.slice(start + boundaryBuf.length, next);
+    const headerEnd = part.indexOf("\r\n\r\n");
+    if (headerEnd !== -1) {
+      const headerText = part.slice(0, headerEnd).toString("utf-8");
+      if (/name="file"/.test(headerText)) {
+        const filenameMatch = /filename="([^"]*)"/.exec(headerText);
+        let content = part.slice(headerEnd + 4);
+        if (content.slice(-2).toString("utf-8") === "\r\n") content = content.slice(0, -2);
+        return { filename: filenameMatch ? filenameMatch[1] : "upload.bin", size: content.length };
+      }
+    }
+    start = next;
+  }
+  return null;
+}
+
+// Dieselbe simple Dateityp-Heuristik wie backend/src/lookups/
+// attachmentScanMock.ts (dupliziert statt geteilt -- der Mock-Server hat
+// bewusst keine Abhängigkeit auf backend/, siehe Kopfkommentar dieser Datei).
+const DANGEROUS_ATTACHMENT_EXTENSIONS = new Set([
+  "exe", "bat", "cmd", "com", "scr", "pif", "msi", "js", "jse", "vbs", "vbe",
+  "ws", "wsf", "ps1", "jar", "docm", "xlsm", "pptm", "dotm", "xltm",
+]);
+
+function scanAttachment(filename) {
+  if (/virus|malware/i.test(filename)) return "malicious";
+  const ext = filename.includes(".") ? filename.split(".").pop().toLowerCase() : "";
+  if (DANGEROUS_ATTACHMENT_EXTENSIONS.has(ext)) return "blocked_type";
+  return "clean";
 }
 
 const server = createServer(async (req, res) => {
@@ -191,7 +245,28 @@ const server = createServer(async (req, res) => {
     } else if (!accounts.some((a) => a.id === body.accountId)) {
       return badRequest(res, "accountId ist erforderlich, wenn keine inReplyToMessageId angegeben ist");
     }
+    // Anhang-Gate (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
+    // Eintrags von eben"), gleiche Prüfung wie im echten Backend.
+    const attachmentIds = Array.isArray(body.attachmentIds) ? body.attachmentIds : [];
+    for (const attachmentId of attachmentIds) {
+      const attachment = attachments.find((a) => a.id === attachmentId);
+      if (!attachment) return badRequest(res, `unbekannte attachmentId: ${attachmentId}`);
+      if (attachment.scanStatus !== "clean") {
+        return send(res, 422, { blocked: true, reason: `Anhang "${attachment.filename}" ist nicht freigegeben (Status: ${attachment.scanStatus})` });
+      }
+    }
     return send(res, 200, { sentMessageId: randomUUID() });
+  }
+
+  // POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
+  // Eintrags von eben") -- vereinfachter Mock, gleiche Dateityp-Heuristik
+  // wie das echte Backend, siehe scanAttachment() oben.
+  if (req.method === "POST" && parts.length === 1 && parts[0] === "attachments") {
+    const parsed = await readMultipartFile(req, req.headers["content-type"]);
+    if (!parsed) return badRequest(res, "keine Datei im Feld 'file' gefunden");
+    const record = { id: randomUUID(), filename: parsed.filename, scanStatus: scanAttachment(parsed.filename) };
+    attachments.push(record);
+    return send(res, 200, { attachmentId: record.id, scanStatus: record.scanStatus });
   }
 
   // GET /messages?folderId=&accountId=

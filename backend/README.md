@@ -230,6 +230,13 @@ curl -X POST http://localhost:3000/v1/capability-check \
   Fixture-Adapter (simulierter Erfolg, kein echtes Postfach). Siehe eigener
   Abschnitt "Versand" unten für Grenzen (Link-Extraktion aus reinem Text,
   SMTP-Host-Fallback bei generischem IMAP).
+- **Anhang-Upload/Scan** (neu, `POST /attachments`, `src/routes/
+  attachments.ts` + `AttachmentScanner`): echte Dateityp-/Endungsprüfung
+  (`attachmentScanMock.ts`), kein echter Virenscan-Dienst — Mock, analog zu
+  den externen Lookup-Adaptern. Dateiinhalt wird nicht gespeichert (keine
+  `content`-Spalte im Contract), deshalb wird ein geprüfter Anhang aktuell
+  auch nicht tatsächlich in die ausgehende Mail eingebettet. Siehe eigener
+  Abschnitt "Anhänge" unten.
 
 ## Auto-Delete: adult/gambling-Spam
 
@@ -503,8 +510,8 @@ wie beim Lesen — siehe "Was ist echt, was ist Mock/Stub" unten).
 **Bewusst nicht Teil dieses Schritts:** kein lokaler `messages`-Eintrag im
 "gesendet"-Ordner (der Ordner selbst existiert noch nicht, siehe
 `WEB_INBOX.md` "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags" — hängt laut
-Web explizit von diesem Endpunkt ab, nicht umgekehrt). Anhänge sind ebenfalls
-nicht Teil dieses Schritts (eigener, noch offener `WEB_INBOX.md`-Eintrag).
+Web explizit von diesem Endpunkt ab, nicht umgekehrt). Anhänge: siehe eigener
+Abschnitt "Anhänge" unten.
 
 **Tests:** `src/smoketest.ts` deckt eine neue Mail (200 + `sentMessageId`,
 `outgoing_send_log`-Eintrag über `hasSentTo` geprüft), eine Antwort (nur
@@ -512,6 +519,72 @@ nicht Teil dieses Schritts (eigener, noch offener `WEB_INBOX.md`-Eintrag).
 ohne `inReplyToMessageId` (400), unbekannte `inReplyToMessageId` (404) sowie
 den serverseitigen Phishing-Block (Dringlichkeit + Zugangsdaten-Anfrage, 422,
 kein `outgoing_send_log`-Eintrag) ab.
+
+## Anhänge (`POST /attachments` + `POST /messages/send` `attachmentIds`)
+
+Seit `WEB_INBOX.md` 09.09. ("Erweiterung des Send-Endpunkt-Eintrags von
+eben"): Anhänge müssen VOR dem Versand hochgeladen und gescannt werden,
+`POST /messages/send` lehnt ab (422, gleiche Fehlerform wie der
+Phishing-Block), wenn irgendeine mitgegebene `attachmentId` nicht
+`scan_status='clean'` hat — keine Ausnahme.
+
+**Contract-Anpassung an `message_attachments`:** `message_id` ist jetzt
+nullable, neue Spalte `uploaded_by_user_id` + Check-Constraint (genau eines
+von beiden muss gesetzt sein) — direkt am `CREATE TABLE` geändert statt per
+`ALTER TABLE` (Repo-Konvention, siehe Kommentar in `db-schema.sql`; die
+Tabelle wurde bisher von keinem Code beschrieben, es gibt also keinen
+Bestand, der eine echte Migration bräuchte).
+
+**Ablauf:**
+
+1. `POST /attachments` (`multipart/form-data`, Feld `file`, siehe
+   `routes/attachments.ts`): Datei wird per `multer` (Memory-Storage, 15 MB
+   Limit) entgegengenommen, sofort gescannt (`attachmentScanMock.ts`,
+   siehe unten) und als `message_attachments`-Zeile mit `message_id = null`,
+   `uploaded_by_user_id = <Demo-User>` gespeichert. Response:
+   `attachmentId` + `scanStatus`.
+2. `POST /messages/send` bekommt ein neues optionales Feld `attachmentIds`
+   (Array). Jede ID muss existieren (sonst 400) und `scan_status='clean'`
+   haben (sonst 422, `blocked: true` + `reason` mit Dateiname/Status) —
+   geprüft NACH dem Phishing-Check, VOR dem eigentlichen Provider-Send-Call.
+
+**Scan-Logik (`src/lookups/attachmentScanMock.ts`):** wie bei den externen
+Lookups ein austauschbares `AttachmentScanner`-Interface
+(`src/lookups/types.ts`) + eine bewusst simple Mock-Implementierung — KEIN
+echter Virenscan (kein ClamAV-/VirusTotal-Aufruf). Prüft nur die
+Dateiendung gegen eine Beispielliste ausführbarer/makrofähiger Typen (`.exe`,
+`.bat`, `.js`, `.docm`, …) → `blocked_type`; ein Dateiname, der
+`virus`/`malware` enthält, ist ein deterministischer Test-Trigger für
+`malicious` (analog zur Botnetz-Beispiel-IP-Liste in `ipReputationMock.ts`);
+alles andere → `clean`. `scan_failed` wird vom Mock nie geliefert (kein
+echter Dienst, der fehlschlagen könnte) — der Enum-Wert existiert im
+Contract für eine spätere echte Anbindung.
+
+**Zwei bewusste, dokumentierte Grenzen dieses Schritts (kein Blocker, aber
+nicht stillschweigend als "fertig" markiert):**
+
+1. **Der Dateiinhalt selbst wird nicht gespeichert.** `message_attachments`
+   hat laut Contract keine `content`-Spalte (eine echte Implementierung
+   würde Objektspeicher wie S3 nutzen, kein DB-Feld) — der Scan läuft daher
+   nur gegen Metadaten (Dateiname/MIME-Typ/Größe), nicht gegen den
+   tatsächlichen Byte-Inhalt. Folge: `POST /messages/send` bettet geprüfte
+   Anhänge aktuell **nicht tatsächlich** in die ausgehende Mail ein (die
+   Bytes sind nach dem Upload-Request nicht mehr vorhanden) — der Endpunkt
+   stellt nur sicher, dass kein ungeprüfter/gefährlicher Anhang "mitgeschickt"
+   werden darf. Echte Speicherung + MIME-Einbettung beim Versand ist ein
+   späterer Schritt.
+2. **`store.linkAttachmentsToMessage()`** (Store-Methode existiert bereits)
+   wird nach einem erfolgreichen Versand noch nicht aufgerufen — dafür
+   bräuchte es eine lokale `messages`-Zeile für die gesendete Mail, die es
+   erst mit dem "gesendet"-Systemordner geben wird (nächster priorisierter
+   Schritt laut `WEB_INBOX.md`, noch offen). `TODO`-Kommentar an der
+   entsprechenden Stelle in `routes/messages.ts`.
+
+**Tests:** `src/smoketest.ts` deckt Upload einer unauffälligen Datei
+(`clean`), einer Datei mit gefährlicher Endung (`blocked_type`), des
+`malicious`-Test-Triggers, fehlendes Datei-Feld (400), Versand mit einem
+`clean` Anhang (200) sowie Versand mit einem nicht-`clean` bzw. unbekannten
+Anhang (422 bzw. 400) ab.
 
 ## Externe Lookup-Adapter
 

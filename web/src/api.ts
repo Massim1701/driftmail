@@ -4,7 +4,7 @@
 // daher ist AiAdapterResult.source hier stets "cloud_fallback" — der
 // Mock-Server liefert diesen Wert bereits in MailSummary.source mit.
 
-import type { Contract, Folder, MailAccount, MailSummary, Message, MessageDetail } from "./types";
+import type { AttachmentScanStatus, Contract, Folder, MailAccount, MailSummary, Message, MessageDetail } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
@@ -86,7 +86,24 @@ export const api = {
     cc?: string[];
     subject?: string;
     bodyText: string;
+    attachmentIds?: string[];
   }) => request<{ sentMessageId: string }>("/messages/send", { method: "POST", body: JSON.stringify(data) }),
+
+  // POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
+  // Eintrags von eben") -- multipart/form-data statt JSON, deshalb kein
+  // request()-Aufruf (der setzt Content-Type immer auf application/json;
+  // bei FormData muss der Browser den multipart-Boundary-Header selbst
+  // setzen). Scan läuft synchron, die Antwort enthält das fertige Ergebnis.
+  uploadAttachment: async (file: File): Promise<{ attachmentId: string; scanStatus: AttachmentScanStatus }> => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${BASE_URL}/attachments`, { method: "POST", body: form });
+    if (!res.ok) {
+      const body = await res.json().catch(() => undefined);
+      throw new ApiError(`API-Fehler ${res.status} bei /attachments`, res.status, body);
+    }
+    return (await res.json()) as { attachmentId: string; scanStatus: AttachmentScanStatus };
+  },
 
   listContracts: () => request<Contract[]>("/contracts"),
 };

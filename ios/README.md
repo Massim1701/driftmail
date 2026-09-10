@@ -93,9 +93,71 @@ konnte nie tatsächlich verschickt werden.
   Entwurf, bei Erfolg eine Bestätigung ("Antwort an … wurde gesendet.") und
   die Entwurfskarte verschwindet.
 - **Nicht umgesetzt** (bewusst, siehe WEB_INBOX.md-Reihenfolge): kein
-  "Neue Mail verfassen"-Screen, keine Anhänge, kein lokaler Eintrag im
-  "Gesendet"-Ordner (der Ordner selbst existiert noch nicht — hängt laut
-  Web explizit von diesem Endpunkt ab, nicht umgekehrt).
+  "Neue Mail verfassen"-Screen, keine Anhänge (siehe Nachtrag direkt
+  unten), kein lokaler Eintrag im "Gesendet"-Ordner (der Ordner selbst
+  existiert noch nicht — hängt laut Web explizit von diesem Endpunkt ab,
+  nicht umgekehrt).
+
+## [2026-09-10] Nachtrag: Anhänge (`POST /attachments`)
+
+Contract-Nachtrag "Erweiterung des Send-Endpunkt-Eintrags von eben"
+(WEB_INBOX.md 09.09.): Anhänge müssen vor dem Versand hochgeladen und
+gescannt werden, `POST /messages/send` lehnt ab, wenn eine mitgegebene
+`attachmentId` nicht `scanStatus == .clean` hat.
+
+- **Modelle** (`Models/Attachment.swift`, neu): `AttachmentScanStatus`
+  (`pending`/`clean`/`malicious`/`blocked_type`/`scan_failed`) +
+  `AttachmentUploadResult` (`attachmentId`/`scanStatus`), 1:1 aus
+  `POST /attachments` in api-spec.yaml.
+- **`APIClient`**: `sendMessage(...)` bekommt einen neuen Parameter
+  `attachmentIds: [String]` (Pflichtparameter, kein Default — alle drei
+  Implementierungen + der Aufruf in `MessageDetailView` mussten
+  entsprechend angepasst werden). Neue Methode
+  `uploadAttachment(filename:mimeType:data:) async throws -> AttachmentUploadResult`.
+- **`MockAPIClient`**: eigenes In-Memory-Dictionary
+  (`uploadedAttachments: [String: AttachmentScanStatus]`, kein
+  MockDatabase.json-Pendant nötig, da Anhänge nie vorab geseedet sind,
+  sondern immer erst zur Laufzeit hochgeladen werden) + dieselbe simple
+  Dateiendungs-Heuristik wie der echte Scan-Mock im Backend
+  (`attachmentScanMock.ts`), dupliziert statt geteilt (unterschiedliche
+  Sprachen). `sendMessage` prüft das Anhang-Gate echt (nicht nur simuliert)
+  gegen dieses Dictionary.
+- **`RemoteAPIClient`**: `uploadAttachment` baut das `multipart/form-data`-
+  Grundgerüst von Hand (Boundary, `Content-Disposition`-Header) — kein
+  `post()`-Helper, der setzt immer `Content-Type: application/json`.
+- **UI** (`Views/MessageDetailView.swift`): neuer "Anhang hinzufügen"-
+  Button öffnet `.fileImporter` (`allowsMultipleSelection: true`, jede
+  ausgewählte Datei löst sofort einen eigenen Upload-Task aus, parallel,
+  nicht nacheinander). Pro Datei ein `ComposeAttachment`-Eintrag mit
+  Dateiname + Status-Badge (Spinner-Text während des Uploads, danach
+  "Geprüft" grün bzw. der jeweilige Blockier-Grund rot) + Entfernen-Button
+  (`xmark.circle.fill`). "Senden" bleibt deaktiviert, solange
+  `hasBlockingAttachment` true ist (irgendein Anhang nicht `.clean`).
+  Security-Scoped-Resource-Zugriff (`startAccessingSecurityScopedResource`)
+  beim Lesen der vom `.fileImporter` gelieferten URL, wie bei iOS-Datei-
+  Picks aus anderen Apps/iCloud Drive üblich.
+- **Xcode-Projekt:** `Models/Attachment.swift` musste manuell in
+  `project.pbxproj` registriert werden (`PBXBuildFile`/`PBXFileReference`
+  + Aufnahme in die `Models`-Gruppe und die `Sources`-Build-Phase) — das
+  `.xcodeproj` ist generiert, keine automatische Dateisystem-Synchronisation
+  (siehe "Öffnen in Xcode" unten), ein einfaches `Write` einer neuen
+  `.swift`-Datei reicht hier nicht.
+- **Bewusst nicht Teil dieses Schritts** (gleiche Grenze wie im Backend,
+  siehe backend/README.md "Anhänge"): der Dateiinhalt wird zwar zum
+  Backend hochgeladen, aber dort nicht gespeichert (kein Objektspeicher) —
+  ein tatsächlich versendeter Anhang wird deshalb aktuell nicht in die
+  ausgehende Mail eingebettet, nur der Scan-Gate-Mechanismus selbst ist
+  fertig.
+
+**Tests:** `xcodebuild ... -destination 'generic/platform=iOS Simulator' build`
+sowie zusätzlich `-destination 'platform=iOS Simulator,name=iPhone 17' build`
+**BUILD SUCCEEDED**, App installiert/gestartet, Screenshot verifiziert
+(Ordnerliste rendert weiterhin korrekt). Kein interaktiver Klick-Test des
+neuen Anhang-Flows (Datei auswählen -> Scan-Status -> Senden blockiert/
+freigegeben) möglich, da in dieser Umgebung kein UI-Automation-Werkzeug für
+den iOS-Simulator zur Verfügung stand — ehrlich so dokumentiert statt als
+vollständig getestet behauptet (anders als der Web-Client, dort lief der
+komplette Flow inkl. Datei-Upload per Browser-Automation durch).
 
 ## Status: gebaut UND im Simulator getestet
 
