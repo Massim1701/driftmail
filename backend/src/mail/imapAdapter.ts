@@ -5,7 +5,8 @@
 
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
-import type { FetchedMail, MailAdapter } from "./types";
+import nodemailer from "nodemailer";
+import type { FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
 
 export interface ImapCredentials {
   host: string;
@@ -13,6 +14,13 @@ export interface ImapCredentials {
   secure: boolean;
   user: string;
   password: string;
+  // SMTP (Versand) ist bei generischen IMAP-Providern ein eigener Server/
+  // Port, nicht automatisch aus den IMAP-Zugangsdaten ableitbar -- siehe
+  // sendMail() unten. In diesem ersten Durchstich per eigenen Env-Vars
+  // konfiguriert (gleiches Muster wie IMAP_*, siehe mail/sync.ts).
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecure: boolean;
 }
 
 export class ImapAdapter implements MailAdapter {
@@ -114,5 +122,29 @@ export class ImapAdapter implements MailAdapter {
     } finally {
       await client.logout();
     }
+  }
+
+  // POST /messages/send (WEB_INBOX.md 09.09.): IMAP selbst kann nicht
+  // senden (reines Abhol-Protokoll) -- Versand laeuft ueber SMTP mit
+  // denselben Nutzer-Zugangsdaten (getrennter Host/Port, siehe
+  // ImapCredentials.smtp*). nodemailer setzt Message-ID/Date-Header selbst,
+  // `info.messageId` ist der RFC822 Message-ID-Header der gesendeten Mail.
+  async sendMail(input: SendMailInput): Promise<SendMailResult> {
+    const transport = nodemailer.createTransport({
+      host: this.creds.smtpHost,
+      port: this.creds.smtpPort,
+      secure: this.creds.smtpSecure,
+      auth: { user: this.creds.user, pass: this.creds.password },
+    });
+    const info = await transport.sendMail({
+      from: this.creds.user,
+      to: input.to,
+      cc: input.cc.length > 0 ? input.cc : undefined,
+      subject: input.subject,
+      text: input.bodyText,
+      inReplyTo: input.inReplyToMessageIdHeader ?? undefined,
+      references: input.inReplyToMessageIdHeader ?? undefined,
+    });
+    return { providerMessageId: info.messageId };
   }
 }

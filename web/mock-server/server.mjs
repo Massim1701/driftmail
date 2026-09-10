@@ -171,6 +171,29 @@ const server = createServer(async (req, res) => {
     }
   }
 
+  // POST /messages/send (WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt").
+  // Vereinfachter Mock: kein echter Provider-Call, kein Phishing-Check
+  // (dieser Mock-Server bildet den Phishing-Check ohnehin nirgends nach,
+  // siehe fehlender /messages/draft/phishing-check-Endpunkt) -- prüft nur
+  // dieselbe Eingabe-Validierung wie der echte Backend-Endpunkt
+  // (backend/src/routes/messages.ts), damit der Composer im Web-UI auch
+  // ohne den echten Track-A-Server durchgetestet werden kann.
+  if (req.method === "POST" && parts.length === 2 && parts[0] === "messages" && parts[1] === "send") {
+    const body = (await readJsonBody(req)) ?? {};
+    const to = Array.isArray(body.to) ? body.to.filter((x) => typeof x === "string" && x.trim()) : [];
+    const bodyText = typeof body.bodyText === "string" ? body.bodyText : "";
+    if (to.length === 0 || !bodyText.trim()) {
+      return badRequest(res, "to (mindestens 1 Empfänger) und bodyText sind erforderlich");
+    }
+    if (body.inReplyToMessageId) {
+      const original = messages.find((m) => m.id === body.inReplyToMessageId);
+      if (!original) return notFound(res);
+    } else if (!accounts.some((a) => a.id === body.accountId)) {
+      return badRequest(res, "accountId ist erforderlich, wenn keine inReplyToMessageId angegeben ist");
+    }
+    return send(res, 200, { sentMessageId: randomUUID() });
+  }
+
   // GET /messages?folderId=&accountId=
   if (req.method === "GET" && parts.length === 1 && parts[0] === "messages") {
     const folderId = url.searchParams.get("folderId");

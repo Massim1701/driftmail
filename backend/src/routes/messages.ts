@@ -78,6 +78,84 @@ messagesRouter.post("/messages/draft/phishing-check", async (req, res) => {
   res.json(result);
 });
 
+// POST /messages/send — siehe api-spec.yaml (WEB_INBOX.md 09.09. "Fehlender
+// Senden-Endpunkt"). Bisher fehlte trotz vorhandener Infrastruktur drumherum
+// (Phishing-Check oben, outgoing_send_log/recordOutgoingSend in db/store.ts)
+// der eigentliche Endpunkt, der einen Versand auslöst.
+const SEND_BODY_URL_REGEX = /https?:\/\/[^\s<>"]+/g;
+
+messagesRouter.post("/messages/send", async (req, res) => {
+  const body = req.body ?? {};
+  const to: string[] = Array.isArray(body.to)
+    ? body.to.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0)
+    : [];
+  const bodyText = typeof body.bodyText === "string" ? body.bodyText : "";
+  if (to.length === 0 || !bodyText.trim()) {
+    return res.status(400).json({ error: "to (mindestens 1 Empfänger) und bodyText sind erforderlich" });
+  }
+  const cc: string[] = Array.isArray(body.cc)
+    ? body.cc.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0)
+    : [];
+  const subject = typeof body.subject === "string" ? body.subject : "";
+  const inReplyToMessageId = typeof body.inReplyToMessageId === "string" ? body.inReplyToMessageId : null;
+
+  // Konto ermitteln: bei einer Antwort das Konto der Ursprungsnachricht
+  // (der User antwortet aus demselben Postfach, in dem die Mail ankam),
+  // sonst das explizit angegebene accountId.
+  let inReplyToHeader: string | null = null;
+  let accountId: string | null = typeof body.accountId === "string" ? body.accountId : null;
+  if (inReplyToMessageId) {
+    const original = await store.getMessage(inReplyToMessageId);
+    if (!original) return res.status(404).json({ error: "inReplyToMessageId: Nachricht nicht gefunden" });
+    inReplyToHeader = original.messageIdHeader;
+    accountId = original.mailAccountId;
+  }
+  if (!accountId) {
+    return res.status(400).json({ error: "accountId ist erforderlich, wenn keine inReplyToMessageId angegeben ist" });
+  }
+  const account = await store.getMailAccount(accountId);
+  if (!account) return res.status(400).json({ error: `Mail-Konto nicht gefunden: ${accountId}` });
+
+  // Phishing-Check serverseitig als letzte Instanz VOR dem eigentlichen
+  // Versand (siehe api-spec.yaml), unabhängig davon, ob der Composer vorher
+  // schon POST /messages/draft/phishing-check aufgerufen hat. Der
+  // Request-Body dieses Endpunkts hat kein eigenes `links`-Feld (nur
+  // bodyText) -- Links werden deshalb direkt aus dem Klartext extrahiert
+  // (displayText === actualUrl, da bodyText reiner Text ohne separaten
+  // Anzeigetext ist).
+  const urls: string[] = Array.from(new Set(bodyText.match(SEND_BODY_URL_REGEX) ?? []));
+  const links = urls.map((url) => ({ displayText: url, actualUrl: url }));
+  const phishingCheck = checkDraftForPhishing(bodyText, links);
+  if (phishingCheck.blocked) {
+    return res.status(422).json({
+      blocked: true,
+      reason: phishingCheck.reason ?? "Sicherheitsprüfung hat den Versand blockiert",
+    });
+  }
+
+  const adapter = adapterForAccount(account);
+  let sentMessageId: string;
+  try {
+    const result = await adapter.sendMail({ to, cc, subject, bodyText, inReplyToMessageIdHeader: inReplyToHeader });
+    sentMessageId = result.providerMessageId;
+  } catch (err) {
+    console.error("Versand beim Mail-Provider fehlgeschlagen:", err);
+    return res.status(502).json({ error: "Versand beim Mail-Provider fehlgeschlagen" });
+  }
+
+  // outgoing_send_log-Eintrag je Empfänger (to + cc) -- Grundlage für
+  // recipientReputation (store.hasSentTo) und eine künftige Bot/Human-
+  // Missbrauchserkennung (send_abuse_flags-Tabelle existiert bereits im
+  // Schema, Logik dafür ist noch nicht umgesetzt, siehe WEB_INBOX.md).
+  const { user } = await ensureDemoUser();
+  const recipients = Array.from(new Set([...to, ...cc].map((a) => a.toLowerCase())));
+  for (const recipientAddress of recipients) {
+    await store.recordOutgoingSend({ userId: user.id, recipientAddress });
+  }
+
+  res.status(200).json({ sentMessageId });
+});
+
 // GET /messages?folderId=&accountId= — siehe api-spec.yaml
 // CONTRACT-ÄNDERUNG (SYNC.md, Commit 734781e): Query-Param `folder` (Enum)
 // -> `folderId` (UUID, verweist auf eine Zeile in folders).

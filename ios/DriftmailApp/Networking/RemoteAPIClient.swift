@@ -81,6 +81,45 @@ struct RemoteAPIClient: APIClient {
         return response.draftText
     }
 
+    /// `POST /messages/send` — anders als die übrigen `post()`-Aufrufe
+    /// hier muss der HTTP-Status geprüft werden, weil 422 (`blocked:
+    /// true`) ein erwarteter, vom Erfolgsfall inhaltlich verschiedener
+    /// Ausgang ist (siehe `APIError.blocked`), keine generische
+    /// Netzwerk-/Decoding-Fehlerbedingung.
+    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String) async throws -> String {
+        struct Body: Encodable {
+            let inReplyToMessageId: String
+            let to: [String]
+            let subject: String?
+            let bodyText: String
+        }
+        struct SendResponse: Decodable { let sentMessageId: String }
+        struct BlockedResponse: Decodable { let blocked: Bool; let reason: String? }
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("/messages/send"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(Body(inReplyToMessageId: inReplyToMessageId, to: to, subject: subject, bodyText: bodyText))
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.network(error)
+        }
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 200
+        if statusCode == 422 {
+            let blocked = try? decoder.decode(BlockedResponse.self, from: data)
+            throw APIError.blocked(reason: blocked?.reason)
+        }
+        do {
+            return try decoder.decode(SendResponse.self, from: data).sentMessageId
+        } catch let error as DecodingError {
+            throw APIError.decodingFailed(error)
+        }
+    }
+
     func fetchContracts() async throws -> [Contract] {
         try await get("/contracts")
     }

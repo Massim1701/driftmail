@@ -6,7 +6,7 @@
 // (src/mail/sync.ts fällt dann auf den Fixture-Adapter zurück).
 
 import { google } from "googleapis";
-import type { FetchedMail, MailAdapter } from "./types";
+import type { FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
 
 export interface GmailCredentials {
   clientId: string;
@@ -92,5 +92,26 @@ export class GmailAdapter implements MailAdapter {
 
   async permanentlyDeleteMessage(id: string): Promise<void> {
     await this.client.users.messages.delete({ userId: "me", id });
+  }
+
+  // POST /messages/send (WEB_INBOX.md 09.09.): baut eine rohe RFC822-Mail
+  // und schickt sie per `users.messages.send` -- Gmail setzt Absender/DKIM/
+  // SPF selbst anhand des authentifizierten Kontos, ein eigener From-Header
+  // ist dafuer nicht noetig. `raw` muss base64url-kodiert sein (analog zu
+  // decodeBase64Url oben, nur die Gegenrichtung).
+  async sendMail(input: SendMailInput): Promise<SendMailResult> {
+    const headers = [`To: ${input.to.join(", ")}`];
+    if (input.cc.length > 0) headers.push(`Cc: ${input.cc.join(", ")}`);
+    headers.push(`Subject: ${input.subject}`);
+    if (input.inReplyToMessageIdHeader) {
+      headers.push(`In-Reply-To: ${input.inReplyToMessageIdHeader}`);
+      headers.push(`References: ${input.inReplyToMessageIdHeader}`);
+    }
+    headers.push("Content-Type: text/plain; charset=UTF-8");
+    const raw = Buffer.from(`${headers.join("\r\n")}\r\n\r\n${input.bodyText}`, "utf-8").toString("base64url");
+
+    const result = await this.client.users.messages.send({ userId: "me", requestBody: { raw } });
+    if (!result.data.id) throw new Error("Gmail-Versand: Antwort enthielt keine Message-ID");
+    return { providerMessageId: result.data.id };
   }
 }

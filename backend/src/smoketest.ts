@@ -265,6 +265,85 @@ async function main() {
       "ohne recipientAddress im Request sollte recipientReputation weiterhin 'unknown' sein (siehe lookups/recipientReputationMock.ts)",
     );
 
+    // POST /messages/send (WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt")
+    // -- Fall 1: neue Mail (kein inReplyToMessageId), muss durchgehen und
+    // einen outgoing_send_log-Eintrag hinterlassen (Grundlage für
+    // recipientReputation, siehe lookups/recipientReputationMock.ts).
+    const sendRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: account.id,
+        to: ["kollegin@example.com"],
+        subject: "Testmail",
+        bodyText: "Hallo, das ist eine Testmail.",
+      }),
+    });
+    assert(sendRes.status === 200, "POST /v1/messages/send sollte 200 liefern");
+    const sent = (await sendRes.json()) as Record<string, unknown>;
+    assert(typeof sent.sentMessageId === "string" && (sent.sentMessageId as string).length > 0, "sentMessageId erwartet");
+    assert(
+      await store.hasSentTo(account.userId, "kollegin@example.com"),
+      "outgoing_send_log sollte den Empfänger nach dem Versand kennen",
+    );
+
+    // Fall 2: weder accountId noch inReplyToMessageId angegeben -> 400
+    // (Edge Case, siehe Kommentar in routes/messages.ts).
+    const sendMissingAccountRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: ["jemand@example.com"], bodyText: "Text ohne Konto-Bezug" }),
+    });
+    assert(sendMissingAccountRes.status === 400, "POST /v1/messages/send ohne accountId/inReplyToMessageId sollte 400 liefern");
+
+    // Fall 3: harter Phishing-Block (Dringlichkeit + Zugangsdaten-Anfrage,
+    // dieselbe Testphrase wie security-classification/tests/
+    // draftPhishingCheck.test.ts) verhindert den Versand serverseitig --
+    // end-to-end derselbe Mechanismus wie POST /messages/draft/phishing-check
+    // oben, jetzt über den Send-Endpunkt selbst ausgelöst.
+    const sendBlockedRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: account.id,
+        to: ["opfer@example.com"],
+        bodyText: "DRINGEND: Ihr Konto wird gesperrt! Bitte umgehend Passwort bestätigen, sonst wird Ihr Konto endgültig gesperrt!!!",
+      }),
+    });
+    assert(sendBlockedRes.status === 422, "phishing-blockierter Versand sollte 422 liefern");
+    const sendBlocked = (await sendBlockedRes.json()) as Record<string, unknown>;
+    assert(sendBlocked.blocked === true, "geblockter Versand sollte blocked=true liefern");
+    assert(
+      !(await store.hasSentTo(account.userId, "opfer@example.com")),
+      "ein blockierter Versand darf keinen outgoing_send_log-Eintrag hinterlassen",
+    );
+
+    // Fall 4: Antwort (inReplyToMessageId gesetzt, kein accountId nötig) --
+    // Konto wird aus der Ursprungsnachricht abgeleitet (siehe
+    // routes/messages.ts-Kommentar), In-Reply-To/References-Header werden
+    // aus deren messageIdHeader gesetzt (nicht direkt über die API prüfbar,
+    // aber der Erfolgsfall selbst beweist, dass die Ableitung funktioniert).
+    const replyTarget = (await store.findMessageByHeader(account.id, "<fixture-4@kollegin.example.com>"))!;
+    assert(!!replyTarget, "Fixture 4 sollte für den Antwort-Testfall noch existieren");
+    const sendReplyRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ inReplyToMessageId: replyTarget.id, to: ["kollegin@example.com"], bodyText: "Danke für das Update!" }),
+    });
+    assert(sendReplyRes.status === 200, "POST /v1/messages/send als Antwort (nur inReplyToMessageId) sollte 200 liefern");
+
+    // Fall 5: unbekannte inReplyToMessageId -> 404 (Edge Case).
+    const sendReplyMissingRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        inReplyToMessageId: "00000000-0000-0000-0000-000000000000",
+        to: ["kollegin@example.com"],
+        bodyText: "Text",
+      }),
+    });
+    assert(sendReplyMissingRes.status === 404, "POST /v1/messages/send mit unbekannter inReplyToMessageId sollte 404 liefern");
+
     // ----- Externe Lookup-Adapter (SYNC.md 08.09., Web-Antwort auf die vier
     // "wer macht den externen Lookup"-Fragen): src/lookups/*. Jeder der vier
     // Lookups läuft als Nachbearbeitungsschritt NACH analyzeMail() (Sync) bzw.

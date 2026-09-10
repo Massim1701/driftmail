@@ -5,7 +5,8 @@
 // Kernfluss (Sync -> Security-Analyse -> Ordner -> Vertrag -> Summary)
 // end-to-end sichtbar.
 
-import type { FetchedMail, MailAdapter } from "./types";
+import { randomUUID } from "node:crypto";
+import type { FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
 
 const now = () => new Date();
 const daysAgo = (n: number) => new Date(now().getTime() - n * 24 * 3600 * 1000).toISOString();
@@ -152,4 +153,12 @@ export class FixtureMailAdapter implements MailAdapter {
   // Platzhalter-TODO wie zuvor bei Gmail/IMAP.
   async trashMessage(): Promise<void> {}
   async permanentlyDeleteMessage(): Promise<void> {}
+
+  // POST /messages/send (WEB_INBOX.md 09.09.): kein echtes Postfach dahinter
+  // -- simuliert einen erfolgreichen Versand mit einer eindeutigen, aber
+  // erfundenen providerMessageId, damit der Rest der Pipeline (Smoketest,
+  // `npm run dev` ohne jede Konfiguration) end-to-end durchläuft.
+  async sendMail(_input: SendMailInput): Promise<SendMailResult> {
+    return { providerMessageId: `fixture-sent-${randomUUID()}` };
+  }
 }

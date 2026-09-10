@@ -24,12 +24,34 @@ export interface FetchedMail {
   rawHeaders: Record<string, string>;
 }
 
+// POST /messages/send (WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt"):
+// Versand laeuft ausschliesslich ueber die Provider-API des verbundenen
+// Kontos (kein eigener Mailserver, gleiches Prinzip wie beim Lesen).
+export interface SendMailInput {
+  to: string[];
+  cc: string[];
+  subject: string;
+  bodyText: string;
+  // RFC822 Message-ID-Header der Ursprungsnachricht (nicht providerMessageId)
+  // -- wird als In-Reply-To/References gesetzt, damit Mail-Clients die
+  // Antwort im selben Thread einsortieren. `null` bei neuen Mails.
+  inReplyToMessageIdHeader: string | null;
+}
+
+export interface SendMailResult {
+  /** Provider-natives Handle der gesendeten Mail, siehe FetchedMail.providerMessageId. */
+  providerMessageId: string;
+}
+
 export interface MailAdapter {
   /** Verbindungstest / Auth-Check. Wirft bei Fehler. */
   testConnection(): Promise<void>;
 
   /** Holt die letzten N Nachrichten (neueste zuerst) aus dem Posteingang. */
   fetchRecentMessages(limit: number): Promise<FetchedMail[]>;
+
+  /** Sendet eine neue Mail oder Antwort ueber den Provider. Wirft bei Fehler. */
+  sendMail(input: SendMailInput): Promise<SendMailResult>;
 
   /**
    * Verschiebt eine Nachricht beim Provider in den Papierkorb (soft

@@ -46,6 +46,16 @@ export function adapterForAccount(account: MailAccountRecord): MailAdapter {
         secure: process.env.IMAP_SECURE !== "false",
         user,
         password,
+        // SMTP (Versand, WEB_INBOX.md 09.09.) faellt mangels eigener
+        // Env-Vars auf den IMAP-Host + den ueblichen SMTP-Submission-Port
+        // 587 (STARTTLS, nicht implizites TLS) zurueck -- funktioniert bei
+        // Providern mit demselben Mailserver fuer IMAP/SMTP (haeufigster
+        // Fall bei generischem Hosting), aber nicht garantiert korrekt.
+        // Fuer den ersten Durchstich dokumentiert statt geraten: bei Bedarf
+        // per SMTP_HOST/SMTP_PORT/SMTP_SECURE ueberschreibbar.
+        smtpHost: process.env.SMTP_HOST ?? host,
+        smtpPort: Number(process.env.SMTP_PORT ?? 587),
+        smtpSecure: process.env.SMTP_SECURE === "true",
       });
     }
   }

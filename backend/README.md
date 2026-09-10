@@ -222,6 +222,14 @@ curl -X POST http://localhost:3000/v1/capability-check \
   testbar — der Smoketest läuft gegen den Fixture-Adapter, dort ist die
   Spiegelung ein dokumentiertes No-Op. Siehe eigener Abschnitt "Papierkorb
   / Löschen" unten.
+- **Versand** (neu, `POST /messages/send`, `src/routes/messages.ts` +
+  `MailAdapter.sendMail()`): echter Versand über Gmail-API bzw. SMTP
+  (`nodemailer`, IMAP-Konten), inkl. serverseitigem Phishing-Check davor und
+  `outgoing_send_log`-Eintrag danach. Wie bei Gmail/IMAP-Fetch nur mit
+  echten Zugangsdaten end-to-end testbar — der Smoketest läuft gegen den
+  Fixture-Adapter (simulierter Erfolg, kein echtes Postfach). Siehe eigener
+  Abschnitt "Versand" unten für Grenzen (Link-Extraktion aus reinem Text,
+  SMTP-Host-Fallback bei generischem IMAP).
 
 ## Auto-Delete: adult/gambling-Spam
 
@@ -432,6 +440,78 @@ false`, `containsSensitiveData` enthält `"iban"`, ohne `recipientAddress`
 bleibt `recipientReputation === "unknown"`) sowie die
 `recipientReputation`-Fälle `"safe"`/`"flagged"` über den
 Lookup-Adapter ab (siehe "Externe Lookup-Adapter" unten).
+
+## Versand (`POST /messages/send`)
+
+Seit `WEB_INBOX.md` 09.09. ("Fehlender Senden-Endpunkt", `contracts/api-spec.yaml`
++ `src/routes/messages.ts`): sendet eine neue Mail oder eine Antwort über die
+Provider-API des verbundenen Kontos (kein eigener Mailserver, gleiches Prinzip
+wie beim Lesen — siehe "Was ist echt, was ist Mock/Stub" unten).
+
+**Ablauf:**
+
+1. Konto ermitteln: bei einer Antwort (`inReplyToMessageId` gesetzt) das Konto
+   der Ursprungsnachricht, sonst das explizit übergebene `accountId` — genau
+   eines von beidem ist erforderlich, sonst 400.
+2. Phishing-Check serverseitig als letzte Instanz (dieselbe Logik wie
+   `POST /messages/draft/phishing-check`, siehe oben), unabhängig davon, ob
+   der Composer vorher schon geprüft hat. **Grenze:** der Request-Body dieses
+   Endpunkts hat kein eigenes `links`-Feld (nur `bodyText`) — Links werden
+   deshalb per Regex direkt aus dem Klartext extrahiert, mit `displayText ===
+   actualUrl`. Der Link-Mismatch-Erkennungspfad (Anzeigetext täuscht eine
+   andere Domain vor als das tatsächliche Linkziel) kann dadurch über diesen
+   Endpunkt nie auslösen — das ist nur über den separaten Draft-Check mit
+   echten HTML-Links (Anzeigetext ≠ URL) möglich. Homoglyph-Erkennung
+   (innerhalb der URL selbst) und die Dringlichkeit+Zugangsdaten-Kombination
+   funktionieren dagegen unverändert, weil sie nicht auf einem
+   Anzeigetext/URL-Unterschied beruhen. `blocked === true` → 422, kein Versand.
+3. `MailAdapter.sendMail()` (neu, siehe `src/mail/types.ts`) baut je Provider
+   eine echte Mail und sendet sie:
+   - **Gmail:** rohe RFC822-Mail (`To`/`Cc`/`Subject`/`In-Reply-To`/
+     `References`/Body), base64url-kodiert, über `users.messages.send` — Gmail
+     setzt Absender/Auth-Header selbst anhand des authentifizierten Kontos.
+   - **IMAP:** IMAP selbst kann nicht senden (reines Abhol-Protokoll) — Versand
+     läuft über SMTP (`nodemailer`, neue Dependency) mit denselben
+     Zugangsdaten. **Grenze (nicht geraten, sondern bewusst dokumentiert):**
+     SMTP-Host/Port sind bei generischen IMAP-Providern nicht automatisch aus
+     den IMAP-Zugangsdaten ableitbar — mangels eigener Env-Vars fällt
+     `adapterForAccount()` (`src/mail/sync.ts`) auf den IMAP-Host + Port 587
+     (STARTTLS) zurück, überschreibbar über `SMTP_HOST`/`SMTP_PORT`/
+     `SMTP_SECURE`. Funktioniert bei Providern mit demselben Mailserver für
+     IMAP/SMTP (häufigster Fall), aber nicht garantiert korrekt bei jedem
+     Provider.
+   - **Fixture:** kein echtes Postfach — simuliert einen erfolgreichen Versand
+     mit einer erfundenen `providerMessageId`, damit `npm run dev`/Smoketest
+     ohne jede Konfiguration weiterhin end-to-end lauffähig bleiben.
+   Schlägt der Provider-Call fehl, wird das geloggt und 502 zurückgegeben —
+   anders als bei der Papierkorb-Spiegelung (best effort, siehe unten) KEIN
+   stiller Fallback, weil ein Versand, der beim User als "gesendet" ankommt,
+   aber nie beim Provider ankam, ein Vertrauensbruch wäre (im Gegensatz zu
+   "Mail aus der eigenen Ansicht entfernen", wo die lokale Sicht bereits die
+   Quelle der Wahrheit ist).
+4. Nach erfolgreichem Versand: ein `outgoing_send_log`-Eintrag je Empfänger
+   (`to` + `cc`, dedupliziert) über `store.recordOutgoingSend()` — die
+   Infrastruktur dafür (Tabelle + Store-Methode) existierte bereits seit
+   Commit `a5432e6`, wurde aber nie von einem echten Endpunkt aufgerufen.
+   Grundlage für `recipientReputation` (`hasSentTo`, siehe oben) und eine
+   künftige Bot/Human-Missbrauchserkennung (`send_abuse_flags`-Tabelle
+   existiert bereits im Schema, die eigentliche Erkennungslogik
+   `rate_burst`/`many_new_recipients`/`duplicate_content`/
+   `no_read_before_reply`/`phishing_content` ist **nicht** Teil dieses
+   Schritts und noch offen).
+
+**Bewusst nicht Teil dieses Schritts:** kein lokaler `messages`-Eintrag im
+"gesendet"-Ordner (der Ordner selbst existiert noch nicht, siehe
+`WEB_INBOX.md` "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags" — hängt laut
+Web explizit von diesem Endpunkt ab, nicht umgekehrt). Anhänge sind ebenfalls
+nicht Teil dieses Schritts (eigener, noch offener `WEB_INBOX.md`-Eintrag).
+
+**Tests:** `src/smoketest.ts` deckt eine neue Mail (200 + `sentMessageId`,
+`outgoing_send_log`-Eintrag über `hasSentTo` geprüft), eine Antwort (nur
+`inReplyToMessageId`, Konto wird daraus abgeleitet), fehlendes `accountId`
+ohne `inReplyToMessageId` (400), unbekannte `inReplyToMessageId` (404) sowie
+den serverseitigen Phishing-Block (Dringlichkeit + Zugangsdaten-Anfrage, 422,
+kein `outgoing_send_log`-Eintrag) ab.
 
 ## Externe Lookup-Adapter
 

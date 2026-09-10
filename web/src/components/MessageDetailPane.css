@@ -62,6 +62,23 @@
   border: 1px solid var(--color-border);
 }
 
+.send-error {
+  margin: 0;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  color: var(--color-danger-text);
+  font-size: var(--font-size-small);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
+}
+
+.send-confirmation {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--color-success);
+  font-size: var(--font-size-small);
+  border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
+}
+
 .detail-section {
   display: flex;
   flex-direction: column;

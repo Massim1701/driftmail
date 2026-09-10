@@ -23,6 +23,9 @@ struct MessageDetailView: View {
     @State private var isPermanentlyDeleting = false
     @State private var showPermanentDeleteConfirm = false
     @State private var errorMessage: String?
+    @State private var isSending = false
+    @State private var sendBlockedReason: String?
+    @State private var sentConfirmation: String?
 
     /// The folder the message currently sits in, looked up from
     /// `environment.folders` via `detail.folderId`. `nil` while folders or
@@ -62,8 +65,20 @@ struct MessageDetailView: View {
                         summaryCard(summary)
                     }
 
-                    if let draft {
-                        draftCard(draft)
+                    if draft != nil {
+                        draftCard(for: detail)
+                    }
+
+                    if let sentConfirmation {
+                        Text("Antwort an \(sentConfirmation) wurde gesendet.")
+                            .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
+                            .foregroundStyle(DesignTokens.Color.success)
+                            .padding(DesignTokens.Spacing.lg)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
+                                    .fill(DesignTokens.Color.success.opacity(0.1))
+                            )
                     }
                 } else {
                     ProgressView()
@@ -223,13 +238,36 @@ struct MessageDetailView: View {
         )
     }
 
-    private func draftCard(_ draft: String) -> some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
-            Text("Antwortentwurf (nicht gesendet — bitte prüfen)")
+    /// Zeigt den (editierbaren) Antwortentwurf + Senden-Button. Bindet
+    /// direkt an `$draft` (statt einen unveränderlichen String
+    /// entgegenzunehmen), damit der Nutzer den KI-generierten Text vor dem
+    /// Versand noch anpassen kann — der Versand selbst wird erst durch
+    /// den Klick auf "Senden" ausgelöst (`POST /messages/send`).
+    private func draftCard(for detail: MessageDetail) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
+            Text("Antwortentwurf (wird erst nach Tippen auf „Senden“ verschickt)")
                 .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
                 .foregroundStyle(DesignTokens.Color.textSecondary)
-            Text(draft)
+            TextEditor(text: Binding(get: { draft ?? "" }, set: { draft = $0; sendBlockedReason = nil }))
                 .font(.system(size: DesignTokens.Typography.Size.body))
+                .frame(minHeight: 120)
+                .scrollContentBackground(.hidden)
+
+            if let sendBlockedReason {
+                Text(sendBlockedReason)
+                    .font(.system(size: DesignTokens.Typography.Size.small))
+                    .foregroundStyle(DesignTokens.Color.dangerText)
+            }
+
+            Button {
+                Task { await send(to: detail) }
+            } label: {
+                Text(isSending ? "Sende…" : "Senden")
+                    .font(.system(size: DesignTokens.Typography.Size.body))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(isSending || (draft ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .padding(DesignTokens.Spacing.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -270,6 +308,31 @@ struct MessageDetailView: View {
             draft = try await environment.apiClient.requestReplyDraft(messageId: messageId)
         } catch {
             errorMessage = "Antwortentwurf fehlgeschlagen."
+        }
+    }
+
+    /// `POST /messages/send` — sendet den aktuellen Entwurfstext als
+    /// Antwort auf diese Nachricht. Backend leitet Konto + In-Reply-To-
+    /// Header aus `messageId` ab (siehe `APIClient.sendMessage`).
+    private func send(to detail: MessageDetail) async {
+        guard let draft, !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        isSending = true
+        sendBlockedReason = nil
+        defer { isSending = false }
+        let subject = detail.subject.map { $0.lowercased().hasPrefix("re:") ? $0 : "Re: \($0)" } ?? ""
+        do {
+            _ = try await environment.apiClient.sendMessage(
+                inReplyToMessageId: messageId,
+                to: [detail.fromAddress],
+                subject: subject,
+                bodyText: draft
+            )
+            sentConfirmation = detail.fromAddress
+            self.draft = nil
+        } catch APIError.blocked(let reason) {
+            sendBlockedReason = reason ?? "Versand wurde aus Sicherheitsgründen blockiert."
+        } catch {
+            errorMessage = "Versand fehlgeschlagen. Bitte später erneut versuchen."
         }
     }
 

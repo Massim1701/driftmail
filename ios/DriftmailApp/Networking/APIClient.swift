@@ -37,6 +37,14 @@ protocol APIClient {
     func permanentlyDeleteMessage(id: String) async throws
     func fetchSummary(messageId: String) async throws -> MailSummary
     func requestReplyDraft(messageId: String) async throws -> String
+    /// `POST /messages/send` — sendet eine Antwort auf `inReplyToMessageId`
+    /// (das Konto wird backend-seitig aus der Ursprungsnachricht
+    /// abgeleitet, siehe backend/README.md "Versand"). Gibt die
+    /// provider-seitige `sentMessageId` zurück. Wirft `APIError.blocked`,
+    /// wenn der serverseitige Phishing-Check den Versand verhindert hat
+    /// (422, siehe api-spec.yaml). [2026-09-09] WEB_INBOX.md "Fehlender
+    /// Senden-Endpunkt".
+    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String) async throws -> String
     func fetchContracts() async throws -> [Contract]
     func confirmContract(_ contract: Contract) async throws
     func reportCapabilityCheck(_ capability: UserAiCapability) async throws
@@ -50,4 +58,8 @@ enum APIError: Error {
     /// Operation not permitted by the contract (e.g. renaming
     /// quarantaene/spam, deleting a system folder).
     case forbidden
+    /// `POST /messages/send` was rejected by the server-side phishing
+    /// check (422, `blocked: true`) — `reason` is the human-readable
+    /// explanation from the response body, if the server sent one.
+    case blocked(reason: String?)
 }

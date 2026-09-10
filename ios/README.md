@@ -57,6 +57,46 @@ ist "Endgültig löschen" (hard delete) möglich.
   WEB_INBOX.md explizit nicht gefordert — Standard-Verhalten wie Gmail,
   User leert manuell oder es bleibt liegen).
 
+## [2026-09-10] Nachtrag: Versand (`POST /messages/send`)
+
+Contract-Nachtrag "Fehlender Senden-Endpunkt" (WEB_INBOX.md 09.09.): der
+Antwortentwurf (`MessageDetailView`, `requestReplyDraft`) landete bisher in
+einer reinen Anzeigekarte ohne funktionierenden Senden-Button — der Entwurf
+konnte nie tatsächlich verschickt werden.
+
+- **`APIClient` um einen Endpunkt ergänzt** (`Networking/APIClient.swift`):
+  `sendMessage(inReplyToMessageId:to:subject:bodyText:)` →
+  `POST /messages/send`. Nur der Antwort-Fall ist abgedeckt (kein
+  "Neue Mail verfassen"-Screen in diesem Durchstich, analog Web) — das
+  Backend leitet Konto + `In-Reply-To`/`References`-Header selbst aus
+  `inReplyToMessageId` ab (siehe backend/README.md "Versand"), die App muss
+  kein `accountId` mitgeben.
+- **`APIError.blocked(reason:)`** (neuer Fall): der serverseitige
+  Phishing-Check kann den Versand mit `422` verhindern — das ist ein
+  erwarteter, vom Erfolgsfall inhaltlich verschiedener Ausgang, kein
+  generischer Netzwerkfehler, deshalb ein eigener `APIError`-Fall statt
+  `.network`.
+- **`MockAPIClient`**: simulierter Erfolg (keine echte Phishing-Check-Logik
+  im Mock, analog zum Web-Mock-Server), liefert eine erfundene
+  `sentMessageId`.
+- **`RemoteAPIClient`**: eigene Implementierung statt der generischen
+  `post()`-Hilfsfunktion, weil `422` explizit am HTTP-Status erkannt und
+  als `.blocked` geworfen werden muss (die übrigen Endpunkte prüfen den
+  Status bisher gar nicht — hier ist das nötig, weil der Blockier-Fall kein
+  Fehler im Sinne von "Request kaputt" ist, sondern ein gültiges
+  Geschäftsergebnis). Wie die übrigen `RemoteAPIClient`-Pfade ungetestet
+  gegen einen echten Server (kein Live-Backend in dieser Umgebung).
+- **UI** (`Views/MessageDetailView.swift`): der Entwurfstext ist jetzt in
+  einem `TextEditor` editierbar (statt nur `Text`, der Nutzer kann den
+  KI-generierten Vorschlag vor dem Versand anpassen), darunter ein echter
+  "Senden"-Button. Bei `.blocked` erscheint der `reason` direkt unter dem
+  Entwurf, bei Erfolg eine Bestätigung ("Antwort an … wurde gesendet.") und
+  die Entwurfskarte verschwindet.
+- **Nicht umgesetzt** (bewusst, siehe WEB_INBOX.md-Reihenfolge): kein
+  "Neue Mail verfassen"-Screen, keine Anhänge, kein lokaler Eintrag im
+  "Gesendet"-Ordner (der Ordner selbst existiert noch nicht — hängt laut
+  Web explizit von diesem Endpunkt ab, nicht umgekehrt).
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

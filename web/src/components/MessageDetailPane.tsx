@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Folder, MailSummary, MessageDetail } from "../types";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { SecurityBadge, SecurityDetails } from "./SecurityBadge";
 import "./MessageDetailPane.css";
 
@@ -44,11 +44,16 @@ export function MessageDetailPane({
   const [deleting, setDeleting] = useState(false);
   const [permanentlyDeleting, setPermanentlyDeleting] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
 
   // Beim Wechsel der Nachricht abgeleiteten Zustand zurücksetzen
   useEffect(() => {
     setSummary(null);
     setDraft(null);
+    setSendError(null);
+    setSent(false);
     setShowDetails(false);
   }, [message?.id]);
 
@@ -113,6 +118,36 @@ export function MessageDetailPane({
       onDeleted(message.id);
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function handleSend() {
+    if (!message || !draft || !draft.trim()) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      const subject = message.subject
+        ? message.subject.toLowerCase().startsWith("re:")
+          ? message.subject
+          : `Re: ${message.subject}`
+        : "";
+      await api.sendMessage({
+        inReplyToMessageId: message.id,
+        to: [message.fromAddress],
+        subject,
+        bodyText: draft,
+      });
+      setSent(true);
+      setDraft(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 422) {
+        const body = err.body as { reason?: string } | undefined;
+        setSendError(body?.reason ?? "Versand wurde aus Sicherheitsgründen blockiert.");
+      } else {
+        setSendError("Versand fehlgeschlagen. Bitte später erneut versuchen.");
+      }
+    } finally {
+      setSending(false);
     }
   }
 
@@ -229,13 +264,28 @@ export function MessageDetailPane({
 
       {draft && (
         <section className="detail-card">
-          <div className="detail-card-title">Antwortentwurf (Entwurf — wird nie automatisch gesendet)</div>
-          <textarea className="draft-textarea" value={draft} onChange={(e) => setDraft(e.target.value)} rows={6} />
+          <div className="detail-card-title">Antwortentwurf (wird erst nach Klick auf „Senden“ verschickt)</div>
+          <textarea
+            className="draft-textarea"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setSendError(null);
+            }}
+            rows={6}
+          />
+          {sendError && <p className="send-error">{sendError}</p>}
           <div className="detail-actions">
-            <button type="button" className="btn btn-primary" disabled title="Mock: Versand ist in diesem Skeleton nicht angebunden">
-              Senden
+            <button type="button" className="btn btn-primary" onClick={handleSend} disabled={sending || !draft.trim()}>
+              {sending ? "Sende…" : "Senden"}
             </button>
           </div>
+        </section>
+      )}
+
+      {sent && (
+        <section className="detail-card send-confirmation">
+          Antwort an {message.fromAddress} wurde gesendet.
         </section>
       )}
 

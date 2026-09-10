@@ -344,6 +344,61 @@ paths:
                         url: { type: string }
                         reason: { type: string }
 
+  /messages/send:
+    post:
+      summary: >
+        Sendet eine Mail (neu oder Antwort). Loest VOR dem eigentlichen Versand
+        den Phishing-Check aus (dieselbe Logik wie POST
+        /messages/draft/phishing-check, serverseitig auf bodyText angewendet),
+        blocked=true verhindert das Senden (422). Schreibt nach erfolgreichem
+        Versand einen outgoing_send_log-Eintrag pro Empfaenger (to + cc) fuer
+        die Abuse-Erkennung. Siehe WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt".
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to, bodyText]
+              properties:
+                accountId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: >
+                    Erforderlich, ausser inReplyToMessageId ist gesetzt (dann
+                    wird das Konto der Ursprungsnachricht verwendet).
+                inReplyToMessageId: { type: string, format: uuid, nullable: true }
+                to:
+                  type: array
+                  items: { type: string }
+                cc:
+                  type: array
+                  items: { type: string }
+                subject: { type: string }
+                bodyText: { type: string }
+      responses:
+        "200":
+          description: Gesendet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sentMessageId: { type: string }
+        "422":
+          description: Blockiert (Phishing-Check hat blocked=true geliefert)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  blocked: { type: boolean }
+                  reason: { type: string }
+        "400":
+          description: Ungueltige Eingabe (z.B. weder accountId noch inReplyToMessageId, kein Empfaenger)
+        "502":
+          description: Versand beim Mail-Provider fehlgeschlagen
+
   /signatures:
     get:
       summary: Signaturen des Users auflisten

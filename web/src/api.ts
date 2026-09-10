@@ -8,13 +8,29 @@ import type { Contract, Folder, MailAccount, MailSummary, Message, MessageDetail
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
+// Erweitert den generischen Fehler um Status + (falls vorhanden) den
+// geparsten Response-Body — der Send-Composer (POST /messages/send) braucht
+// den Body bei 422, um blocked/reason anzuzeigen statt nur eine generische
+// Fehlermeldung.
+export class ApiError extends Error {
+  readonly status: number;
+  readonly body: unknown;
+
+  constructor(message: string, status: number, body: unknown) {
+    super(message);
+    this.status = status;
+    this.body = body;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
     ...init,
   });
   if (!res.ok) {
-    throw new Error(`API-Fehler ${res.status} bei ${path}`);
+    const body = await res.json().catch(() => undefined);
+    throw new ApiError(`API-Fehler ${res.status} bei ${path}`, res.status, body);
   }
   if (res.status === 204) {
     return undefined as T;
@@ -58,6 +74,19 @@ export const api = {
 
   createReplyDraft: (id: string) =>
     request<{ draftText: string }>(`/messages/${id}/reply-draft`, { method: "POST" }),
+
+  // POST /messages/send (WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt").
+  // Genau eines von accountId/inReplyToMessageId ist erforderlich (siehe
+  // backend/README.md "Versand") -- bei einer Antwort reicht
+  // inReplyToMessageId, das Backend leitet das Konto daraus ab.
+  sendMessage: (data: {
+    accountId?: string;
+    inReplyToMessageId?: string;
+    to: string[];
+    cc?: string[];
+    subject?: string;
+    bodyText: string;
+  }) => request<{ sentMessageId: string }>("/messages/send", { method: "POST", body: JSON.stringify(data) }),
 
   listContracts: () => request<Contract[]>("/contracts"),
 };

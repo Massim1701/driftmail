@@ -186,6 +186,18 @@ actor MockAPIClient: APIClient {
         return try await OnDeviceAiAdapter().draftReply(thread: thread)
     }
 
+    /// `POST /messages/send`, Mock: kein echter Provider-Versand, kein
+    /// Phishing-Check (der Mock bildet `checkDraftForPhishing()` nirgends
+    /// nach) — simuliert nur den Erfolgsfall mit einer erfundenen
+    /// `sentMessageId`, analog zu `requestReplyDraft` oben.
+    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String) async throws -> String {
+        await delay()
+        guard db.messages.contains(where: { $0.id == inReplyToMessageId }) else {
+            throw APIError.notFound
+        }
+        return "mock-sent-\(UUID().uuidString)"
+    }
+
     func fetchContracts() async throws -> [Contract] {
         await delay()
         return db.contracts
