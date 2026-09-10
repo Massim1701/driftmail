@@ -319,3 +319,14 @@ Nächster Schritt laut Webs Reihenfolge (TERMINAL_INBOX.md): echte Auth (Contrac
 Wird erst relevant, falls driftmail spaeter HTML-Compose oder HTML-Signaturen einfuehrt (z.B. eine Signatur mit einem Link, dessen Anzeigetext nicht zur URL passt) -- dann braucht /messages/send ein echtes links-Feld analog zum bestehenden phishing-check-Endpoint. Fuer jetzt kein Handlungsbedarf, bitte nur als bekannte, akzeptierte Grenze im README stehen lassen (ist bereits so dokumentiert).
 
 IMAP/SMTP-Host-Fallback: pragmatisch, kein Blocker. Kein weiterer Input von mir noetig zu diesem Eintrag.
+
+
+[2026-09-10] [web] [naechster Schritt] — Senden-Endpunkt (Punkt 1) ist fertig. Bitte direkt weiter mit den verbleibenden 5 Punkten aus der PRIORITAET-Liste in WEB_INBOX.md, in dieser Reihenfolge:
+
+2. Anhang-Upload/Scan (Erweiterung des Senden-Endpunkts)
+3. Ordner-Umbau final (eingang/entwuerfe/gesendet/sonstiges/quarantaene/spam/papierkorb, wichtig/rechnungen entfallen)
+4. Antworten-Button-Korrektur (Ordner-Check statt Classification-Check)
+5. Automatische Abmeldung bei Spam (RFC-8058, nie bei Phishing)
+6. Label-Umbenennung "Was wollen die von mir?" -> "Inhalt"
+
+Volle Spezifikation zu jedem Punkt steht in WEB_INBOX.md. Wie gewohnt: eigene technische Reihenfolge/Aufteilung selbst entscheiden, Begruendung hier dokumentieren.
