@@ -260,6 +260,49 @@ wurde im Browser end-to-end verifiziert (siehe `web/README.md`
 "Antworten-Button bei Spam"), die iOS-Implementierung folgt exakt demselben
 `folderId`/`systemKey`-Vergleichsprinzip gegen dasselbe API-Feld.
 
+## [2026-09-10] Nachtrag: Automatische Abmeldung bei Spam (Schritt 5)
+
+`Models/Message.swift`: `MessageDetail.canUnsubscribe: Bool` neu (spiegelt
+das gleichnamige, kleine Contract-Feld — steuert, ob die Nachricht einen
+gültigen List-Unsubscribe-Header hat, unabhängig von `classification`).
+`Models/Classification.swift`: neues `UnsubscribeStatus`-Enum
+(`pendingConfirmation`/`confirmed`/`rejected`, spiegelt
+`unsubscribe_actions.status`). `APIClient`-Protokoll +
+`MockAPIClient`/`RemoteAPIClient`: neue Methode
+`unsubscribeFromMessage(id:) async throws -> UnsubscribeStatus` (`POST
+/messages/{messageId}/unsubscribe`). `Views/MessageDetailView.swift`: neuer
+"Von Absender abmelden"-Button (nur sichtbar bei `canUnsubscribe == true`,
+unabhängig vom aktuellen Ordner/der Klassifikation — auch bei Phishing
+manuell möglich, siehe `backend/README.md` "Automatische Abmeldung bei
+Spam"), ersetzt sich nach Erfolg durch einen Status-Text statt erneut
+klickbar zu bleiben.
+
+`MockDatabase.json`: `canUnsubscribe` für alle 13 Beispiel-Nachrichten
+ergänzt (Codable-Pflichtfeld, keine sinnvolle Default-Annahme möglich) —
+`true` für beide Spam-Beispiele plus eine Marketing-Newsletter- und eine
+Papierkorb-Beispielnachricht (zeigt den Button unabhängig von Ordner/
+Klassifikation), sonst `false`.
+
+**Tests:** `xcodebuild` gegen zwei Simulator-Ziele **BUILD SUCCEEDED**. Kein
+interaktiver Klicktest (gleiche Werkzeug-Grenze wie bei den vorherigen
+Nachträgen) — die Web-Variante derselben Logik wurde im Browser
+end-to-end verifiziert (siehe `web/README.md`).
+
+## [2026-09-10] Nachtrag: echte Auth (kein iOS-Code-Change nötig)
+
+Backend-seitig verlangt jede Contract-Route jetzt einen gültigen
+`Authorization: Bearer <token>`-Header (siehe `backend/README.md` "Auth").
+Für iOS ändert sich dadurch **nichts**: `AppEnvironment` nutzt weiterhin
+ausschließlich `MockAPIClient` (spricht nie das Netzwerk an, siehe unten
+"Was ist gemockt"), `RemoteAPIClient` ist unverändert ein unverdrahtetes
+Skeleton (`APIError.notImplemented` an mehreren Stellen, nie gegen einen
+echten Server getestet — siehe "Was ungetestet ist"). Sobald `RemoteAPIClient`
+tatsächlich verdrahtet wird, braucht es dort einen Session-Bootstrap
+analog zu `web/src/api.ts` (`ensureSessionToken()`, implizites `POST
+/accounts` beim ersten Request) — bewusst nicht vorgezogen, um kein totes,
+ungetestetes Code sitzenzulassen, solange `RemoteAPIClient` ohnehin nicht
+genutzt wird.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

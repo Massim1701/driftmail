@@ -70,17 +70,17 @@ npm run lint       # oxlint
 ## Was ist gemockt
 
 - **Backend komplett gemockt.** `mock-server/server.mjs` implementiert alle
-  Endpunkte aus `contracts/api-spec.yaml` (`/accounts`, `/folders`,
-  `/folders/{folderId}`, `/messages`, `/messages/{id}` (GET + DELETE),
-  `/messages/{id}/permanent` (DELETE), `/messages/{id}/quarantine`,
-  `/messages/{id}/move`, `/messages/{id}/summary`,
-  `/messages/{id}/reply-draft`, `/messages/send`, `/attachments`,
-  `/drafts` (GET/POST), `/drafts/{id}` (PATCH/DELETE), `/contracts`,
-  `/contracts/{id}/confirm`, `/capability-check`) gegen statische
-  Beispieldaten in `mock-server/data.mjs`. Mutationen (Ordner anlegen/
-  umbenennen/löschen, Nachricht verschieben/löschen/in Quarantäne setzen,
-  Contract bestätigen, Anhänge/Entwürfe) wirken nur im Prozessspeicher und
-  gehen beim Neustart verloren.
+  Endpunkte aus `contracts/api-spec.yaml` (`/accounts` (GET + POST),
+  `/folders`, `/folders/{folderId}`, `/messages`, `/messages/{id}` (GET +
+  DELETE), `/messages/{id}/permanent` (DELETE), `/messages/{id}/quarantine`,
+  `/messages/{id}/unsubscribe`, `/messages/{id}/move`,
+  `/messages/{id}/summary`, `/messages/{id}/reply-draft`, `/messages/send`,
+  `/attachments`, `/drafts` (GET/POST), `/drafts/{id}` (PATCH/DELETE),
+  `/contracts`, `/contracts/{id}/confirm`, `/capability-check`) gegen
+  statische Beispieldaten in `mock-server/data.mjs`. Mutationen (Ordner
+  anlegen/umbenennen/löschen, Nachricht verschieben/löschen/in Quarantäne
+  setzen, Contract bestätigen, Anhänge/Entwürfe) wirken nur im
+  Prozessspeicher und gehen beim Neustart verloren.
 - **KI-Quelle ist immer `cloud_fallback`.** Laut Auftrag nutzt Web keine
   On-Device-KI (kein Browser-seitiges Modell). Der Mock-Server liefert in
   `MailSummary.source` konsequent `"cloud_fallback"`. Für
@@ -92,8 +92,15 @@ npm run lint       # oxlint
   `POST /messages/send` auf, siehe Abschnitt "Versand & Anhänge" unten.
   Der Mock-Server selbst hat weiterhin kein echtes Postfach dahinter
   (simulierter Erfolg, analog zum Fixture-Adapter im echten Backend).
-- **Keine Authentifizierung/Login.** Es gibt genau ein Mock-Konto
-  (`massimo@example.com`, Provider `gmail`), das beim Start geladen wird.
+- **Keine echte Authentifizierung/Login-UI.** [2026-09-10] echte Auth im
+  echten Backend (siehe `backend/README.md` "Auth"): `api.ts` meldet sich
+  beim ersten Request implizit mit einer festen Demo-Adresse an (`POST
+  /accounts`) und hängt den Token an alle weiteren Requests, damit derselbe
+  Client-Code unverändert gegen beide Server läuft. Der Mock-Server prüft
+  diesen Header aber NIE — `POST /accounts` liefert hier nur einen
+  bedeutungslosen Platzhalter-Token zurück, es gibt weiterhin genau ein
+  Mock-Konto (`massimo@example.com`, Provider `gmail`), das beim Start
+  geladen wird.
 - **Kein echtes IMAP/OAuth**, kein echter Datenbank-Layer — `db-schema.sql`
   wird nicht direkt verwendet, nur als Referenz für plausible Beispieldaten
   (z. B. Feldnamen der `quarantine`-Tabelle für den simulierten

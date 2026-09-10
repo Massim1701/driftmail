@@ -29,17 +29,28 @@ import type {
   OutgoingSendLogRecord,
   QuarantineRecord,
   SecurityAuditLogRecord,
+  SessionRecord,
   SystemFolderKey,
   UnsubscribeActionRecord,
   User,
   UserAiCapabilityRecord,
 } from "../types";
 
+// [2026-09-10] echte Auth: 30 Tage, willkürlicher aber plausibler
+// Beispielwert für ein Entwicklungsstadium (kein Wert aus dem Contract) --
+// lang genug, dass ein einmal ausgestellter Dev-Token nicht staendig
+// erneuert werden muss, kurz genug, um das Prinzip "Sessions laufen ab"
+// echt zu demonstrieren statt ein Token auf ewig gueltig zu machen.
+const SESSION_TTL_MS = 30 * 24 * 3600 * 1000;
+
 export interface Store {
   // ----- Users / Accounts -----
   createUser(email: string): Promise<User>;
   /** Für ensureDemoUser(): liefert den ersten angelegten User, falls vorhanden. */
   getFirstUser(): Promise<User | undefined>;
+  /** Für POST /accounts (Login/Registrierung, siehe routes/auth.ts) --
+   * find-or-create nach E-Mail-Adresse. */
+  getUserByEmail(email: string): Promise<User | undefined>;
   createMailAccount(input: Omit<MailAccountRecord, "id">): Promise<MailAccountRecord>;
   listMailAccounts(): Promise<MailAccountRecord[]>;
   getMailAccount(id: string): Promise<MailAccountRecord | undefined>;
@@ -48,6 +59,14 @@ export interface Store {
    * vorherige direkte Mutation des `MailAccountRecord`-Objekts, die bei
    * einer echten DB nicht persistiert hätte. */
   updateMailAccount(id: string, patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt">>): Promise<MailAccountRecord | undefined>;
+
+  // ----- Sessions ([2026-09-10] echte Auth, siehe middleware/auth.ts + routes/auth.ts) -----
+  createSession(userId: string): Promise<SessionRecord>;
+  getSessionByToken(token: string): Promise<SessionRecord | undefined>;
+  /** Rotiert den Token einer bestehenden, noch nicht abgelaufenen Sitzung
+   * (POST /auth/session) -- `undefined`, wenn der übergebene Token unbekannt
+   * oder bereits abgelaufen ist. */
+  refreshSession(token: string): Promise<SessionRecord | undefined>;
 
   // ----- Ordner -----
   createFolder(input: Omit<FolderRecord, "id">): Promise<FolderRecord>;
@@ -141,6 +160,7 @@ export interface Store {
 export class InMemoryStore implements Store {
   users: User[] = [];
   mailAccounts: MailAccountRecord[] = [];
+  sessions: SessionRecord[] = [];
   folders: FolderRecord[] = [];
   messages: MessageRecord[] = [];
   messageSecurity: Map<string, MessageSecurityRecord> = new Map(); // key: messageId
@@ -188,6 +208,10 @@ export class InMemoryStore implements Store {
     return this.users[0];
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return this.users.find((u) => u.email === email);
+  }
+
   async createMailAccount(input: Omit<MailAccountRecord, "id">): Promise<MailAccountRecord> {
     const record: MailAccountRecord = { id: randomUUID(), ...input };
     this.mailAccounts.push(record);
@@ -215,6 +239,34 @@ export class InMemoryStore implements Store {
     if (patch.syncStatus !== undefined) account.syncStatus = patch.syncStatus;
     if (patch.lastSyncedAt !== undefined) account.lastSyncedAt = patch.lastSyncedAt;
     return account;
+  }
+
+  // ----- Sessions -----
+
+  async createSession(userId: string): Promise<SessionRecord> {
+    const now = Date.now();
+    const session: SessionRecord = {
+      id: randomUUID(),
+      userId,
+      token: randomUUID(),
+      createdAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + SESSION_TTL_MS).toISOString(),
+    };
+    this.sessions.push(session);
+    return session;
+  }
+
+  async getSessionByToken(token: string): Promise<SessionRecord | undefined> {
+    return this.sessions.find((s) => s.token === token);
+  }
+
+  async refreshSession(token: string): Promise<SessionRecord | undefined> {
+    const session = this.sessions.find((s) => s.token === token);
+    if (!session || new Date(session.expiresAt).getTime() < Date.now()) return undefined;
+    const now = Date.now();
+    session.token = randomUUID();
+    session.expiresAt = new Date(now + SESSION_TTL_MS).toISOString();
+    return session;
   }
 
   // ----- Ordner -----
@@ -587,6 +639,26 @@ const SYSTEM_FOLDER_DEFAULTS: Array<{ systemKey: SystemFolderKey; name: string; 
 // koennen. Der Vergleich unten arbeitet deshalb auf String-Ebene.
 const LEGACY_SYSTEM_FOLDER_KEYS: string[] = ["wichtig", "rechnungen"];
 
+/** Legt die 7 Standard-System-Ordner für einen frisch angelegten User an
+ * (aus `ensureDemoUser()` herausgezogen, [2026-09-10] echte Auth, damit
+ * `POST /accounts` -- der reguläre Login/Registrierungs-Weg für echte User,
+ * siehe routes/auth.ts -- dieselbe Ordnerstruktur bekommt wie der
+ * Demo-User, ohne den Demo-spezifischen Rest von `ensureDemoUser()`
+ * mitzuschleppen). Nur für User ohne jede bestehende Ordner-Zeile gedacht --
+ * `migrateLegacySystemFolders()` deckt den Bestands-User-Fall separat ab. */
+export async function createSystemFoldersForUser(userId: string): Promise<void> {
+  for (const [index, def] of SYSTEM_FOLDER_DEFAULTS.entries()) {
+    await store.createFolder({
+      userId,
+      name: def.name,
+      icon: def.icon,
+      isSystem: true,
+      systemKey: def.systemKey,
+      sortOrder: index,
+    });
+  }
+}
+
 /** Migriert einen User von der alten 6-Ordner- auf die neue 7-Ordner-Struktur
  * (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags").
  * Idempotent -- für neu angelegte User (die die neuen Defaults schon über
@@ -646,16 +718,7 @@ export async function ensureDemoUser(): Promise<{ user: User; account: MailAccou
   }
 
   if ((await store.listFolders(user.id)).length === 0) {
-    for (const [index, def] of SYSTEM_FOLDER_DEFAULTS.entries()) {
-      await store.createFolder({
-        userId: user.id,
-        name: def.name,
-        icon: def.icon,
-        isSystem: true,
-        systemKey: def.systemKey,
-        sortOrder: index,
-      });
-    }
+    await createSystemFoldersForUser(user.id);
   } else {
     // Bestehender User (von vor dem Ordner-Umbau) -- neue Pflicht-Ordner
     // nachrüsten + wichtig/rechnungen auflösen. Im `length === 0`-Zweig

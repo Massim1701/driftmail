@@ -852,6 +852,110 @@ mehrere Schreiboperationen hinweg (z.B. `insertMessage` +
 Datenbank-Migrationen im engeren Sinne (Schema-Änderungen an bestehenden
 Spalten, nur `IF NOT EXISTS` für neue Tabellen/Indizes).
 
+## Auth
+
+Seit 09.09. (TERMINAL_INBOX.md, Web-Priorisierung direkt nach Persistenz;
+"Automatische Abmeldung bei Spam" kam als Zwischen-Auftrag dazwischen, siehe
+WEB_INBOX.md) gibt es echte, sitzungsbasierte Auth statt eines fest
+verdrahteten Demo-Users. Der Contract schreibt `security: bearerAuth`
+bereits seit 08.09. global vor (Commit `42a8b53`) — bis dahin wurde das nie
+durchgesetzt, jede Route lief über `ensureDemoUser()`.
+
+**Mechanismus:** `sessions`-Tabelle (Opaque-Token, kein JWT — ein einfacher
+DB-Lookup reicht für diesen Umfang, keine Signaturprüfung nötig).
+`middleware/auth.ts` (`requireAuth`) prüft `Authorization: Bearer <token>`
+gegen `sessions`, hängt die aufgelöste `userId` an `req.userId`. Wird in
+`app.ts` auf den gesamten `/v1`-Router angewendet, **außer** `routes/auth.ts`
+(`POST /accounts`, `POST /auth/session`) — die beiden einzigen Endpunkte mit
+`security: []` im Contract, weil man naturgemäß keinen Token verlangen kann,
+um überhaupt einen zu bekommen.
+
+**Login/Registrierung läuft über `POST /accounts` (Mail-Konto verbinden),
+nicht über ein separates `/login`** — das war schon so im Contract-Kommentar
+von `/auth/session` angelegt ("Login selbst passiert implizit durch den
+OAuth-Flow beim Verbinden eines Mail-Kontos"), nur fehlte der Endpunkt dafür
+komplett (Contract-Lücke, wie zuvor schon bei
+`/messages/{messageId}/unsubscribe`). Find-or-create nach `emailAddress`:
+neue Adresse → neuer User + dessen 7 Standard-Ordner
+(`createSystemFoldersForUser()`, aus `ensureDemoUser()` herausgezogen);
+bekannte Adresse → bestehender User/bestehendes Konto, neue Session. `POST
+/auth/session` rotiert den Token einer noch gültigen Sitzung (neuer Token,
+alter wird sofort ungültig — echte Rotation, keine bloße Verlängerung).
+
+**Autorisierung (nicht nur Authentifizierung):** ein gültiger Token allein
+reicht nicht — jede Route, die eine Ressource per ID lädt (Nachricht, Ordner,
+Entwurf, Vertrag, Mail-Konto), prüft zusätzlich, dass die Ressource dem
+angemeldeten User gehört (`403`, falls nicht — bewusst nicht `404`, um
+zwischen "nicht gefunden" und "gehört jemand anderem" zu unterscheiden).
+`GET /messages`/`GET /contracts`/`GET /accounts` ohne konkrete ID filtern
+jetzt nach `req.userId`, statt (wie vorher) ungefiltert alles zu liefern —
+unkritisch, solange es ohnehin nur den einen Demo-User gab, aber ein
+notwendiger Schritt für echte Mehrbenutzerfähigkeit. `routes/messages.ts`
+bündelt das in einem `requireOwnMessage()`-Helper (Nachrichten haben keine
+eigene `user_id`-Spalte, nur `mail_account_id` → Besitz läuft über das
+Konto). Mit einem zweiten, echten User im Smoketest verifiziert (nicht nur
+behauptet), siehe unten.
+
+**BEWUSSTE GRENZEN (kein Blocker, hier absichtlich transparent statt
+stillschweigend übergangen):**
+- **Kein echter OAuth-Code-Austausch (Gmail) bzw. keine echte
+  IMAP-Zugangsdaten-Prüfung.** `POST /accounts` akzeptiert `provider` +
+  `emailAddress`, `oauthCode`/`imapPassword` werden entgegengenommen, aber
+  nicht ausgewertet — analog zum bestehenden Fixture-Adapter-Muster für den
+  Mail-Sync selbst (`mail/fixtureAdapter.ts`): funktioniert ohne jede
+  Konfiguration, echte Provider-Anbindung ist ein separater, späterer
+  Schritt.
+- **Keine sichtbare Login-UI in Web/iOS.** Web meldet sich beim ersten
+  Request implizit mit einer festen Demo-Adresse an (`web/src/api.ts`,
+  `ensureSessionToken()`) und hängt den erhaltenen Token an alle weiteren
+  Requests — kein Retry bei 401/Ablauf. iOS bleibt unangetastet: `MockAPIClient`
+  (aktuell die einzige aktive Implementierung, siehe `ios/README.md`) spricht
+  ohnehin nie das echte Backend an, `RemoteAPIClient` ist weiterhin ein
+  unverdrahtetes Skeleton — dort gibt es deshalb noch nichts zu verbinden.
+- **Klartext-Token-Speicherung**, keine Rate-Limits gegen Brute-Force, kein
+  vom Zugriffstoken getrennter Refresh-Token (siehe Kommentar an der
+  `sessions`-Tabelle in `contracts/db-schema.sql`) — ausreichend für dieses
+  Entwicklungsstadium, vor echtem Produktivbetrieb nachzurüsten.
+- **Kein Logout-Endpoint** (Session-Invalidierung vor Ablauf) — 30 Tage
+  TTL (`SESSION_TTL_MS`), sonst nur Rotation über `POST /auth/session`.
+- **Web/mock-server CORS-Fund währenddessen:** der lokale Mock-Server
+  (`web/mock-server/server.mjs`, kein Teil dieses Backends) erlaubte per
+  `Access-Control-Allow-Headers` bisher nur `Content-Type` — der neue
+  `Authorization`-Header wurde vom Browser nach einer eigentlich
+  erfolgreichen CORS-Preflight-Antwort trotzdem blockiert. Im Mock-Server
+  nachgezogen (`Content-Type, Authorization`), da web/README.md-Testfluss
+  sonst gebrochen gewesen wäre. Das ECHTE Backend hier setzt bisher
+  überhaupt keine CORS-Header (bestehende, unabhängige Lücke, nicht Teil
+  dieses Schritts — Web müsste direkt aus dem Browser gegen `localhost:3000`
+  sprechen, um das zu bemerken; bisher lief der Browser-Test immer nur gegen
+  den Mock-Server).
+
+**Getestet:** Backend-Smoketest um einen eigenen Auth-Block erweitert (401
+ohne/mit ungültigem Token, `POST /accounts` inkl. Idempotenz bei
+wiederholtem Login, `POST /auth/session` inkl. Token-Rotation + Invalidierung
+des alten Tokens, sowie ein zweiter, echter User, der geprüft NICHT auf die
+Nachrichten/Ordner des ersten zugreifen kann), `npm run typecheck`/`npm test`
+grün. Zusätzlich manuell gegen eine echte, frische lokale Postgres-Instanz
+verifiziert (`curl`): Login, Token-Refresh mit Rotation, sowie
+Zwei-User-Isolation — alles wie im In-Memory-Smoketest, aber gegen echte
+Tabellen. Web: `npm run build` grün, End-to-End im Browser gegen den
+Mock-Server verifiziert (impliziter Login beim Laden, danach normale
+Nutzung wie vorher, keine sichtbare Änderung für den User).
+
+**Pre-existierender, unabhängiger Fund (nicht behoben, nicht Teil dieses
+Schritts):** beim Testen gegen eine echte Postgres-Instanz schlägt der
+bereits bestehende Migrations-Smoketest-Block ("Ordner-Umbau-Migration",
+simuliert einen Bestands-User mit einem alten `wichtig`-Ordner) fehl —
+`folders.system_key` hat seit dem Ordner-Umbau eine `CHECK`-Constraint, die
+`'wichtig'` korrekt ablehnt, der Smoketest simuliert diesen Altzustand aber
+per direktem `INSERT` gegen das AKTUELLE Schema, was gegen eine echte DB nie
+so hätte vorkommen können (bei einer echten Migration hätte die Zeile mit
+dem alten, damals noch gültigen Schema existiert). Gegen `InMemoryStore`
+(keine Constraints) fällt das nicht auf. Verifiziert, dass dieser Fund
+bereits vor diesem Schritt existierte (gleicher Fehler auf dem vorherigen
+Commit). Kein Blocker für Auth selbst, aber ein Hinweis, dass der
+Smoketest bisher nie vollständig gegen Postgres durchlief.
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war

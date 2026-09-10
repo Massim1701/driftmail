@@ -20,6 +20,31 @@ CREATE TABLE IF NOT EXISTS mail_accounts (
     last_synced_at TIMESTAMPTZ
   );
 
+-- [2026-09-10] Echte Auth (TERMINAL_INBOX.md 09.09., von Web priorisiert
+-- direkt nach Persistenz; "Automatische Abmeldung bei Spam" kam als
+-- Zwischen-Auftrag dazwischen, siehe WEB_INBOX.md). Bisher lief das gesamte
+-- Backend gegen einen einzigen fest verdrahteten Demo-User (ensureDemoUser()
+-- in db/store.ts) -- kein echter Login, kein Bearer-Token wurde je geprueft,
+-- obwohl der Contract `security: bearerAuth` bereits seit 08.09. global
+-- vorschreibt (Commit 42a8b53). `sessions` schliesst genau diese Luecke:
+-- ein Opaque-Token (kein JWT, keine Signaturpruefung noetig, einfacher
+-- Datenbank-Lookup reicht fuer diesen Umfang) pro eingeloggter Sitzung.
+-- BEWUSSTE GRENZE (kein Blocker, siehe backend/README.md "Auth"):
+-- Klartext-Token-Speicherung (kein Hashing wie bei Passwoertern), keine
+-- Rate-Limits gegen Brute-Force, kein Refresh-Token getrennt vom
+-- Zugriffstoken -- ausreichend fuer dieses Entwicklungsstadium (analog zur
+-- bereits akzeptierten Sicherheitsschwelle bei den Mock-Scans/-Lookups),
+-- aber vor echtem Produktivbetrieb nachzuruesten.
+CREATE TABLE IF NOT EXISTS sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at TIMESTAMPTZ NOT NULL
+  );
+
+CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);
+
 -- ===== Ordner (frei anlegbar, siehe SYNC.md "Contract-Aenderungen" 08.09.) =====
 --
 -- Ersetzt den vorherigen festen folder-Enum auf messages. Jeder User bekommt

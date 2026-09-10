@@ -87,6 +87,80 @@ async function main() {
   const base = `http://localhost:${address.port}`;
 
   try {
+    // [2026-09-10] echte Auth (TERMINAL_INBOX.md 09.09.): jede Route außer
+    // POST /accounts/POST /auth/session verlangt jetzt einen gültigen
+    // Bearer-Token (requireAuth, siehe middleware/auth.ts) statt wie vorher
+    // implizit den Demo-User anzunehmen. Erst die 401-Fälle ohne Token
+    // prüfen, DANACH einloggen (POST /accounts) und für den Rest des
+    // Smoketests ein lokales `fetch` verwenden, das den Header automatisch
+    // mitschickt -- vermeidet, an über 30 Call-Sites einzeln einen Header
+    // nachzutragen.
+    const noTokenRes = await globalThis.fetch(`${base}/v1/accounts`);
+    assert(noTokenRes.status === 401, "GET /v1/accounts ohne Authorization-Header sollte 401 liefern");
+    const noTokenBadRes = await globalThis.fetch(`${base}/v1/accounts`, { headers: { Authorization: "Bearer offensichtlich-ungueltig" } });
+    assert(noTokenBadRes.status === 401, "GET /v1/accounts mit ungültigem Token sollte 401 liefern");
+
+    // POST /accounts (Login/Registrierung, routes/auth.ts) -- Contract-Lücke
+    // war seit Track 0 unimplementiert (/auth/session verwies bereits
+    // darauf, siehe api-spec.yaml). Gleiche E-Mail wie ensureDemoUser() oben
+    // -> find-or-create liefert denselben User/dasselbe Konto zurück.
+    const connectRes = await globalThis.fetch(`${base}/v1/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "gmail", emailAddress: account.emailAddress }),
+    });
+    assert(connectRes.status === 200, "POST /v1/accounts (Login) sollte 200 liefern");
+    const connected = (await connectRes.json()) as { account: Record<string, unknown>; token: string };
+    assert(typeof connected.token === "string" && connected.token.length > 0, "POST /v1/accounts sollte einen token liefern");
+    assert(connected.account.id === account.id, "POST /v1/accounts sollte das bestehende Demo-Konto wiederverwenden, kein zweites anlegen");
+    let authToken = connected.token;
+
+    // Zweiter Login mit derselben E-Mail -- find-or-create, kein zweiter User/Konto.
+    const secondConnectRes = await globalThis.fetch(`${base}/v1/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "gmail", emailAddress: account.emailAddress }),
+    });
+    const secondConnected = (await secondConnectRes.json()) as { account: Record<string, unknown>; token: string };
+    assert(secondConnected.account.id === connected.account.id, "wiederholter Login mit derselben E-Mail sollte dasselbe Konto liefern");
+    assert(secondConnected.token !== connected.token, "wiederholter Login sollte eine neue, eigene Session ausstellen");
+
+    // POST /accounts ohne emailAddress -> 400 (Edge Case).
+    const connectMissingEmailRes = await globalThis.fetch(`${base}/v1/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "gmail" }),
+    });
+    assert(connectMissingEmailRes.status === 400, "POST /v1/accounts ohne emailAddress sollte 400 liefern");
+
+    // POST /auth/session -- Token-Erneuerung. Rotiert den Token, alter Token
+    // danach ungültig (echte Rotation, keine bloße Verlängerung).
+    const refreshRes = await globalThis.fetch(`${base}/v1/auth/session`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    assert(refreshRes.status === 200, "POST /v1/auth/session mit gültigem Token sollte 200 liefern");
+    const refreshed = (await refreshRes.json()) as { token: string };
+    assert(typeof refreshed.token === "string" && refreshed.token !== authToken, "POST /v1/auth/session sollte einen neuen, anderen token liefern");
+    const oldTokenRes = await globalThis.fetch(`${base}/v1/accounts`, { headers: { Authorization: `Bearer ${authToken}` } });
+    assert(oldTokenRes.status === 401, "der alte Token sollte nach POST /v1/auth/session nicht mehr gültig sein (Rotation)");
+    authToken = refreshed.token;
+
+    const refreshNoTokenRes = await globalThis.fetch(`${base}/v1/auth/session`, { method: "POST" });
+    assert(refreshNoTokenRes.status === 401, "POST /v1/auth/session ohne Authorization-Header sollte 401 liefern");
+
+    // Ab hier: lokales `fetch` überschreibt (shadowed) das globale für den
+    // Rest von main() -- hängt automatisch den aktuellen Bearer-Token an,
+    // ohne jede der folgenden ~30 Fetch-Aufrufstellen einzeln anzufassen.
+    // `globalThis.fetch(...)` bleibt weiterhin der unauthentifizierte Weg,
+    // falls später noch ein expliziter 401-Fall gebraucht wird.
+    const rawFetch = globalThis.fetch.bind(globalThis);
+    const fetch = ((input: Parameters<typeof rawFetch>[0], init?: Parameters<typeof rawFetch>[1]) => {
+      const headers = new Headers(init?.headers);
+      headers.set("Authorization", `Bearer ${authToken}`);
+      return rawFetch(input, { ...init, headers });
+    }) as typeof rawFetch;
+
     const accountsRes = await fetch(`${base}/v1/accounts`);
     assert(accountsRes.status === 200, "GET /v1/accounts sollte 200 liefern");
     const accounts = await accountsRes.json();
@@ -715,7 +789,33 @@ async function main() {
     const manualUnsubMissingRes = await fetch(`${base}/v1/messages/00000000-0000-0000-0000-000000000000/unsubscribe`, { method: "POST" });
     assert(manualUnsubMissingRes.status === 404, "POST .../unsubscribe für unbekannte messageId sollte 404 liefern");
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam) end-to-end grün.");
+    // ----- Autorisierung (echte Auth, [2026-09-10]): ein zweiter, echter
+    // User darf NICHT auf die Nachrichten/Ordner des ersten zugreifen, nur
+    // weil er selbst eingeloggt ist (Authentifizierung allein reicht nicht,
+    // siehe requireOwnMessage()/Besitz-Prüfungen in routes/*.ts). -----
+    const secondUserConnectRes = await globalThis.fetch(`${base}/v1/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "gmail", emailAddress: "zweiter-user@driftmail.local" }),
+    });
+    const secondUserConnected = (await secondUserConnectRes.json()) as { token: string };
+    const secondUserToken = secondUserConnected.token;
+    assert(secondUserToken !== authToken, "zweiter User sollte einen eigenen, anderen Token bekommen");
+
+    const crossUserMessageRes = await globalThis.fetch(`${base}/v1/messages/${fixture1!.id}`, {
+      headers: { Authorization: `Bearer ${secondUserToken}` },
+    });
+    assert(crossUserMessageRes.status === 403, "zweiter User sollte auf die Nachricht des ersten Users mit 403 abgewiesen werden");
+
+    const crossUserFoldersRes = await globalThis.fetch(`${base}/v1/folders`, { headers: { Authorization: `Bearer ${secondUserToken}` } });
+    const secondUserFolders = (await crossUserFoldersRes.json()) as Array<Record<string, unknown>>;
+    assert(
+      !secondUserFolders.some((f) => folders.some((ownFolder) => (ownFolder as Record<string, unknown>).id === f.id)),
+      "zweiter User sollte eigene, komplett andere Ordner-IDs bekommen (eigene 7 Standard-Ordner, keine Überschneidung)",
+    );
+    assert(secondUserFolders.length === 7, "zweiter, frisch angelegter User sollte ebenfalls die 7 Standard-Ordner bekommen");
+
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam) end-to-end grün.");
   } finally {
     server.close();
   }

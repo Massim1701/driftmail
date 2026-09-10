@@ -1,5 +1,5 @@
 import { createApp } from "./app";
-import { ensureDemoUser, initStore } from "./db/store";
+import { ensureDemoUser, initStore, store } from "./db/store";
 import { syncAccount } from "./mail/sync";
 import { aiAdapter } from "./ai";
 
@@ -11,7 +11,16 @@ async function main() {
   // Store-Zugriff abgewartet werden, sonst schlagen die ersten Queries
   // gegen noch nicht existierende Tabellen fehl.
   await initStore();
-  const { account } = await ensureDemoUser();
+  const { user, account } = await ensureDemoUser();
+
+  // [2026-09-10] echte Auth: seit requireAuth (middleware/auth.ts) auf allen
+  // Contract-Routen verlangt jeder Request einen gültigen Bearer-Token --
+  // ohne Login-UI in Web/iOS (noch offen, siehe backend/README.md "Auth")
+  // gäbe es sonst keinen Weg, lokal überhaupt gegen die API zu testen. Der
+  // hier ausgestellte Token gehört zu genau demselben Demo-User/-Konto wie
+  // bisher, nur jetzt über eine echte Session statt implizit.
+  const devSession = await store.createSession(user.id);
+  console.log(`[startup] Demo-Session-Token (${account.emailAddress}): ${devSession.token}`);
 
   // Initialer Sync beim Start, damit GET /v1/messages sofort Daten liefert
   // (Fixture-Adapter, solange keine echten Zugangsdaten konfiguriert sind).

@@ -17,9 +17,17 @@ paths:
   /auth/session:
     post:
       summary: >
-        Session-Token erneuern/erstellen. Login selbst passiert implizit
-        durch den OAuth-Flow beim Verbinden eines Mail-Kontos, dieser
-        Endpoint dient nur der Token-Erneuerung.
+        Session-Token erneuern. Login selbst passiert implizit durch den
+        OAuth-Flow beim Verbinden eines Mail-Kontos (siehe POST /accounts),
+        dieser Endpoint dient nur der Token-Erneuerung. `security: []`
+        bedeutet nur, dass ein bereits abgelaufener Token hier ausnahmsweise
+        nicht per globalem `bearerAuth`-Mechanismus mit 401 abgewiesen wird,
+        bevor der Handler ihn sieht -- der (noch nicht abgelaufene, bzw.
+        innerhalb der serverseitigen Kulanzfrist liegende) aktuelle Token
+        muss trotzdem im `Authorization`-Header mitgeschickt werden, sonst
+        401. [2026-09-10] Terminal, siehe backend/README.md "Auth": bisher
+        war dieser Endpoint zwar spezifiziert, aber von keinem Code
+        implementiert (wie zuvor schon bei /messages/{messageId}/unsubscribe).
       security: []
       responses:
         "200":
@@ -30,10 +38,12 @@ paths:
                 type: object
                 properties:
                   token: { type: string }
+        "401":
+          description: Kein/ungueltiger/abgelaufener Token im Authorization-Header
 
   /accounts:
     get:
-      summary: Verbundene Mail-Konten des Users auflisten
+      summary: Verbundene Mail-Konten des angemeldeten Users auflisten
       responses:
         "200":
           description: Liste der Mail-Konten
@@ -43,6 +53,45 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/MailAccount"
+    post:
+      summary: >
+        Mail-Konto verbinden -- das ist zugleich der Login/Registrierungs-
+        Weg (siehe /auth/session-Beschreibung). [2026-09-10] Terminal,
+        Contract-Luecke geschlossen: dieser Endpoint fehlte komplett, obwohl
+        /auth/session bereits seit Track 0 darauf verwies. Legt bei erster
+        Verbindung dieser E-Mail-Adresse einen neuen User + dessen 7
+        Standard-Ordner an, sonst wird der bestehende User/das bestehende
+        Konto wiederverwendet (kein Multi-Account pro User in diesem
+        Entwicklungsstand, siehe backend/README.md "Auth"). Echter
+        OAuth-Code-Austausch (Gmail) bzw. echte IMAP-Zugangsdaten-Pruefung
+        sind noch nicht angebunden (`oauthCode`/`imapPassword` werden
+        aktuell nicht ausgewertet) -- bewusste, dokumentierte Grenze, analog
+        zum bestehenden Fixture-Adapter-Muster fuer den Mail-Sync selbst.
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, emailAddress]
+              properties:
+                provider: { type: string, enum: [gmail, imap] }
+                emailAddress: { type: string }
+                oauthCode: { type: string, description: "Gmail: noch nicht ausgewertet, siehe summary" }
+                imapPassword: { type: string, description: "IMAP: noch nicht ausgewertet, siehe summary" }
+      responses:
+        "200":
+          description: Konto verbunden, neuer Session-Token ausgestellt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  account:
+                    $ref: "#/components/schemas/MailAccount"
+                  token: { type: string }
+        "400":
+          description: provider oder emailAddress fehlt/ungueltig
 
   /folders:
     get:

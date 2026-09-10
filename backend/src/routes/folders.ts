@@ -3,7 +3,7 @@
 // /folders, /folders/{folderId}.
 
 import { Router } from "express";
-import { store, ensureDemoUser } from "../db/store";
+import { store } from "../db/store";
 import { toApiFolder } from "../mappers";
 import type { SystemFolderKey } from "../types";
 
@@ -19,15 +19,12 @@ const NOT_RENAMABLE: SystemFolderKey[] = ["quarantaene", "spam", "papierkorb", "
 const CUSTOM_FOLDER_DEFAULT_ICON = "folder";
 
 // GET /folders — siehe api-spec.yaml
-foldersRouter.get("/folders", async (_req, res) => {
-  const { user } = await ensureDemoUser();
-  res.json((await store.listFolders(user.id)).map(toApiFolder));
+foldersRouter.get("/folders", async (req, res) => {
+  res.json((await store.listFolders(req.userId)).map(toApiFolder));
 });
 
 // POST /folders — eigenen Ordner anlegen (is_system=false, system_key=null)
 foldersRouter.post("/folders", async (req, res) => {
-  const { user } = await ensureDemoUser();
-
   const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
   if (!name) return res.status(400).json({ error: "name ist erforderlich" });
 
@@ -36,10 +33,10 @@ foldersRouter.post("/folders", async (req, res) => {
 
   // sort_order: ans Ende der bestehenden Liste anhängen (kein sortOrder im
   // Request-Body laut api-spec.yaml POST /folders — nur PATCH erlaubt das).
-  const sortOrder = (await store.listFolders(user.id)).length;
+  const sortOrder = (await store.listFolders(req.userId)).length;
 
   const folder = await store.createFolder({
-    userId: user.id,
+    userId: req.userId,
     name,
     icon,
     isSystem: false,
@@ -53,6 +50,10 @@ foldersRouter.post("/folders", async (req, res) => {
 foldersRouter.patch("/folders/:folderId", async (req, res) => {
   const folder = await store.getFolder(req.params.folderId);
   if (!folder) return res.status(404).json({ error: "Ordner nicht gefunden" });
+  // [2026-09-10] echte Auth: Besitz-Prüfung, vorher fehlte die komplett
+  // (gab bis dahin ohnehin nur den einen Demo-User, an dessen Daten nur er
+  // selbst überhaupt einen Request stellen konnte).
+  if (folder.userId !== req.userId) return res.status(403).json({ error: "Ordner gehört nicht zum angemeldeten User" });
 
   const patch: { name?: string; icon?: string; sortOrder?: number } = {};
 
@@ -88,6 +89,7 @@ foldersRouter.patch("/folders/:folderId", async (req, res) => {
 foldersRouter.delete("/folders/:folderId", async (req, res) => {
   const folder = await store.getFolder(req.params.folderId);
   if (!folder) return res.status(404).json({ error: "Ordner nicht gefunden" });
+  if (folder.userId !== req.userId) return res.status(403).json({ error: "Ordner gehört nicht zum angemeldeten User" });
 
   if (folder.isSystem) {
     return res.status(400).json({ error: "Systemordner können nicht gelöscht werden" });

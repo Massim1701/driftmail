@@ -8,6 +8,35 @@ import type { AttachmentScanStatus, Contract, Draft, Folder, MailAccount, MailSu
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
+// [2026-09-10] echte Auth (backend/README.md "Auth"): das echte Backend
+// verlangt jetzt auf jeder Route außer POST /accounts/POST /auth/session
+// einen gültigen `Authorization: Bearer <token>`-Header. Es gibt noch keine
+// sichtbare Login-UI (bewusste, dokumentierte Grenze dieses Schritts) --
+// stattdessen meldet sich der Client beim ersten Request implizit mit einer
+// festen Demo-Adresse an (POST /accounts, find-or-create) und hängt den
+// erhaltenen Token an alle weiteren Requests an. Der Mock-Server
+// (mock-server/server.mjs) beantwortet denselben Aufruf mit einem
+// bedeutungslosen Platzhalter-Token (er prüft ohnehin nie einen
+// Authorization-Header), damit derselbe Client-Code unverändert gegen
+// beide Server läuft. Einmal pro Seitenladung (Modul-Singleton), kein
+// Retry bei 401/Ablauf -- ausreichend für diesen Entwicklungsstand
+// (Session-Laufzeit serverseitig 30 Tage, siehe backend/src/db/store.ts).
+let sessionTokenPromise: Promise<string> | null = null;
+
+function ensureSessionToken(): Promise<string> {
+  if (!sessionTokenPromise) {
+    sessionTokenPromise = fetch(`${BASE_URL}/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "gmail", emailAddress: "demo@driftmail.local" }),
+    })
+      .then((res) => res.json())
+      .then((body) => (typeof body?.token === "string" ? body.token : ""))
+      .catch(() => "");
+  }
+  return sessionTokenPromise;
+}
+
 // Erweitert den generischen Fehler um Status + (falls vorhanden) den
 // geparsten Response-Body — der Send-Composer (POST /messages/send) braucht
 // den Body bei 422, um blocked/reason anzuzeigen statt nur eine generische
@@ -24,9 +53,12 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = await ensureSessionToken();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
     ...init,
+    headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
   });
   if (!res.ok) {
     const body = await res.json().catch(() => undefined);
@@ -102,9 +134,14 @@ export const api = {
   // bei FormData muss der Browser den multipart-Boundary-Header selbst
   // setzen). Scan läuft synchron, die Antwort enthält das fertige Ergebnis.
   uploadAttachment: async (file: File): Promise<{ attachmentId: string; scanStatus: AttachmentScanStatus }> => {
+    const token = await ensureSessionToken();
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch(`${BASE_URL}/attachments`, { method: "POST", body: form });
+    const res = await fetch(`${BASE_URL}/attachments`, {
+      method: "POST",
+      body: form,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
     if (!res.ok) {
       const body = await res.json().catch(() => undefined);
       throw new ApiError(`API-Fehler ${res.status} bei /attachments`, res.status, body);

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
-import { store, ensureDemoUser } from "../db/store";
+import { store } from "../db/store";
 import { attachmentScanner } from "../lookups";
 
 export const attachmentsRouter = Router();
@@ -41,10 +41,9 @@ attachmentsRouter.post("/attachments", upload.single("file"), async (req, res) =
     sizeBytes: file.size,
   });
 
-  const { user } = await ensureDemoUser();
   const record = await store.insertAttachment({
     messageId: null,
-    uploadedByUserId: user.id,
+    uploadedByUserId: req.userId,
     filename: file.originalname,
     mimeType: file.mimetype || null,
     sizeBytes: file.size,

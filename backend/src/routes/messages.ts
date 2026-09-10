@@ -1,5 +1,6 @@
+import type { Request, Response } from "express";
 import { Router } from "express";
-import { store, ensureDemoUser } from "../db/store";
+import { store } from "../db/store";
 import { toApiMessage, toApiMessageDetail, toApiMailSummary } from "../mappers";
 import { aiAdapter } from "../ai";
 import { checkDraftForPhishing } from "@driftmail/security-classification";
@@ -7,7 +8,32 @@ import { recipientReputationLookup } from "../lookups";
 import { adapterForAccount } from "../mail/sync";
 import { parseListUnsubscribeHeader } from "../mail/listUnsubscribe";
 import type { AiSource, ApiDraftPhishingCheckLink } from "../types";
-import type { MessageRecord } from "../types";
+import type { MailAccountRecord, MessageRecord } from "../types";
+
+// [2026-09-10] echte Auth: Besitz-Prüfung an einer Stelle gebündelt, statt
+// in jedem einzelnen `/:messageId`-Handler zu duplizieren. Nachrichten
+// haben selbst keine direkte `userId`-Spalte (nur `mail_account_id`,
+// siehe db-schema.sql) -- Besitz läuft also über das zugehörige Konto.
+// Schreibt bei Fehlschlag direkt die Response (404 bei unbekannter
+// messageId, 403 bei fremder), damit die Aufrufer nur noch `if (!owned)
+// return;` prüfen müssen.
+async function requireOwnMessage(
+  req: Request,
+  res: Response,
+  messageId: string,
+): Promise<{ message: MessageRecord; account: MailAccountRecord } | null> {
+  const message = await store.getMessage(messageId);
+  if (!message) {
+    res.status(404).json({ error: "message nicht gefunden" });
+    return null;
+  }
+  const account = await store.getMailAccount(message.mailAccountId);
+  if (!account || account.userId !== req.userId) {
+    res.status(403).json({ error: "Nachricht gehört nicht zum angemeldeten User" });
+    return null;
+  }
+  return { message, account };
+}
 
 // Provider-Spiegelung (WEB_INBOX.md 08.09. Punkt 3, umgesetzt 09.09.): ruft
 // den passenden Mail-Adapter für das Konto der Nachricht auf. Best-effort
@@ -73,8 +99,7 @@ messagesRouter.post("/messages/draft/phishing-check", async (req, res) => {
   // checkDraftForPhishing() (SYNC.md 08.09., Web-Antwort), ersetzt den
   // von Track B gelieferten festen "unknown"-Wert. Mock-Implementierung,
   // siehe src/lookups/recipientReputationMock.ts.
-  const { user } = await ensureDemoUser();
-  result.recipientReputation = await recipientReputationLookup.lookup(user.id, recipientAddress);
+  result.recipientReputation = await recipientReputationLookup.lookup(req.userId, recipientAddress);
 
   res.json(result);
 });
@@ -116,6 +141,13 @@ messagesRouter.post("/messages/send", async (req, res) => {
   }
   const account = await store.getMailAccount(accountId);
   if (!account) return res.status(400).json({ error: `Mail-Konto nicht gefunden: ${accountId}` });
+  // [2026-09-10] echte Auth: verhindert, dass ein angemeldeter User über
+  // eine fremde (aber existierende) accountId bzw. eine fremde
+  // inReplyToMessageId aus einem anderen Postfach als seinem eigenen
+  // versendet -- accountId wird oben ggf. genau daraus abgeleitet.
+  if (account.userId !== req.userId) {
+    return res.status(403).json({ error: "Mail-Konto gehört nicht zum angemeldeten User" });
+  }
 
   // Phishing-Check serverseitig als letzte Instanz VOR dem eigentlichen
   // Versand (siehe api-spec.yaml), unabhängig davon, ob der Composer vorher
@@ -222,10 +254,28 @@ messagesRouter.post("/messages/send", async (req, res) => {
 // -> `folderId` (UUID, verweist auf eine Zeile in folders).
 messagesRouter.get("/messages", async (req, res) => {
   const folderId = typeof req.query.folderId === "string" ? req.query.folderId : undefined;
-  const accountId = typeof req.query.accountId === "string" ? req.query.accountId : undefined;
+  let accountId = typeof req.query.accountId === "string" ? req.query.accountId : undefined;
 
-  if (folderId && !(await store.getFolder(folderId))) {
-    return res.status(400).json({ error: `ungültiger folderId-Wert: ${folderId}` });
+  if (folderId) {
+    const folder = await store.getFolder(folderId);
+    if (!folder) return res.status(400).json({ error: `ungültiger folderId-Wert: ${folderId}` });
+    // [2026-09-10] echte Auth: vorher konnte jeder angemeldete User jede
+    // beliebige (existierende) folderId übergeben und so fremde Nachrichten
+    // sehen -- listMessages() selbst filtert nicht nach User.
+    if (folder.userId !== req.userId) return res.status(403).json({ error: "Ordner gehört nicht zum angemeldeten User" });
+  }
+
+  if (accountId) {
+    const account = await store.getMailAccount(accountId);
+    if (!account || account.userId !== req.userId) {
+      return res.status(403).json({ error: "Mail-Konto gehört nicht zum angemeldeten User" });
+    }
+  } else if (!folderId) {
+    // Weder folderId noch accountId angegeben: auf das eigene Konto
+    // einschränken statt (wie vorher) ungefiltert ALLE Nachrichten aller
+    // User zu liefern -- war bis dahin unkritisch, weil es ohnehin nur den
+    // einen Demo-User gab.
+    accountId = (await store.getMailAccountByUserId(req.userId))?.id;
   }
 
   const messages = await store.listMessages({ folderId, accountId });
@@ -234,8 +284,9 @@ messagesRouter.get("/messages", async (req, res) => {
 
 // GET /messages/:messageId — siehe api-spec.yaml
 messagesRouter.get("/messages/:messageId", async (req, res) => {
-  const message = await store.getMessage(req.params.messageId);
-  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+  const owned = await requireOwnMessage(req, res, req.params.messageId);
+  if (!owned) return;
+  const { message } = owned;
 
   const [security, quarantine] = await Promise.all([
     store.getMessageSecurity(message.id),
@@ -246,8 +297,9 @@ messagesRouter.get("/messages/:messageId", async (req, res) => {
 
 // POST /messages/:messageId/quarantine — siehe api-spec.yaml
 messagesRouter.post("/messages/:messageId/quarantine", async (req, res) => {
-  const message = await store.getMessage(req.params.messageId);
-  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+  const owned = await requireOwnMessage(req, res, req.params.messageId);
+  if (!owned) return;
+  const { message } = owned;
 
   const record = await store.quarantineMessage(message.id, "manuell durch User");
   res.json(record);
@@ -263,19 +315,13 @@ messagesRouter.post("/messages/:messageId/quarantine", async (req, res) => {
 // mail/sync.ts maybeAutoUnsubscribeFromSpam()). NIE Klick auf Links im
 // Mail-Body, nur der sichere List-Unsubscribe-Header-Mechanismus.
 messagesRouter.post("/messages/:messageId/unsubscribe", async (req, res) => {
-  const message = await store.getMessage(req.params.messageId);
-  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+  const owned = await requireOwnMessage(req, res, req.params.messageId);
+  if (!owned) return;
+  const { message, account } = owned;
 
   const parsed = parseListUnsubscribeHeader(message.rawHeaders);
   if (!parsed) {
     return res.status(400).json({ error: "Nachricht hat keinen gültigen List-Unsubscribe-Header" });
-  }
-
-  const account = await store.getMailAccount(message.mailAccountId);
-  if (!account) {
-    // Sollte praktisch nie passieren, siehe analoge Absicherung bei
-    // DELETE /messages/:messageId oben.
-    return res.status(500).json({ error: "Mail-Konto für diese Nachricht nicht gefunden" });
   }
 
   const action = await store.insertUnsubscribeAction({
@@ -293,15 +339,23 @@ messagesRouter.post("/messages/:messageId/unsubscribe", async (req, res) => {
 // POST /messages/:messageId/move — siehe api-spec.yaml (neu durch die
 // Ordner-Contract-Änderung, SYNC.md Commit 734781e)
 messagesRouter.post("/messages/:messageId/move", async (req, res) => {
-  const message = await store.getMessage(req.params.messageId);
-  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+  const owned = await requireOwnMessage(req, res, req.params.messageId);
+  if (!owned) return;
+  const { message } = owned;
 
   const folderId = req.body?.folderId;
   if (typeof folderId !== "string" || !folderId) {
     return res.status(400).json({ error: "folderId ist erforderlich" });
   }
-  if (!(await store.getFolder(folderId))) {
+  const targetFolder = await store.getFolder(folderId);
+  if (!targetFolder) {
     return res.status(400).json({ error: `Ordner nicht gefunden: ${folderId}` });
+  }
+  // [2026-09-10] echte Auth: verhindert, eine eigene Nachricht in einen
+  // fremden Ordner zu verschieben (targetFolder existierte zwar, gehörte
+  // aber vorher ungeprüft irgendeinem User).
+  if (targetFolder.userId !== req.userId) {
+    return res.status(403).json({ error: "Ziel-Ordner gehört nicht zum angemeldeten User" });
   }
 
   const updated = (await store.moveMessage(message.id, folderId))!;
@@ -315,11 +369,11 @@ messagesRouter.post("/messages/:messageId/move", async (req, res) => {
 // nur das Ziel ist fest der Papierkorb-Ordner des Accounts statt eines
 // beliebigen, im Body übergebenen Ordners.
 messagesRouter.delete("/messages/:messageId", async (req, res) => {
-  const message = await store.getMessage(req.params.messageId);
-  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+  const owned = await requireOwnMessage(req, res, req.params.messageId);
+  if (!owned) return;
+  const { message, account } = owned;
 
-  const account = await store.getMailAccount(message.mailAccountId);
-  const papierkorb = account ? await store.getSystemFolder(account.userId, "papierkorb") : undefined;
+  const papierkorb = await store.getSystemFolder(account.userId, "papierkorb");
   if (!papierkorb) {
     // Sollte praktisch nie passieren (ensureDemoUser() legt den Ordner
     // immer an), aber sauberer 500 statt eines "undefined"-Absturzes falls
@@ -355,11 +409,11 @@ messagesRouter.delete("/messages/:messageId", async (req, res) => {
 // (Gmail erlaubt "endgültig löschen" ebenfalls nur aus dem Papierkorb
 // heraus über die normale UI).
 messagesRouter.delete("/messages/:messageId/permanent", async (req, res) => {
-  const message = await store.getMessage(req.params.messageId);
-  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+  const owned = await requireOwnMessage(req, res, req.params.messageId);
+  if (!owned) return;
+  const { message, account } = owned;
 
-  const account = await store.getMailAccount(message.mailAccountId);
-  const papierkorb = account ? await store.getSystemFolder(account.userId, "papierkorb") : undefined;
+  const papierkorb = await store.getSystemFolder(account.userId, "papierkorb");
   if (!papierkorb || message.folderId !== papierkorb.id) {
     return res.status(400).json({
       error: "endgültiges Löschen ist nur für Nachrichten im Papierkorb erlaubt -- zuerst DELETE /messages/{messageId} (in den Papierkorb verschieben)",
@@ -379,8 +433,9 @@ messagesRouter.delete("/messages/:messageId/permanent", async (req, res) => {
 // Wird on-demand berechnet (per User-Klick "Was wollen die von mir?") und
 // in message_ai_summary gecacht, wie in ai-adapter-interface.ts beschrieben.
 messagesRouter.get("/messages/:messageId/summary", async (req, res) => {
-  const message = await store.getMessage(req.params.messageId);
-  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+  const owned = await requireOwnMessage(req, res, req.params.messageId);
+  if (!owned) return;
+  const { message } = owned;
 
   const cached = await store.getMessageAiSummary(message.id);
   if (cached) return res.json(toApiMailSummary(cached));
@@ -402,8 +457,9 @@ messagesRouter.get("/messages/:messageId/summary", async (req, res) => {
 
 // POST /messages/:messageId/reply-draft — siehe api-spec.yaml
 messagesRouter.post("/messages/:messageId/reply-draft", async (req, res) => {
-  const message = await store.getMessage(req.params.messageId);
-  if (!message) return res.status(404).json({ error: "message nicht gefunden" });
+  const owned = await requireOwnMessage(req, res, req.params.messageId);
+  if (!owned) return;
+  const { message } = owned;
 
   const draftText = await aiAdapter.draftReply({
     messages: [

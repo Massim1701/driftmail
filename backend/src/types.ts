@@ -33,6 +33,18 @@ export interface User {
   createdAt: string;
 }
 
+// `sessions` (db-schema.sql, [2026-09-10] "echte Auth", TERMINAL_INBOX.md
+// 09.09.): Opaque-Token pro eingeloggter Sitzung, kein JWT. `token` ist
+// intern eindeutig (DB-Constraint), wird aber nie an die API zurückgegeben
+// außer im unmittelbaren Login/Refresh-Response (siehe routes/auth.ts).
+export interface SessionRecord {
+  id: string;
+  userId: string;
+  token: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface MailAccountRecord {
   id: string;
   userId: string;

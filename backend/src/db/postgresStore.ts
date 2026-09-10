@@ -18,6 +18,7 @@
 // Backend-Prozess der einzige `pg`-Nutzer ist.
 
 import { Pool, types } from "pg";
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Store } from "./store";
@@ -33,11 +34,17 @@ import type {
   OutgoingSendLogRecord,
   QuarantineRecord,
   SecurityAuditLogRecord,
+  SessionRecord,
   SystemFolderKey,
   UnsubscribeActionRecord,
   User,
   UserAiCapabilityRecord,
 } from "../types";
+
+// Gleicher Wert wie store.ts `SESSION_TTL_MS` -- bewusst hier dupliziert
+// statt importiert, um keinen zirkulären Modul-Import store.ts <-> hier
+// einzuführen (store.ts importiert bereits `PostgresStore` von hier).
+const SESSION_TTL_MS = 30 * 24 * 3600 * 1000;
 
 const TYPE_OID_DATE = 1082;
 const TYPE_OID_TIMESTAMP = 1114;
@@ -61,6 +68,10 @@ const SCHEMA_PATH = join(__dirname, "../../../contracts/db-schema.sql");
 
 function rowToUser(r: any): User {
   return { id: r.id, email: r.email, createdAt: r.created_at };
+}
+
+function rowToSession(r: any): SessionRecord {
+  return { id: r.id, userId: r.user_id, token: r.token, createdAt: r.created_at, expiresAt: r.expires_at };
 }
 
 function rowToMailAccount(r: any): MailAccountRecord {
@@ -249,6 +260,11 @@ export class PostgresStore implements Store {
     return rows[0] ? rowToUser(rows[0]) : undefined;
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    return rows[0] ? rowToUser(rows[0]) : undefined;
+  }
+
   async createMailAccount(input: Omit<MailAccountRecord, "id">): Promise<MailAccountRecord> {
     const { rows } = await this.pool.query(
       `INSERT INTO mail_accounts
@@ -296,6 +312,32 @@ export class PostgresStore implements Store {
       [id, patch.syncStatus ?? null, patch.lastSyncedAt ?? null],
     );
     return rows[0] ? rowToMailAccount(rows[0]) : undefined;
+  }
+
+  // ----- Sessions -----
+
+  async createSession(userId: string): Promise<SessionRecord> {
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+    const { rows } = await this.pool.query(
+      "INSERT INTO sessions (user_id, token, expires_at) VALUES ($1, $2, $3) RETURNING *",
+      [userId, randomUUID(), expiresAt],
+    );
+    return rowToSession(rows[0]);
+  }
+
+  async getSessionByToken(token: string): Promise<SessionRecord | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM sessions WHERE token = $1", [token]);
+    return rows[0] ? rowToSession(rows[0]) : undefined;
+  }
+
+  async refreshSession(token: string): Promise<SessionRecord | undefined> {
+    const { rows } = await this.pool.query(
+      `UPDATE sessions SET token = $2, expires_at = $3
+       WHERE token = $1 AND expires_at >= now()
+       RETURNING *`,
+      [token, randomUUID(), new Date(Date.now() + SESSION_TTL_MS).toISOString()],
+    );
+    return rows[0] ? rowToSession(rows[0]) : undefined;
   }
 
   // ----- Ordner -----

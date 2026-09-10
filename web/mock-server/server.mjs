@@ -54,7 +54,12 @@ function send(res, status, body) {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    // [2026-09-10] echte Auth: "Authorization" ergänzt -- web/src/api.ts
+    // schickt seitdem einen Authorization-Header mit, den der Browser sonst
+    // per CORS-Preflight blockiert (die eigentliche Anfrage nach der
+    // fehlgeschlagenen Preflight-Autorisierung schlägt dann fehl, obwohl
+    // der Preflight selbst 204 liefert).
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
   });
   res.end(json);
 }
@@ -63,7 +68,12 @@ function sendNoContent(res) {
   res.writeHead(204, {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    // [2026-09-10] echte Auth: "Authorization" ergänzt -- web/src/api.ts
+    // schickt seitdem einen Authorization-Header mit, den der Browser sonst
+    // per CORS-Preflight blockiert (die eigentliche Anfrage nach der
+    // fehlgeschlagenen Preflight-Autorisierung schlägt dann fehl, obwohl
+    // der Preflight selbst 204 liefert).
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
   });
   res.end();
 }
@@ -155,6 +165,24 @@ const server = createServer(async (req, res) => {
   // GET /accounts
   if (req.method === "GET" && parts.length === 1 && parts[0] === "accounts") {
     return send(res, 200, accounts);
+  }
+
+  // POST /accounts ([2026-09-10] echte Auth im echten Backend, siehe
+  // backend/README.md "Auth") -- dieser Mock-Server prüft ohnehin nirgends
+  // einen Authorization-Header (bewusst, siehe Kopfkommentar dieser Datei:
+  // reine Mock-Daten für den lokalen Web-Betrieb ohne echtes Backend), aber
+  // web/src/api.ts ruft diesen Endpunkt beim Start immer auf (Session-
+  // Bootstrap), damit derselbe Client-Code unverändert gegen das echte
+  // Backend läuft. Liefert deshalb nur einen Platzhalter-Token zurück, ohne
+  // ihn je zu prüfen.
+  if (req.method === "POST" && parts.length === 1 && parts[0] === "accounts") {
+    // Body wird nicht ausgewertet (siehe Kommentar oben), MUSS aber
+    // trotzdem konsumiert werden wie bei jedem anderen POST-Handler hier --
+    // sonst bleiben ungelesene Bytes auf der Keep-Alive-Verbindung stehen
+    // und zerschießen die NÄCHSTE darüber gepipelinete Anfrage (führte zu
+    // sporadischen 503 bei den direkt folgenden GET /accounts, GET /folders).
+    await readJsonBody(req);
+    return send(res, 200, { account: accounts[0], token: "mock-server-token" });
   }
 
   // GET /folders
