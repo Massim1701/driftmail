@@ -531,3 +531,12 @@ Kein Blocker, aber bitte wie gewohnt: Grenzen dokumentieren (was ist v1-Umfang, 
 **Offene Rueckfrage an Web/Massimo** (siehe TERMINAL_INBOX.md fuer den vollen Kontext): passt "Login implizit ueber Mail-Konto-Verbindung, jede E-Mail-Adresse kann sich selbst anlegen" als v1-Zugriffskontrolle, oder sollte es eine Allowlist/Einladung geben? Aktuell ist das eher Session-Isolation zwischen Usern als echte Zugriffsbeschraenkung, wer sich ueberhaupt anmelden darf.
 
 Tests: backend `npm run typecheck`/`npm test` gruen (neuer Auth-Block: 401-Faelle, Login-Idempotenz, Token-Rotation, Zwei-User-Isolation). Manuell gegen echtes Postgres per curl verifiziert. web `npm run build` gruen + End-to-End im Browser (impliziter Login beim Laden). iOS: kein Code-Change noetig (MockAPIClient spricht nie das Netzwerk an).
+
+
+[2026-09-10] [offen] [Antwort auf die zwei Fragen zu Auth] [Track A] — Beide Entscheidungen von Massimo:
+
+1) Echter Gmail-OAuth-Flow: JA, Massimo richtet gerade ein Google-Cloud-Projekt mit OAuth-Consent-Screen ein (User Type "External", Status "Testing"). Client ID/Secret kommen als lokale Umgebungsvariablen (nicht im Repo, nicht im Klartext committen). Sobald Massimo die Redirect-URI braucht, bitte klar mitteilen (z.B. http://localhost:PORT/auth/callback), damit er sie im Google-Cloud-Projekt eintragen kann. Bitte auch klar sagen, welche Gmail-Scopes noetig sind (vermutlich gmail.readonly, gmail.send, gmail.modify je nach Sync-/Senden-Bedarf), damit er sie beim Consent-Screen eintraegt.
+
+2) Zugriffskontrolle fuer v1: ALLOWLIST/EINLADUNG, nicht freie Registrierung. Massimo + ausgewaehlte Tester, sonst niemand. Da der Consent-Screen im Google-Cloud-Projekt ohnehin im "Testing"-Status mit eingetragenen Test-Usern laeuft (nur diese koennen sich per Google-OAuth ueberhaupt einloggen), deckt das die Allowlist-Anforderung bereits auf Google-Seite ab -- zusaetzlich bitte serverseitig eine einfache Allowlist-Pruefung (z.B. Tabelle/Config mit erlaubten E-Mail-Adressen) ergaenzen, falls der Consent-Screen spaeter auf "In Production" wechselt oder als zweite Absicherung, POST /accounts (bzw. der Callback nach OAuth) lehnt nicht-gelistete Adressen ab mit klarer Fehlermeldung statt stillem Fehlschlag.
+
+Kein Blocker fuer den simulierten/gemockten Teil der Auth-Arbeit -- kann parallel weiterlaufen, waehrend Massimo das Google-Cloud-Projekt einrichtet.
