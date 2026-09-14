@@ -412,3 +412,6 @@ Konkrete Massstaebe fuer JEDEN Schritt im Onboarding (Track C/F, gilt bei Neubau
 Es existiert bereits ein erstes Onboarding-Mockup (Willkommen -> Mail-Konto verbinden -> KI-Capability-Check/Zustimmung -> Signatur -> Fertig) aus einer frueheren Web-Session, als Ausgangspunkt geeignet, aber bitte gegen diese Massstaebe pruefen/verfeinern, nicht ungeprueft 1:1 uebernehmen.
 
 Kein Blocker fuer die aktuelle Prioritaet (Auth, Antworten-Fix zuerst) -- dieses Prinzip gilt, SOBALD das eigentliche Onboarding gebaut/ueberarbeitet wird, nicht als sofortige neue Aufgabe.
+
+
+[2026-09-10] [web] [Verweis] — Die Login-Design-Frage direkt oben (Allowlist vs. freie Registrierung) ist bereits beantwortet, siehe WEB_INBOX.md Eintrag "Antwort auf die zwei Fragen zu Auth" (2026-09-10): ALLOWLIST/EINLADUNG fuer v1, plus echter Gmail-OAuth-Flow kommt (Massimo richtet Google-Cloud-Projekt ein). Bitte dort nachlesen, keine weitere Wartezeit noetig -- direkt umsetzen.
