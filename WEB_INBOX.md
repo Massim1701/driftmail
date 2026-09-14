@@ -540,3 +540,64 @@ Tests: backend `npm run typecheck`/`npm test` gruen (neuer Auth-Block: 401-Faell
 2) Zugriffskontrolle fuer v1: ALLOWLIST/EINLADUNG, nicht freie Registrierung. Massimo + ausgewaehlte Tester, sonst niemand. Da der Consent-Screen im Google-Cloud-Projekt ohnehin im "Testing"-Status mit eingetragenen Test-Usern laeuft (nur diese koennen sich per Google-OAuth ueberhaupt einloggen), deckt das die Allowlist-Anforderung bereits auf Google-Seite ab -- zusaetzlich bitte serverseitig eine einfache Allowlist-Pruefung (z.B. Tabelle/Config mit erlaubten E-Mail-Adressen) ergaenzen, falls der Consent-Screen spaeter auf "In Production" wechselt oder als zweite Absicherung, POST /accounts (bzw. der Callback nach OAuth) lehnt nicht-gelistete Adressen ab mit klarer Fehlermeldung statt stillem Fehlschlag.
 
 Kein Blocker fuer den simulierten/gemockten Teil der Auth-Arbeit -- kann parallel weiterlaufen, waehrend Massimo das Google-Cloud-Projekt einrichtet.
+
+
+[2026-09-10] [erledigt: 6886882 — Web + iOS, siehe SYNC.md "Antworten ohne KI-Zwang"] [Track C/F, UX-Fund von Massimo im echten Geraete-Test] — "Antworten" oeffnet aktuell (vermutlich) nur den Weg ueber einen KI-generierten Entwurf. Das ist zu eng: der User muss direkt selbst frei schreiben koennen, ohne vorher einen KI-Entwurf anzufordern/abwarten/zu loeschen.
+
+Gewuenschter Flow: Klick auf "Antworten" oeffnet SOFORT ein leeres (oder nur mit Zitat des Original-Threads vorausgefuelltes) Compose-Feld, in das der User direkt selbst tippen kann. Der KI-Entwurf (POST /messages/{id}/reply-draft) ist ein SEPARATER, optionaler Button/Icon INNERHALB des Compose-Screens (z.B. "KI-Vorschlag einfuegen"), nicht die einzige oder erste Moeglichkeit zu antworten. Deckt sich mit dem bereits bestehenden Prinzip "Compose-Text bleibt vollstaendig user-editierbar, KI-Entwurf ist nur Vorschlag" (SYNC.md 08.09.) -- das war schon als Grundsatz festgehalten, aber offenbar in der UI noch nicht so umgesetzt/wahrgenommen.
+
+Kein Contract-Bruch (beide Endpunkte /messages/send und /messages/{id}/reply-draft existieren unabhaengig voneinander bereits, reine UI-Frage: reply-draft darf nicht die Vorbedingung fuer den Zugriff aufs Compose-Feld sein). Kein Blocker, aber bitte zeitnah, ist eine spuerbare Einschraenkung im taeglichen Gebrauch.
+
+
+[2026-09-10] [offen] [Track C/F, kleine UX-Ergaenzung] — Massimo: "Rechnungen" ist als Ordnername negativ behaftet (klingt nach Kosten/Schulden), deckt ausserdem nicht ab, dass darin auch Vertraege und andere wichtige Unterlagen landen koennen. Kein System-Ordner-Comeback (wichtig/rechnungen bleiben bewusst entfernt, siehe fruehere Entscheidung) -- stattdessen ein besserer NAMENSVORSCHLAG, wenn der User selbst einen eigenen Ordner fuer sowas anlegt.
+
+Vorschlag: "Dokumente" als neutraler Sammelbegriff (deckt Rechnungen, Vertraege, sonstige wichtige Unterlagen ab, ohne negative Konnotation).
+
+Konkret in der UI: beim Anlegen eines neuen eigenen Ordners (POST /folders) koennte die UI 1-2 sinnvolle Namensvorschlaege als Chips/Quick-Picks anbieten statt eines leeren Textfelds, z.B. "Dokumente" als einer davon. Kein Contract-Change noetig (Ordnername ist ohnehin freier Text), reine Onboarding-/Leerzustand-UX-Verbesserung. Kein Blocker, kleine Sache fuer spaeter im Compose-/Ordner-Polish.
+
+
+[2026-09-10] [offen] [Track C/F, UX-Fund von Massimo im echten Geraete-Test] — Wo aktuell oben "Driftmail" als App-Titel/Branding steht, soll stattdessen die E-Mail-Adresse des verbundenen Kontos stehen, damit der User immer sofort sieht, in welchem Postfach er sich befindet (besonders wichtig sobald mehrere Mail-Konten unterstuetzt werden, siehe mail_accounts-Tabelle, die das schon vorsieht).
+
+Vorschlag: Header/Navigationsleiste zeigt die emailAddress des aktuell aktiven MailAccount (aus GET /accounts) statt oder zusaetzlich zum App-Namen. Bei mehreren verbundenen Konten koennte das zugleich als Account-Switcher fungieren (Tap/Klick auf die Adresse oeffnet Kontenwahl) -- das waere ein natuerlicher Ort dafuer, aber kein Muss fuer diesen Auftrag, reicht erstmal nur die Anzeige.
+
+Passt zur bereits bestehenden Regel "kein driftmail-Branding in ausgehenden Mails" (WEB_INBOX.md 09.09.) -- gleiches Prinzip jetzt auch fuer die App-UI selbst: der User und sein Konto stehen im Vordergrund, nicht das Produkt.
+
+Kein Contract-Change noetig (emailAddress existiert bereits in MailAccount-Schema), reine UI-Aenderung. Kein Blocker.
+
+
+[2026-09-10] [offen] [Track C/F, App-Icon/Logo-Design] — Massimo moechte ein neues App-Icon/Logo: ein GESCHLOSSENER Briefumschlag (klare Rand-/Umriss-Linie, nicht die klassische "offene Klappe"-Mail-Icon-Optik), mit dem Schriftzug "driftmail" halbtransparent (ca. 50% Deckkraft) im Hintergrund/auf dem Umschlag platziert. Farbe: Hellblau. Schrift: elegant, nicht die Standard-Systemschrift (in unseren Mockup-Versuchen kam Serif kursiv der Vorstellung am naechsten, aber final nicht bestaetigt).
+
+Wichtig: Die exakte Form/Randstaerke/Proportion konnten wir per Text-Hin-und-Her nicht zuverlaessig treffen (mehrere Iterationen, siehe Chat-Verlauf) -- bitte NICHT versuchen, das 1:1 aus dieser Beschreibung zu bauen, sondern als Ausgangspunkt nehmen und in einem echten Design-Tool (Figma, SF Symbols, o.ae.) 2-3 Varianten bauen und Massimo direkt zeigen (Screenshot/Export), damit er live reagieren kann statt ueber Textbeschreibung zu raten.
+
+Referenz-SVG als grober Ausgangspunkt (NICHT final, nur Idee):
+```svg
+<svg viewBox="0 0 680 320">
+  <path d="M120 110 L340 50 L560 110 L560 270 L120 270 Z" fill="#4A90D9" opacity="0.10" stroke="#4A90D9" stroke-width="6" stroke-linejoin="round"/>
+  <text x="340" y="242" text-anchor="middle" font-family="serif" font-style="italic" font-size="50" fill="#4A90D9" opacity="0.5">driftmail</text>
+</svg>
+```
+
+Zielverwendung: App-Icon (iOS AppIcon-Asset, Track C) und/oder Header-Logo im Web (Track F) -- bitte klaeren, ob beide dasselbe Icon nutzen oder getrennte Varianten noetig sind (App-Icon braucht meist ein Vollbild-Quadrat ohne Transparenz-Spielerei, das beschriebene Konzept mit Text im Hintergrund passt eher zu einem Header-Logo/Splash-Screen als zum App-Icon selbst -- bitte diese Unterscheidung selbst treffen und kurz in SYNC.md begruenden).
+
+Kein Blocker, kein Contract-Change. Reine Design-/Asset-Aufgabe.
+
+
+[2026-09-10] [teilweise erledigt: Punkte 1+2, siehe SYNC.md] [PRIORITAET - Reihenfolge] [alle Tracks] — Massimo: erst Funktion, dann Optik. Bitte die 6 aktuell offenen Punkte in dieser Reihenfolge abarbeiten:
+
+FUNKTIONAL ZUERST:
+1. ~~Auth (Track A) — Entscheidungen sind beantwortet (OAuth-Flow + Allowlist), Umsetzung hat Prioritaet.~~ **Erledigt (Terminal, 10.09., Commit `b6e374d`):** echter Google-OAuth-Redirect-Flow + serverseitige Allowlist, siehe SYNC.md "Echter Google-Login + Allowlist".
+2. ~~"Antworten" ohne KI-Zwang (Track C/F) — echte funktionale Luecke, kein Design-Detail.~~ **Erledigt (Terminal, 10.09., Commit `6886882`):** Web + iOS, siehe SYNC.md "Antworten ohne KI-Zwang".
+
+OPTIK/POLISH DANACH, NICHT VORHER:
+3. Ordnername-Vorschlag "Dokumente" statt "Rechnungen"
+4. Header zeigt E-Mail-Adresse statt "Driftmail"
+5. App-Icon/Logo-Design (geschlossener Umschlag, Hellblau)
+
+Bitte diese Reihenfolge einhalten, auch wenn die Optik-Punkte evtl. schneller zu erledigen waeren -- Funktion geht vor Politur. Kein Blocker, nur Priorisierung.
+
+
+[2026-09-10] [offen] [WICHTIG - sofort beachten] [Track C, alle iOS-Tests] — Massimo: der letzte Test-Durchlauf auf dem echten iPhone hat die Geraete-Einstellungen durcheinandergebracht/beschaedigt. Bitte bis auf Weiteres NICHT mehr gegen das echte iPhone testen/deployen (kein xcodebuild -destination mit dem physischen Geraet, keine Play-Anweisung Richtung echtem Handy).
+
+Bitte NUR NOCH GEGEN DEN SIMULATOR testen (xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17 Pro' o.ae., wie bisher ueberwiegend gemacht). Das reicht fuer Build-Verifikation und Funktionstests voellig aus. Massimo meldet sich, wenn das echte Geraet wieder freigegeben ist.
+
+Kein Blocker fuer die Weiterarbeit an sich (Simulator-Tests reichen), nur eine Einschraenkung bei der Test-Zieleinstellung.
