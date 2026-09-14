@@ -398,3 +398,17 @@ Volle Spezifikation zu jedem Punkt steht in WEB_INBOX.md. Wie gewohnt: eigene te
 **Tests:** Backend `npm run typecheck`/`npm test` gruen (neuer Auth-Block: 401 ohne/mit ungueltigem Token, `POST /accounts`-Idempotenz, Token-Rotation inkl. Invalidierung des alten Tokens, Zwei-User-Isolation mit einem echten zweiten User). Zusaetzlich manuell gegen eine echte, frische lokale Postgres-Instanz per `curl` verifiziert (gleiche Faelle, echte Tabellen statt In-Memory). Web `npm run build` gruen, End-to-End im Browser gegen den Mock-Server verifiziert (impliziter Login beim Laden, keine sichtbare Aenderung fuer den User).
 
 **[Terminal, 10.09., an Web/Massimo]:** siehe TERMINAL_INBOX.md fuer die konkrete Rueckfrage zum Login-Design (implizit ueber Mail-Konto-Verbindung vs. expliziter Login-Endpunkt) -- aktuell kann sich jede E-Mail-Adresse selbst "registrieren", das ist Session-Isolation, aber noch keine echte Zugriffskontrolle. Naechste Schritte laut der aelteren Prioritaeten-Liste waeren danach externe Lookups an echte Dienste und echte KI-Funktionen fuer Track D/E -- warte auf Feedback zum Auth-Design, bevor ich breiter darauf aufbaue.
+
+
+[2026-09-10] [web] [Leitprinzip - dauerhaft gueltig, nicht nur eine Einzelaufgabe] — Massimo zum Einrichtungsassistenten (Onboarding): darf NICHT kompliziert sein. Muss den User abholen, einfach zu bedienen sein, sicher wirken und deutlich besser als jeder andere Mail-Client-Einstieg sein. Der User soll sich nach dem Onboarding richtig gut fuehlen mit der Entscheidung, driftmail zu nutzen -- das ist der erste Eindruck und entscheidet, ob jemand bleibt.
+
+Konkrete Massstaebe fuer JEDEN Schritt im Onboarding (Track C/F, gilt bei Neubau UND bei jeder spaeteren Aenderung):
+- So wenig Schritte wie moeglich, jeder Schritt mit klarem, verstaendlichem Zweck (kein Schritt "weil wir's technisch brauchen", ohne dass der User versteht warum).
+- Sicherheits-relevante Schritte (z.B. On-Device-KI-Zustimmung, siehe bereits gebautes Mockup) klar aber nicht einschuechternd erklaeren -- Vertrauen aufbauen, nicht Angst.
+- Sinnvolle Vorauswahlen/Defaults, damit der User moeglichst wenig selbst entscheiden muss, aber nichts wird ohne sein Wissen entschieden.
+- Kein technischer Jargon in der sichtbaren UI (Dinge wie OAuth-Details, Token, etc. bleiben im Hintergrund).
+- Nach Abschluss soll der User sofort etwas Sinnvolles sehen (z.B. bereits synchronisierte Mails, nicht eine leere Inbox) -- kein "und jetzt?"-Gefuehl.
+
+Es existiert bereits ein erstes Onboarding-Mockup (Willkommen -> Mail-Konto verbinden -> KI-Capability-Check/Zustimmung -> Signatur -> Fertig) aus einer frueheren Web-Session, als Ausgangspunkt geeignet, aber bitte gegen diese Massstaebe pruefen/verfeinern, nicht ungeprueft 1:1 uebernehmen.
+
+Kein Blocker fuer die aktuelle Prioritaet (Auth, Antworten-Fix zuerst) -- dieses Prinzip gilt, SOBALD das eigentliche Onboarding gebaut/ueberarbeitet wird, nicht als sofortige neue Aufgabe.
