@@ -580,3 +580,17 @@ Referenz-SVG als grober Ausgangspunkt (NICHT final, nur Idee):
 Zielverwendung: App-Icon (iOS AppIcon-Asset, Track C) und/oder Header-Logo im Web (Track F) -- bitte klaeren, ob beide dasselbe Icon nutzen oder getrennte Varianten noetig sind (App-Icon braucht meist ein Vollbild-Quadrat ohne Transparenz-Spielerei, das beschriebene Konzept mit Text im Hintergrund passt eher zu einem Header-Logo/Splash-Screen als zum App-Icon selbst -- bitte diese Unterscheidung selbst treffen und kurz in SYNC.md begruenden).
 
 Kein Blocker, kein Contract-Change. Reine Design-/Asset-Aufgabe.
+
+
+[2026-09-10] [offen] [PRIORITAET - Reihenfolge] [alle Tracks] — Massimo: erst Funktion, dann Optik. Bitte die 6 aktuell offenen Punkte in dieser Reihenfolge abarbeiten:
+
+FUNKTIONAL ZUERST:
+1. Auth (Track A) — Entscheidungen sind beantwortet (OAuth-Flow + Allowlist), Umsetzung hat Prioritaet.
+2. "Antworten" ohne KI-Zwang (Track C/F) — echte funktionale Luecke, kein Design-Detail.
+
+OPTIK/POLISH DANACH, NICHT VORHER:
+3. Ordnername-Vorschlag "Dokumente" statt "Rechnungen"
+4. Header zeigt E-Mail-Adresse statt "Driftmail"
+5. App-Icon/Logo-Design (geschlossener Umschlag, Hellblau)
+
+Bitte diese Reihenfolge einhalten, auch wenn die Optik-Punkte evtl. schneller zu erledigen waeren -- Funktion geht vor Politur. Kein Blocker, nur Priorisierung.
