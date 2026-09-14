@@ -594,3 +594,10 @@ OPTIK/POLISH DANACH, NICHT VORHER:
 5. App-Icon/Logo-Design (geschlossener Umschlag, Hellblau)
 
 Bitte diese Reihenfolge einhalten, auch wenn die Optik-Punkte evtl. schneller zu erledigen waeren -- Funktion geht vor Politur. Kein Blocker, nur Priorisierung.
+
+
+[2026-09-10] [offen] [WICHTIG - sofort beachten] [Track C, alle iOS-Tests] — Massimo: der letzte Test-Durchlauf auf dem echten iPhone hat die Geraete-Einstellungen durcheinandergebracht/beschaedigt. Bitte bis auf Weiteres NICHT mehr gegen das echte iPhone testen/deployen (kein xcodebuild -destination mit dem physischen Geraet, keine Play-Anweisung Richtung echtem Handy).
+
+Bitte NUR NOCH GEGEN DEN SIMULATOR testen (xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17 Pro' o.ae., wie bisher ueberwiegend gemacht). Das reicht fuer Build-Verifikation und Funktionstests voellig aus. Massimo meldet sich, wenn das echte Geraet wieder freigegeben ist.
+
+Kein Blocker fuer die Weiterarbeit an sich (Simulator-Tests reichen), nur eine Einschraenkung bei der Test-Zieleinstellung.
