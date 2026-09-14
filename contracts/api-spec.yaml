@@ -41,6 +41,44 @@ paths:
         "401":
           description: Kein/ungueltiger/abgelaufener Token im Authorization-Header
 
+  /auth/google/start:
+    get:
+      summary: >
+        Echter Google-Login starten (Browser-Redirect, kein JSON-Endpoint).
+        [2026-09-10] WEB_INBOX.md "Antwort auf die zwei Fragen zu Auth":
+        Server-seitiger OAuth-Redirect-Flow -- der Client ruft diese URL per
+        Navigation (nicht `fetch`) auf, der Server leitet direkt zu Googles
+        Consent-Screen weiter. `503`, falls Google-OAuth nicht konfiguriert
+        ist (siehe backend/README.md "Auth"), dann bleibt `POST /accounts`
+        als Fallback.
+      security: []
+      responses:
+        "302":
+          description: Redirect zu Googles OAuth-Consent-Screen
+        "503":
+          description: Google-OAuth ist serverseitig nicht konfiguriert
+
+  /auth/google/callback:
+    get:
+      summary: >
+        Redirect-Ziel nach Googles Consent-Screen (`code`-Query-Parameter).
+        Tauscht den Code serverseitig gegen Tokens, liest die verifizierte
+        E-Mail-Adresse von Google (nie vom Client), prüft sie gegen die
+        Allowlist (`ALLOWED_EMAILS`, backend/README.md "Auth"), legt bei
+        Erstanmeldung User + Standard-Ordner an und leitet danach IMMER zu
+        `FRONTEND_URL/auth/callback` weiter -- entweder mit `?token=...`
+        (Erfolg) oder `?error=<code>` (siehe backend/README.md für die
+        möglichen Fehlercodes, z.B. `not_allowlisted`).
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "302":
+          description: Redirect zu FRONTEND_URL/auth/callback mit token oder error
+
   /accounts:
     get:
       summary: Verbundene Mail-Konten des angemeldeten Users auflisten
@@ -67,6 +105,12 @@ paths:
         sind noch nicht angebunden (`oauthCode`/`imapPassword` werden
         aktuell nicht ausgewertet) -- bewusste, dokumentierte Grenze, analog
         zum bestehenden Fixture-Adapter-Muster fuer den Mail-Sync selbst.
+        [2026-09-10] Fuer Gmail mit konfiguriertem Google-OAuth (siehe
+        backend/README.md "Auth") ist `GET /auth/google/start` der echte,
+        empfohlene Weg -- dieser Endpoint bleibt als Fallback (kein Google-
+        OAuth konfiguriert) und fuer provider=imap. Unterliegt seitdem
+        derselben Allowlist-Pruefung (`ALLOWED_EMAILS`) wie der echte
+        Google-Login, `403` bei nicht freigeschalteter Adresse.
       security: []
       requestBody:
         content:
@@ -92,6 +136,8 @@ paths:
                   token: { type: string }
         "400":
           description: provider oder emailAddress fehlt/ungueltig
+        "403":
+          description: emailAddress ist nicht auf der Allowlist (ALLOWED_EMAILS)
 
   /folders:
     get:

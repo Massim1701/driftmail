@@ -92,15 +92,17 @@ npm run lint       # oxlint
   `POST /messages/send` auf, siehe Abschnitt "Versand & Anhänge" unten.
   Der Mock-Server selbst hat weiterhin kein echtes Postfach dahinter
   (simulierter Erfolg, analog zum Fixture-Adapter im echten Backend).
-- **Keine echte Authentifizierung/Login-UI.** [2026-09-10] echte Auth im
-  echten Backend (siehe `backend/README.md` "Auth"): `api.ts` meldet sich
-  beim ersten Request implizit mit einer festen Demo-Adresse an (`POST
-  /accounts`) und hängt den Token an alle weiteren Requests, damit derselbe
-  Client-Code unverändert gegen beide Server läuft. Der Mock-Server prüft
-  diesen Header aber NIE — `POST /accounts` liefert hier nur einen
-  bedeutungslosen Platzhalter-Token zurück, es gibt weiterhin genau ein
-  Mock-Konto (`massimo@example.com`, Provider `gmail`), das beim Start
-  geladen wird.
+- ~~**Keine echte Authentifizierung/Login-UI.**~~ **Nachgezogen (10.09.,
+  siehe `backend/README.md` "Echter Google-Login"):** echter LoginScreen
+  (`src/components/LoginScreen.tsx`), Token wird explizit in `localStorage`
+  gehalten (`src/api.ts`), keine implizite Demo-Anmeldung mehr. Button
+  navigiert per echtem Browser-Redirect zu `GET /auth/google/start`. Der
+  Mock-Server implementiert dieses eine GET als sofortigen Redirect zu
+  `/auth/callback?token=mock-server-token` (kein echtes Google nötig für
+  lokale UI-Entwicklung, prüft den Token danach weiterhin NIE) — derselbe
+  Client-Code läuft damit unverändert gegen Mock- und echtes Backend. Es
+  gibt weiterhin genau ein Mock-Konto (`massimo@example.com`, Provider
+  `gmail`).
 - **Kein echtes IMAP/OAuth**, kein echter Datenbank-Layer — `db-schema.sql`
   wird nicht direkt verwendet, nur als Referenz für plausible Beispieldaten
   (z. B. Feldnamen der `quarantine`-Tabelle für den simulierten

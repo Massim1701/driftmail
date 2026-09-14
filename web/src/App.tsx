@@ -1,16 +1,43 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "./api";
+import { api, ApiError, getStoredToken, setStoredToken } from "./api";
 import type { Draft, Folder, MailAccount, Message, MessageDetail } from "./types";
 import { FolderSidebar } from "./components/FolderSidebar";
 import { MessageList } from "./components/MessageList";
 import { DraftList } from "./components/DraftList";
 import { MessageDetailPane } from "./components/MessageDetailPane";
+import { LoginScreen } from "./components/LoginScreen";
 import { useTheme } from "./useTheme";
 import "./App.css";
+
+// [2026-09-10] echter Google-Login (backend/README.md "Echter
+// Google-Login"): GET /auth/google/callback landet hier immer mit
+// ?token=... (Erfolg) oder ?error=<code> (Fehlschlag) im Query-String --
+// keine Router-Library im Projekt (siehe web/README.md), daher reines
+// window.location-Parsing statt einer echten Route. Läuft außerhalb der
+// Komponente, damit es garantiert vor dem ersten Render passiert (die
+// erste request()-Anfrage in App.tsx braucht den Token bereits).
+function consumeAuthCallback(): { error: string | null } {
+  if (window.location.pathname !== "/auth/callback") return { error: null };
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("token");
+  const error = params.get("error");
+  if (token) setStoredToken(token);
+  // URL säubern (kein Token/Error mehr sichtbar, kein erneutes Verarbeiten
+  // bei einem Reload), zurück zur Startseite.
+  window.history.replaceState(null, "", "/");
+  return { error: token ? null : (error ?? "token_exchange_failed") };
+}
+
+const authCallbackResult = consumeAuthCallback();
 
 export default function App() {
   const [theme, setTheme] = useTheme();
   const [account, setAccount] = useState<MailAccount | null>(null);
+  const [token, setToken] = useState<string | null>(() => getStoredToken());
+  // Nur der EINE Fehler aus dem gerade konsumierten Callback (falls einer da
+  // war) -- kein State-Update nötig, ändert sich nicht innerhalb einer
+  // Seitenladung (ein erneuter Login-Versuch navigiert ohnehin komplett weg).
+  const loginError = authCallbackResult.error;
 
   const [folders, setFolders] = useState<Folder[]>([]);
   const [foldersLoading, setFoldersLoading] = useState(true);
@@ -29,13 +56,24 @@ export default function App() {
 
   const [error, setError] = useState<string | null>(null);
 
-  // Konto laden (nur für Anzeige der E-Mail-Adresse im Sidebar-Header)
+  // Konto laden (nur für Anzeige der E-Mail-Adresse im Sidebar-Header) --
+  // erst NACH erfolgreichem Login (token gesetzt), siehe LoginScreen unten.
   useEffect(() => {
+    if (!token) return;
     api
       .listAccounts()
       .then((accs) => setAccount(accs[0] ?? null))
-      .catch(() => setError("Mock-Server nicht erreichbar. Läuft er auf Port 4000?"));
-  }, []);
+      .catch((err) => {
+        // 401: gespeicherter Token war ungültig/abgelaufen (api.ts hat ihn
+        // bereits aus localStorage entfernt) -- zurück zum LoginScreen,
+        // statt in einer Fehlermeldung hängen zu bleiben.
+        if (err instanceof ApiError && err.status === 401) {
+          setToken(null);
+          return;
+        }
+        setError("Server nicht erreichbar. Läuft Backend/Mock-Server?");
+      });
+  }, [token]);
 
   const loadFolder = useCallback((folderId: string) => {
     setListLoading(true);
@@ -50,7 +88,9 @@ export default function App() {
   }, []);
 
   // Ordner laden (System- und eigene) und initial den ersten sinnvollen Ordner aktivieren
+  // -- erst NACH erfolgreichem Login, siehe listAccounts-Effekt oben.
   useEffect(() => {
+    if (!token) return;
     api
       .listFolders()
       .then((fs) => {
@@ -61,9 +101,15 @@ export default function App() {
         // "wichtig" als automatische Landezone/Standard-Startordner.
         setActiveFolder((prev) => prev ?? sorted.find((f) => f.systemKey === "eingang")?.id ?? sorted[0]?.id ?? null);
       })
-      .catch(() => setError("Mock-Server nicht erreichbar. Läuft er auf Port 4000?"))
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 401) {
+          setToken(null);
+          return;
+        }
+        setError("Server nicht erreichbar. Läuft Backend/Mock-Server?");
+      })
       .finally(() => setFoldersLoading(false));
-  }, []);
+  }, [token]);
 
   // Alle Ordner initial laden, damit die Sidebar-Zähler stimmen
   useEffect(() => {
@@ -235,6 +281,15 @@ export default function App() {
         setError(null);
       })
       .catch(() => setError("Entwurf konnte nicht gelöscht werden."));
+  }
+
+  // [2026-09-10] echter Google-Login: ohne Token keine Anfragen an die API
+  // (die würden ohnehin alle mit 401 scheitern) -- stattdessen der
+  // LoginScreen. onLogin gibt es bewusst nicht als Prop: der Button dort
+  // navigiert per echtem Redirect zu GET /auth/google/start, kein
+  // clientseitiger State-Übergang.
+  if (!token) {
+    return <LoginScreen error={loginError} />;
   }
 
   if (foldersLoading) {

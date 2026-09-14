@@ -301,15 +301,16 @@ export class PostgresStore implements Store {
 
   async updateMailAccount(
     id: string,
-    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt">>,
+    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt" | "encryptedOauthToken">>,
   ): Promise<MailAccountRecord | undefined> {
     const { rows } = await this.pool.query(
       `UPDATE mail_accounts SET
          sync_status = COALESCE($2, sync_status),
-         last_synced_at = COALESCE($3, last_synced_at)
+         last_synced_at = COALESCE($3, last_synced_at),
+         encrypted_oauth_token = COALESCE($4, encrypted_oauth_token)
        WHERE id = $1
        RETURNING *`,
-      [id, patch.syncStatus ?? null, patch.lastSyncedAt ?? null],
+      [id, patch.syncStatus ?? null, patch.lastSyncedAt ?? null, patch.encryptedOauthToken ?? null],
     );
     return rows[0] ? rowToMailAccount(rows[0]) : undefined;
   }

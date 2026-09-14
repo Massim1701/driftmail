@@ -8,34 +8,54 @@ import type { AttachmentScanStatus, Contract, Draft, Folder, MailAccount, MailSu
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
-// [2026-09-10] echte Auth (backend/README.md "Auth"): das echte Backend
-// verlangt jetzt auf jeder Route außer POST /accounts/POST /auth/session
-// einen gültigen `Authorization: Bearer <token>`-Header. Es gibt noch keine
-// sichtbare Login-UI (bewusste, dokumentierte Grenze dieses Schritts) --
-// stattdessen meldet sich der Client beim ersten Request implizit mit einer
-// festen Demo-Adresse an (POST /accounts, find-or-create) und hängt den
-// erhaltenen Token an alle weiteren Requests an. Der Mock-Server
-// (mock-server/server.mjs) beantwortet denselben Aufruf mit einem
-// bedeutungslosen Platzhalter-Token (er prüft ohnehin nie einen
-// Authorization-Header), damit derselbe Client-Code unverändert gegen
-// beide Server läuft. Einmal pro Seitenladung (Modul-Singleton), kein
-// Retry bei 401/Ablauf -- ausreichend für diesen Entwicklungsstand
-// (Session-Laufzeit serverseitig 30 Tage, siehe backend/src/db/store.ts).
-let sessionTokenPromise: Promise<string> | null = null;
+// [2026-09-10] echte Auth (backend/README.md "Echter Google-Login"): das
+// Backend verlangt auf jeder Route außer POST /accounts/GET
+// /auth/google/start/callback/POST /auth/session einen gültigen
+// `Authorization: Bearer <token>`-Header. Anders als im vorigen Schritt gibt
+// es jetzt eine sichtbare Login-UI (LoginScreen.tsx) statt einer impliziten
+// festen Demo-Adresse -- der Token kommt aus dem Redirect-Flow
+// (GET /auth/google/start -> Google -> GET /auth/google/callback -> Redirect
+// zu /auth/callback?token=..., von App.tsx übernommen) und wird für
+// nachfolgende Seitenladungen in localStorage gemerkt. Der Mock-Server
+// (mock-server/server.mjs) implementiert GET /auth/google/start als
+// sofortigen Redirect zu /auth/callback?token=mock-server-token (kein
+// echtes Google nötig für lokale UI-Entwicklung), damit derselbe
+// Client-Code unverändert gegen Mock- und echtes Backend läuft.
+const TOKEN_STORAGE_KEY = "driftmail.token";
 
-function ensureSessionToken(): Promise<string> {
-  if (!sessionTokenPromise) {
-    sessionTokenPromise = fetch(`${BASE_URL}/accounts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ provider: "gmail", emailAddress: "demo@driftmail.local" }),
-    })
-      .then((res) => res.json())
-      .then((body) => (typeof body?.token === "string" ? body.token : ""))
-      .catch(() => "");
+export function getStoredToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
   }
-  return sessionTokenPromise;
 }
+
+export function setStoredToken(token: string): void {
+  try {
+    localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  } catch {
+    // localStorage kann in seltenen Umgebungen (privates Fenster o.ä.) nicht
+    // verfügbar sein -- der Token lebt dann nur für die aktuelle Seitenladung
+    // im Modul-Singleton weiter (siehe currentToken unten), kein harter Fehler.
+  }
+  currentToken = token;
+}
+
+export function clearStoredToken(): void {
+  try {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    // siehe setStoredToken
+  }
+  currentToken = null;
+}
+
+export function googleLoginUrl(): string {
+  return `${BASE_URL}/auth/google/start`;
+}
+
+let currentToken: string | null = getStoredToken();
 
 // Erweitert den generischen Fehler um Status + (falls vorhanden) den
 // geparsten Response-Body — der Send-Composer (POST /messages/send) braucht
@@ -53,15 +73,18 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = await ensureSessionToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (currentToken) headers.Authorization = `Bearer ${currentToken}`;
   const res = await fetch(`${BASE_URL}${path}`, {
     ...init,
     headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
   });
   if (!res.ok) {
     const body = await res.json().catch(() => undefined);
+    // Abgelaufener/ungültiger Token: lokal löschen, damit App.tsx beim
+    // nächsten Render wieder den LoginScreen zeigt statt in einer Schleife
+    // aus 401-Fehlern hängen zu bleiben.
+    if (res.status === 401) clearStoredToken();
     throw new ApiError(`API-Fehler ${res.status} bei ${path}`, res.status, body);
   }
   if (res.status === 204) {
@@ -134,16 +157,16 @@ export const api = {
   // bei FormData muss der Browser den multipart-Boundary-Header selbst
   // setzen). Scan läuft synchron, die Antwort enthält das fertige Ergebnis.
   uploadAttachment: async (file: File): Promise<{ attachmentId: string; scanStatus: AttachmentScanStatus }> => {
-    const token = await ensureSessionToken();
     const form = new FormData();
     form.append("file", file);
     const res = await fetch(`${BASE_URL}/attachments`, {
       method: "POST",
       body: form,
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: currentToken ? { Authorization: `Bearer ${currentToken}` } : undefined,
     });
     if (!res.ok) {
       const body = await res.json().catch(() => undefined);
+      if (res.status === 401) clearStoredToken();
       throw new ApiError(`API-Fehler ${res.status} bei /attachments`, res.status, body);
     }
     return (await res.json()) as { attachmentId: string; scanStatus: AttachmentScanStatus };

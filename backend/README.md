@@ -898,20 +898,19 @@ behauptet), siehe unten.
 
 **BEWUSSTE GRENZEN (kein Blocker, hier absichtlich transparent statt
 stillschweigend übergangen):**
-- **Kein echter OAuth-Code-Austausch (Gmail) bzw. keine echte
+- ~~**Kein echter OAuth-Code-Austausch (Gmail) bzw. keine echte
   IMAP-Zugangsdaten-Prüfung.** `POST /accounts` akzeptiert `provider` +
   `emailAddress`, `oauthCode`/`imapPassword` werden entgegengenommen, aber
-  nicht ausgewertet — analog zum bestehenden Fixture-Adapter-Muster für den
-  Mail-Sync selbst (`mail/fixtureAdapter.ts`): funktioniert ohne jede
-  Konfiguration, echte Provider-Anbindung ist ein separater, späterer
-  Schritt.
-- **Keine sichtbare Login-UI in Web/iOS.** Web meldet sich beim ersten
-  Request implizit mit einer festen Demo-Adresse an (`web/src/api.ts`,
-  `ensureSessionToken()`) und hängt den erhaltenen Token an alle weiteren
-  Requests — kein Retry bei 401/Ablauf. iOS bleibt unangetastet: `MockAPIClient`
-  (aktuell die einzige aktive Implementierung, siehe `ios/README.md`) spricht
-  ohnehin nie das echte Backend an, `RemoteAPIClient` ist weiterhin ein
-  unverdrahtetes Skeleton — dort gibt es deshalb noch nichts zu verbinden.
+  nicht ausgewertet.~~ **Für Gmail nachgezogen (Terminal, 10.09.):** siehe
+  neuer Abschnitt "Echter Google-Login" unten — `POST /accounts` bleibt nur
+  noch als Fallback (kein Google-OAuth konfiguriert) und für `provider=imap`
+  (dort weiterhin ungeprüft, analog zum Fixture-Adapter-Muster für den
+  Mail-Sync selbst).
+- ~~**Keine sichtbare Login-UI in Web/iOS.**~~ **Für Web nachgezogen
+  (Terminal, 10.09.):** siehe "Echter Google-Login" unten. iOS bleibt
+  unangetastet: `MockAPIClient` (aktuell die einzige aktive Implementierung,
+  siehe `ios/README.md`) spricht ohnehin nie das echte Backend an,
+  `RemoteAPIClient` ist weiterhin ein unverdrahtetes Skeleton.
 - **Klartext-Token-Speicherung**, keine Rate-Limits gegen Brute-Force, kein
   vom Zugriffstoken getrennter Refresh-Token (siehe Kommentar an der
   `sessions`-Tabelle in `contracts/db-schema.sql`) — ausreichend für dieses
@@ -956,6 +955,87 @@ bereits vor diesem Schritt existierte (gleicher Fehler auf dem vorherigen
 Commit). Kein Blocker für Auth selbst, aber ein Hinweis, dass der
 Smoketest bisher nie vollständig gegen Postgres durchlief.
 
+### Echter Google-Login (10.09., WEB_INBOX.md "Antwort auf die zwei Fragen zu Auth")
+
+Massimo hat beide offenen Fragen aus dem vorigen Auth-Schritt beantwortet:
+echter Gmail-OAuth-Flow (er richtet ein Google-Cloud-Projekt ein) UND
+Allowlist statt freier Registrierung. Beides umgesetzt:
+
+**Mechanismus:** Server-seitiger OAuth-Redirect-Flow, kein clientseitiger
+Code-Austausch — der Browser navigiert (nicht `fetch`) zu `GET
+/auth/google/start`, das Backend leitet direkt zu Googles Consent-Screen
+weiter. Nach Zustimmung landet der Browser bei `GET
+/auth/google/callback?code=...`, das Backend tauscht den Code serverseitig
+gegen Tokens (`googleapis`, derselbe `google.auth.OAuth2`-Client wie
+`mail/gmailAdapter.ts` — ein Google-Cloud-Projekt für Login UND Sync, wie
+von Massimo vorgeschlagen), liest die **verifizierte** E-Mail-Adresse über
+Googles eigenen `oauth2.userinfo.get()`-Endpoint (nie vom Client vertraut —
+gleiches Prinzip wie `userId` serverseitig aus dem Session-Token statt aus
+Body/Query/Pfad), prüft sie gegen die Allowlist, legt bei Erstanmeldung
+User + Mail-Konto + Standard-Ordner an (Refresh-Token landet in
+`mail_accounts.encrypted_oauth_token` — künftige echte Gmail-Sync-Anbindung
+für dieses Konto kann diesen direkt verwenden, statt wie bisher nur über die
+einzelne `GMAIL_REFRESH_TOKEN`-Env-Var) und leitet danach IMMER zu
+`FRONTEND_URL/auth/callback` weiter, mit `?token=...` bei Erfolg oder
+`?error=<code>` bei Fehler. Mögliche `error`-Codes:
+`oauth_not_configured`, `missing_code`, `token_exchange_failed`,
+`userinfo_failed`, `email_not_verified`, `not_allowlisted`.
+
+**Scopes** (Consent-Screen, siehe `.env.example`-Kommentar):
+`openid email profile` (verifizierte Identität) +
+`gmail.readonly gmail.modify` (bestehender Sync) + `gmail.send` (`POST
+/messages/send`).
+
+**Allowlist** (`src/auth/allowlist.ts`, `ALLOWED_EMAILS`-Env-Var,
+kommagetrennt): greift an JEDER Stelle, an der ein neuer User entstehen
+kann — sowohl `GET /auth/google/callback` als auch der `POST
+/accounts`-Fallback, sonst wäre sie nur eine halbe Absicherung. Bewusst
+keine eigene DB-Tabelle (wie in der Antwort als Alternative genannt): eine
+von Massimo per Hand gepflegte Handvoll Adressen braucht kein Laufzeit-CRUD,
+ein Server-Neustart nach Env-Änderung reicht. Nicht gesetzt → jede Adresse
+erlaubt (Zero-Config-Dev-Fallback, gleiches Muster wie
+`DATABASE_URL`/Gmail-Sync-Envs) — **muss vor einem öffentlich erreichbaren
+Deploy gesetzt werden**, sonst kann sich jede beliebige Google-Adresse
+selbst registrieren. Google deckt die Allowlist für die Login-Prüfung selbst
+teilweise bereits ab (Consent-Screen im "Testing"-Status akzeptiert ohnehin
+nur eingetragene Test-User), die serverseitige Prüfung ist die zusätzliche,
+von Google unabhängige Absicherung, die Massimo explizit wollte (siehe
+WEB_INBOX.md).
+
+**An Massimo für das Google-Cloud-Projekt (siehe `.env.example`):**
+Redirect-URI muss exakt `GOOGLE_OAUTH_REDIRECT_URI` entsprechen, für lokale
+Entwicklung z.B. `http://localhost:3000/v1/auth/google/callback`. Scopes
+siehe oben.
+
+**Web:** `web/src/api.ts` verwaltet den Token jetzt explizit (nicht mehr
+implizit über eine feste Demo-Adresse) — `localStorage`
+(`driftmail.token`), keine automatische Anmeldung mehr beim Laden. Neuer
+`LoginScreen` (`src/components/LoginScreen.tsx`) mit Button "Mit Google
+anmelden" (navigiert zu `${VITE_API_BASE_URL}/auth/google/start`), `App.tsx`
+zeigt ihn, solange kein Token vorhanden ist. `/auth/callback`-Route wird
+clientseitig (keine echte Router-Library im Projekt, siehe
+`web/README.md`) anhand von `window.location.pathname` erkannt, übernimmt
+`?token=`/`?error=` aus der URL und säubert sie danach per
+`history.replaceState`. Mock-Server (`web/mock-server/server.mjs`) bekommt
+ein `GET /auth/google/start`-Äquivalent, das SOFORT (ohne echtes Google) zu
+`.../auth/callback?token=mock-server-token` redirected — gleiches Prinzip
+wie beim bestehenden `POST /accounts`-Mock: derselbe Client-Code läuft
+unverändert gegen Mock- und echtes Backend, nur die lokale UI-Entwicklung
+bleibt ohne echte Google-Zugangsdaten funktionsfähig.
+
+**Getestet:** Backend `npm run typecheck`/`npm test` weiterhin grün
+(Kern-Smoketest nutzt weiterhin `POST /accounts` ohne `ALLOWED_EMAILS`,
+unverändertes Verhalten). Manuell per `curl` verifiziert: `GET
+/auth/google/start` ohne Konfiguration → `503`; mit
+`GMAIL_CLIENT_ID`/`GMAIL_CLIENT_SECRET`/`GOOGLE_OAUTH_REDIRECT_URI` → `302`
+zu einer korrekten Google-Consent-URL (Client-ID, Redirect-URI, alle sechs
+Scopes, `access_type=offline&prompt=consent`); `POST /accounts` mit
+gesetztem `ALLOWED_EMAILS` → `403` für nicht gelistete, `200` für gelistete
+Adresse. Den vollständigen Callback (echter Code-Austausch) kann ich ohne
+echte Google-Zugangsdaten von Massimo nicht selbst end-to-end durchspielen —
+sobald das Google-Cloud-Projekt/die Credentials stehen, bitte einmal echt
+gegentesten. Web `npm run build`/`tsc -b` grün.
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war
@@ -968,10 +1048,17 @@ Smoketest bisher nie vollständig gegen Postgres durchlief.
   Skeleton mit einem einzigen Demo-User (`ensureDemoUser()` in
   `src/db/store.ts`), analog zu `POST /capability-check`, dessen Body
   laut Contract ebenfalls kein `userId`-Feld hat.
-- Gmail-OAuth-Consent-Flow (Autorisierung durch den End-User) ist nicht
+- ~~Gmail-OAuth-Consent-Flow (Autorisierung durch den End-User) ist nicht
   Teil dieses Durchstichs — der Adapter erwartet ein bereits vorhandenes
   Refresh-Token. Der eigentliche OAuth-Flow (Redirect/Callback-Route) ist
-  ein späterer Schritt.
+  ein späterer Schritt.~~ **Nachgezogen (Terminal, 10.09.):** siehe Abschnitt
+  "Echter Google-Login" oben — der Redirect/Callback-Flow existiert jetzt
+  für den Login, `mail_accounts.encrypted_oauth_token` wird dabei befüllt.
+  `mail/gmailAdapter.ts` selbst nutzt dieses per-Konto-Token aber noch
+  nicht (liest weiterhin nur die einzelne `GMAIL_REFRESH_TOKEN`-Env-Var) —
+  die Verdrahtung "Sync nutzt das beim Login erhaltene Token pro Konto"
+  bleibt ein separater, späterer Schritt (kein Blocker für Login/Auth
+  selbst).
 - Kein Hintergrund-Job/Webhook (Gmail Push, IMAP IDLE) — Sync läuft beim
   Serverstart und on-demand über `POST /internal/sync`
   (`src/routes/internal.ts`, **kein** Contract-Bestandteil, nur

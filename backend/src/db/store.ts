@@ -55,10 +55,15 @@ export interface Store {
   listMailAccounts(): Promise<MailAccountRecord[]>;
   getMailAccount(id: string): Promise<MailAccountRecord | undefined>;
   getMailAccountByUserId(userId: string): Promise<MailAccountRecord | undefined>;
-  /** Für den Sync-Status (syncAccount() in mail/sync.ts) -- ersetzt die
-   * vorherige direkte Mutation des `MailAccountRecord`-Objekts, die bei
-   * einer echten DB nicht persistiert hätte. */
-  updateMailAccount(id: string, patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt">>): Promise<MailAccountRecord | undefined>;
+  /** Für den Sync-Status (syncAccount() in mail/sync.ts) UND für das
+   * Nachtragen/Erneuern des Gmail-Refresh-Tokens beim erneuten Login
+   * (GET /auth/google/callback, routes/auth.ts) -- ersetzt die vorherige
+   * direkte Mutation des `MailAccountRecord`-Objekts, die bei einer echten
+   * DB nicht persistiert hätte. */
+  updateMailAccount(
+    id: string,
+    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt" | "encryptedOauthToken">>,
+  ): Promise<MailAccountRecord | undefined>;
 
   // ----- Sessions ([2026-09-10] echte Auth, siehe middleware/auth.ts + routes/auth.ts) -----
   createSession(userId: string): Promise<SessionRecord>;
@@ -232,12 +237,13 @@ export class InMemoryStore implements Store {
 
   async updateMailAccount(
     id: string,
-    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt">>,
+    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt" | "encryptedOauthToken">>,
   ): Promise<MailAccountRecord | undefined> {
     const account = await this.getMailAccount(id);
     if (!account) return undefined;
     if (patch.syncStatus !== undefined) account.syncStatus = patch.syncStatus;
     if (patch.lastSyncedAt !== undefined) account.lastSyncedAt = patch.lastSyncedAt;
+    if (patch.encryptedOauthToken !== undefined) account.encryptedOauthToken = patch.encryptedOauthToken;
     return account;
   }
 

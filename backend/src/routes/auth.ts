@@ -1,4 +1,6 @@
-// POST /accounts (Login/Registrierung) + POST /auth/session (Token-
+// POST /accounts (Login/Registrierung, provider=imap bzw. Fallback ohne
+// Google-OAuth-Konfiguration) + GET /auth/google/start + GET
+// /auth/google/callback (echter Gmail-Login) + POST /auth/session (Token-
 // Erneuerung) — siehe api-spec.yaml. [2026-09-10] echte Auth
 // (TERMINAL_INBOX.md 09.09.): bisher lief das gesamte Backend gegen einen
 // fest verdrahteten Demo-User (ensureDemoUser() in db/store.ts), obwohl der
@@ -9,20 +11,147 @@
 // kann naturgemäß nicht schon vorher verlangt werden, um überhaupt einen
 // Token zu bekommen.
 //
-// BEWUSSTE GRENZE (kein Blocker, siehe backend/README.md "Auth"): echter
-// Gmail-OAuth-Code-Austausch bzw. echte IMAP-Zugangsdaten-Prüfung sind noch
-// nicht angebunden -- `oauthCode`/`imapPassword` werden aktuell nicht
-// ausgewertet, nur `provider`/`emailAddress`. Analog zum bestehenden
-// Fixture-Adapter-Muster für den Mail-Sync selbst (mail/fixtureAdapter.ts):
-// funktioniert ohne jede Konfiguration, echte Provider-Anbindung ist ein
-// späterer, separater Schritt.
+// [2026-09-10] WEB_INBOX.md "Antwort auf die zwei Fragen zu Auth": echter
+// Gmail-OAuth-Flow (Server-seitiger Redirect-Flow, kein clientseitiger
+// Code-Austausch -- einfacher, kein OAuth-Client-Secret im Browser) plus
+// Allowlist-Pruefung (auth/allowlist.ts) bei JEDER Stelle, an der ein neuer
+// User entstehen kann. `POST /accounts` bleibt daneben bestehen für
+// provider=imap (dort gibt es weiterhin keinen echten Zugangsdaten-Check,
+// bewusste, unveraenderte Grenze, siehe backend/README.md "Auth") und als
+// Fallback, falls Google-OAuth nicht konfiguriert ist (Zero-Config-Muster
+// wie beim Gmail-Sync-Adapter selbst) -- unterliegt jetzt aber ebenfalls der
+// Allowlist, sonst waere sie nur eine halbe Absicherung.
 
 import { Router } from "express";
+import { google } from "googleapis";
+import { isEmailAllowed } from "../auth/allowlist";
 import { createSystemFoldersForUser, store } from "../db/store";
 import { toApiMailAccount } from "../mappers";
 import type { Provider } from "../types";
 
 export const authRouter = Router();
+
+// Scopes wie in der urspruenglichen Rueckfrage angekuendigt (WEB_INBOX.md):
+// `openid`/`email`/`profile` fuer die verifizierte Identitaet (Login),
+// `gmail.readonly`/`gmail.modify` fuer den bestehenden Sync
+// (mail/gmailAdapter.ts), `gmail.send` fuer POST /messages/send.
+const GOOGLE_OAUTH_SCOPES = [
+  "openid",
+  "email",
+  "profile",
+  "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.modify",
+  "https://www.googleapis.com/auth/gmail.send",
+];
+
+function googleOAuthConfigured(): boolean {
+  return Boolean(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET && process.env.GOOGLE_OAUTH_REDIRECT_URI);
+}
+
+// Selber OAuth-Client wie der geplante echte Gmail-Sync (mail/gmailAdapter.ts)
+// -- ein Google-Cloud-Projekt/-Client fuer beides, siehe Kopfkommentar.
+function buildGoogleOAuthClient() {
+  return new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    process.env.GOOGLE_OAUTH_REDIRECT_URI,
+  );
+}
+
+function frontendUrl(): string {
+  return process.env.FRONTEND_URL ?? "http://localhost:5173";
+}
+
+authRouter.get("/auth/google/start", (req, res) => {
+  if (!googleOAuthConfigured()) {
+    return res
+      .status(503)
+      .json({ error: "Google-OAuth ist nicht konfiguriert (GMAIL_CLIENT_ID/GMAIL_CLIENT_SECRET/GOOGLE_OAUTH_REDIRECT_URI fehlen)" });
+  }
+  const client = buildGoogleOAuthClient();
+  const url = client.generateAuthUrl({
+    // "offline" + "consent" erzwingen ein refresh_token bei JEDEM Login,
+    // nicht nur beim allerersten Consent -- ohne "consent" liefert Google
+    // bei einer bereits erteilten Zustimmung kein refresh_token erneut,
+    // was den spaeteren echten Mail-Sync fuer dieses Konto ohne manuelles
+    // Zuruecksetzen im Google-Konto verhindern wuerde.
+    access_type: "offline",
+    prompt: "consent",
+    scope: GOOGLE_OAUTH_SCOPES,
+  });
+  res.redirect(url);
+});
+
+authRouter.get("/auth/google/callback", async (req, res) => {
+  const redirectWithError = (reason: string) => res.redirect(`${frontendUrl()}/auth/callback?error=${encodeURIComponent(reason)}`);
+
+  if (!googleOAuthConfigured()) {
+    return redirectWithError("oauth_not_configured");
+  }
+  const code = typeof req.query.code === "string" ? req.query.code : null;
+  if (!code) {
+    return redirectWithError("missing_code");
+  }
+
+  const client = buildGoogleOAuthClient();
+  let tokens;
+  try {
+    ({ tokens } = await client.getToken(code));
+  } catch (err) {
+    console.error("[auth] Google-Token-Austausch fehlgeschlagen:", err);
+    return redirectWithError("token_exchange_failed");
+  }
+  client.setCredentials(tokens);
+
+  // Verifizierte E-Mail-Adresse kommt aus Googles eigenem Userinfo-Endpoint
+  // (auf Basis des soeben erhaltenen Access-Tokens) -- NIE vom Client
+  // vertrauen (gleiches Prinzip wie userId serverseitig aus dem Session-
+  // Token, nicht aus Body/Query/Pfad, siehe middleware/auth.ts).
+  let email: string | null | undefined;
+  let emailVerified: boolean | null | undefined;
+  try {
+    const oauth2 = google.oauth2({ version: "v2", auth: client });
+    const { data } = await oauth2.userinfo.get();
+    email = data.email;
+    emailVerified = data.verified_email;
+  } catch (err) {
+    console.error("[auth] Google-Userinfo-Abruf fehlgeschlagen:", err);
+    return redirectWithError("userinfo_failed");
+  }
+  if (!email || emailVerified === false) {
+    return redirectWithError("email_not_verified");
+  }
+  if (!isEmailAllowed(email)) {
+    return redirectWithError("not_allowlisted");
+  }
+
+  let user = await store.getUserByEmail(email);
+  if (!user) user = await store.createUser(email);
+
+  let account = await store.getMailAccountByUserId(user.id);
+  if (!account) {
+    account = await store.createMailAccount({
+      userId: user.id,
+      provider: "gmail",
+      emailAddress: email,
+      encryptedOauthToken: tokens.refresh_token ?? null,
+      encryptedImapCredentials: null,
+      syncStatus: "pending",
+      lastSyncedAt: null,
+    });
+  } else if (tokens.refresh_token) {
+    // Google liefert ein refresh_token nur bei "prompt=consent" (s.o.) --
+    // bei erneutem Login trotzdem immer den neuesten Stand übernehmen.
+    account = (await store.updateMailAccount(account.id, { encryptedOauthToken: tokens.refresh_token })) ?? account;
+  }
+
+  if ((await store.listFolders(user.id)).length === 0) {
+    await createSystemFoldersForUser(user.id);
+  }
+
+  const session = await store.createSession(user.id);
+  res.redirect(`${frontendUrl()}/auth/callback?token=${encodeURIComponent(session.token)}`);
+});
 
 authRouter.post("/accounts", async (req, res) => {
   const body = req.body ?? {};
@@ -30,6 +159,9 @@ authRouter.post("/accounts", async (req, res) => {
   const emailAddress = typeof body.emailAddress === "string" ? body.emailAddress.trim() : "";
   if (!emailAddress) {
     return res.status(400).json({ error: "emailAddress ist erforderlich" });
+  }
+  if (!isEmailAllowed(emailAddress)) {
+    return res.status(403).json({ error: "Diese E-Mail-Adresse ist fuer driftmail (noch) nicht freigeschaltet." });
   }
 
   let user = await store.getUserByEmail(emailAddress);

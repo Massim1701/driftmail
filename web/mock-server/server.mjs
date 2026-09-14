@@ -24,6 +24,11 @@ import {
 } from "./data.mjs";
 
 const PORT = process.env.MOCK_PORT ? Number(process.env.MOCK_PORT) : 4000;
+// [2026-09-10] echter Google-Login im echten Backend (siehe
+// backend/README.md "Echter Google-Login") -- wohin GET /auth/google/start
+// unten zurück-redirected, gleicher Default wie backend/.env.example
+// FRONTEND_URL (Vite-Dev-Server-Port).
+const FRONTEND_ORIGIN = process.env.FRONTEND_URL ?? "http://localhost:5173";
 
 // In-Memory-Mutationen (gehen beim Neustart verloren, das reicht für den Skeleton-Zweck)
 const quarantineLog = [];
@@ -75,6 +80,11 @@ function sendNoContent(res) {
     // der Preflight selbst 204 liefert).
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
   });
+  res.end();
+}
+
+function redirect(res, location) {
+  res.writeHead(302, { Location: location });
   res.end();
 }
 
@@ -165,6 +175,18 @@ const server = createServer(async (req, res) => {
   // GET /accounts
   if (req.method === "GET" && parts.length === 1 && parts[0] === "accounts") {
     return send(res, 200, accounts);
+  }
+
+  // GET /auth/google/start ([2026-09-10] echter Google-Login im echten
+  // Backend, siehe backend/README.md "Echter Google-Login") -- der
+  // Mock-Server hat kein echtes Google, überspringt daher den kompletten
+  // Consent-/Code-Austausch-Schritt und redirected SOFORT zu
+  // /auth/callback mit demselben Platzhalter-Token wie POST /accounts
+  // oben. Damit funktioniert der LoginScreen-Button (echte Browser-
+  // Navigation, kein fetch) unverändert gegen Mock- UND echtes Backend --
+  // rein lokale UI-Entwicklung bleibt ohne echte Google-Zugangsdaten möglich.
+  if (req.method === "GET" && parts.length === 3 && parts[0] === "auth" && parts[1] === "google" && parts[2] === "start") {
+    return redirect(res, `${FRONTEND_ORIGIN}/auth/callback?token=mock-server-token`);
   }
 
   // POST /accounts ([2026-09-10] echte Auth im echten Backend, siehe
