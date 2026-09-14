@@ -303,6 +303,43 @@ analog zu `web/src/api.ts` (`ensureSessionToken()`, implizites `POST
 ungetestetes Code sitzenzulassen, solange `RemoteAPIClient` ohnehin nicht
 genutzt wird.
 
+## [2026-09-10] Nachtrag: Antworten ohne KI-Zwang (WEB_INBOX.md-Priorität, gleiche Woche wie echte Auth)
+
+Gleicher Fund/Fix wie in `web/README.md` (siehe dort für die identische
+Web-Änderung, `MessageDetailPane.tsx`): der "Antwortentwurf"-Button rief
+bisher direkt `requestReplyDraft()` (KI-Aufruf, `POST
+/messages/{id}/reply-draft`) auf, und **nur** ein Erfolg davon setzte
+`draft: String?` auf einen Wert ungleich `nil` — das war zugleich die
+einzige Bedingung, unter der das Compose-Feld überhaupt sichtbar wurde. Ein
+Antworten ohne KI war UI-seitig gar nicht möglich, obwohl das Backend das
+nie verlangt hat (`bodyText` in `POST /messages/send` ist ein normales,
+vom User editierbares Textfeld).
+
+**Fix in `Views/MessageDetailView.swift`:** `draft: String?` ersetzt durch
+zwei getrennte States, `isReplyOpen: Bool` (steuert allein die Sichtbarkeit
+von `replyCard`, vorher `draftCard`) und `replyBody: String` (von Anfang an
+`""`, sofort editierbar). Der bisherige "Antwortentwurf"-Button heißt jetzt
+"Antworten" und öffnet nur noch `isReplyOpen = true` — kein Netzwerk-Call.
+Innerhalb der offenen `replyCard` gibt es jetzt zwei zusätzliche Buttons:
+"KI-Entwurf" (optional, ruft `requestAiDraft()` — umbenannt aus `loadDraft()`
+— auf und füllt `replyBody`; fragt per `confirmationDialog` erst nach, wenn
+bereits eigener Text im Feld steht, damit ein versehentlicher Tap nichts
+stillschweigend verwirft) und "Verwerfen" (schließt das Feld wieder,
+`isReplyOpen = false`, `replyBody = ""` — vorher gab es keinen Weg zurück,
+sobald ein Entwurf geladen war, außer Senden).
+
+Gleiche Sichtbarkeitsregel wie vorher unverändert übernommen: kein
+"Antworten"-Button im `spam`-Systemordner (`currentFolder?.systemKey !=
+.spam`, siehe Nachtrag "Antworten-Button bei Spam" oben).
+
+**Tests:** `xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17'
+build` **BUILD SUCCEEDED**. Kein interaktiver Klicktest (gleiche
+Werkzeug-Grenze wie bei den vorherigen Nachträgen) — die Web-Variante
+derselben Logik wurde im Browser end-to-end verifiziert (leeres
+Compose-Feld sofort nutzbar, "KI-Entwurf vorschlagen" füllt es optional,
+"Verwerfen" schließt es wieder), die iOS-Implementierung folgt exakt
+demselben State-Aufteilungsprinzip.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

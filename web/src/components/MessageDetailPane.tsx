@@ -80,7 +80,15 @@ export function MessageDetailPane({
 }) {
   const [summary, setSummary] = useState<MailSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [draft, setDraft] = useState<string | null>(null);
+  // [2026-09-10] WEB_INBOX.md-Priorität "Antworten ohne KI-Zwang": das
+  // Compose-Feld muss sofort leer nutzbar sein, der KI-Entwurf ist nur ein
+  // optionaler Zusatz-Button INNERHALB des bereits offenen Feldes --
+  // deshalb zwei getrennte States statt eines einzigen `draft`, der vorher
+  // erst nach einer erfolgreichen KI-Antwort gesetzt wurde und damit
+  // zugleich (missbräuchlich) darüber entschied, ob das Compose-Feld
+  // überhaupt sichtbar war.
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [body, setBody] = useState("");
   const [draftLoading, setDraftLoading] = useState(false);
   const [quarantining, setQuarantining] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -98,7 +106,8 @@ export function MessageDetailPane({
   // Beim Wechsel der Nachricht abgeleiteten Zustand zurücksetzen
   useEffect(() => {
     setSummary(null);
-    setDraft(null);
+    setReplyOpen(false);
+    setBody("");
     setSendError(null);
     setSent(false);
     setShowDetails(false);
@@ -127,12 +136,21 @@ export function MessageDetailPane({
     }
   }
 
-  async function loadDraft() {
+  // Optionaler Zusatz-Button INNERHALB des bereits offenen Compose-Felds
+  // (siehe replyOpen/body-Kommentar oben) -- fragt einen KI-Entwurf ab und
+  // füllt ihn ins Feld. Überschreibt bereits Getipptes nur nach expliziter
+  // Bestätigung, damit ein versehentlicher Klick keinen angefangenen Text
+  // stillschweigend verwirft.
+  async function requestAiDraft() {
     if (!message) return;
+    if (body.trim() && !window.confirm("Vorhandenen Text durch einen KI-Entwurf ersetzen?")) {
+      return;
+    }
     setDraftLoading(true);
     try {
       const res = await api.createReplyDraft(message.id);
-      setDraft(res.draftText);
+      setBody(res.draftText);
+      setSendError(null);
     } finally {
       setDraftLoading(false);
     }
@@ -224,7 +242,7 @@ export function MessageDetailPane({
   const hasBlockingAttachment = attachments.some((a) => a.status !== "clean");
 
   async function handleSend() {
-    if (!message || !draft || !draft.trim() || hasBlockingAttachment) return;
+    if (!message || !body.trim() || hasBlockingAttachment) return;
     setSending(true);
     setSendError(null);
     try {
@@ -237,11 +255,12 @@ export function MessageDetailPane({
         inReplyToMessageId: message.id,
         to: [message.fromAddress],
         subject,
-        bodyText: draft,
+        bodyText: body,
         attachmentIds: attachments.map((a) => a.attachmentId).filter((id): id is string => id !== null),
       });
       setSent(true);
-      setDraft(null);
+      setReplyOpen(false);
+      setBody("");
       setAttachments([]);
       onSent();
     } catch (err) {
@@ -332,14 +351,17 @@ export function MessageDetailPane({
         <button type="button" className="btn btn-secondary" onClick={loadSummary} disabled={summaryLoading}>
           {summaryLoading ? "Fasse zusammen…" : "Inhalt"}
         </button>
-        {/* WEB_INBOX.md 09.09. "KORREKTUR der letzten Regel": ausgeblendet
-            bei aktuellem Ordner spam (folderId-Check), nicht bei
-            eingefrorenem classification='spam' -- Antworten auf Spam macht
-            keinen Sinn, auf Phishing (Quarantäne) schon (User kann die Mail
-            trotzdem sehen/melden, siehe Warnbanner oben). */}
-        {!isInSpam && (
-          <button type="button" className="btn btn-secondary" onClick={loadDraft} disabled={draftLoading}>
-            {draftLoading ? "Erstelle Entwurf…" : "Antwortentwurf erstellen"}
+        {/* [2026-09-10] "Antworten ohne KI-Zwang": öffnet das Compose-Feld
+            sofort leer, kein KI-Aufruf nötig (der sitzt jetzt als optionaler
+            Zusatz-Button INNERHALB des Felds, siehe unten). WEB_INBOX.md
+            09.09. "KORREKTUR der letzten Regel" weiterhin gültig:
+            ausgeblendet bei aktuellem Ordner spam (folderId-Check), nicht
+            bei eingefrorenem classification='spam' -- Antworten auf Spam
+            macht keinen Sinn, auf Phishing (Quarantäne) schon (User kann
+            die Mail trotzdem sehen/melden, siehe Warnbanner oben). */}
+        {!isInSpam && !replyOpen && (
+          <button type="button" className="btn btn-secondary" onClick={() => setReplyOpen(true)}>
+            Antworten
           </button>
         )}
         {/* Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.): manueller
@@ -389,17 +411,19 @@ export function MessageDetailPane({
         </section>
       )}
 
-      {draft && (
+      {replyOpen && (
         <section className="detail-card">
-          <div className="detail-card-title">Antwortentwurf (wird erst nach Klick auf „Senden“ verschickt)</div>
+          <div className="detail-card-title">Antwort (wird erst nach Klick auf „Senden“ verschickt)</div>
           <textarea
             className="draft-textarea"
-            value={draft}
+            value={body}
             onChange={(e) => {
-              setDraft(e.target.value);
+              setBody(e.target.value);
               setSendError(null);
             }}
             rows={6}
+            autoFocus
+            placeholder="Antwort eingeben…"
           />
 
           {attachments.length > 0 && (
@@ -437,11 +461,28 @@ export function MessageDetailPane({
             <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
               Anhang hinzufügen
             </button>
+            {/* Optionaler Zusatz-Button (siehe requestAiDraft-Kommentar) --
+                erzeugt nie automatisch, nur auf expliziten Klick. */}
+            <button type="button" className="btn btn-secondary" onClick={requestAiDraft} disabled={draftLoading}>
+              {draftLoading ? "Erstelle Entwurf…" : "KI-Entwurf vorschlagen"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setReplyOpen(false);
+                setBody("");
+                setAttachments([]);
+                setSendError(null);
+              }}
+            >
+              Verwerfen
+            </button>
             <button
               type="button"
               className="btn btn-primary"
               onClick={handleSend}
-              disabled={sending || !draft.trim() || hasBlockingAttachment}
+              disabled={sending || !body.trim() || hasBlockingAttachment}
             >
               {sending ? "Sende…" : "Senden"}
             </button>

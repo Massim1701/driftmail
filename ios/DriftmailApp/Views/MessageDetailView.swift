@@ -15,7 +15,16 @@ struct MessageDetailView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var detail: MessageDetail?
     @State private var summary: MailSummary?
-    @State private var draft: String?
+    // [2026-09-10] WEB_INBOX.md-Priorität "Antworten ohne KI-Zwang" (siehe
+    // web/src/components/MessageDetailPane.tsx für dieselbe Web-Änderung):
+    // getrennte States statt eines einzigen `draft: String?`, der vorher
+    // erst nach einer erfolgreichen KI-Antwort gesetzt wurde und damit
+    // zugleich (missbräuchlich) darüber entschied, ob das Compose-Feld
+    // überhaupt sichtbar war. `isReplyOpen` steuert jetzt allein die
+    // Sichtbarkeit, `replyBody` ist von Anfang an leer nutzbar.
+    @State private var isReplyOpen = false
+    @State private var replyBody = ""
+    @State private var showAiOverwriteConfirm = false
     @State private var isLoadingSummary = false
     @State private var isLoadingDraft = false
     @State private var isQuarantining = false
@@ -77,8 +86,8 @@ struct MessageDetailView: View {
                         summaryCard(summary)
                     }
 
-                    if draft != nil {
-                        draftCard(for: detail)
+                    if isReplyOpen {
+                        replyCard(for: detail)
                     }
 
                     if let sentConfirmation {
@@ -125,6 +134,16 @@ struct MessageDetailView: View {
         } message: {
             Text("Diese Nachricht wird unwiderruflich gelöscht und kann nicht wiederhergestellt werden.")
         }
+        .confirmationDialog(
+            "Vorhandenen Text durch einen KI-Entwurf ersetzen?",
+            isPresented: $showAiOverwriteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Ersetzen", role: .destructive) {
+                Task { await requestAiDraft() }
+            }
+            Button("Abbrechen", role: .cancel) {}
+        }
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             if case .success(let urls) = result {
                 for url in urls { Task { await uploadAttachment(from: url) } }
@@ -162,20 +181,23 @@ struct MessageDetailView: View {
                 .buttonStyle(.bordered)
                 .disabled(isLoadingSummary)
 
-                // WEB_INBOX.md 09.09. "KORREKTUR der letzten Regel":
-                // ausgeblendet bei aktuellem Ordner spam (folderId-/
-                // systemKey-Check), nicht bei eingefrorenem
-                // classification='spam' -- Antworten auf Spam macht keinen
-                // Sinn, auf Phishing (Quarantäne) schon (Warnbanner oben).
-                if currentFolder?.systemKey != .spam {
+                // [2026-09-10] "Antworten ohne KI-Zwang": öffnet das
+                // Compose-Feld sofort leer, kein KI-Aufruf nötig (der sitzt
+                // jetzt als optionaler Zusatz-Button INNERHALB des Felds,
+                // siehe replyCard). WEB_INBOX.md 09.09. "KORREKTUR der
+                // letzten Regel" weiterhin gültig: ausgeblendet bei
+                // aktuellem Ordner spam (folderId-/systemKey-Check), nicht
+                // bei eingefrorenem classification='spam' -- Antworten auf
+                // Spam macht keinen Sinn, auf Phishing (Quarantäne) schon
+                // (Warnbanner oben).
+                if currentFolder?.systemKey != .spam && !isReplyOpen {
                     Button {
-                        Task { await loadDraft() }
+                        isReplyOpen = true
                     } label: {
-                        Label("Antwortentwurf", systemImage: "pencil")
+                        Label("Antworten", systemImage: "arrowshape.turn.up.left")
                             .font(.system(size: DesignTokens.Typography.Size.body))
                     }
                     .buttonStyle(.bordered)
-                    .disabled(isLoadingDraft)
                 }
             }
 
@@ -287,17 +309,17 @@ struct MessageDetailView: View {
         )
     }
 
-    /// Zeigt den (editierbaren) Antwortentwurf + Senden-Button. Bindet
-    /// direkt an `$draft` (statt einen unveränderlichen String
-    /// entgegenzunehmen), damit der Nutzer den KI-generierten Text vor dem
-    /// Versand noch anpassen kann — der Versand selbst wird erst durch
-    /// den Klick auf "Senden" ausgelöst (`POST /messages/send`).
-    private func draftCard(for detail: MessageDetail) -> some View {
+    /// Zeigt das (von Anfang an leere, sofort nutzbare) Antwortfeld +
+    /// Senden-Button. Bindet direkt an `$replyBody`, damit der Nutzer frei
+    /// tippen ODER optional per "KI-Entwurf vorschlagen" einen Vorschlag
+    /// einfüllen kann — der Versand selbst wird erst durch den Klick auf
+    /// "Senden" ausgelöst (`POST /messages/send`).
+    private func replyCard(for detail: MessageDetail) -> some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
-            Text("Antwortentwurf (wird erst nach Tippen auf „Senden“ verschickt)")
+            Text("Antwort (wird erst nach Tippen auf „Senden“ verschickt)")
                 .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
                 .foregroundStyle(DesignTokens.Color.textSecondary)
-            TextEditor(text: Binding(get: { draft ?? "" }, set: { draft = $0; sendBlockedReason = nil }))
+            TextEditor(text: Binding(get: { replyBody }, set: { replyBody = $0; sendBlockedReason = nil }))
                 .font(.system(size: DesignTokens.Typography.Size.body))
                 .frame(minHeight: 120)
                 .scrollContentBackground(.hidden)
@@ -350,6 +372,37 @@ struct MessageDetailView: View {
                 }
                 .buttonStyle(.bordered)
 
+                // Optionaler Zusatz-Button (siehe replyCard-Kommentar) --
+                // erzeugt nie automatisch, nur auf expliziten Tap. Fragt
+                // erst nach, wenn bereits eigener Text im Feld steht,
+                // damit ein versehentlicher Tap nichts stillschweigend
+                // verwirft.
+                Button {
+                    if replyBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Task { await requestAiDraft() }
+                    } else {
+                        showAiOverwriteConfirm = true
+                    }
+                } label: {
+                    Label(isLoadingDraft ? "Erstelle Entwurf…" : "KI-Entwurf", systemImage: "sparkles")
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                }
+                .buttonStyle(.bordered)
+                .disabled(isLoadingDraft)
+            }
+
+            HStack(spacing: DesignTokens.Spacing.sm) {
+                Button(role: .destructive) {
+                    isReplyOpen = false
+                    replyBody = ""
+                    composeAttachments = []
+                    sendBlockedReason = nil
+                } label: {
+                    Text("Verwerfen")
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                }
+                .buttonStyle(.bordered)
+
                 Button {
                     Task { await send(to: detail) }
                 } label: {
@@ -358,7 +411,7 @@ struct MessageDetailView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isSending || (draft ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasBlockingAttachment)
+                .disabled(isSending || replyBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasBlockingAttachment)
             }
         }
         .padding(DesignTokens.Spacing.lg)
@@ -393,13 +446,13 @@ struct MessageDetailView: View {
         }
     }
 
-    private func loadDraft() async {
+    private func requestAiDraft() async {
         isLoadingDraft = true
         defer { isLoadingDraft = false }
         do {
-            draft = try await environment.apiClient.requestReplyDraft(messageId: messageId)
+            replyBody = try await environment.apiClient.requestReplyDraft(messageId: messageId)
         } catch {
-            errorMessage = "Antwortentwurf fehlgeschlagen."
+            errorMessage = "KI-Entwurf fehlgeschlagen."
         }
     }
 
@@ -407,7 +460,7 @@ struct MessageDetailView: View {
     /// Antwort auf diese Nachricht. Backend leitet Konto + In-Reply-To-
     /// Header aus `messageId` ab (siehe `APIClient.sendMessage`).
     private func send(to detail: MessageDetail) async {
-        guard let draft, !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !replyBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         guard !hasBlockingAttachment else { return }
         isSending = true
         sendBlockedReason = nil
@@ -419,12 +472,13 @@ struct MessageDetailView: View {
                 inReplyToMessageId: messageId,
                 to: [detail.fromAddress],
                 subject: subject,
-                bodyText: draft,
+                bodyText: replyBody,
                 attachmentIds: attachmentIds,
                 draftId: nil
             )
             sentConfirmation = detail.fromAddress
-            self.draft = nil
+            isReplyOpen = false
+            replyBody = ""
             composeAttachments = []
         } catch APIError.blocked(let reason) {
             sendBlockedReason = reason ?? "Versand wurde aus Sicherheitsgründen blockiert."

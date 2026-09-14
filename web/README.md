@@ -264,6 +264,36 @@ Verifiziert im Browser: Nachricht im Spam-Ordner → Button fehlt; per
 sofort wieder, obwohl das (eingefrorene) `classification`-Badge weiterhin
 "Spam" zeigt.
 
+## Antworten ohne KI-Zwang (10.09., WEB_INBOX.md-Priorität "erst Funktion, dann Optik")
+
+**Fund:** Das Compose-Feld ließ sich vorher gar nicht öffnen, ohne einen
+KI-Entwurf abzurufen — `MessageDetailPane.tsx` band die Sichtbarkeit des
+Antwortfelds direkt an `draft: string | null`, das ausschließlich nach
+einem erfolgreichen `POST /messages/{id}/reply-draft` gesetzt wurde. Der
+einzige Button hieß "Antwortentwurf erstellen" und löste diesen KI-Aufruf
+sofort aus — eine normale, selbst getippte Antwort ohne KI war UI-seitig
+nicht möglich, obwohl das Backend das nie verlangt hat.
+
+**Fix:** `draft` ersetzt durch zwei getrennte States: `replyOpen: boolean`
+(steuert allein, ob das Compose-Feld sichtbar ist) und `body: string` (von
+Anfang an `""`, sofort editierbar, `autoFocus`). Der Button heißt jetzt
+"Antworten" und setzt nur noch `replyOpen = true` — kein Netzwerk-Call.
+Innerhalb des offenen Felds gibt es jetzt zwei zusätzliche Buttons:
+"KI-Entwurf vorschlagen" (optional, ruft `api.createReplyDraft()` auf und
+füllt `body`; fragt per `window.confirm` erst nach, wenn bereits eigener
+Text im Feld steht, damit ein versehentlicher Klick nichts stillschweigend
+verwirft) und "Verwerfen" (schließt das Feld wieder, `replyOpen = false`,
+`body = ""` — vorher gab es keinen Weg zurück, sobald ein Entwurf geladen
+war, außer Senden). Gleiche Sichtbarkeitsregel wie vorher unverändert
+übernommen (kein "Antworten"-Button im `spam`-Ordner, siehe Abschnitt
+oben).
+
+Verifiziert per Browser-Automation gegen den Mock-Server: "Antworten"
+öffnet das Feld sofort leer und fokussiert, "Senden" bleibt bis zur ersten
+Eingabe deaktiviert, "Verwerfen" schließt das Feld wieder, "KI-Entwurf
+vorschlagen" füllt es mit einem KI-Text (Mock-Server liefert einen
+Platzhaltertext).
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge
