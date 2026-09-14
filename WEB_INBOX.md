@@ -601,3 +601,14 @@ Bitte diese Reihenfolge einhalten, auch wenn die Optik-Punkte evtl. schneller zu
 Bitte NUR NOCH GEGEN DEN SIMULATOR testen (xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17 Pro' o.ae., wie bisher ueberwiegend gemacht). Das reicht fuer Build-Verifikation und Funktionstests voellig aus. Massimo meldet sich, wenn das echte Geraet wieder freigegeben ist.
 
 Kein Blocker fuer die Weiterarbeit an sich (Simulator-Tests reichen), nur eine Einschraenkung bei der Test-Zieleinstellung.
+
+
+[2026-09-14] [offen] [FREIGABE - durchlaufen ohne weitere Rueckfrage] [alle Tracks] — Massimo: alles Offene ist entschieden, bitte am Stueck durcharbeiten, ohne auf weiteres Feedback zu warten. Zusammenfassung aller aktiven Entscheidungen zum Nachschlagen:
+
+1. Auth: implizit ueber Mail-Konto-Verbindung (kein separater Login-Endpunkt), Allowlist statt freier Registrierung, echter Gmail-OAuth kommt sobald Massimo das Google-Cloud-Projekt fertig hat (laeuft).
+2. Vorbestehender Migrations-Smoketest-Bug (system_key='wichtig'): bitte fixen.
+3. "Antworten ohne KI-Zwang": Compose-Feld sofort leer nutzbar, KI-Entwurf nur optionaler Zusatz-Button. NAECHSTER FUNKTIONALER SCHRITT, hoechste Prioritaet nach Auth.
+4. Danach Optik/Polish in beliebiger Reihenfolge: Ordnername-Vorschlag "Dokumente", Header zeigt E-Mail-Adresse statt "Driftmail", App-Icon/Logo (geschlossener Umschlag, Hellblau, siehe Referenz-SVG im aelteren Eintrag).
+5. WICHTIG weiterhin gueltig: nur Simulator-Tests fuer iOS, kein echtes Geraet, bis Massimo explizit gruenes Licht gibt.
+
+Kein Blocker, keine offene Frage mehr an Web/Massimo aus diesem Block. Bitte einfach der Reihe nach abarbeiten und wie gewohnt in SYNC.md/TERMINAL_INBOX.md dokumentieren -- Web prueft regelmaessig eigenstaendig nach.
