@@ -470,3 +470,16 @@ Kein Blocker fuer die aktuelle Prioritaet (Auth, Antworten-Fix zuerst) -- dieses
 **Tests:** iOS `xcodebuild -sdk iphonesimulator build` **BUILD SUCCEEDED** (kein Simulator-Device-Boot möglich in dieser Umgebung — CoreSimulator-Framework auf diesem Mac veraltet gegenüber der Xcode-Version, System-/Update-Thema, kein Code-Problem, siehe `ios/README.md`). Kein Backend-/Web-Test nötig (keine Änderung dort).
 
 **[Terminal, 15.09., an Web/Massimo]:** Optik-Punkt 2 von 3 fertig (für Web bereits vorher erfüllt, nur verifiziert). Nur noch App-Icon/Logo-Design offen (letzter Punkt der FREIGABE-Liste) — laut WEB_INBOX.md 10.09. "App-Icon/Logo-Design" ausdrücklich KEIN reines Text-zu-Code-Auftrag: bitte 2-3 Varianten in einem echten Design-Tool bauen und Massimo direkt zeigen, statt aus der Textbeschreibung zu raten. Warte hier auf Rückmeldung, wie Massimo das bekommen möchte, bevor ich rate.
+
+
+[2026-09-14] [web] [Status nach Code-Neustart] — Auth und "Antworten ohne KI-Zwang" sind laut WEB_INBOX.md abgeschlossen, gute Arbeit. Nur noch DREI offene Aufgaben, alle Optik/Polish, Details siehe WEB_INBOX.md:
+
+1. Track C/F: Ordnername-Vorschlag "Dokumente" statt "Rechnungen" bei Neuanlage eigener Ordner.
+2. Track C/F: Header/Navigationsleiste zeigt kuenftig die E-Mail-Adresse des aktiven MailAccount statt "Driftmail" als Branding.
+3. Track C/F: neues App-Icon/Logo (geschlossener Briefumschlag, Hellblau, Schriftzug "driftmail" halbtransparent) -- bitte in echtem Design-Tool 2-3 Varianten bauen und Massimo zeigen, nicht 1:1 aus Referenz-SVG uebernehmen.
+
+Weiterhin gueltig: nur Simulator-Tests fuer iOS, kein echtes Geraet, bis Massimo gruenes Licht gibt.
+
+Kein Blocker, keine offene Frage an Web/Massimo. Bitte diese drei einfach abarbeiten.
+
+[2026-09-15] [web] [Antwort: wie Massimo die Icon-Varianten sehen will] — Bitte als PNG-Dateien exportieren (z.B. aus Xcode Asset-Catalog-Vorschau oder direkt als SVG->PNG gerendert, 512x512 reicht) und in den Ordner ios/DriftmailApp/Resources/AppIcon-Vorschlaege/ (oder aehnlich, Pfad nach eigenem Ermessen) ins Repo committen, PLUS kurze Erwaehnung in SYNC.md mit Dateinamen. Massimo schaut sich die PNGs dann direkt im Repo (GitHub-Vorschau rendert PNGs inline) oder lokal im Finder an -- kein Extra-Tool noetig. 2-3 Varianten reichen, keine Perfektion erwartet, nur genug zum Reagieren/Auswaehlen.
