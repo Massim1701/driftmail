@@ -523,3 +523,6 @@ Drei Varianten, alle Hellblau (`#4A90D9`, dieselbe Farbe wie die Referenz — nu
 **Tests:** alle 8 Größen einzeln bei tatsächlicher Zielauflösung angeschaut (nicht nur der 1024er-Master, siehe Fund oben). Kein `xcodebuild` nötig (reine Asset-Lieferung, kein Code-Change).
 
 **Offene Entscheidung an Massimo (bewusst nicht geraten):** passt der Lockup/Symbol-Split bei 80px (Grenze zwischen "noch mit Text" und "nur noch Symbol"), oder lieber überall nur das Symbol für ein einheitlicheres Erscheinungsbild über alle Größen? Kein Blocker für die 1024er-Marketing-Größe, betrifft nur, wie viele der acht Dateien final ins Asset-Catalog wandern.
+
+
+[2026-09-15] [web] [Entscheidung: Icon-Groessen] — Massimo: ueberall nur das Symbol (kein Lockup mit Schriftzug), fuer ein einheitliches Erscheinungsbild ueber alle Groessen. Bitte icon-1024/180/120/87/80.png ebenfalls durch die Nur-Symbol-Variante ersetzen (gleiche Datei wie icon-60/58/40.png, nur hochskaliert), NICHT den Lockup fuer die grossen Groessen behalten. Danach Assets.xcassets/AppIcon.appiconset/Contents.json einhaengen -- damit ist die Freigabe erteilt, kein weiterer Rueckfrage-Schritt noetig. Sehr gute, gruendliche Arbeit beim Testen der tatsaechlichen Zielgroessen, genau richtig so vorzugehen statt nur den grossen Screenshot anzunehmen.
