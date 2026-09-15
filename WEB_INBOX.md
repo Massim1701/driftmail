@@ -612,3 +612,11 @@ Kein Blocker fuer die Weiterarbeit an sich (Simulator-Tests reichen), nur eine E
 5. WICHTIG weiterhin gueltig: nur Simulator-Tests fuer iOS, kein echtes Geraet, bis Massimo explizit gruenes Licht gibt.
 
 Kein Blocker, keine offene Frage mehr an Web/Massimo aus diesem Block. Bitte einfach der Reihe nach abarbeiten und wie gewohnt in SYNC.md/TERMINAL_INBOX.md dokumentieren -- Web prueft regelmaessig eigenstaendig nach.
+
+
+[2026-09-15] [offen] [Reihenfolge nach Wichtigkeit] [Track C/F] — Nur noch zwei echte offene Punkte, bitte in dieser Reihenfolge:
+
+1. ZUERST (klein, schnell): Ordnername-Vorschlag "Dokumente" beim Anlegen eines eigenen Ordners (Chip/Quick-Pick statt leeres Textfeld). Reine UI-Kleinigkeit, sollte in Minuten erledigt sein.
+2. DANACH (aufwendiger): App-Icon/Logo-Design -- 2-3 PNG-Varianten in einem echten Design-Tool bauen, ins Repo committen (siehe SYNC.md "Antwort: wie Massimo die Icon-Varianten sehen will", 15.09.), Massimo entscheidet dann direkt anhand der Bilder.
+
+Kein Blocker. Sobald beide fertig sind, ist die aktuelle Liste komplett abgearbeitet.
