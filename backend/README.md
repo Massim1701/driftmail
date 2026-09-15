@@ -696,6 +696,95 @@ seit der "gesendet"-Systemordner existiert, gibt es die dafür nötige
 lokale `messages`-Zeile (siehe Abschnitt "Versand" oben, Punkt 5). Der
 `TODO`-Kommentar dazu in `routes/messages.ts` ist entfernt.
 
+### [2026-09-15] Sensible-Dokument-Erkennung (Fotos von Ausweisen/Kreditkarten)
+
+WEB_INBOX.md 15.09. "Sensible-Daten-Erkennung um Fotos von Ausweisen/
+Kreditkarten erweitern": Erweiterung der bestehenden Text-Erkennung (IBAN/
+Kreditkarte im Composer-Text, siehe `@driftmail/security-classification`)
+um Bild-Anhänge. Neuer Nachbearbeitungsschritt in `POST /attachments`
+(`src/attachments/`), läuft NACH dem bestehenden Malware-/Dateityp-Scan,
+nur bei `scan_status='clean'` (ein bereits blockiertes Bild bekommt ohnehin
+die dominante Warnung, ein zusätzlicher OCR-Lauf wäre verschwendete Arbeit).
+
+**Architektur (Auftrag: "OCR statt neues Bildmodell, bestehende
+Text-Pattern-Erkennung wiederverwenden"):**
+
+1. `src/attachments/types.ts` — `OcrAdapter`-Interface, gleiches
+   austauschbares Adapter-Muster wie `AiAdapter`/die externen Lookups.
+2. `src/attachments/tesseractOcrAdapter.ts` — **echte** Implementierung
+   über `tesseract.js` (WASM, läuft lokal/offline, kein API-Key). Anders
+   als bei den externen Lookups (WHOIS/Spamhaus/Fraud-DB brauchen echte,
+   hier nicht vorhandene Zugangsdaten) ist Bild-zu-Text-Erkennung ohne
+   externen Dienst möglich — deshalb echt gebaut, kein Mock. Nur das
+   Englisch-Sprachmodell geladen (`eng`, nicht `deu+eng`): beide erkannten
+   Muster sind kein natürlicher Fließtext, sondern strukturierter Code
+   (Kreditkarten-Ziffern, MRZ laut ICAO 9303 ohnehin sprachneutral) — ein
+   zusätzliches deutsches Wörterbuchmodell verschlechtert die Erkennung
+   hier nachweislich (siehe Kommentar in der Datei, lokal reproduziert: mit
+   `deu+eng` wurde eine lange MRZ-"<"-Füllzeichen-Folge fälschlich zu
+   "Z"/"E"-Zeichen korrigiert, mit reinem `eng` blieb der Text sauber).
+3. `security-classification/src/mrzDetection.ts` (**neu**, Track B) —
+   erkennt die MRZ (Machine Readable Zone, ICAO 9303) im OCR-Text: zwei
+   aufeinanderfolgende Zeilen mit MRZ-typischer Form (Länge 26–50 Zeichen,
+   nur `A-Z0-9<`, mindestens 20% `<`-Füllzeichen). Bewusst KEINE
+   Prüfziffern-Validierung (anders als Luhn/IBAN-Mod-97) — eine echte,
+   fotografierte/OCR-gescannte MRZ hat unvermeidbar einzelne Fehllesungen,
+   eine strikte Prüfziffernprüfung würde genau die echten Treffer meist
+   verwerfen. Stattdessen toleranter Formheuristik-Ansatz, mit echten
+   OCR-Fehlerfällen getestet (siehe `mrzDetection.test.ts`).
+4. `src/attachments/sensitiveDocumentScan.ts` — Orchestrierung: nur für
+   `image/jpeg`/`image/png` (OCR-Versuch), OCR-Text durch
+   `detectCreditCard()` (bereits vorhanden, Luhn-Algorithmus) und
+   `detectMrz()` (neu, s.o.) geschickt. Treffer-Priorität bei (seltenem)
+   Doppeltreffer: `credit_card` vor `id_document`, willkürlich aber
+   dokumentiert (Contract erlaubt nur einen Enum-Wert, kein Array).
+
+**Contract-Ergänzung** (kleine, additive Änderung wie üblich hier
+dokumentiert): `message_attachments.contains_sensitive_document TEXT
+CHECK (IN 'none','credit_card','id_document') DEFAULT 'none'`, `POST
+/attachments`-Response um `containsSensitiveDocument` ergänzt. NICHT
+blockierend, reiner Warnhinweis — exakt gleiches Prinzip wie
+`containsSensitiveData` beim Draft-Phishing-Check.
+
+**Bewusste Grenze — `heic` nicht unterstützt:** die Spec nennt explizit
+`jpg/png/heic` als Bildformate. `heic` ist von `tesseract.js` nicht direkt
+lesbar (bräuchte eine vorgeschaltete Konvertierung, z.B. `libheif`) —
+bewusst nicht Teil dieses Schritts. Ein `heic`-Anhang bekommt ehrlich
+`'none'` (kein OCR-Versuch, kein geratenes Ergebnis), keinen Fehler.
+
+**Bewusste Grenze — nur Backend, kein iOS-Vision-Framework-Pfad:** der
+Auftrag nennt als mögliche OCR-Quelle für iOS "Apples Vision-Framework
+(`VNRecognizeTextRequest`), läuft on-device". Nicht gebaut: `POST
+/attachments` ist bereits die EINE zentrale Stelle, über die Anhänge von
+JEDER Plattform laufen (iOS hat keinen eigenen Attachment-Upload-Pfad,
+siehe `ios/README.md`) — ein zusätzlicher on-device-Vorab-Check auf iOS
+wäre eine rein lokale Optimierung/Duplikation desselben, bereits
+funktional vollständigen Backend-Scans, kein für diesen Schritt nötiger
+Bestandteil. Könnte ein späterer, eigenständiger iOS-Schritt sein (z.B. um
+den Upload eines erkannt sensiblen Bildes gar nicht erst anzustoßen), ist
+hier aber bewusst nicht mitgebaut.
+
+**Ressourcen-Detail (echter Fund, nicht nur Design):** `tesseract.js`
+erzeugt bei der ersten Nutzung einen `worker_threads`-Worker, der den
+Node-Prozess am Leben hält — `server.close()` allein reicht in
+`smoketest.ts` NICHT zum sauberen Prozessende (Symptom: der Testlauf
+"hängt" nach dem letzten `console.log`, obwohl alle Assertions schon
+bestanden haben). `OcrAdapter.terminate?()` ergänzt, `smoketest.ts` ruft
+es im `finally`-Block nach `server.close()` auf. Ein echter, dauerhaft
+laufender Server-Prozess (`index.ts`) braucht das nicht.
+
+**Tests:** drei echte Bild-Fixtures (`test-fixtures/*.png`, per
+Chrome-Rendering erzeugt, keine handgezeichneten Platzhalter) — ein
+Kreditkarten-Foto (Luhn-gültige Testnummer `4539 1488 0343 6467`), ein
+Passfoto mit MRZ-Block, ein unauffälliges Foto ohne jedes Muster. Alle drei
+laufen durch die ECHTE OCR-Pipeline (kein Mock), Ergebnis
+(`credit_card`/`id_document`/`none`) wird geprüft. Zusätzlich: ein
+Nicht-Bild-Anhang bekommt `'none'` ohne OCR-Versuch (MIME-Type-Weiche).
+`security-classification`: 7 neue Tests für `detectMrz()` (u.a. gegen
+echten, per `tesseract.js` erzeugten verrauschten OCR-Text, nicht nur
+sauberen Idealfall). `npm run typecheck`/`npm test` (beide Pakete) grün,
+zusätzlich gegen eine echte, frische lokale Postgres-Instanz verifiziert.
+
 **Tests:** `src/smoketest.ts` deckt Upload einer unauffälligen Datei
 (`clean`), einer Datei mit gefährlicher Endung (`blocked_type`), des
 `malicious`-Test-Triggers, fehlendes Datei-Feld (400), Versand mit einem

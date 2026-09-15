@@ -8,8 +8,13 @@ import { PostgresStore } from "./db/postgresStore";
 import { syncAccount } from "./mail/sync";
 import { aiAdapter } from "./ai";
 import { domainReputationLookup, extractIbanCandidates, ibanHistoryCheck } from "./lookups";
+import { ocrAdapter } from "./attachments";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Server } from "node:http";
 import type { SystemFolderKey } from "./types";
+
+const FIXTURES_DIR = join(__dirname, "..", "test-fixtures");
 
 function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`Smoketest fehlgeschlagen: ${msg}`);
@@ -472,12 +477,40 @@ async function main() {
     // POST /attachments + Anhang-Gate bei POST /messages/send (WEB_INBOX.md
     // 09.09. "Erweiterung des Send-Endpunkt-Eintrags von eben"). Fall 1:
     // unauffällige Datei -> 200, scanStatus 'clean'.
-    async function uploadAttachment(filename: string, content: string): Promise<{ status: number; attachmentId?: string; scanStatus?: string }> {
+    async function uploadAttachment(
+      filename: string,
+      content: string,
+    ): Promise<{ status: number; attachmentId?: string; scanStatus?: string; containsSensitiveDocument?: string }> {
       const form = new FormData();
       form.append("file", new Blob([content], { type: "text/plain" }), filename);
       const res = await fetch(`${base}/v1/attachments`, { method: "POST", body: form });
       const json = res.status === 200 ? ((await res.json()) as Record<string, unknown>) : undefined;
-      return { status: res.status, attachmentId: json?.attachmentId as string | undefined, scanStatus: json?.scanStatus as string | undefined };
+      return {
+        status: res.status,
+        attachmentId: json?.attachmentId as string | undefined,
+        scanStatus: json?.scanStatus as string | undefined,
+        containsSensitiveDocument: json?.containsSensitiveDocument as string | undefined,
+      };
+    }
+
+    // Wie uploadAttachment(), aber mit einem echten Bild von der Platte
+    // (test-fixtures/, siehe dortige README-Notiz) statt Text-Inhalt --
+    // nötig für die Sensible-Dokument-Erkennung unten, die nur für
+    // Bild-MIME-Typen überhaupt einen OCR-Versuch macht.
+    async function uploadImageFixture(
+      fixtureFilename: string,
+    ): Promise<{ status: number; attachmentId?: string; scanStatus?: string; containsSensitiveDocument?: string }> {
+      const bytes = readFileSync(join(FIXTURES_DIR, fixtureFilename));
+      const form = new FormData();
+      form.append("file", new Blob([bytes], { type: "image/png" }), fixtureFilename);
+      const res = await fetch(`${base}/v1/attachments`, { method: "POST", body: form });
+      const json = res.status === 200 ? ((await res.json()) as Record<string, unknown>) : undefined;
+      return {
+        status: res.status,
+        attachmentId: json?.attachmentId as string | undefined,
+        scanStatus: json?.scanStatus as string | undefined,
+        containsSensitiveDocument: json?.containsSensitiveDocument as string | undefined,
+      };
     }
 
     const cleanUpload = await uploadAttachment("rechnung.pdf", "Beispielinhalt, keine echte PDF-Struktur nötig für den Mock-Scan.");
@@ -540,6 +573,42 @@ async function main() {
       }),
     });
     assert(sendWithUnknownAttachmentRes.status === 400, "POST /v1/messages/send mit unbekannter attachmentId sollte 400 liefern");
+
+    // Sensible-Dokument-Erkennung (WEB_INBOX.md 15.09. "Sensible-Daten-
+    // Erkennung um Fotos von Ausweisen/Kreditkarten erweitern"): echte
+    // Bild-Fixtures (test-fixtures/, per Chrome gerendert, kein
+    // handgezeichnetes Testbild) durch die tatsächliche OCR-Pipeline
+    // (tesseract.js) geschickt -- kein Mock, echte Bilderkennung.
+    const creditCardUpload = await uploadImageFixture("credit-card-photo.png");
+    assert(creditCardUpload.status === 200, "POST /v1/attachments (Kreditkarten-Foto) sollte 200 liefern");
+    assert(creditCardUpload.scanStatus === "clean", "Kreditkarten-Foto ist kein gefährlicher Dateityp, scanStatus sollte 'clean' sein");
+    assert(
+      creditCardUpload.containsSensitiveDocument === "credit_card",
+      `Kreditkarten-Foto sollte per OCR+Luhn als 'credit_card' erkannt werden, war '${creditCardUpload.containsSensitiveDocument}'`,
+    );
+
+    const idDocumentUpload = await uploadImageFixture("id-document-photo.png");
+    assert(idDocumentUpload.status === 200, "POST /v1/attachments (Ausweis-Foto) sollte 200 liefern");
+    assert(
+      idDocumentUpload.containsSensitiveDocument === "id_document",
+      `Ausweis-Foto (MRZ) sollte per OCR+MRZ-Heuristik als 'id_document' erkannt werden, war '${idDocumentUpload.containsSensitiveDocument}'`,
+    );
+
+    const innocuousUpload = await uploadImageFixture("innocuous-photo.png");
+    assert(innocuousUpload.status === 200, "POST /v1/attachments (unauffälliges Foto) sollte 200 liefern");
+    assert(
+      innocuousUpload.containsSensitiveDocument === "none",
+      `unauffälliges Foto sollte 'none' liefern, war '${innocuousUpload.containsSensitiveDocument}'`,
+    );
+
+    // Nicht-Bild-Anhang (das bereits oben hochgeladene cleanUpload, ein
+    // "PDF"): kein OCR-Versuch, immer 'none' -- verifiziert die
+    // MIME-Type-Weiche in sensitiveDocumentScan.ts, nicht nur den
+    // Bild-Pfad.
+    assert(
+      cleanUpload.containsSensitiveDocument === "none",
+      `Nicht-Bild-Anhang sollte 'none' liefern ohne OCR-Versuch, war '${cleanUpload.containsSensitiveDocument}'`,
+    );
 
     // "Gesendet"-Ordner (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
     // Ordner-Umbau-Eintrags"): jeder erfolgreiche Versand oben (sendRes,
@@ -837,6 +906,10 @@ async function main() {
     console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam) end-to-end grün.");
   } finally {
     server.close();
+    // Ohne das haelt der tesseract.js-Worker (worker_threads) den Prozess
+    // am Leben -- server.close() allein reicht nicht zum sauberen Beenden,
+    // siehe Kommentar an OcrAdapter.terminate().
+    await ocrAdapter.terminate?.();
   }
 }
 

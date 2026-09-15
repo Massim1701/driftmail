@@ -561,6 +561,16 @@ paths:
                   scanStatus:
                     type: string
                     enum: [pending, clean, malicious, blocked_type, scan_failed]
+                  containsSensitiveDocument:
+                    type: string
+                    enum: [none, credit_card, id_document]
+                    description: >
+                      [2026-09-15] WEB_INBOX.md "Sensible-Daten-Erkennung um
+                      Fotos von Ausweisen/Kreditkarten erweitern": nur fuer
+                      Bild-Anhaenge per OCR + Text-Pattern-Erkennung ermittelt
+                      (sonst 'none', kein OCR-Lauf noetig/versucht). NICHT
+                      blockierend, reiner Warnhinweis -- analog zu
+                      containsSensitiveData beim Draft-Phishing-Check.
         "400":
           description: Keine Datei mitgeschickt
 

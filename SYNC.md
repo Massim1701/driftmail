@@ -15,7 +15,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 |---|---|---|---|
 | 0 — Contracts | contracts/ | fertig | 2026-09-08 |
 | A — Backend | backend/ | fertig (inkl. echter Track-B-Integration) | 2026-09-15 |
-| B — Sicherheits-Klassifikation | security-classification/ | fertig | 2026-09-08 |
+| B — Sicherheits-Klassifikation | security-classification/ | fertig | 2026-09-15 |
 | C — iOS App | ios/ | fertig | 2026-09-15 |
 | D — Vertrag & Reminder | contracts-logic/ | fertig | 2026-09-08 |
 | E — Antwort & Signatur | mail-actions/ | fertig | 2026-09-09 |
@@ -551,3 +551,20 @@ Drei Varianten, alle Hellblau (`#4A90D9`, dieselbe Farbe wie die Referenz — nu
 **4. End-to-End-Rundgang — durchgeführt, wo möglich (Web), iOS-Teil aus demselben Grund wie Punkt 3 nicht durchführbar:** Web-App per Browser-Automation gegen den Mock-Server durchgespielt: `localStorage` geleert → Login-Screen erscheint korrekt ("Mit Google anmelden") statt der Inbox → Klick → Weiterleitung über den Mock-OAuth-Endpunkt → zurück in der Inbox mit den korrekten 7 System-Ordnern (eingang/entwuerfe/gesendet/sonstiges/quarantaene/spam/papierkorb) plus eigenen Ordnern → Mail geöffnet (Security-Badge "Sicher" korrekt angezeigt) → "Antworten" geklickt → Compose-Feld öffnet SOFORT leer und fokussiert, kein erzwungener KI-Aufruf, genau wie spezifiziert → Text eingetippt → "Senden"-Button aktiviert sich korrekt. Bewusst NICHT tatsächlich abgeschickt (Auftrag verlangt nur "bis vor dem tatsächlichen Versand"), um keine Mock-Daten zu verändern.
 
 **Gesamtergebnis:** Fundament steht — Backend (beide Persistenz-Pfade) und Web sind vollständig grün und end-to-end durchgespielt, inkl. echtem Login-Flow und dem korrigierten Antworten-Verhalten. iOS ist so weit grün, wie diese Maschine es aktuell zulässt (voller Clean-Build gegen das Simulator-SDK erfolgreich) — der fehlende letzte Schritt (Simulator tatsächlich booten) ist eine Umgebungs-Einschränkung dieses Macs, keine unbeantwortete Frage zum Code. Kein Fix nötig, nichts kaputt gefunden.
+
+[2026-09-15] [terminal] [A/B] — Sensible-Dokument-Erkennung (Fotos von Ausweisen/Kreditkarten) umgesetzt (WEB_INBOX.md 15.09. "NEUER AUFTRAG", nach dem Stabilitäts-Check). Betraf `contracts/`, `backend/`, `security-classification/`. **Kein Mock — echte OCR-Pipeline, echte Bild-Fixtures, real getestet.**
+
+**Umsetzung wie vorgegeben (OCR statt neues Bildmodell, Wiederverwendung statt Neubau):**
+- `POST /attachments` läuft nach dem bestehenden Malware-/Dateityp-Scan (nur bei `scan_status='clean'`) einen neuen Schritt: `src/attachments/` (`OcrAdapter`-Interface + **echte** `tesseract.js`-Implementierung, kein Mock — anders als bei den externen Lookups ist Bild-zu-Text ohne externe Zugangsdaten möglich). Nur `image/jpeg`/`image/png` (kein `heic`, bewusste Grenze, siehe README).
+- OCR-Text läuft durch die BEREITS VORHANDENE `detectCreditCard()` (Luhn, `@driftmail/security-classification`) und eine NEUE `detectMrz()` (Track B, `mrzDetection.ts`) — MRZ-Formheuristik (Zeilenlänge + `<`-Füllzeichen-Anteil + zwei aufeinanderfolgende Zeilen), bewusst OHNE Prüfziffern-Validierung, da echte OCR-Fehllesungen eine strikte Prüfung meist scheitern lassen würden (mit echtem, verrauschtem OCR-Text getestet, nicht nur dem sauberen Idealfall).
+- **Contract-Ergänzung** (additiv, wie üblich hier dokumentiert): `message_attachments.contains_sensitive_document` (`none`/`credit_card`/`id_document`, Default `none`), `POST /attachments`-Response um `containsSensitiveDocument` ergänzt. NICHT blockierend, reiner Warnhinweis — exakt wie beim Text-Pendant im Composer.
+
+**Zwei echte Funde beim Testen, nicht nur behauptet:**
+1. Das deutsche Sprachmodell (`deu+eng`) verschlechterte die Erkennung nachweislich (Test wiederholt, reproduzierbar) — die MRZ-"<"-Füllzeichen wurden vom deutschen Wörterbuch-Modell zu "Z"/"E" korrigiert. Auf reines `eng` umgestellt (beide erkannten Muster sind ohnehin kein natürlicher Fließtext).
+2. `tesseract.js` hält über einen `worker_threads`-Worker den Node-Prozess am Leben — `server.close()` allein reicht in `smoketest.ts` nicht zum sauberen Beenden (Symptom: Testlauf "hängt" nach der letzten Erfolgsmeldung, obwohl alle Asserts schon bestanden hatten — über mehrere Minuten reproduziert, dann Ursache gefunden statt einfach neu gestartet). `OcrAdapter.terminate?()` ergänzt, im `finally`-Block aufgerufen. Danach: `npm test` läuft in ~1,5s statt zu hängen.
+
+**Bewusste Grenzen (README "Sensible-Dokument-Erkennung"):** kein `heic`-Support (bräuchte `libheif`-Konvertierung), kein iOS-Vision-Framework-Pfad (Auftrag nannte das als Option, aber `POST /attachments` ist bereits die eine zentrale Stelle für Anhänge JEDER Plattform — ein iOS-seitiger on-device-Vorab-Check wäre reine Duplikation des bereits funktional vollständigen Backend-Scans, kein Blocker für diesen Schritt, könnte ein späterer eigenständiger iOS-Schritt sein).
+
+**Tests:** 3 echte Bild-Fixtures (`backend/test-fixtures/*.png`, per Chrome-Rendering erzeugt, keine Platzhalter) — Kreditkarten-Foto (Luhn-gültige Testnummer), Passfoto mit MRZ-Block, unauffälliges Foto — laufen durch die ECHTE OCR-Pipeline im Smoketest, plus ein Nicht-Bild-Anhang, der `'none'` ohne OCR-Versuch bekommt (MIME-Weiche). `security-classification`: 7 neue Tests für `detectMrz()` (121 Tests gesamt, alle grün). Backend: `npm run typecheck`/`npm test` grün, ohne UND mit `DATABASE_URL` gegen eine frische lokale Postgres-Instanz.
+
+**Kein Blocker, keine offene Frage.**

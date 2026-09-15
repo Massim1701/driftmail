@@ -634,7 +634,7 @@ Bitte ALLE vier Ergebnisse (nicht nur "war schon mal gruen") in SYNC.md als ein 
 Kein Blocker im Sinne einer neuen Funktionalitaet, nur eine Absicherung vor dem naechsten sichtbaren Schritt.
 
 
-[2026-09-15] [offen] [NEUER AUFTRAG] [Track A/B + Track C/F] [nach dem Stabilitaets-Check] — Massimo: Erweiterung der bestehenden Sensible-Daten-Erkennung (IBAN/Kreditkartennummer im Text, bereits fertig, siehe SYNC.md 30 neue Tests) um FOTOS von Ausweisen und Kreditkarten als Anhang.
+[2026-09-15] [erledigt: siehe SYNC.md "Sensible-Dokument-Erkennung"] [Track A/B — Track C/F Teil bewusst nicht gebaut, siehe dort] [nach dem Stabilitaets-Check] — Massimo: Erweiterung der bestehenden Sensible-Daten-Erkennung (IBAN/Kreditkartennummer im Text, bereits fertig, siehe SYNC.md 30 neue Tests) um FOTOS von Ausweisen und Kreditkarten als Anhang.
 
 **Technischer Ansatz -- OCR statt neues Bildmodell:**
 Kein trainiertes Bilderkennungsmodell noetig. Stattdessen: Text per OCR aus dem Bild extrahieren, dann die BEREITS VORHANDENE Text-Pattern-Erkennung (creditCardDetection.ts, Luhn-Validierung) auf den OCR-Text anwenden -- Wiederverwendung statt Neubau. Zusaetzlich ein zweites, gut etabliertes Muster fuer Ausweise/Reisepaesse: die MRZ (Machine Readable Zone, die zwei/drei Zeilen mit "<"-Fuellzeichen unten auf jedem Ausweisdokument/Reisepass) -- feste, laenderuebergreifend genormte Struktur, zuverlaessig per Regex auf OCR-Text erkennbar, kein ML-Training noetig.

@@ -143,5 +143,6 @@ export { computeImageToTextRatio } from "./imageToTextRatio.js";
 export { detectIpReputation } from "./ipReputation.js";
 export { detectLinkMismatch, extractLinks, isLinkMismatch } from "./linkMismatch.js";
 export type { ExtractedLink } from "./linkMismatch.js";
+export { detectMrz } from "./mrzDetection.js";
 export { detectSpamSubcategory } from "./spamSubcategory.js";
 export { scoreUrgencyLanguage } from "./urgencyLanguage.js";

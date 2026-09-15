@@ -1,5 +1,6 @@
 import { Router } from "express";
 import multer from "multer";
+import { ocrAdapter, scanForSensitiveDocument } from "../attachments";
 import { store } from "../db/store";
 import { attachmentScanner } from "../lookups";
 
@@ -41,6 +42,18 @@ attachmentsRouter.post("/attachments", upload.single("file"), async (req, res) =
     sizeBytes: file.size,
   });
 
+  // [2026-09-15] WEB_INBOX.md "Sensible-Daten-Erkennung um Fotos von
+  // Ausweisen/Kreditkarten erweitern": Nachbearbeitungsschritt NACH dem
+  // Malware-/Dateityp-Scan (gleiches Reihenfolge-Prinzip wie bei den
+  // externen Lookups nach analyzeMail()). Nur für scanStatus='clean'
+  // versucht -- ein bereits als gefährlich/blockiert eingestuftes Bild
+  // bekommt ohnehin schon die dominante Warnung, ein zusätzlicher
+  // OCR-Lauf darauf wäre verschwendete Arbeit ohne UI-Nutzen.
+  const containsSensitiveDocument =
+    scanStatus === "clean"
+      ? await scanForSensitiveDocument({ buffer: file.buffer, mimeType: file.mimetype || null }, ocrAdapter)
+      : "none";
+
   const record = await store.insertAttachment({
     messageId: null,
     uploadedByUserId: req.userId,
@@ -50,7 +63,12 @@ attachmentsRouter.post("/attachments", upload.single("file"), async (req, res) =
     scanStatus,
     isDangerousType,
     scannedAt: new Date().toISOString(),
+    containsSensitiveDocument,
   });
 
-  res.status(200).json({ attachmentId: record.id, scanStatus: record.scanStatus });
+  res.status(200).json({
+    attachmentId: record.id,
+    scanStatus: record.scanStatus,
+    containsSensitiveDocument: record.containsSensitiveDocument,
+  });
 });

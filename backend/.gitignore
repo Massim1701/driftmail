@@ -2,3 +2,8 @@ node_modules/
 dist/
 .env
 *.log
+
+# tesseract.js lädt Sprachmodelle bei der ersten Nutzung in den cwd, wenn
+# keine eigene Cache-Directory konfiguriert ist (siehe attachments/
+# tesseractOcrAdapter.ts) -- Laufzeit-Cache, kein Repo-Inhalt.
+*.traineddata

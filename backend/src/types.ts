@@ -90,6 +90,12 @@ export interface MessageRecord {
 // identifiziert den Anhang in dieser Phase stattdessen. Nach POST
 // /messages/send wird `messageId` auf die neu entstandene gesendete
 // Nachricht nachgetragen (siehe routes/messages.ts).
+// [2026-09-15] WEB_INBOX.md "Sensible-Daten-Erkennung um Fotos von
+// Ausweisen/Kreditkarten erweitern": per OCR ermittelt, nur für
+// Bild-Anhänge (sonst immer "none", kein OCR-Versuch), siehe
+// attachments/sensitiveDocumentScan.ts.
+export type SensitiveDocumentKind = "none" | "credit_card" | "id_document";
+
 export interface MessageAttachmentRecord {
   id: string;
   messageId: string | null;
@@ -100,6 +106,7 @@ export interface MessageAttachmentRecord {
   scanStatus: "pending" | "clean" | "malicious" | "blocked_type" | "scan_failed";
   isDangerousType: boolean;
   scannedAt: string | null;
+  containsSensitiveDocument: SensitiveDocumentKind;
 }
 
 // `drafts` (db-schema.sql, WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des

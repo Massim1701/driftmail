@@ -229,6 +229,7 @@ function rowToMessageAttachment(r: any): MessageAttachmentRecord {
     scanStatus: r.scan_status,
     isDangerousType: r.is_dangerous_type,
     scannedAt: r.scanned_at,
+    containsSensitiveDocument: r.contains_sensitive_document,
   };
 }
 
@@ -799,8 +800,8 @@ export class PostgresStore implements Store {
   async insertAttachment(input: Omit<MessageAttachmentRecord, "id">): Promise<MessageAttachmentRecord> {
     const { rows } = await this.pool.query(
       `INSERT INTO message_attachments
-         (message_id, uploaded_by_user_id, filename, mime_type, size_bytes, scan_status, is_dangerous_type, scanned_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         (message_id, uploaded_by_user_id, filename, mime_type, size_bytes, scan_status, is_dangerous_type, scanned_at, contains_sensitive_document)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
       [
         input.messageId,
@@ -811,6 +812,7 @@ export class PostgresStore implements Store {
         input.scanStatus,
         input.isDangerousType,
         input.scannedAt,
+        input.containsSensitiveDocument,
       ],
     );
     return rowToMessageAttachment(rows[0]);

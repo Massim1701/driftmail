@@ -312,6 +312,12 @@ CREATE TABLE IF NOT EXISTS message_attachments (
     scan_status TEXT NOT NULL DEFAULT 'pending' CHECK (scan_status IN ('pending', 'clean', 'malicious', 'blocked_type', 'scan_failed')),
     is_dangerous_type BOOLEAN NOT NULL DEFAULT false,
     scanned_at TIMESTAMPTZ,
+    -- [2026-09-15] WEB_INBOX.md 15.09. "Sensible-Daten-Erkennung um Fotos
+    -- von Ausweisen/Kreditkarten erweitern": analog zu scan_status, per OCR
+    -- + Text-Pattern-Erkennung ermittelt (siehe backend/src/attachments/).
+    -- NICHT blockierend -- gleiches Prinzip wie containsSensitiveData bei
+    -- Text-IBAN/Kreditkarte im Composer.
+    contains_sensitive_document TEXT NOT NULL DEFAULT 'none' CHECK (contains_sensitive_document IN ('none', 'credit_card', 'id_document')),
     CONSTRAINT message_attachments_owner_check CHECK (message_id IS NOT NULL OR uploaded_by_user_id IS NOT NULL)
   );
 
