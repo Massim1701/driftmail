@@ -620,3 +620,15 @@ Kein Blocker, keine offene Frage mehr an Web/Massimo aus diesem Block. Bitte ein
 2. DANACH (aufwendiger): App-Icon/Logo-Design -- 2-3 PNG-Varianten in einem echten Design-Tool bauen, ins Repo committen (siehe SYNC.md "Antwort: wie Massimo die Icon-Varianten sehen will", 15.09.), Massimo entscheidet dann direkt anhand der Bilder.
 
 **Umgesetzt:** Punkt 1 war zu diesem Zeitpunkt bereits fertig (Commit `596d333`, siehe SYNC.md-Klarstellung 15.09.). Punkt 2: 3 PNG-Varianten in `ios/DriftmailApp/Resources/AppIcon-Vorschlaege/` committet (Commit `b1a2173`), Details/Trade-offs/offene Massimo-Entscheidung in SYNC.md. Damit ist die aktuelle Liste komplett abgearbeitet, kein Blocker.
+
+
+[2026-09-15] [offen] [STABILITAETS-CHECK vor Simulator-Test] [alle Tracks] — Massimo: bevor er sich das Ergebnis im Simulator anschaut, soll das Fundament nachweislich stabil stehen, nicht nur einzeln berichtet. Bitte einmal komplett und am Stueck durchlaufen lassen:
+
+1. Backend: npm run typecheck und npm test (mit UND ohne DATABASE_URL, also In-Memory- und echter Postgres-Pfad).
+2. Web: npm run build.
+3. iOS: xcodebuild -scheme DriftmailApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build (voller Build, nicht nur Teil-Checks).
+4. Kurzer End-to-End-Rundgang, falls moeglich: Login/Auth-Flow, Ordner anzeigen (neue Struktur eingang/entwuerfe/gesendet/sonstiges/quarantaene/spam/papierkorb), eine Mail oeffnen, Antworten-Button testen (Compose-Feld direkt nutzbar), Senden-Flow bis vor dem tatsaechlichen Versand.
+
+Bitte ALLE vier Ergebnisse (nicht nur "war schon mal gruen") in SYNC.md als ein zusammenhaengender Status-Eintrag festhalten, mit Datum von heute. Falls irgendwo etwas bricht: bitte beheben, bevor Massimo in den Simulator schaut -- kein "kommt schon hin", echte gruene Bestaetigung gewuenscht.
+
+Kein Blocker im Sinne einer neuen Funktionalitaet, nur eine Absicherung vor dem naechsten sichtbaren Schritt.
