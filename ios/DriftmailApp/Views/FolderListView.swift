@@ -70,7 +70,12 @@ struct FolderListView: View {
                 await loadFoldersAndCounts(forceRefresh: true)
             }
             .alert("Neuer Ordner", isPresented: $isCreatingFolder) {
-                TextField("Name", text: $newFolderName)
+                // [2026-09-15] WEB_INBOX.md 10.09. "kleine UX-Ergänzung":
+                // Namensvorschlag statt leerem Feld, hier als Placeholder
+                // statt Chips/Quick-Picks wie im Web -- ein natives
+                // SwiftUI .alert() kann außer Textfeldern/Buttons keine
+                // eigene Chip-Reihe hosten, siehe SYNC.md.
+                TextField("z. B. Dokumente", text: $newFolderName)
                 Button("Abbrechen", role: .cancel) {}
                 Button("Anlegen") {
                     Task { await createFolder() }

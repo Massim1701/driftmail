@@ -12,6 +12,15 @@ function metaFor(folder: Folder) {
   return { renamable: true };
 }
 
+// [2026-09-15] WEB_INBOX.md 10.09. "kleine UX-Ergänzung": "Rechnungen" als
+// Ordnername ist negativ behaftet (klingt nach Kosten/Schulden) und deckt
+// nicht ab, dass auch Verträge/sonstige wichtige Unterlagen dort landen
+// können. Kein System-Ordner-Comeback -- stattdessen nur ein neutraler
+// Namensvorschlag als Quick-Pick beim Anlegen eines eigenen Ordners, statt
+// eines leeren Textfelds. Reiner Vorschlag: Klick übernimmt den Namen ins
+// Textfeld, User kann ihn vor dem Anlegen noch anpassen.
+const FOLDER_NAME_SUGGESTIONS = ["Dokumente"];
+
 export function FolderSidebar({
   folders,
   active,
@@ -143,6 +152,20 @@ export function FolderSidebar({
         })}
       </ul>
 
+      {!newFolderName && (
+        <div className="folder-create-suggestions" role="group" aria-label="Namensvorschläge für neuen Ordner">
+          {FOLDER_NAME_SUGGESTIONS.map((suggestion) => (
+            <button
+              key={suggestion}
+              type="button"
+              className="folder-create-suggestion"
+              onClick={() => setNewFolderName(suggestion)}
+            >
+              {suggestion}
+            </button>
+          ))}
+        </div>
+      )}
       <form className="folder-create" onSubmit={submitNewFolder}>
         <input
           type="text"

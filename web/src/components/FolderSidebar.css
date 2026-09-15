@@ -148,6 +148,28 @@
   font-size: var(--font-size-body);
 }
 
+.folder-create-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.folder-create-suggestion {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  cursor: pointer;
+}
+
+.folder-create-suggestion:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
 .folder-create {
   display: flex;
   gap: var(--space-xs);
