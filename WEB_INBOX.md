@@ -632,3 +632,21 @@ Kein Blocker, keine offene Frage mehr an Web/Massimo aus diesem Block. Bitte ein
 Bitte ALLE vier Ergebnisse (nicht nur "war schon mal gruen") in SYNC.md als ein zusammenhaengender Status-Eintrag festhalten, mit Datum von heute. Falls irgendwo etwas bricht: bitte beheben, bevor Massimo in den Simulator schaut -- kein "kommt schon hin", echte gruene Bestaetigung gewuenscht.
 
 Kein Blocker im Sinne einer neuen Funktionalitaet, nur eine Absicherung vor dem naechsten sichtbaren Schritt.
+
+
+[2026-09-15] [offen] [NEUER AUFTRAG] [Track A/B + Track C/F] [nach dem Stabilitaets-Check] — Massimo: Erweiterung der bestehenden Sensible-Daten-Erkennung (IBAN/Kreditkartennummer im Text, bereits fertig, siehe SYNC.md 30 neue Tests) um FOTOS von Ausweisen und Kreditkarten als Anhang.
+
+**Technischer Ansatz -- OCR statt neues Bildmodell:**
+Kein trainiertes Bilderkennungsmodell noetig. Stattdessen: Text per OCR aus dem Bild extrahieren, dann die BEREITS VORHANDENE Text-Pattern-Erkennung (creditCardDetection.ts, Luhn-Validierung) auf den OCR-Text anwenden -- Wiederverwendung statt Neubau. Zusaetzlich ein zweites, gut etabliertes Muster fuer Ausweise/Reisepaesse: die MRZ (Machine Readable Zone, die zwei/drei Zeilen mit "<"-Fuellzeichen unten auf jedem Ausweisdokument/Reisepass) -- feste, laenderuebergreifend genormte Struktur, zuverlaessig per Regex auf OCR-Text erkennbar, kein ML-Training noetig.
+
+**Wo einhaengen:** in die bestehende Anhang-Scan-Pipeline (message_attachments, siehe fruehere Auftraege zu Anhang-Upload/Scan). Nach dem Malware-/Dateityp-Scan zusaetzlich: wenn Anhang ein Bildformat ist (jpg/png/heic), OCR-Durchlauf, dann Pattern-Check (Kreditkarte via bestehende Luhn-Logik, Ausweis via MRZ-Regex).
+
+**OCR-Quelle, passend zur bestehenden On-Device/Cloud-Fallback-Philosophie (siehe ai-adapter-interface.ts):**
+- iOS: Apples eigenes Vision-Framework (VNRecognizeTextRequest) -- laeuft on-device, kein externer Dienst noetig, keine zusaetzlichen Kosten.
+- Web/Backend: Cloud-Fallback-OCR-Dienst (Anbieter offen, Track A/B entscheidet -- z.B. Tesseract.js on-device im Browser als erste Stufe, echter Cloud-OCR nur falls Qualitaet nicht reicht).
+
+**Contract-Vorschlag:** message_attachments um Spalte contains_sensitive_document TEXT CHECK (IN 'none','credit_card','id_document') erweitern, analog zu scan_status. Response von POST /attachments (siehe frueherer Anhang-Upload-Auftrag) um dieses Feld ergaenzen.
+
+**Verhalten:** wie bei Text-IBAN/Kreditkarte -- NICHT blockierend, nur Warnhinweis (Sprechblase/Banner), User kann trotzdem senden wenn er wirklich will (z.B. legitimer Fall: eigenen Ausweis an eine Behoerde schicken). Gleiche Begruendung wie beim Text-Pendant: Warnung statt Verbot, da es legitime Anwendungsfaelle gibt.
+
+Kein Blocker, aber bitte NACH dem gerade angeforderten Stabilitaets-Check einordnen -- neue Funktionalitaet, nicht Teil der Stabilitaetspruefung selbst.
