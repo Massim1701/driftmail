@@ -343,6 +343,30 @@ export class PostgresStore implements Store {
 
   // ----- Ordner -----
 
+  /** NUR für den Migrations-Smoketest (siehe smoketest.ts "Ordner-Umbau-
+   * Migration"): `folders_system_key_check` erlaubt seit dem Ordner-Umbau
+   * (WEB_INBOX.md 09.09.) nur noch die neue 7er-Liste, 'wichtig' ist damit
+   * kein gültiger Wert mehr. Auf einer frisch aus contracts/db-schema.sql
+   * aufgesetzten Test-DB verhindert genau das, echte Bestandsdaten von VOR
+   * dem Umbau zu simulieren -- auf einer ECHTEN, bereits vorher angelegten
+   * Produktions-DB kann so eine Zeile aber sehr wohl noch existieren, weil
+   * `CREATE TABLE ... IF NOT EXISTS` eine verschärfte Constraint nie
+   * rückwirkend auf eine bestehende Tabelle anwendet. `fn` läuft deshalb mit
+   * kurzzeitig entfernter Constraint (Constraint wird danach wiederhergestellt,
+   * `fn` muss die simulierte Alt-Zeile selbst wieder entfernen -- hier über
+   * migrateLegacySystemFolders(), sonst würde das Wiederherstellen fehlschlagen). */
+  async runWithRelaxedSystemKeyConstraint<T>(fn: () => Promise<T>): Promise<T> {
+    await this.pool.query("ALTER TABLE folders DROP CONSTRAINT IF EXISTS folders_system_key_check");
+    try {
+      return await fn();
+    } finally {
+      await this.pool.query(
+        `ALTER TABLE folders ADD CONSTRAINT folders_system_key_check
+         CHECK (system_key IN ('eingang', 'entwuerfe', 'gesendet', 'sonstiges', 'quarantaene', 'spam', 'papierkorb'))`,
+      );
+    }
+  }
+
   async createFolder(input: Omit<FolderRecord, "id">): Promise<FolderRecord> {
     const { rows } = await this.pool.query(
       `INSERT INTO folders (user_id, name, icon, is_system, system_key, sort_order)

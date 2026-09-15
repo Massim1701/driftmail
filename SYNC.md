@@ -14,7 +14,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | Track | Ordner | Status | Zuletzt geändert |
 |---|---|---|---|
 | 0 — Contracts | contracts/ | fertig | 2026-09-08 |
-| A — Backend | backend/ | fertig (inkl. echter Track-B-Integration) | 2026-09-09 |
+| A — Backend | backend/ | fertig (inkl. echter Track-B-Integration) | 2026-09-15 |
 | B — Sicherheits-Klassifikation | security-classification/ | fertig | 2026-09-08 |
 | C — iOS App | ios/ | fertig | 2026-09-08 |
 | D — Vertrag & Reminder | contracts-logic/ | fertig | 2026-09-08 |
@@ -440,3 +440,13 @@ Kein Blocker fuer die aktuelle Prioritaet (Auth, Antworten-Fix zuerst) -- dieses
 **Tests:** Web `npm run build` grün, End-to-End per Browser-Automation gegen den Mock-Server verifiziert (Compose-Feld öffnet sofort leer + fokussiert, "Senden" bleibt bis zur ersten Eingabe deaktiviert, "Verwerfen" schließt es wieder, "KI-Entwurf vorschlagen" füllt es mit Mock-Text). iOS: `xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17' build` **BUILD SUCCEEDED**, kein interaktiver Klicktest (gleiche Werkzeug-Grenze wie bei den vorherigen Nachträgen).
 
 **[Terminal, 10.09., an Web/Massimo]:** Beide Punkte der Prioritätenliste (Auth, Antworten ohne KI-Zwang) sind fertig. Bereit für die drei Optik-Punkte (Ordnername-Vorschlag "Dokumente", Header zeigt E-Mail-Adresse statt "Driftmail", App-Icon-Design), sobald gewünscht.
+
+[2026-09-15] [terminal] [A] — Migrations-Smoketest-Bugfix umgesetzt (WEB_INBOX.md 14.09. "FREIGABE", Punkt 2 — der seit 10.09. bekannte, vorbestehende, nie behobene Fund gegen echtes Postgres, siehe Eintrag oben "Echte Auth umgesetzt"). Betraf nur `backend/`.
+
+**Ursache verifiziert, nicht nur vermutet:** der Migrations-Smoketest-Block ("Ordner-Umbau-Migration") simulierte einen Bestands-User mit einem alten `wichtig`-Systemordner per direktem `store.createFolder(...)`-INSERT gegen das AKTUELLE Schema. Auf einer frisch aus `contracts/db-schema.sql` aufgesetzten Test-DB gilt die `folders_system_key_check`-Constraint (erlaubt seit dem Ordner-Umbau nur noch die neue 7er-Liste) aber von Anfang an — eine Zeile mit `'wichtig'` kann dort nie entstehen. Auf einer ECHTEN, bereits vor dem Ordner-Umbau angelegten Produktions-DB kann so eine Zeile aber sehr wohl noch existieren, weil `CREATE TABLE ... IF NOT EXISTS` eine nachträglich verschärfte Constraint nie rückwirkend auf eine bestehende Tabelle anwendet. Der Smoketest simulierte also nicht den echten Altzustand, sondern einen auf frischem Schema unmöglichen Zwischenzustand — kein Bug in der Migrationslogik selbst (`migrateLegacySystemFolders()` war nie das Problem), sondern im Test-Setup.
+
+**Fix:** neue `PostgresStore.runWithRelaxedSystemKeyConstraint()` (`backend/src/db/postgresStore.ts`) entfernt die Constraint kurzzeitig (`ALTER TABLE ... DROP CONSTRAINT IF EXISTS`), lässt den Smoketest die Alt-Zeile einfügen + `migrateLegacySystemFolders()` darüber laufen (räumt sie auf), stellt die Constraint danach wieder her (`ALTER TABLE ... ADD CONSTRAINT`) — bildet damit exakt den echten Alt-DB-Zustand nach, statt die Constraint dauerhaft aufzuweichen. `smoketest.ts` nutzt das nur für `store instanceof PostgresStore`, für `InMemoryStore` (kein echtes Constraint-Konzept) läuft derselbe Testcode unverändert direkt. Details/Begründung: `backend/README.md` Auth-Abschnitt, dortiger Fund-Eintrag jetzt als "behoben" aktualisiert statt neu angehängt.
+
+**Verifiziert (nicht nur behauptet):** frische lokale Postgres-16-Instanz aufgesetzt, `npm test` mit `DATABASE_URL` läuft jetzt komplett grün durch (vorher: Fehlschlag im Migrations-Block). Per `psql` geprüft: Constraint nach dem Testlauf wiederhergestellt, Alt-Zeile weg, ein manuelles `INSERT` mit `'wichtig'` wird wieder korrekt abgelehnt. `npm run typecheck` sauber. `npm test` ohne `DATABASE_URL` (InMemoryStore) weiterhin grün, unverändertes Verhalten.
+
+**[Terminal, 15.09., an Web/Massimo]:** Bugfix (Punkt 2 der FREIGABE-Liste) ist fertig, Smoketest läuft jetzt erstmals vollständig gegen echtes Postgres durch. Weiter mit den drei Optik-Punkten (Ordnername-Vorschlag "Dokumente", Header zeigt E-Mail-Adresse statt "Driftmail", App-Icon-Design) — laut Freigabe ohne weitere Rückfrage, beliebige Reihenfolge.

@@ -4,6 +4,7 @@
 
 import { createApp } from "./app";
 import { ensureDemoUser, initStore, store } from "./db/store";
+import { PostgresStore } from "./db/postgresStore";
 import { syncAccount } from "./mail/sync";
 import { aiAdapter } from "./ai";
 import { domainReputationLookup, extractIbanCandidates, ibanHistoryCheck } from "./lookups";
@@ -611,31 +612,49 @@ async function main() {
     // die Nachricht nach "eingang" verschiebt und den Ordner entfernt. Cast
     // auf SystemFolderKey nötig, weil "wichtig" laut aktuellem Contract kein
     // gültiger Wert mehr ist -- genau das simuliert hier echte Altdaten.
-    const legacyWichtigFolder = await store.createFolder({
-      userId: account.userId,
-      name: "Wichtig",
-      icon: "star",
-      isSystem: true,
-      systemKey: "wichtig" as unknown as SystemFolderKey,
-      sortOrder: 99,
-    });
-    const legacyMessage = await store.insertMessage({
-      mailAccountId: account.id,
-      messageIdHeader: "<legacy-migration-test@example.com>",
-      providerMessageId: null,
-      fromAddress: "alt@example.com",
-      fromDisplayName: null,
-      replyToAddress: null,
-      subject: "Alte Mail im wichtig-Ordner",
-      bodyText: "Text",
-      receivedAt: new Date().toISOString(),
-      folderId: legacyWichtigFolder.id,
-      rawHeaders: null,
-    });
-    await ensureDemoUser(); // triggert migrateLegacySystemFolders() (Store hat bereits Ordner -> else-Zweig)
-    const migratedMessage = await store.getMessage(legacyMessage.id);
-    assert(migratedMessage !== undefined, "Nachricht aus dem alten 'wichtig'-Ordner darf nicht verloren gehen");
-    assert(migratedMessage!.folderId === eingangFolder!.id, "Nachricht aus 'wichtig' sollte nach der Migration in 'eingang' liegen");
+    //
+    // [2026-09-15] Bugfix (SYNC.md 10.09., vorbestehender, nie behobener
+    // Fund): gegen echtes Postgres verletzte das direkte INSERT unten die
+    // `folders_system_key_check`-Constraint, die seit dem Ordner-Umbau nur
+    // noch die neue 7er-Liste erlaubt -- auf einer frisch aus
+    // contracts/db-schema.sql aufgesetzten Test-DB kann "wichtig" so nie
+    // eingefügt werden, obwohl genau das auf einer echten, VOR dem Umbau
+    // angelegten Produktions-DB möglich ist (siehe Kommentar an
+    // runWithRelaxedSystemKeyConstraint() in postgresStore.ts). Deshalb hier
+    // die Constraint für Postgres kurzzeitig entfernt, für InMemoryStore
+    // (kein echtes Constraint-Konzept) läuft derselbe Code unverändert direkt.
+    const runLegacyFolderMigrationCheck = async () => {
+      const legacyWichtigFolder = await store.createFolder({
+        userId: account.userId,
+        name: "Wichtig",
+        icon: "star",
+        isSystem: true,
+        systemKey: "wichtig" as unknown as SystemFolderKey,
+        sortOrder: 99,
+      });
+      const legacyMessage = await store.insertMessage({
+        mailAccountId: account.id,
+        messageIdHeader: "<legacy-migration-test@example.com>",
+        providerMessageId: null,
+        fromAddress: "alt@example.com",
+        fromDisplayName: null,
+        replyToAddress: null,
+        subject: "Alte Mail im wichtig-Ordner",
+        bodyText: "Text",
+        receivedAt: new Date().toISOString(),
+        folderId: legacyWichtigFolder.id,
+        rawHeaders: null,
+      });
+      await ensureDemoUser(); // triggert migrateLegacySystemFolders() (Store hat bereits Ordner -> else-Zweig)
+      const migratedMessage = await store.getMessage(legacyMessage.id);
+      assert(migratedMessage !== undefined, "Nachricht aus dem alten 'wichtig'-Ordner darf nicht verloren gehen");
+      assert(migratedMessage!.folderId === eingangFolder!.id, "Nachricht aus 'wichtig' sollte nach der Migration in 'eingang' liegen");
+    };
+    if (store instanceof PostgresStore) {
+      await store.runWithRelaxedSystemKeyConstraint(runLegacyFolderMigrationCheck);
+    } else {
+      await runLegacyFolderMigrationCheck();
+    }
     const foldersAfterMigrationRes = await fetch(`${base}/v1/folders`);
     const foldersAfterMigration = (await foldersAfterMigrationRes.json()) as Array<Record<string, unknown>>;
     assert(!foldersAfterMigration.some((f) => f.systemKey === "wichtig"), "'wichtig'-Ordner sollte nach der Migration entfernt sein");

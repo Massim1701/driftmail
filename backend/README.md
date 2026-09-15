@@ -941,19 +941,43 @@ Tabellen. Web: `npm run build` grün, End-to-End im Browser gegen den
 Mock-Server verifiziert (impliziter Login beim Laden, danach normale
 Nutzung wie vorher, keine sichtbare Änderung für den User).
 
-**Pre-existierender, unabhängiger Fund (nicht behoben, nicht Teil dieses
-Schritts):** beim Testen gegen eine echte Postgres-Instanz schlägt der
-bereits bestehende Migrations-Smoketest-Block ("Ordner-Umbau-Migration",
-simuliert einen Bestands-User mit einem alten `wichtig`-Ordner) fehl —
-`folders.system_key` hat seit dem Ordner-Umbau eine `CHECK`-Constraint, die
-`'wichtig'` korrekt ablehnt, der Smoketest simuliert diesen Altzustand aber
-per direktem `INSERT` gegen das AKTUELLE Schema, was gegen eine echte DB nie
-so hätte vorkommen können (bei einer echten Migration hätte die Zeile mit
-dem alten, damals noch gültigen Schema existiert). Gegen `InMemoryStore`
-(keine Constraints) fällt das nicht auf. Verifiziert, dass dieser Fund
-bereits vor diesem Schritt existierte (gleicher Fehler auf dem vorherigen
-Commit). Kein Blocker für Auth selbst, aber ein Hinweis, dass der
-Smoketest bisher nie vollständig gegen Postgres durchlief.
+**Pre-existierender, unabhängiger Fund — behoben (15.09., WEB_INBOX.md
+14.09. "FREIGABE", Punkt 2):** beim Testen gegen eine echte Postgres-Instanz
+schlug der bereits bestehende Migrations-Smoketest-Block
+("Ordner-Umbau-Migration", simuliert einen Bestands-User mit einem alten
+`wichtig`-Ordner) fehl — `folders.system_key` hat seit dem Ordner-Umbau eine
+`CHECK`-Constraint (`folders_system_key_check`), die `'wichtig'` korrekt
+ablehnt, der Smoketest simulierte diesen Altzustand aber per direktem
+`INSERT` gegen das AKTUELLE Schema.
+
+**Ursache (verifiziert, nicht nur vermutet):** auf einer frisch aus
+`contracts/db-schema.sql` aufgesetzten Test-DB gilt die verschärfte
+Constraint von Anfang an — eine Zeile mit `'wichtig'` kann dort nie
+entstehen. Auf einer ECHTEN, bereits vor dem Ordner-Umbau angelegten
+Produktions-DB kann so eine Zeile aber sehr wohl noch existieren: `CREATE
+TABLE ... IF NOT EXISTS` (siehe Kopfkommentar von `db-schema.sql`) wendet
+eine nachträglich verschärfte Constraint nie rückwirkend auf eine bereits
+bestehende Tabelle an. Der Smoketest simulierte also nicht den echten
+Altzustand, sondern einen auf frischem Schema unmöglichen Zwischenzustand.
+
+**Fix:** `PostgresStore.runWithRelaxedSystemKeyConstraint()`
+(`src/db/postgresStore.ts`) entfernt die Constraint für die Dauer des
+simulierten Alt-User-Szenarios (`ALTER TABLE ... DROP CONSTRAINT IF
+EXISTS`) und stellt sie danach wieder her (`ALTER TABLE ... ADD CONSTRAINT`)
+— bildet damit exakt nach, was auf einer echten Alt-DB der Fall wäre: die
+Zeile mit `'wichtig'` existiert, bis `migrateLegacySystemFolders()` sie
+aufräumt, danach gilt die Constraint wie gewohnt. `smoketest.ts` ruft das
+nur für `store instanceof PostgresStore` auf; gegen `InMemoryStore` (kein
+echtes Constraint-Konzept) läuft derselbe Code unverändert direkt.
+
+**Verifiziert (nicht nur behauptet):** gegen eine frische lokale
+Postgres-16-Instanz (`DATABASE_URL` gesetzt, `npm test`) läuft der komplette
+Smoketest jetzt grün durch, inkl. des Migrations-Blocks. Danach per `psql`
+geprüft: die Constraint ist wiederhergestellt (`\d folders` zeigt
+`folders_system_key_check`), die simulierte Alt-Zeile ist weg, ein erneutes
+manuelles `INSERT` mit `system_key='wichtig'` wird korrekt abgelehnt. Damit
+läuft der Smoketest jetzt erstmals wirklich vollständig gegen echtes
+Postgres durch, nicht nur teilweise wie zuvor dokumentiert.
 
 ### Echter Google-Login (10.09., WEB_INBOX.md "Antwort auf die zwei Fragen zu Auth")
 
