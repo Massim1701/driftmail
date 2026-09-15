@@ -614,9 +614,9 @@ Kein Blocker fuer die Weiterarbeit an sich (Simulator-Tests reichen), nur eine E
 Kein Blocker, keine offene Frage mehr an Web/Massimo aus diesem Block. Bitte einfach der Reihe nach abarbeiten und wie gewohnt in SYNC.md/TERMINAL_INBOX.md dokumentieren -- Web prueft regelmaessig eigenstaendig nach.
 
 
-[2026-09-15] [offen] [Reihenfolge nach Wichtigkeit] [Track C/F] — Nur noch zwei echte offene Punkte, bitte in dieser Reihenfolge:
+[2026-09-15] [erledigt: 596d333 (Punkt 1, bereits vorher fertig) + b1a2173 (Punkt 2)] [Reihenfolge nach Wichtigkeit] [Track C/F] — Nur noch zwei echte offene Punkte, bitte in dieser Reihenfolge:
 
 1. ZUERST (klein, schnell): Ordnername-Vorschlag "Dokumente" beim Anlegen eines eigenen Ordners (Chip/Quick-Pick statt leeres Textfeld). Reine UI-Kleinigkeit, sollte in Minuten erledigt sein.
 2. DANACH (aufwendiger): App-Icon/Logo-Design -- 2-3 PNG-Varianten in einem echten Design-Tool bauen, ins Repo committen (siehe SYNC.md "Antwort: wie Massimo die Icon-Varianten sehen will", 15.09.), Massimo entscheidet dann direkt anhand der Bilder.
 
-Kein Blocker. Sobald beide fertig sind, ist die aktuelle Liste komplett abgearbeitet.
+**Umgesetzt:** Punkt 1 war zu diesem Zeitpunkt bereits fertig (Commit `596d333`, siehe SYNC.md-Klarstellung 15.09.). Punkt 2: 3 PNG-Varianten in `ios/DriftmailApp/Resources/AppIcon-Vorschlaege/` committet (Commit `b1a2173`), Details/Trade-offs/offene Massimo-Entscheidung in SYNC.md. Damit ist die aktuelle Liste komplett abgearbeitet, kein Blocker.
