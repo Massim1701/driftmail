@@ -16,7 +16,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | 0 — Contracts | contracts/ | fertig | 2026-09-08 |
 | A — Backend | backend/ | fertig (inkl. echter Track-B-Integration) | 2026-09-15 |
 | B — Sicherheits-Klassifikation | security-classification/ | fertig | 2026-09-08 |
-| C — iOS App | ios/ | fertig | 2026-09-08 |
+| C — iOS App | ios/ | fertig | 2026-09-15 |
 | D — Vertrag & Reminder | contracts-logic/ | fertig | 2026-09-08 |
 | E — Antwort & Signatur | mail-actions/ | fertig | 2026-09-09 |
 | F — Web-Fallback-UI | web/ | fertig | 2026-09-08 |
@@ -460,3 +460,13 @@ Kein Blocker fuer die aktuelle Prioritaet (Auth, Antworten-Fix zuerst) -- dieses
 **Getestet:** Web `npm run build` grün, End-to-End per Browser-Automation gegen den Mock-Server verifiziert (Chip erscheint bei leerem Feld, Klick füllt das Feld, "Dokumente"-Ordner erfolgreich angelegt, Chip erscheint danach wieder für den nächsten Ordner). iOS: `xcodebuild -sdk iphonesimulator build` **BUILD SUCCEEDED** (kein Simulator-Device-Boot möglich in dieser Umgebung gerade — CoreSimulator-Framework auf diesem Mac veraltet, siehe Fehlermeldung bei `xcodebuild -list`, System-/Xcode-Update nötig, kein Code-Problem — Build gegen das iphonesimulator-SDK selbst lief aber durch, kein interaktiver Klicktest).
 
 **[Terminal, 15.09., an Web/Massimo]:** Optik-Punkt 1 von 3 fertig. Weiter mit "Header zeigt E-Mail-Adresse statt Driftmail", danach App-Icon-Design — laut Freigabe ohne weitere Rückfrage.
+
+[2026-09-15] [terminal] [C/F] — Header zeigt Konto-Adresse umgesetzt (WEB_INBOX.md 10.09. "UX-Fund im echten Geräte-Test", FREIGABE-Liste Punkt 4/2. Optik-Punkt). Kein Contract-Change (`emailAddress` existierte bereits im `MailAccount`-Schema). Betraf nur `ios/` — **Web war bereits erfüllt, verifiziert statt neu gebaut.**
+
+**Fund (per Git-Historie verifiziert, nicht nur behauptet):** `web/src/components/FolderSidebar.tsx` zeigt die Konto-Adresse (`account?.emailAddress`, aus einem echten `listAccounts()`-Aufruf) bereits seit dem allerersten Track-F-Skeleton-Commit unterhalb des "driftmail"-Brandings — das erfüllt bereits die im Auftrag selbst als gleichwertig genannte "zusätzlich zum App-Namen"-Variante. Keine Web-Änderung nötig für diesen Punkt.
+
+**iOS:** neues `AppEnvironment.account: MailAccount?` + `loadAccount()` (gleiches Cache-Muster wie das bestehende `loadFolders()`, nutzt den bereits vorhandenen `APIClient.fetchAccounts()`). `FolderListView.swift` setzt `.navigationTitle(environment.account?.emailAddress ?? "driftmail")` — **Ersetzen statt Ergänzen** (anders als Web), weil ein `navigationTitle` nur ein einzelner String ist und "statt" laut Auftrag ("statt ODER zusätzlich") gleichwertig zulässig war. Fällt auf "driftmail" zurück, solange das Konto lädt/bei Fehler. Kein Account-Switcher (laut Auftrag kein Muss für diesen Schritt). Details: `ios/README.md`.
+
+**Tests:** iOS `xcodebuild -sdk iphonesimulator build` **BUILD SUCCEEDED** (kein Simulator-Device-Boot möglich in dieser Umgebung — CoreSimulator-Framework auf diesem Mac veraltet gegenüber der Xcode-Version, System-/Update-Thema, kein Code-Problem, siehe `ios/README.md`). Kein Backend-/Web-Test nötig (keine Änderung dort).
+
+**[Terminal, 15.09., an Web/Massimo]:** Optik-Punkt 2 von 3 fertig (für Web bereits vorher erfüllt, nur verifiziert). Nur noch App-Icon/Logo-Design offen (letzter Punkt der FREIGABE-Liste) — laut WEB_INBOX.md 10.09. "App-Icon/Logo-Design" ausdrücklich KEIN reines Text-zu-Code-Auftrag: bitte 2-3 Varianten in einem echten Design-Tool bauen und Massimo direkt zeigen, statt aus der Textbeschreibung zu raten. Warte hier auf Rückmeldung, wie Massimo das bekommen möchte, bevor ich rate.

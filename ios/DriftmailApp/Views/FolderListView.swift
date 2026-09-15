@@ -36,7 +36,13 @@ struct FolderListView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(DesignTokens.Color.surfacePage)
-            .navigationTitle("driftmail")
+            // [2026-09-15] WEB_INBOX.md 10.09.: zeigt die E-Mail-Adresse des
+            // verbundenen Kontos statt des App-Namens, sobald geladen --
+            // User soll immer sofort sehen, in welchem Postfach er ist.
+            // Fällt auf "driftmail" zurück, solange das Konto noch lädt
+            // oder aus einem echten Fehler heraus (loadAccount() lässt
+            // account dann bewusst nil statt einen Ladezustand zu erzwingen).
+            .navigationTitle(environment.account?.emailAddress ?? "driftmail")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -64,6 +70,7 @@ struct FolderListView: View {
                 }
             }
             .task {
+                await environment.loadAccount()
                 await loadFoldersAndCounts()
             }
             .refreshable {

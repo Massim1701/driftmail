@@ -340,6 +340,54 @@ Compose-Feld sofort nutzbar, "KI-Entwurf vorschlagen" füllt es optional,
 "Verwerfen" schließt es wieder), die iOS-Implementierung folgt exakt
 demselben State-Aufteilungsprinzip.
 
+## [2026-09-15] Nachtrag: Ordner-Namensvorschlag + Header zeigt Konto-Adresse (Optik-Punkte 1+2 der FREIGABE-Liste)
+
+**Ordnername-Vorschlag "Dokumente"** (WEB_INBOX.md 10.09. "kleine
+UX-Ergänzung"): `Views/FolderListView.swift` fragt den Ordnernamen über ein
+natives SwiftUI `.alert()` mit `TextField` ab — anders als die
+Web-Sidebar kann ein `.alert()` keine eigene Chip-/Quick-Pick-Reihe
+hosten (Plattform-Grenze, kein Custom-Sheet nur für diese eine
+Polish-Aufgabe gebaut, wäre unverhältnismäßig zum Umfang). Stattdessen der
+`TextField`-Placeholder von "Name" auf "z. B. Dokumente" geändert — gleiche
+Absicht (Vorschlag statt leerem Feld), plattformgerecht umgesetzt statt
+1:1 portiert.
+
+**Header zeigt Konto-Adresse statt "driftmail"** (WEB_INBOX.md 10.09.
+"UX-Fund im echten Geräte-Test"): neues `AppEnvironment.account:
+MailAccount?` + `loadAccount()` (gleiches Cache-Muster wie `loadFolders()`,
+nutzt den bereits im `APIClient`-Protokoll vorhandenen `fetchAccounts()`).
+`FolderListView.swift` ruft `loadAccount()` im `.task` auf und setzt
+`.navigationTitle(environment.account?.emailAddress ?? "driftmail")` —
+**Ersetzen statt Ergänzen**, anders als die Web-Sidebar (die Branding
+UND Adresse gleichzeitig zeigen kann, weil beides eigene Zeilen sind):
+ein `navigationTitle` ist ein einzelner String, "statt" war laut Auftrag
+("statt ODER zusätzlich") gleichwertig zulässig und ist der native
+iOS-Weg für einen einzeiligen Titel. Fällt auf "driftmail" zurück, solange
+das Konto noch lädt oder bei einem Fehler (`loadAccount()` lässt `account`
+dann bewusst `nil`, kein erzwungener Ladezustand). Kein
+Account-Switcher (laut Auftrag kein Muss für diesen Schritt, `account` ist
+aber bereits zentral in `AppEnvironment` gehalten, falls das später
+gebraucht wird).
+
+**Web-Seite bereits erfüllt, verifiziert statt neu gebaut:** die
+Web-Sidebar (`FolderSidebar.tsx`) zeigt die Konto-Adresse (`account?.
+emailAddress` aus einem echten `listAccounts()`-Aufruf, kein Mock-Wert)
+bereits seit dem allerersten Track-F-Skeleton unterhalb des
+"driftmail"-Brandings — das erfüllt bereits die "zusätzlich
+zum App-Namen"-Variante aus dem Auftrag, keine Web-Änderung für diesen
+Punkt nötig. Per Git-Historie nachvollzogen (nicht nur behauptet): der
+Code existierte schon vor diesem WEB_INBOX.md-Eintrag.
+
+**Tests:** `xcodebuild -sdk iphonesimulator build` **BUILD SUCCEEDED**.
+Kein Simulator-Device-Boot in dieser Umgebung möglich (CoreSimulator-
+Framework auf diesem Mac veraltet gegenüber der installierten
+Xcode-Version, siehe Fehlermeldung bei `xcodebuild -list` — ein
+System-/Xcode-Update-Thema, kein Code-Problem; Build gegen das
+iphonesimulator-SDK selbst lief beide Male durch), kein interaktiver
+Klicktest. Web-Seite (nur Ordnername-Vorschlag, Header war schon da) per
+Browser-Automation end-to-end verifiziert, siehe `web/README.md`/
+SYNC.md.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine
