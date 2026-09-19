@@ -678,3 +678,26 @@ Vorschlag: neuer spam_subcategory-Wert 'advance_fee_scam' (Enum in message_secur
 WICHTIG, Abgrenzung: das bleibt eine UNTERKATEGORIE von spam, NICHT von phishing. Klassische Phishing-Mails (Credential-Diebstahl, gefaelschte Login-Seiten) bleiben unveraendert bei der vorsichtigeren Quarantaene-mit-Warnhinweis-Behandlung -- dort ist das Risiko eines Fehlalarms teurer (koennte eine echte, wichtige Sicherheitswarnung sein), waehrend der Vorschussbetrug ein eindeutiges, seit Jahrzehnten bekanntes Muster ohne legitimen Graubereich ist.
 
 Kein Blocker, bitte nach dem Stabilitaets-Check und dem OCR-Auftrag einordnen. Beide Punkte unabhaengig voneinander umsetzbar, koennen parallel laufen.
+
+
+[2026-09-15] [offen] [NEUE AUFTRAEGE - 6 Sicherheits-Ergaenzungen] [Track A/B + Track C/F + contracts] [nach Stabilitaets-Check + OCR + Whitelist/Vorschussbetrug] — Massimo hat sechs weitere Sicherheitsluecken bestaetigt, alle sechs sollen umgesetzt werden. Getrennte, unabhaengige Punkte:
+
+**1) Anzeigename-Spoofing-Erkennung (Track B):**
+Absender-Anzeigename (z.B. "PayPal Support") stimmt inhaltlich nicht mit der Domain der echten Absenderadresse ueberein (z.B. Anzeigename nennt eine bekannte Marke/Firma, tatsaechliche Adresse hat eine komplett andere/verdaechtige Domain). Neues Signal in security-classification, aehnliches Muster wie die bestehende Homoglyph-Erkennung: bekannte Markennamen-Liste (PayPal, Amazon, Bank-Namen etc. -- Startliste ausreichend, muss nicht vollstaendig sein) im Anzeigenamen gegen die tatsaechliche Absender-Domain abgleichen. Erhoeht bei Treffer classification-Konfidenz Richtung phishing.
+
+**2) Reply-To-Mismatch (Track B):**
+Falls die Mail einen Reply-To-Header hat, der von der sichtbaren From-Adresse abweicht (klassischer BEC-Trick), ist das ein zusaetzliches Phishing-Signal. Reply-To-Header muss beim Mail-Sync mit eingelesen werden (Track A, falls noch nicht vorhanden), dann Vergleich in security-classification.
+
+**3) IBAN-Wechsel im selben Thread (Track A + B):**
+Baut auf der bestehenden IBAN-Erkennung (containsNewIban) auf. Wenn innerhalb desselben Threads (gleicher in_reply_to_message_id-Verlauf) eine ANDERE IBAN auftaucht als in einer frueheren Nachricht desselben Threads, ist das ein starkes Betrugssignal (Rechnungsbetrug/"IBAN-Wechsel-Trick"). Braucht Zugriff auf vorherige Nachrichten desselben Threads waehrend der Klassifikation -- das ist ein Zustandsbezug, den das bisher zustandslose security-classification/ nicht selbst hat (siehe fruehere Architektur-Entscheidung: externe/zustandsbehaftete Pruefungen laufen als Nachbearbeitung in Track A). Bitte als weiteren Nachbearbeitungsschritt in Track A einbauen, analog zu den vier bestehenden externen Lookups.
+
+**4) "Erster Kontakt"-Kennzeichnung (Track A + C/F):**
+Mail von einer Adresse, von der der User noch nie zuvor eine Mail bekommen hat, bekommt ein dezentes UI-Kennzeichen ("Neuer Absender"). Pruefung: existiert bereits eine fruehere Nachricht mit derselben From-Adresse fuer diesen User? Kein neues Feld noetig, kann zur Laufzeit aus messages abgeleitet werden (oder als Cache-Feld, Track A entscheidet). Ergaenzt sich gut mit der gerade gebauten Whitelist (trusted_senders) -- ein Absender, der noch NICHT auf der Whitelist steht UND zum ersten Mal schreibt, ist der Fall, der das Kennzeichen bekommt.
+
+**5) App-Sperre per Face ID/Touch ID (Track C, evtl. Track F wo technisch moeglich):**
+Zusaetzlich zum Mail-Konto-Login: App selbst mit biometrischer Sperre schuetzen (iOS: LocalAuthentication-Framework), damit der lokale Mail-Cache geschuetzt ist, falls das Geraet verloren geht/gestohlen wird, waehrend die App noch eingeloggt ist. Optional in den Einstellungen aktivierbar (nicht erzwungen, User-Entscheidung), aber deutlich empfohlen beim Onboarding.
+
+**6) Verschluesselung der lokalen Mail-Datenbank (Track A/C/F, je nach Speicherort):**
+Die lokal zwischengespeicherten Mails (siehe fruehere Diskussion zu lokalem IMAP-Cache) sollen at-rest verschluesselt sein, nicht nur durch die generelle Geraeteverschluesselung. iOS: Core-Data-Verschluesselung oder Keychain-gestuetzter Schluessel, macOS-Web-Client: je nach tatsaechlichem Speicherort (IndexedDB o.ae.) pruefen, was realistisch umsetzbar ist. Bitte Grenzen ehrlich dokumentieren, falls eine Plattform das nicht vollstaendig abbilden kann.
+
+Kein Contract-Bruch bei 1/2/4 (neue Felder/Signale, additiv). Bei 3 und 6 bitte Umfang/Grenzen klar in SYNC.md dokumentieren, da beides etwas aufwendiger ist. Alle sechs unabhaengig voneinander umsetzbar, Reihenfolge nach eigenem Ermessen -- Vorschlag: 1/2/4 zuerst (klein, additiv), dann 3, dann 5/6 (groesserer Aufwand).
