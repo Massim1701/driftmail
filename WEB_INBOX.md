@@ -718,3 +718,12 @@ Kein Contract-Bruch bei 1/2/4 (neue Felder/Signale, additiv). Bei 3 und 6 bitte 
 **Vorschlag zur Reihenfolge:** Gmail-OAuth zuerst fertigstellen (laeuft bereits). Danach IMAP-Passwort-Weg mit Provider-Presets (GMX/web.de/iCloud/generisch) -- technisch einfacher als weitere OAuth-Integrationen, deckt aber schon viele deutsche Nutzer ab. Outlook/Yahoo-OAuth koennen warten, bis Massimo bei Bedarf weitere Provider-Projekte einrichtet (aehnlicher Aufwand wie das Google-Cloud-Projekt).
 
 Kein Blocker fuer die aktuell laufenden Auftraege (Stabilitaets-Check, OCR, Whitelist, die 6 Sicherheits-Ergaenzungen), aber bitte zeitnah einordnen -- ohne das ist der Client fuer alle Nicht-Gmail-Nutzer aktuell gar nicht nutzbar.
+
+
+[2026-09-19] [offen] [PRIORITAET - naechster Schritt] [Track C/F] — Backend-Seite von drei grossen Themen ist fertig (Whitelist/Vorschussbetrug, 5 von 6 Sicherheitsergaenzungen, IMAP-Provider-Support inkl. zweier kritischer Sicherheitsfixes, siehe SYNC.md 19.09.). Bitte jetzt die UI-Seite nachziehen:
+
+1. Onboarding: Provider-Auswahlbildschirm (Gmail, Outlook/Yahoo als "demnaechst", iCloud, GMX, web.de, generisches IMAP) + IMAP-Verbindungsformular mit Preset-Vorbefuellung (GET /mail-providers nutzen) + kurze App-Passwort-Erklaerung mit Link zur jeweiligen Anbieter-Anleitung.
+2. Sichtbare Kennzeichen/Badges fuer die neuen Sicherheitssignale: Anzeigename-Spoofing, Reply-To-Mismatch, IBAN-Wechsel im Thread, "Neuer Absender" (isNewSender). Bitte am bestehenden Farbrollen-/Warnhinweis-System orientieren (design-tokens.json colorRole, gleiche Sprechblasen-/Banner-Optik wie bei den bereits bestehenden Warnungen), keine neue visuelle Sprache erfinden.
+3. Face-ID/Touch-ID-App-Sperre ist auf iOS laut Bericht schon "echt gebaut" -- bitte auf Web pruefen, ob/wie ein Aequivalent sinnvoll ist (z.B. WebAuthn/Passkey-Sperre beim Aufwachen aus Inaktivitaet), oder dokumentieren falls technisch nicht sinnvoll uebertragbar.
+
+Kein Blocker, alle drei Punkte unabhaengig. IMAP-Login-Weg bitte einmal von Massimo selbst mit echtem GMX-/web.de-/iCloud-Konto gegengetestet werden, sobald Zeit ist (siehe SYNC.md 19.09.) -- das kann parallel zur UI-Arbeit laufen, ist kein Abhaengigkeits-Blocker dafuer.
