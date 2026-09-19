@@ -209,6 +209,55 @@ paths:
         "204":
           description: Gelöscht
 
+  /trusted-senders:
+    get:
+      summary: Vertrauenswuerdige Absender des Users auflisten
+      responses:
+        "200":
+          description: Liste der vertrauenswuerdigen Absender
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrustedSender"
+    post:
+      summary: >
+        Absender als vertrauenswuerdig markieren (User-Entscheidung, keine
+        automatische Klassifikation). Wirkt ab sofort fuer kuenftige Mail
+        dieser Adresse -- landet dann unabhaengig vom sonstigen
+        Auth-/Link-/Inhalts-Signal direkt in eingang. Idempotent: erneutes
+        Hinzufuegen derselben Adresse liefert den bestehenden Eintrag.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [senderAddress]
+              properties:
+                senderAddress: { type: string }
+      responses:
+        "201":
+          description: Hinzugefuegt (oder bereits vorhanden)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrustedSender"
+
+  /trusted-senders/{trustedSenderId}:
+    delete:
+      summary: Vertrauenswuerdigen Absender wieder entfernen
+      parameters:
+        - name: trustedSenderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Entfernt
+
   /messages:
     get:
       summary: Nachrichten eines Ordners abrufen
@@ -827,6 +876,13 @@ components:
           enum: [eingang, entwuerfe, gesendet, sonstiges, quarantaene, spam, papierkorb]
         sortOrder: { type: integer }
 
+    TrustedSender:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        senderAddress: { type: string }
+        addedAt: { type: string, format: date-time }
+
     Draft:
       type: object
       properties:
@@ -922,7 +978,7 @@ components:
         spamSubcategory:
           type: string
           nullable: true
-          enum: [adult, gambling, generic, marketing]
+          enum: [adult, gambling, generic, marketing, advance_fee_scam]
         ipReputationFlag:
           type: string
           nullable: true

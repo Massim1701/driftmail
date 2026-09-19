@@ -150,6 +150,28 @@ const FIXTURES: FetchedMail[] = [
     receivedAt: daysAgo(0),
     rawHeaders: { "Received-SPF": "none", "Content-Type": "text/plain" },
   },
+  {
+    // Auto-Delete-Pfad (WEB_INBOX.md 15.09., "Neue Auto-Loesch-Kategorie:
+    // klassischer Vorschussbetrug"): klassisches "Prinz aus Nigeria"-Muster
+    // -> classification "spam" + spamSubcategory "advance_fee_scam" -> wird
+    // von der Sync-Pipeline NICHT persistiert (gleiche Behandlung wie
+    // adult/gambling, siehe mail/sync.ts). Kein Auth-Signal nötig -- der
+    // Content-Trigger in security-classification/src/index.ts erhebt
+    // eindeutigen Inhalt selbst zu "spam", auch ohne technisches Signal
+    // (dieses Muster kommt fast immer als reiner Fließtext ohne Link).
+    messageIdHeader: "<fixture-7@erbschaft-mitteilung.example>",
+    providerMessageId: null,
+    fromAddress: "kanzlei@erbschaft-mitteilung.example",
+    fromDisplayName: "Rechtsanwaltskanzlei Dubois",
+    replyToAddress: null,
+    subject: "Vertrauliche Mitteilung: Erbschaft in Millionenhöhe",
+    bodyText:
+      "Sehr geehrte Damen und Herren, ich bin der Anwalt eines verstorbenen Geschäftsmann, der Ihnen als " +
+      "next of kin ein Vermögen von mehreren Millionen US-Dollar hinterlassen hat. Bitte antworten Sie unter " +
+      "strengster Geheimhaltung, damit wir die Übertragung einleiten können.",
+    receivedAt: daysAgo(4),
+    rawHeaders: { "Content-Type": "text/plain", "Received-SPF": "pass" },
+  },
 ];
 
 export class FixtureMailAdapter implements MailAdapter {

@@ -14,8 +14,8 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | Track | Ordner | Status | Zuletzt geändert |
 |---|---|---|---|
 | 0 — Contracts | contracts/ | fertig | 2026-09-08 |
-| A — Backend | backend/ | fertig (inkl. echter Track-B-Integration) | 2026-09-15 |
-| B — Sicherheits-Klassifikation | security-classification/ | fertig | 2026-09-15 |
+| A — Backend | backend/ | fertig (inkl. echter Track-B-Integration) | 2026-09-19 |
+| B — Sicherheits-Klassifikation | security-classification/ | fertig | 2026-09-19 |
 | C — iOS App | ios/ | fertig | 2026-09-15 |
 | D — Vertrag & Reminder | contracts-logic/ | fertig | 2026-09-08 |
 | E — Antwort & Signatur | mail-actions/ | fertig | 2026-09-09 |
@@ -566,5 +566,26 @@ Drei Varianten, alle Hellblau (`#4A90D9`, dieselbe Farbe wie die Referenz — nu
 **Bewusste Grenzen (README "Sensible-Dokument-Erkennung"):** kein `heic`-Support (bräuchte `libheif`-Konvertierung), kein iOS-Vision-Framework-Pfad (Auftrag nannte das als Option, aber `POST /attachments` ist bereits die eine zentrale Stelle für Anhänge JEDER Plattform — ein iOS-seitiger on-device-Vorab-Check wäre reine Duplikation des bereits funktional vollständigen Backend-Scans, kein Blocker für diesen Schritt, könnte ein späterer eigenständiger iOS-Schritt sein).
 
 **Tests:** 3 echte Bild-Fixtures (`backend/test-fixtures/*.png`, per Chrome-Rendering erzeugt, keine Platzhalter) — Kreditkarten-Foto (Luhn-gültige Testnummer), Passfoto mit MRZ-Block, unauffälliges Foto — laufen durch die ECHTE OCR-Pipeline im Smoketest, plus ein Nicht-Bild-Anhang, der `'none'` ohne OCR-Versuch bekommt (MIME-Weiche). `security-classification`: 7 neue Tests für `detectMrz()` (121 Tests gesamt, alle grün). Backend: `npm run typecheck`/`npm test` grün, ohne UND mit `DATABASE_URL` gegen eine frische lokale Postgres-Instanz.
+
+**Kein Blocker, keine offene Frage.**
+
+[2026-09-19] [terminal] [A/B] — Whitelist vertrauenswürdiger Absender + Vorschussbetrug-Auto-Löschung umgesetzt (WEB_INBOX.md 15.09. "NEUER AUFTRAG: zwei getrennte Ergaenzungen zur Absender-Behandlung", nach Stabilitäts-Check + OCR-Auftrag). Betraf `contracts/`, `backend/`, `security-classification/`. **Track C/F (Web-/iOS-UI) bewusst nicht gebaut, siehe "Übergabe" unten** — gleiches Muster wie beim OCR-Auftrag.
+
+**1) Whitelist (`trusted_senders`):**
+- `contracts/db-schema.sql`: neue Tabelle `trusted_senders` (`id`, `user_id`, `sender_address`, `added_at`, `UNIQUE(user_id, sender_address)`) — exakt wie im Auftrag vorgeschlagen.
+- `contracts/api-spec.yaml`: `GET`/`POST /trusted-senders`, `DELETE /trusted-senders/{trustedSenderId}`, neues `TrustedSender`-Schema.
+- `backend/src/db/store.ts` + `postgresStore.ts`: `createTrustedSender()` ist find-or-create (idempotent über `UNIQUE(user_id, sender_address)`, `201` auch bei bereits vorhandenem Eintrag statt Konflikt), `listTrustedSenders()`, `getTrustedSender()`, `deleteTrustedSender()`, `isTrustedSender()`. Adresse wird kleingeschrieben gespeichert (E-Mail-Adressen lokal case-insensitiv, gleiches Prinzip wie `hasSentTo()`) — sonst hätten `Foo@Bar.com`/`foo@bar.com` als zwei verschiedene Einträge gezählt.
+- `backend/src/routes/trustedSenders.ts` (neu) + `app.ts`-Registrierung. Besitz-Prüfung bei `DELETE` analog zu `routes/folders.ts`.
+- **Wirkung (`backend/src/mail/sync.ts`):** direkt nach `ai.analyzeMail()`, VOR den externen Lookups UND dem Auto-Delete-Pfad, wird `store.isTrustedSender()` geprüft; bei Treffer werden `classification` auf `"safe"` und `spamSubcategory` auf `null` überschrieben — landet danach immer in `eingang`, unabhängig vom sonstigen Signal (auch wenn `analyzeMail()` eigentlich `phishing` geliefert hätte). Bewusst VOR dem Auto-Delete-Pfad geprüft, nicht danach korrigiert.
+- **Design-Entscheidung (nicht explizit im Auftrag):** kein Domain-Wildcard (z.B. `*@firma.de`), nur exakte Adressen — der Auftrag sprach durchgehend von "einen Absender" (Singular, Adresse), keine Unterscheidung von Domain-Whitelisting angedeutet.
+
+**2) Neue Auto-Delete-Kategorie `advance_fee_scam`:**
+- `contracts/db-schema.sql` + `api-spec.yaml`: `spam_subcategory`/`spamSubcategory`-Enum um `advance_fee_scam` erweitert (`adult`/`gambling`/`generic`/`marketing`/`advance_fee_scam`).
+- `security-classification/src/spamSubcategory.ts`: gleiches zweistufiges STRONG/WEAK-Keyword-Verfahren wie bei `adult`/`gambling` (z.B. "verstorbenen geschäftsmann"/"next of kin" stark, "erbschaft"/"millionen us-dollar"/"geheimhaltung" schwach, ab 2 Treffern). `src/index.ts`: `advance_fee_scam` ist derselbe eigenständige Content-Trigger wie `adult`/`gambling` (hebt `classification` auf `"spam"` auch ohne technisches Signal, außer bei bereits `"phishing"`) — begründet, weil dieses Muster fast immer als reiner Fließtext ohne Link/Homoglyph kommt.
+- `backend/src/mail/sync.ts`: Auto-Delete-Bedingung um `advance_fee_scam` erweitert (nicht persistieren, kein Undo, wie `adult`/`gambling`). **Eigener Audit-Log-Action-Name `auto_deleted_advance_fee_scam`** (statt des bestehenden `auto_deleted_adult_gambling_spam`) — bewusst NICHT der bestehende Name für alle drei, damit `security_audit_log` die Kategorien unterscheidbar hält, ohne bestehende Auswertungen/Erwartungen am alten Namen zu brechen.
+
+**Tests:** `security-classification` 125 Tests grün (6 neue: `spamSubcategory.test.ts` STRONG/WEAK-Fälle für `advance_fee_scam`, `index.test.ts` Content-Trigger-Fall). Backend-Smoketest: neue Fixture 7 (`fixtureAdapter.ts`, Vorschussbetrug-Text) beweist Auto-Delete + eigener Audit-Log-Eintrag (`autoDeleted` jetzt `2` statt `1`, mit Erklärung warum in der Assertion). Whitelist über den bereits im Smoketest vorhandenen "zweiten User" getestet: markiert Fixture 2s (Phishing-)Absender VOR dem ersten eigenen Sync als vertrauenswürdig, verifiziert danach `classification==='safe'`, `folderId===eingang`, keine Quarantäne — UND dass Fixture 5/7 trotzdem automatisch gelöscht werden (Whitelist wirkt gezielt, nicht global). Zusätzlich: leere Liste für frischen User, Idempotenz bei case-insensitiv gleicher Adresse, 400 ohne `senderAddress`, 403 beim Löschversuch durch einen anderen User, 404 bei unbekannter ID. `npm run typecheck`/`npm test` grün, ohne UND mit `DATABASE_URL` gegen eine frisch aufgesetzte lokale Postgres-Instanz. `web/`-Build unverändert grün (keine Web-Änderung in diesem Schritt, siehe Übergabe).
+
+**Übergabe:** Track C/F (Web-/iOS-UI) bewusst nicht gebaut — kein "Als vertrauenswürdig markieren"-Button in der Detailansicht, keine Verwaltungsansicht für die Whitelist. Contract + Backend + Erkennung sind vollständig und sofort nutzbar (z.B. per curl/Postman), UI-Wiring ist ein eigener, unabhängiger nächster Schritt.
 
 **Kein Blocker, keine offene Frage.**

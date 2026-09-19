@@ -124,13 +124,18 @@ Umbenennung/Löschung bei System-Ordnern, inkl. `papierkorb`),
 `/v1/messages/:id` (DELETE, soft delete in den Papierkorb),
 `/v1/messages/:id/permanent` (DELETE, endgültiges Löschen — inkl. Ablehnung
 außerhalb des Papierkorbs), `/v1/contracts`, `/v1/contracts/:id/confirm`,
-`/v1/capability-check`. Bricht mit
-Fehlermeldung ab, sobald eine Response nicht zum erwarteten Contract-Format
-passt. Prüft zusätzlich direkt gegen `store` (kein HTTP-Endpunkt dafür,
-siehe oben): den Auto-Delete-Pfad (adult/gambling-Spam-Fixture wird nicht
-persistiert, hinterlässt genau einen `security_audit_log`-Eintrag, ein
+`/v1/capability-check`, `/v1/trusted-senders` (GET/POST/DELETE, inkl.
+Idempotenz bei erneutem Hinzufügen derselben Adresse und Besitz-Prüfung
+über zwei User hinweg). Bricht mit Fehlermeldung ab, sobald eine Response
+nicht zum erwarteten Contract-Format passt. Prüft zusätzlich direkt gegen
+`store` (kein HTTP-Endpunkt dafür, siehe oben): den Auto-Delete-Pfad
+(adult/gambling/advance_fee_scam-Spam-Fixtures werden nicht persistiert,
+hinterlassen je Kategorie einen eigenen `security_audit_log`-Eintrag, ein
 zweiter Sync-Lauf dedupliziert korrekt und erzeugt keinen weiteren
-Eintrag).
+Eintrag), sowie die Whitelist-Wirkung (ein zweiter, frisch angelegter User
+markiert einen Absender vor dem ersten Sync als vertrauenswürdig -- dessen
+eigentlich phishing-artige Fixture-Mail landet danach trotzdem in
+`eingang`, nicht in Quarantäne).
 
 Manuell durchprobieren z.B. mit:
 
@@ -302,6 +307,55 @@ Track B baut die echte Erkennungslogik; der Austausch betrifft weiterhin
 nur `src/ai/index.ts` (siehe oben "Was ist echt, was ist Mock/Stub").
 Integration mit Track B (echte `spamSubcategory`-Werte statt Mock) ist ein
 separater, noch offener Schritt.
+
+**Update 15.09. (`WEB_INBOX.md` "Neue Auto-Loesch-Kategorie: klassischer
+Vorschussbetrug"):** dritte Auto-Delete-Kategorie `advance_fee_scam`
+("Prinz aus Nigeria"-Muster) dazugekommen, gleiche Behandlung wie
+`adult`/`gambling` (nicht persistieren, kein Undo) in `src/mail/sync.ts`.
+Bewusst ein eigener Audit-Log-Action-Name (`auto_deleted_advance_fee_scam`
+statt des bestehenden `auto_deleted_adult_gambling_spam`), damit die drei
+Kategorien in `security_audit_log` unterscheidbar bleiben, ohne den
+bestehenden Action-Namen (und darauf aufbauende Auswertungen/Tests) zu
+ändern. Erkennung liegt in `security-classification/src/spamSubcategory.ts`
+(Track B, siehe dortiges README "Design-Entscheidungen").
+
+## Whitelist vertrauenswürdiger Absender
+
+Seit dem Contract-Update vom 15.09. (`WEB_INBOX.md` "Whitelist fuer
+vertrauenswuerdige Absender", Tabelle `trusted_senders`) kann der User eine
+Absenderadresse per `POST /trusted-senders` explizit als vertrauenswürdig
+markieren -- eine bewusste User-Entscheidung, **keine** automatische
+Klassifikation.
+
+**Wirkung (`src/mail/sync.ts`):** direkt nach `ai.analyzeMail()`, VOR den
+externen Lookups und dem Auto-Delete-Pfad, wird geprüft, ob
+`mail.fromAddress` auf der Whitelist des Kontobesitzers steht
+(`store.isTrustedSender()`). Falls ja, werden `classification` auf
+`"safe"` und `spamSubcategory` auf `null` überschrieben -- die Mail landet
+danach unabhängig vom sonstigen Auth-/Link-/Inhalts-Signal in `eingang`,
+auch wenn `analyzeMail()` sie eigentlich als `phishing` oder `spam`
+eingestuft hätte. Bewusst VOR (nicht NACH) dem Auto-Delete-Pfad geprüft,
+damit eine whitelisted Adresse mit z.B. `advance_fee_scam`-artigem Inhalt
+nicht trotzdem automatisch gelöscht wird, bevor die Whitelist greifen kann.
+
+**Grenzen (bewusst, kein Blocker):**
+- Wirkt nur für **künftige** Mail ab dem Zeitpunkt des Hinzufügens, kein
+  rückwirkendes Neu-Einordnen bereits importierter Nachrichten (so auch im
+  Auftrag spezifiziert).
+- Adressvergleich ist case-insensitiv (E-Mail-Adressen sind lokal meist
+  case-insensitiv), Adresse wird deshalb kleingeschrieben gespeichert
+  (`InMemoryStore`/`PostgresStore` verhalten sich hier identisch, siehe
+  Kommentare dort). Kein Domain-Wildcard (z.B. `*@firma.de`) -- nur exakte
+  Adressen, wie im Auftrag beschrieben.
+- `POST /trusted-senders` ist idempotent (find-or-create über
+  `UNIQUE(user_id, sender_address)`): erneutes Hinzufügen derselben Adresse
+  liefert `201` mit dem bestehenden Eintrag statt eines Konflikts.
+
+**Übergabe:** Track C/F (Web-/iOS-UI für "Absender als vertrauenswürdig
+markieren"-Button in der Detailansicht sowie eine Verwaltungsansicht für die
+Whitelist) ist bewusst **nicht** Teil dieses Schritts -- Contract + Track A/B
+(Backend-Endpunkte + Wirkung in der Sync-Pipeline) sind vollständig, siehe
+`SYNC.md`.
 
 ## Automatische Abmeldung bei Spam
 

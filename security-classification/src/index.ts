@@ -95,7 +95,13 @@ export async function analyzeMail(
   const contentSpamSubcategory = detectSpamSubcategory(rawText);
   const contentTriggersSpam =
     signalClassification !== "phishing" &&
-    (contentSpamSubcategory === "adult" || contentSpamSubcategory === "gambling");
+    (contentSpamSubcategory === "adult" ||
+      contentSpamSubcategory === "gambling" ||
+      // Vorschussbetrug (WEB_INBOX.md 15.09.): gleicher eigenständiger
+      // Trigger wie adult/gambling -- das klassische Muster kommt oft ohne
+      // Link/Homoglyph aus (reiner Fließtext), phishing-artige Signale
+      // fehlen also häufig ganz, obwohl der Inhalt eindeutig ist.
+      contentSpamSubcategory === "advance_fee_scam");
 
   const classification = contentTriggersSpam ? "spam" : signalClassification;
   const confidenceScore = contentTriggersSpam ? CONTENT_TRIGGERED_SPAM_CONFIDENCE : signalConfidence;

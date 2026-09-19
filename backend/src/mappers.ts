@@ -12,6 +12,7 @@ import type {
   ApiMessageDetail,
   ApiQuarantineInfo,
   ApiSecurityResult,
+  ApiTrustedSender,
   ContractRecord,
   DraftRecord,
   FolderRecord,
@@ -20,6 +21,7 @@ import type {
   MessageRecord,
   MessageSecurityRecord,
   QuarantineRecord,
+  TrustedSenderRecord,
 } from "./types";
 
 export function toApiMailAccount(a: MailAccountRecord): ApiMailAccount {
@@ -28,6 +30,10 @@ export function toApiMailAccount(a: MailAccountRecord): ApiMailAccount {
 
 export function toApiFolder(f: FolderRecord): ApiFolder {
   return { id: f.id, name: f.name, icon: f.icon, isSystem: f.isSystem, systemKey: f.systemKey, sortOrder: f.sortOrder };
+}
+
+export function toApiTrustedSender(t: TrustedSenderRecord): ApiTrustedSender {
+  return { id: t.id, senderAddress: t.senderAddress, addedAt: t.addedAt };
 }
 
 export function toApiSecurityResult(s: MessageSecurityRecord): ApiSecurityResult {

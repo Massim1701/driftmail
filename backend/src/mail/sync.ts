@@ -140,6 +140,19 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
 
       const security = await ai.analyzeMail(mail.bodyText ?? "", mail.rawHeaders);
 
+      // Whitelist (WEB_INBOX.md 15.09., "Whitelist für vertrauenswürdige
+      // Absender"): bewusste User-Entscheidung hat Vorrang vor der
+      // automatischen Erkennung -- eine gelistete Adresse landet immer in
+      // eingang, UNABHÄNGIG vom sonstigen Auth-/Link-/Inhalts-Signal. Deshalb
+      // hier VOR den externen Lookups und dem Auto-Delete-Pfad überschrieben,
+      // nicht erst nachträglich korrigiert (sonst würde z.B. der Auto-Delete-
+      // Pfad unten trotzdem greifen, bevor jemand die Klassifikation wieder
+      // zurückdreht).
+      if (await store.isTrustedSender(account.userId, mail.fromAddress)) {
+        security.classification = "safe";
+        security.spamSubcategory = null;
+      }
+
       // Externe Lookups als eigener Nachbearbeitungsschritt NACH
       // analyzeMail() (SYNC.md 08.09., Web-Antwort auf die vier "wer macht
       // den externen Lookup"-Fragen): security-classification/ (Track B)
@@ -171,7 +184,19 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
       // nahegelegt. Nachvollziehbarkeit für den User trotzdem über
       // `security_audit_log` (action 'auto_deleted_adult_gambling_spam'),
       // ohne Message-Referenz (messageId=null, da nie angelegt).
-      if (security.classification === "spam" && (security.spamSubcategory === "adult" || security.spamSubcategory === "gambling")) {
+      // [2026-09-15] WEB_INBOX.md "Neue Auto-Loesch-Kategorie: klassischer
+      // Vorschussbetrug": 'advance_fee_scam' bekommt dieselbe Behandlung wie
+      // adult/gambling (nicht persistieren, kein Undo) -- eigener
+      // Audit-Log-Action-Name, damit die drei Kategorien in
+      // security_audit_log unterscheidbar bleiben (bestehender Action-Name
+      // 'auto_deleted_adult_gambling_spam' bewusst unverändert, um bestehende
+      // Auswertungen/Tests nicht zu brechen).
+      const isAutoDeleteSpamCategory =
+        security.classification === "spam" &&
+        (security.spamSubcategory === "adult" ||
+          security.spamSubcategory === "gambling" ||
+          security.spamSubcategory === "advance_fee_scam");
+      if (isAutoDeleteSpamCategory) {
         // Automatische Abmeldung (WEB_INBOX.md 09.09.) VOR dem Verwerfen --
         // der Header steht hier schon zur Verfügung, danach nicht mehr
         // (keine messages-Zeile, aus der er sich später noch lesen ließe).
@@ -179,7 +204,10 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         await store.logSecurityAudit({
           userId: account.userId,
           messageId: null,
-          action: "auto_deleted_adult_gambling_spam",
+          action:
+            security.spamSubcategory === "advance_fee_scam"
+              ? "auto_deleted_advance_fee_scam"
+              : "auto_deleted_adult_gambling_spam",
         });
         await store.markAutoDeleted(account.id, mail.messageIdHeader);
         autoDeleted++;

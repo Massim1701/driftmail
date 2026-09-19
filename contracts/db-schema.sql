@@ -139,11 +139,12 @@ CREATE TABLE IF NOT EXISTS message_security (
     urgency_language_score NUMERIC(3,2),
     contains_new_iban BOOLEAN NOT NULL DEFAULT false,
     classification TEXT NOT NULL DEFAULT 'unclear' CHECK (classification IN ('safe', 'spam', 'phishing', 'unclear')),
-    -- Nur gesetzt wenn classification = 'spam'. 'adult'/'gambling' loesen
-    -- sofortiges Loeschen aus (kein Quarantaene-Pfad, kein 30-Tage-Aufheben,
-    -- kein Undo) -- siehe WEB_INBOX.md 08.09. Betrifft NICHT 'phishing',
-    -- das bleibt immer im Quarantaene-Pfad.
-    spam_subcategory TEXT CHECK (spam_subcategory IN ('adult', 'gambling', 'generic', 'marketing')),
+    -- Nur gesetzt wenn classification = 'spam'. 'adult'/'gambling'/
+    -- 'advance_fee_scam' loesen sofortiges Loeschen aus (kein
+    -- Quarantaene-Pfad, kein 30-Tage-Aufheben, kein Undo) -- siehe
+    -- WEB_INBOX.md 08.09. bzw. 15.09. ("Vorschussbetrug"). Betrifft NICHT
+    -- 'phishing', das bleibt immer im Quarantaene-Pfad.
+    spam_subcategory TEXT CHECK (spam_subcategory IN ('adult', 'gambling', 'generic', 'marketing', 'advance_fee_scam')),
     -- Botnetz-Erkennung (WEB_INBOX.md 08.09.). ip_reputation_flag braucht
     -- einen externen Blocklist-Abgleich (z.B. Spamhaus XBL/CBL) -- das kann
     -- ein zustandsloses Text+Header-Modul (Track B) nicht selbst liefern,
@@ -437,4 +438,19 @@ CREATE TABLE IF NOT EXISTS auto_deleted_message_headers (
   mail_account_id UUID NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
   message_id_header TEXT NOT NULL,
   PRIMARY KEY (mail_account_id, message_id_header)
+);
+
+-- ===== Vertrauenswuerdige Absender (User-Whitelist) =====
+-- WEB_INBOX.md 15.09. ("Whitelist fuer vertrauenswuerdige Absender"):
+-- bewusste User-Entscheidung, KEINE automatische Klassifikation. Hat Vorrang
+-- vor der automatischen Erkennung -- eine gelistete Adresse landet immer in
+-- eingang, siehe backend/src/mail/sync.ts. Wirkt nur fuer kuenftige Mail ab
+-- dem Zeitpunkt des Hinzufuegens, kein Ruecktausch bestehender Nachrichten.
+
+CREATE TABLE IF NOT EXISTS trusted_senders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sender_address TEXT NOT NULL,
+  added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, sender_address)
 );

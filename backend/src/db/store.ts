@@ -31,6 +31,7 @@ import type {
   SecurityAuditLogRecord,
   SessionRecord,
   SystemFolderKey,
+  TrustedSenderRecord,
   UnsubscribeActionRecord,
   User,
   UserAiCapabilityRecord,
@@ -158,6 +159,18 @@ export interface Store {
    * `messageId` weggelassen filtert gar nicht danach. Nur für den
    * Smoketest gedacht (kein API-Endpunkt liest diese Liste). */
   listUnsubscribeActions(filter: { userId?: string; messageId?: string | null }): Promise<UnsubscribeActionRecord[]>;
+
+  // ----- Vertrauenswuerdige Absender (Whitelist, WEB_INBOX.md 15.09.) -----
+  /** Find-or-create nach (userId, senderAddress) -- idempotent, analog zum
+   * UNIQUE-Constraint im Schema. Gibt bei bereits vorhandenem Eintrag den
+   * bestehenden zurück statt einen Konflikt zu werfen. */
+  createTrustedSender(input: { userId: string; senderAddress: string }): Promise<TrustedSenderRecord>;
+  listTrustedSenders(userId: string): Promise<TrustedSenderRecord[]>;
+  getTrustedSender(id: string): Promise<TrustedSenderRecord | undefined>;
+  deleteTrustedSender(id: string): Promise<boolean>;
+  /** Case-insensitiver Abgleich (Mail-Adressen sind lokal case-insensitiv
+   * üblich) -- genutzt von mail/sync.ts VOR der Auto-Delete-/Ordner-Logik. */
+  isTrustedSender(userId: string, senderAddress: string): Promise<boolean>;
 }
 
 /** In-Memory-Implementierung (Standard, wenn DATABASE_URL nicht gesetzt ist).
@@ -186,6 +199,9 @@ export class InMemoryStore implements Store {
   // `unsubscribe_actions` (db-schema.sql) -- siehe UnsubscribeActionRecord-
   // Kommentar in types.ts.
   unsubscribeActions: UnsubscribeActionRecord[] = [];
+  // `trusted_senders` (db-schema.sql, WEB_INBOX.md 15.09.) -- siehe
+  // TrustedSenderRecord-Kommentar in types.ts.
+  trustedSenders: TrustedSenderRecord[] = [];
 
   // ----- Externe Lookup-Adapter (SYNC.md 08.09., Web-Antwort "vier externe
   // Lookups") -----
@@ -594,6 +610,45 @@ export class InMemoryStore implements Store {
     return this.unsubscribeActions
       .filter((a) => (filter.userId ? a.userId === filter.userId : true))
       .filter((a) => (filter.messageId === undefined ? true : a.messageId === filter.messageId));
+  }
+
+  // ----- Vertrauenswuerdige Absender -----
+
+  // Adresse wird kleingeschrieben gespeichert -- siehe gleichnamiger
+  // Kommentar in postgresStore.ts für die Begründung (beide Stores müssen
+  // sich identisch verhalten).
+  async createTrustedSender(input: { userId: string; senderAddress: string }): Promise<TrustedSenderRecord> {
+    const normalized = input.senderAddress.toLowerCase();
+    const existing = this.trustedSenders.find((t) => t.userId === input.userId && t.senderAddress === normalized);
+    if (existing) return existing; // idempotent, siehe UNIQUE(user_id, sender_address) im Schema
+    const record: TrustedSenderRecord = {
+      id: randomUUID(),
+      userId: input.userId,
+      senderAddress: normalized,
+      addedAt: new Date().toISOString(),
+    };
+    this.trustedSenders.push(record);
+    return record;
+  }
+
+  async listTrustedSenders(userId: string): Promise<TrustedSenderRecord[]> {
+    return this.trustedSenders.filter((t) => t.userId === userId).sort((a, b) => (a.addedAt < b.addedAt ? 1 : -1));
+  }
+
+  async getTrustedSender(id: string): Promise<TrustedSenderRecord | undefined> {
+    return this.trustedSenders.find((t) => t.id === id);
+  }
+
+  async deleteTrustedSender(id: string): Promise<boolean> {
+    const idx = this.trustedSenders.findIndex((t) => t.id === id);
+    if (idx === -1) return false;
+    this.trustedSenders.splice(idx, 1);
+    return true;
+  }
+
+  async isTrustedSender(userId: string, senderAddress: string): Promise<boolean> {
+    const normalized = senderAddress.toLowerCase();
+    return this.trustedSenders.some((t) => t.userId === userId && t.senderAddress.toLowerCase() === normalized);
   }
 }
 

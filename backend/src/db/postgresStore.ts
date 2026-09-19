@@ -36,6 +36,7 @@ import type {
   SecurityAuditLogRecord,
   SessionRecord,
   SystemFolderKey,
+  TrustedSenderRecord,
   UnsubscribeActionRecord,
   User,
   UserAiCapabilityRecord,
@@ -85,6 +86,10 @@ function rowToMailAccount(r: any): MailAccountRecord {
     syncStatus: r.sync_status,
     lastSyncedAt: r.last_synced_at,
   };
+}
+
+function rowToTrustedSender(r: any): TrustedSenderRecord {
+  return { id: r.id, userId: r.user_id, senderAddress: r.sender_address, addedAt: r.added_at };
 }
 
 function rowToFolder(r: any): FolderRecord {
@@ -901,5 +906,48 @@ export class PostgresStore implements Store {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const { rows } = await this.pool.query(`SELECT * FROM unsubscribe_actions ${where}`, params);
     return rows.map(rowToUnsubscribeAction);
+  }
+
+  // ----- Vertrauenswuerdige Absender -----
+
+  // Adresse wird kleingeschrieben gespeichert (E-Mail-Adressen sind lokal
+  // meist case-insensitiv, gleiches Prinzip wie hasSentTo() weiter unten) --
+  // sonst würde die UNIQUE(user_id, sender_address)-Constraint "Foo@Bar.com"
+  // und "foo@bar.com" fälschlich als zwei verschiedene Absender behandeln.
+  async createTrustedSender(input: { userId: string; senderAddress: string }): Promise<TrustedSenderRecord> {
+    const { rows } = await this.pool.query(
+      `INSERT INTO trusted_senders (user_id, sender_address)
+       VALUES ($1, LOWER($2))
+       ON CONFLICT (user_id, sender_address) DO UPDATE SET sender_address = EXCLUDED.sender_address
+       RETURNING *`,
+      [input.userId, input.senderAddress],
+    );
+    return rowToTrustedSender(rows[0]);
+  }
+
+  async listTrustedSenders(userId: string): Promise<TrustedSenderRecord[]> {
+    const { rows } = await this.pool.query(
+      "SELECT * FROM trusted_senders WHERE user_id = $1 ORDER BY added_at DESC",
+      [userId],
+    );
+    return rows.map(rowToTrustedSender);
+  }
+
+  async getTrustedSender(id: string): Promise<TrustedSenderRecord | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM trusted_senders WHERE id = $1", [id]);
+    return rows[0] ? rowToTrustedSender(rows[0]) : undefined;
+  }
+
+  async deleteTrustedSender(id: string): Promise<boolean> {
+    const { rowCount } = await this.pool.query("DELETE FROM trusted_senders WHERE id = $1", [id]);
+    return (rowCount ?? 0) > 0;
+  }
+
+  async isTrustedSender(userId: string, senderAddress: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      "SELECT 1 FROM trusted_senders WHERE user_id = $1 AND LOWER(sender_address) = LOWER($2)",
+      [userId, senderAddress],
+    );
+    return rows.length > 0;
   }
 }

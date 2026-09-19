@@ -7,6 +7,7 @@ import { contractsRouter } from "./routes/contracts";
 import { capabilityRouter } from "./routes/capability";
 import { attachmentsRouter } from "./routes/attachments";
 import { draftsRouter } from "./routes/drafts";
+import { trustedSendersRouter } from "./routes/trustedSenders";
 import { internalRouter } from "./routes/internal";
 import { requireAuth } from "./middleware/auth";
 
@@ -31,6 +32,7 @@ export function createApp() {
   v1.use(capabilityRouter);
   v1.use(attachmentsRouter);
   v1.use(draftsRouter);
+  v1.use(trustedSendersRouter);
   app.use("/v1", v1);
 
   // Betriebs-/Test-Hilfsmittel, kein Contract-Bestandteil.

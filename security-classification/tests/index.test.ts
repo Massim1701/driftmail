@@ -191,6 +191,15 @@ describe("analyzeMail (integration)", () => {
       expect(result.confidenceScore).toBe(0.75);
     });
 
+    it("classifies clean advance-fee-scam content (no auth/link signals at all) as spam", async () => {
+      const rawText =
+        "Ich bin der Anwalt eines verstorbenen Geschäftsmann, der Ihnen als next of kin ein Vermögen hinterlassen hat.";
+      const result = await analyzeMail(rawText, {});
+      expect(result.classification).toBe("spam");
+      expect(result.spamSubcategory).toBe("advance_fee_scam");
+      expect(result.confidenceScore).toBe(0.75);
+    });
+
     it("does NOT trigger spam for clean marketing/generic content without any signal (unchanged, nachgelagert)", async () => {
       const marketing = await analyzeMail("50% Rabatt nur heute! Gutscheincode: SUMMER50. Jetzt bestellen.", {});
       expect(marketing.classification).toBe("unclear");

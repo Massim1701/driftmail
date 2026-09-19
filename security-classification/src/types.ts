@@ -13,12 +13,14 @@ export type Classification = "safe" | "spam" | "phishing" | "unclear";
 export type AuthStatus = "pass" | "fail" | "none";
 
 // Nur relevant wenn classification === "spam" (siehe SecurityResult.spamSubcategory
-// unten). "adult"/"gambling" = eindeutig identifizierbarer Erotik-/
-// Glücksspiel-Spam ohne Phishing-Risiko -> löst im Aufrufer (Track A) sofortiges
-// Löschen statt Quarantäne/Spam-Ordner aus. "generic"/"marketing" = alles
-// andere, Verhalten unverändert. Siehe WEB_INBOX.md 08.09. ("Neue
-// Spam-Unterkategorie fuer aggressives Auto-Loeschen").
-export type SpamSubcategory = "adult" | "gambling" | "generic" | "marketing";
+// unten). "adult"/"gambling"/"advance_fee_scam" = eindeutig identifizierbare
+// Kategorien ohne legitimen Graubereich -> lösen im Aufrufer (Track A)
+// sofortiges Löschen statt Quarantäne/Spam-Ordner aus. "generic"/"marketing"
+// = alles andere, Verhalten unverändert. Siehe WEB_INBOX.md 08.09. ("Neue
+// Spam-Unterkategorie fuer aggressives Auto-Loeschen") bzw. 15.09.
+// ("Vorschussbetrug" -- klassisches "Prinz aus Nigeria"-Muster, bleibt eine
+// Unterkategorie von spam, NICHT von phishing, siehe dortige Abgrenzung).
+export type SpamSubcategory = "adult" | "gambling" | "generic" | "marketing" | "advance_fee_scam";
 
 // Botnetz-Erkennung (WEB_INBOX.md 08.09., "Botnetz-Erkennungssignale").
 // ipReputationFlag braucht einen externen Blocklist-Abgleich (z.B. Spamhaus

@@ -32,7 +32,7 @@ npm run build     # -> dist/
 | `src/urgencyLanguage.ts` | Keyword-Heuristik für Dringlichkeitssprache (DE/EN) |
 | `src/ibanDetection.ts` | IBAN-Erkennung per Regex + ISO-13616-Mod-97-Prüfsumme |
 | `src/classification.ts` | Kombiniert alle Signale zu `classification` + `confidenceScore` (regelbasiert) |
-| `src/spamSubcategory.ts` | Ordnet `classification === "spam"` einer Unterkategorie zu (`adult`/`gambling`/`generic`/`marketing`), Keyword-Heuristik |
+| `src/spamSubcategory.ts` | Ordnet `classification === "spam"` einer Unterkategorie zu (`adult`/`gambling`/`advance_fee_scam`/`generic`/`marketing`), Keyword-Heuristik |
 | `src/heloMismatch.ts` | HELO/EHLO-Hostname aus `Received` vs. Absenderdomain aus `From` — Näherung, kein echter Reverse-DNS-Check |
 | `src/imageToTextRatio.ts` | Bild-zu-Text-Anteil aus `<img>`-Tags vs. sichtbarer Textmenge in HTML-Mails |
 | `src/ipReputation.ts` | Liefert immer `"unknown"` — braucht externen Blocklist-Abgleich, den dieses Modul nicht machen kann |
@@ -216,16 +216,19 @@ was ist Platzhalter" oben und "Übergabe an Track A" unten.
 ## Design-Entscheidungen
 
 - **`spamSubcategory` -- zweistufige Keyword-Schwelle statt einfachem
-  Treffer-Zähler (08.09.):** `adult`/`gambling` lösen im Aufrufer sofortiges,
-  endgültiges Löschen aus (kein Quarantäne-Pfad, kein Undo -- siehe
-  WEB_INBOX.md 08.09.). Ein falsch-positiver Treffer wäre also deutlich
-  teurer als bei den übrigen (nur informativen) Signalen dieses Moduls.
-  Deshalb: "starke" Phrasen (eindeutig, praktisch nie harmlos, z.B. "casino
-  bonus ohne einzahlung") lösen mit einem einzigen Treffer aus, "schwache"
-  Einzelwörter (z.B. "casino", "erotik" -- können auch in harmlosem Kontext
-  vorkommen, z.B. eine Reise-Mail über ein Hotel mit Casino) erst ab zwei
-  Treffern. Bei Gleichstand zwischen mehreren Kategorien gewinnt die
-  Prüfreihenfolge adult > gambling > marketing > generic (adult zuerst
+  Treffer-Zähler (08.09., erweitert 15.09.):** `adult`/`gambling`/
+  `advance_fee_scam` lösen im Aufrufer sofortiges, endgültiges Löschen aus
+  (kein Quarantäne-Pfad, kein Undo -- siehe WEB_INBOX.md 08.09. bzw. 15.09.
+  "Neue Auto-Loesch-Kategorie: klassischer Vorschussbetrug"). Ein
+  falsch-positiver Treffer wäre also deutlich teurer als bei den übrigen
+  (nur informativen) Signalen dieses Moduls. Deshalb: "starke" Phrasen
+  (eindeutig, praktisch nie harmlos, z.B. "casino bonus ohne einzahlung",
+  "next of kin") lösen mit einem einzigen Treffer aus, "schwache"
+  Einzelwörter (z.B. "casino", "erotik", "erbschaft" -- können auch in
+  harmlosem Kontext vorkommen, z.B. eine Reise-Mail über ein Hotel mit
+  Casino oder eine echte Erbschaftsberatung) erst ab zwei Treffern. Bei
+  Gleichstand zwischen mehreren Kategorien gewinnt die Prüfreihenfolge
+  adult > gambling > advance_fee_scam > marketing > generic (adult zuerst
   geprüft).
 - **`marketing` vs. `generic` (08.09.):** Der bestehende `classify()`-Layer
   unterschied das bisher nicht (dort geht es nur um phishing/spam/safe/
@@ -294,10 +297,10 @@ was ist Platzhalter" oben und "Übergabe an Track A" unten.
   genommen, weil diese Funktion NIE allein `blocked` auslöst -- immer nur
   in Kombination mit hoher Dringlichkeits-Sprache. Ein echter NLP-Ersatz
   gehört wie bei den anderen Platzhaltern in den KI-Adapter.
-- **`spamSubcategory` (`adult`/`gambling`) ist seit 09.09. ein
-  EIGENSTÄNDIGER Klassifikations-Trigger, nicht mehr nur eine nachgelagerte
-  Verfeinerung (SYNC.md, Web-Antwort auf einen Fund aus der Track-A+B-
-  Integration):**
+- **`spamSubcategory` (`adult`/`gambling`, seit 15.09. auch
+  `advance_fee_scam`) ist seit 09.09. ein EIGENSTÄNDIGER
+  Klassifikations-Trigger, nicht mehr nur eine nachgelagerte Verfeinerung
+  (SYNC.md, Web-Antwort auf einen Fund aus der Track-A+B-Integration):**
 
   **Alt (bis 08.09.):** Ob eine Mail überhaupt als "spam" (statt
   phishing/safe/unclear) galt, entschied ausschließlich `classification.ts`
@@ -319,17 +322,20 @@ was ist Platzhalter" oben und "Übergabe an Track A" unten.
   reinem Glücksspiel-Text ohne technisches Signal fälschlich nicht als Spam
   erkannt wurde.
 
-  **Neu (ab 09.09.):** `index.ts` ruft `detectSpamSubcategory()` jetzt
-  IMMER auf, unabhängig vom `classification.ts`-Ergebnis. Liefert es
-  `"adult"` oder `"gambling"`, wird `classification` auf `"spam"` gehoben,
-  AUCH wenn `classification.ts` sonst `"safe"`/`"unclear"` ergäbe -- außer
+  **Neu (ab 09.09., erweitert 15.09.):** `index.ts` ruft
+  `detectSpamSubcategory()` jetzt IMMER auf, unabhängig vom
+  `classification.ts`-Ergebnis. Liefert es `"adult"`, `"gambling"` oder
+  `"advance_fee_scam"`, wird `classification` auf `"spam"` gehoben, AUCH
+  wenn `classification.ts` sonst `"safe"`/`"unclear"` ergäbe -- außer
   `classification.ts` hat bereits `"phishing"` festgestellt (stärkeres,
   spezifischeres Signal geht vor, ein zufälliger Content-Treffer soll ein
   echtes Phishing-Ergebnis nicht herabstufen). `generic`/`marketing` bleiben
   bewusst weiterhin rein nachgelagert (kein eigener Trigger) -- nur
-  `adult`/`gambling` ist die zeitkritische Auto-Delete-Kategorie im
-  Aufrufer (Track A), `generic`/`marketing` landet ohnehin nur im normalen
-  Spam-Ordner ohne Eile.
+  `adult`/`gambling`/`advance_fee_scam` sind die zeitkritischen
+  Auto-Delete-Kategorien im Aufrufer (Track A), `generic`/`marketing` landet
+  ohnehin nur im normalen Spam-Ordner ohne Eile. `advance_fee_scam` kommt in
+  der Praxis fast immer als reiner Fließtext ohne Link/Homoglyph -- genau
+  der Fall, für den dieser Trigger-Mechanismus ursprünglich gebaut wurde.
 
   **Konfidenz:** Ein rein content-getriggertes `"spam"` (ohne jedes
   phishing-artige Signal) bekommt einen fixen Platzhalterwert
@@ -459,8 +465,10 @@ Die Handlungslogik ist explizit **nicht** Teil dieses Moduls und muss von
 Track A in der Message-Pipeline ergänzt werden (siehe WEB_INBOX.md 08.09.):
 
 - `classification === "spam"` UND `spamSubcategory` in `("adult",
-  "gambling")` → sofort löschen, **keine** Quarantäne, **kein**
-  30-Tage-Aufheben, **kein** Undo.
+  "gambling", "advance_fee_scam")` → sofort löschen, **keine** Quarantäne,
+  **kein** 30-Tage-Aufheben, **kein** Undo (`advance_fee_scam` seit 15.09.,
+  siehe WEB_INBOX.md "Neue Auto-Loesch-Kategorie: klassischer
+  Vorschussbetrug").
 - `spamSubcategory` in `("generic", "marketing")` → Verhalten unverändert
   (normaler Spam-Ordner, normale Aufbewahrung).
 - `classification === "phishing"` → von dieser Regel komplett unberührt,

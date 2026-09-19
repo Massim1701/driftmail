@@ -27,17 +27,28 @@ async function main() {
   assert(imported > 0, "Fixture-Sync sollte Nachrichten importieren");
 
   // Auto-Delete-Pfad (WEB_INBOX.md 08.09., siehe mail/sync.ts): Fixture 5
-  // ist eindeutiger Glücksspiel-Spam und darf NICHT als Nachricht landen.
-  assert(autoDeleted === 1, "genau 1 adult/gambling-Spam-Mail sollte automatisch gelöscht worden sein (Fixture 5)");
+  // ist eindeutiger Glücksspiel-Spam, Fixture 7 (WEB_INBOX.md 15.09.)
+  // klassischer Vorschussbetrug -- beide dürfen NICHT als Nachricht landen.
+  assert(autoDeleted === 2, "genau 2 auto-lösch-pflichtige Spam-Mails erwartet (Fixture 5 + Fixture 7)");
   assert(
     (await store.findMessageByHeader(account.id, "<fixture-5@casino-bonus-express.example>")) === undefined,
     "auto-gelöschte Mail darf keine messages-Zeile bekommen",
+  );
+  assert(
+    (await store.findMessageByHeader(account.id, "<fixture-7@erbschaft-mitteilung.example>")) === undefined,
+    "auto-gelöschte Vorschussbetrug-Mail (Fixture 7) darf keine messages-Zeile bekommen",
   );
   assert(
     (await store.listSecurityAuditLog({ userId: account.userId, action: "auto_deleted_adult_gambling_spam" })).some(
       (e) => e.messageId === null,
     ),
     "Auto-Delete sollte einen security_audit_log-Eintrag hinterlassen (messageId=null, da nie angelegt)",
+  );
+  assert(
+    (await store.listSecurityAuditLog({ userId: account.userId, action: "auto_deleted_advance_fee_scam" })).some(
+      (e) => e.messageId === null,
+    ),
+    "Auto-Delete von Fixture 7 sollte einen eigenen security_audit_log-Eintrag hinterlassen (action 'auto_deleted_advance_fee_scam')",
   );
 
   // Erneuter Sync darf dieselbe Mail nicht nochmal löschen/loggen (Dedupe
@@ -47,6 +58,10 @@ async function main() {
   assert(
     (await store.listSecurityAuditLog({ action: "auto_deleted_adult_gambling_spam" })).length === 1,
     "wiederholter Sync sollte keinen zweiten Audit-Log-Eintrag für dieselbe Mail erzeugen",
+  );
+  assert(
+    (await store.listSecurityAuditLog({ action: "auto_deleted_advance_fee_scam" })).length === 1,
+    "wiederholter Sync sollte keinen zweiten Audit-Log-Eintrag für Fixture 7 erzeugen",
   );
 
   // Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09. "Automatische
@@ -903,7 +918,122 @@ async function main() {
     );
     assert(secondUserFolders.length === 7, "zweiter, frisch angelegter User sollte ebenfalls die 7 Standard-Ordner bekommen");
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam) end-to-end grün.");
+    // ----- Whitelist (WEB_INBOX.md 15.09., "Whitelist für vertrauenswürdige
+    // Absender"): der zweite User (oben angelegt, noch NICHT synchronisiert)
+    // markiert Fixture 2s Absender (die Phishing-Fixture) als
+    // vertrauenswürdig, BEVOR er zum ersten Mal synchronisiert -- stärkster
+    // Beleg für "Vorrang vor der automatischen Erkennung", da hier sogar ein
+    // eigentlich als phishing eingestuftes Signal überstimmt wird. -----
+    const trustedSenderAddress = "service@sicherheit-konto-check.tk"; // Fixture 2, siehe mail/fixtureAdapter.ts
+
+    const listTrustedEmptyRes = await globalThis.fetch(`${base}/v1/trusted-senders`, {
+      headers: { Authorization: `Bearer ${secondUserToken}` },
+    });
+    const trustedEmpty = (await listTrustedEmptyRes.json()) as unknown[];
+    assert(
+      listTrustedEmptyRes.status === 200 && trustedEmpty.length === 0,
+      "GET /trusted-senders sollte für einen frischen User eine leere Liste liefern",
+    );
+
+    const addTrustedRes = await globalThis.fetch(`${base}/v1/trusted-senders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secondUserToken}` },
+      body: JSON.stringify({ senderAddress: trustedSenderAddress }),
+    });
+    assert(addTrustedRes.status === 201, "POST /trusted-senders sollte 201 liefern");
+    const addedTrusted = (await addTrustedRes.json()) as { id: string; senderAddress: string };
+    assert(
+      addedTrusted.senderAddress === trustedSenderAddress,
+      "angelegter Whitelist-Eintrag sollte die gesendete Adresse zurückliefern",
+    );
+
+    // Idempotenz + Case-Insensitivität: erneutes Hinzufügen derselben (hier
+    // GROSSGESCHRIEBENEN) Adresse liefert denselben Eintrag, keinen zweiten.
+    const addTrustedAgainRes = await globalThis.fetch(`${base}/v1/trusted-senders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secondUserToken}` },
+      body: JSON.stringify({ senderAddress: trustedSenderAddress.toUpperCase() }),
+    });
+    const addedTrustedAgain = (await addTrustedAgainRes.json()) as { id: string };
+    assert(
+      addedTrustedAgain.id === addedTrusted.id,
+      "erneutes (case-insensitiv gleiches) Hinzufügen sollte denselben Eintrag liefern statt eines zweiten",
+    );
+
+    const missingSenderRes = await globalThis.fetch(`${base}/v1/trusted-senders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secondUserToken}` },
+      body: JSON.stringify({}),
+    });
+    assert(missingSenderRes.status === 400, "POST /trusted-senders ohne senderAddress sollte 400 liefern");
+
+    const secondUserRecord = await store.getUserByEmail("zweiter-user@driftmail.local");
+    assert(secondUserRecord !== undefined, "zweiter User sollte im Store auffindbar sein");
+    const secondUserAccount = await store.getMailAccountByUserId(secondUserRecord!.id);
+    assert(secondUserAccount !== undefined, "zweiter User sollte ein Mail-Konto haben (POST /accounts legt es an)");
+
+    const { imported: secondUserImported, autoDeleted: secondUserAutoDeleted } = await syncAccount(secondUserAccount!, aiAdapter);
+    assert(secondUserImported > 0, "Sync des zweiten Users sollte Nachrichten importieren");
+    // Whitelist wirkt gezielt NUR auf Fixture 2 -- Fixture 5 (gambling) und
+    // Fixture 7 (advance_fee_scam) werden trotzdem automatisch gelöscht,
+    // ihre Absender stehen nicht auf der Whitelist dieses Users.
+    assert(
+      secondUserAutoDeleted === 2,
+      "Whitelist betrifft nur Fixture 2 -- Fixture 5/7 werden beim zweiten User trotzdem automatisch gelöscht",
+    );
+
+    const secondUserFixture2 = await store.findMessageByHeader(secondUserAccount!.id, "<fixture-2@sicherheit-konto-check.tk>");
+    assert(
+      secondUserFixture2 !== undefined,
+      "Fixture 2 sollte beim zweiten User trotz Phishing-Inhalt als normale Nachricht landen (Whitelist)",
+    );
+    const secondUserFixture2Security = await store.getMessageSecurity(secondUserFixture2!.id);
+    assert(
+      secondUserFixture2Security?.classification === "safe",
+      "Whitelist sollte die Klassifikation auf 'safe' überschreiben, unabhängig vom Phishing-Signal",
+    );
+    assert(secondUserFixture2Security?.spamSubcategory === null, "spamSubcategory sollte beim Whitelist-Override null sein");
+
+    const secondUserEingang = await store.getSystemFolder(secondUserRecord!.id, "eingang");
+    assert(
+      secondUserFixture2!.folderId === secondUserEingang!.id,
+      "whitelisted Mail sollte in 'eingang' landen, nicht in Quarantäne/Spam",
+    );
+
+    const secondUserQuarantine = await store.getQuarantineForMessage(secondUserFixture2!.id);
+    assert(secondUserQuarantine === undefined, "whitelisted, eigentlich phishing-artige Mail darf NICHT in Quarantäne landen");
+
+    // Autorisierung: der ERSTE User darf den Whitelist-Eintrag des zweiten
+    // Users weder sehen (eigener GET liefert nur eigene Einträge, hier nicht
+    // erneut geprüft) noch löschen dürfen.
+    const crossUserDeleteTrustedRes = await globalThis.fetch(`${base}/v1/trusted-senders/${addedTrusted.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    assert(
+      crossUserDeleteTrustedRes.status === 403,
+      "erster User sollte den Whitelist-Eintrag des zweiten Users nicht löschen dürfen (403)",
+    );
+
+    const deleteTrustedRes = await globalThis.fetch(`${base}/v1/trusted-senders/${addedTrusted.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${secondUserToken}` },
+    });
+    assert(deleteTrustedRes.status === 204, "DELETE /trusted-senders/:id sollte 204 liefern");
+
+    const listTrustedAfterDeleteRes = await globalThis.fetch(`${base}/v1/trusted-senders`, {
+      headers: { Authorization: `Bearer ${secondUserToken}` },
+    });
+    const trustedAfterDelete = (await listTrustedAfterDeleteRes.json()) as unknown[];
+    assert(trustedAfterDelete.length === 0, "nach DELETE sollte die Whitelist wieder leer sein");
+
+    const deleteMissingTrustedRes = await globalThis.fetch(
+      `${base}/v1/trusted-senders/00000000-0000-0000-0000-000000000000`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${secondUserToken}` } },
+    );
+    assert(deleteMissingTrustedRes.status === 404, "DELETE /trusted-senders/:id für unbekannte id sollte 404 liefern");
+
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung) end-to-end grün.");
   } finally {
     server.close();
     // Ohne das haelt der tesseract.js-Worker (worker_threads) den Prozess

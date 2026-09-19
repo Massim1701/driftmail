@@ -51,4 +51,26 @@ describe("detectSpamSubcategory", () => {
       detectSpamSubcategory("XXX Videos gratis, dazu 50% Rabatt auf Premium-Zugang! Gutschein sichern."),
     ).toBe("adult");
   });
+
+  it("detects a classic advance-fee-scam pattern from a single strong keyword", () => {
+    expect(
+      detectSpamSubcategory(
+        "Ich bin der Anwalt eines verstorbenen Geschäftsmann, der Ihnen als next of kin ein Vermögen hinterlassen hat.",
+      ),
+    ).toBe("advance_fee_scam");
+  });
+
+  it("does not classify a single weak advance-fee-scam signal alone (needs >= 2 weak hits)", () => {
+    expect(detectSpamSubcategory("Wir bieten eine Erbschaftsberatung für Ihre Familie an.")).not.toBe(
+      "advance_fee_scam",
+    );
+  });
+
+  it("classifies two weak advance-fee-scam signals together as advance_fee_scam", () => {
+    expect(
+      detectSpamSubcategory(
+        "Es geht um eine Erbschaft von mehreren Millionen US-Dollar, bitte antworten Sie unter strengster Geheimhaltung.",
+      ),
+    ).toBe("advance_fee_scam");
+  });
 });

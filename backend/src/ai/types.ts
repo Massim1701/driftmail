@@ -18,10 +18,11 @@ export interface SecurityResult {
   urgencyLanguageScore: number | null;
   containsNewIban: boolean;
   classification: Classification;
-  // Nur gesetzt wenn classification === "spam". "adult"/"gambling" loesen
-  // sofortiges Loeschen aus (kein Quarantaene-Pfad, kein 30-Tage-Aufheben,
-  // kein Undo) -- siehe WEB_INBOX.md 08.09. Betrifft NICHT "phishing".
-  spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | null;
+  // Nur gesetzt wenn classification === "spam". "adult"/"gambling"/
+  // "advance_fee_scam" loesen sofortiges Loeschen aus (kein
+  // Quarantaene-Pfad, kein 30-Tage-Aufheben, kein Undo) -- siehe
+  // WEB_INBOX.md 08.09. bzw. 15.09. Betrifft NICHT "phishing".
+  spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | "advance_fee_scam" | null;
   // Botnetz-Erkennung (WEB_INBOX.md 08.09., contracts/ai-adapter-interface.ts
   // nachgezogen). ipReputationFlag braucht einen externen Blocklist-Abgleich
   // (z.B. Spamhaus XBL/CBL) -- der Mock-Adapter kann das nicht echt prüfen,

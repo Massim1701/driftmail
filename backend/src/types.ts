@@ -155,7 +155,7 @@ export interface MessageSecurityRecord {
   containsNewIban: boolean;
   classification: Classification;
   // Nur gesetzt wenn classification === "spam", siehe ai/types.ts.
-  spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | null;
+  spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | "advance_fee_scam" | null;
   // Botnetz-Erkennung (WEB_INBOX.md 08.09.), siehe ai/types.ts.
   ipReputationFlag: "clean" | "known_botnet" | "unknown" | null;
   heloMismatch: boolean;
@@ -239,6 +239,16 @@ export interface OutgoingSendLogRecord {
   wasNewRecipient: boolean;
 }
 
+// `trusted_senders` (db-schema.sql, WEB_INBOX.md 15.09. "Whitelist fuer
+// vertrauenswuerdige Absender"). Bewusste User-Entscheidung, keine
+// automatische Klassifikation -- siehe mail/sync.ts für die Wirkung.
+export interface TrustedSenderRecord {
+  id: string;
+  userId: string;
+  senderAddress: string;
+  addedAt: string;
+}
+
 // ===== API-Response-Shapes (camelCase, 1:1 zu api-spec.yaml) =====
 
 export interface ApiMailAccount {
@@ -246,6 +256,12 @@ export interface ApiMailAccount {
   provider: Provider;
   emailAddress: string;
   syncStatus: SyncStatus;
+}
+
+export interface ApiTrustedSender {
+  id: string;
+  senderAddress: string;
+  addedAt: string;
 }
 
 export interface ApiFolder {
@@ -288,7 +304,7 @@ export interface ApiSecurityResult {
   urgencyLanguageScore: number | null;
   containsNewIban: boolean;
   classification: Classification;
-  spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | null;
+  spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | "advance_fee_scam" | null;
   ipReputationFlag: "clean" | "known_botnet" | "unknown" | null;
   heloMismatch: boolean;
   imageToTextRatio: number | null;

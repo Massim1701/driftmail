@@ -77,6 +77,39 @@ const GAMBLING_WEAK_KEYWORDS = [
   "slots gratis",
 ];
 
+// Vorschussbetrug/"Prinz aus Nigeria"-Muster (WEB_INBOX.md 15.09.): seit
+// Jahrzehnten bekanntes Schema ohne legitimen Graubereich (anders als z.B.
+// "erotik", das auch harmlos vorkommt) -- große Geldsumme (Erbschaft/
+// Lotteriegewinn/Geschäftsanteil) + "lieber Freund"/Geheimhaltung +
+// dringende Bitte um Bankdaten/Vorschuss, um das Geld angeblich zu
+// empfangen. Bleibt eine Unterkategorie von spam, NICHT von phishing (siehe
+// WEB_INBOX.md-Abgrenzung: Phishing bleibt bei der vorsichtigeren
+// Quarantäne-Behandlung, hier ist das Fehlalarm-Risiko gering).
+const ADVANCE_FEE_SCAM_STRONG_KEYWORDS = [
+  "verstorbenen geschäftsmann",
+  "mein verstorbener klient",
+  "nächster verwandter verstorben",
+  "next of kin",
+  "unclaimed funds",
+  "dear beloved in the lord",
+  "vor seinem tod bei mir hinterlassen",
+  "vertrauliche geschäftsangelegenheit von großer bedeutung",
+];
+
+const ADVANCE_FEE_SCAM_WEAK_KEYWORDS = [
+  "erbschaft",
+  "lotteriegewinn",
+  "millionen us-dollar",
+  "millionen dollar",
+  "millionen euro",
+  "dringende geschäftsangelegenheit",
+  "geheimhaltung",
+  "vorschussgebühr",
+  "bearbeitungsgebühr überweisen",
+  "witwe des verstorbenen",
+  "mein verstorbener ehemann",
+];
+
 // Marketing ist die "milde" Restkategorie -- eindeutige Werbe-/Rabattsprache,
 // aber kein Phishing-/Betrugsrisiko und kein Erotik/Glücksspiel. Verhalten
 // bleibt für diese Kategorie unverändert (normaler Spam-Ordner), sie dient
@@ -127,6 +160,12 @@ export function detectSpamSubcategory(rawText: string): SpamSubcategory {
   const gamblingWeakHits = countHits(text, GAMBLING_WEAK_KEYWORDS);
   if (gamblingStrongHits >= 1 || gamblingWeakHits >= 2) {
     return "gambling";
+  }
+
+  const advanceFeeScamStrongHits = countHits(text, ADVANCE_FEE_SCAM_STRONG_KEYWORDS);
+  const advanceFeeScamWeakHits = countHits(text, ADVANCE_FEE_SCAM_WEAK_KEYWORDS);
+  if (advanceFeeScamStrongHits >= 1 || advanceFeeScamWeakHits >= 2) {
+    return "advance_fee_scam";
   }
 
   if (countHits(text, MARKETING_KEYWORDS) >= 1) {
