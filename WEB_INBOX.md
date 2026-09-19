@@ -652,7 +652,7 @@ Kein trainiertes Bilderkennungsmodell noetig. Stattdessen: Text per OCR aus dem 
 Kein Blocker, aber bitte NACH dem gerade angeforderten Stabilitaets-Check einordnen -- neue Funktionalitaet, nicht Teil der Stabilitaetspruefung selbst.
 
 
-[2026-09-15] [offen] [NEUER AUFTRAG] [contracts/db-schema.sql + contracts/api-spec.yaml + Track A/B + Track C/F] [nach Stabilitaets-Check + OCR-Auftrag] — Massimo: zwei getrennte Ergaenzungen zur Absender-Behandlung.
+[2026-09-15] [erledigt: 4b08b35 (Contract + Track A/B), Track C/F bewusst nicht gebaut, siehe SYNC.md 19.09.] [NEUER AUFTRAG] [contracts/db-schema.sql + contracts/api-spec.yaml + Track A/B + Track C/F] [nach Stabilitaets-Check + OCR-Auftrag] — Massimo: zwei getrennte Ergaenzungen zur Absender-Behandlung.
 
 **1) Whitelist fuer vertrauenswuerdige Absender (User-Entscheidung, nicht automatisch):**
 Der User soll einen Absender nach eigener Pruefung explizit als vertrauenswuerdig markieren koennen -- das ist eine bewusste User-Entscheidung, KEINE automatische Klassifikation.
