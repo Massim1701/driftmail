@@ -680,7 +680,7 @@ WICHTIG, Abgrenzung: das bleibt eine UNTERKATEGORIE von spam, NICHT von phishing
 Kein Blocker, bitte nach dem Stabilitaets-Check und dem OCR-Auftrag einordnen. Beide Punkte unabhaengig voneinander umsetzbar, koennen parallel laufen.
 
 
-[2026-09-15] [offen] [NEUE AUFTRAEGE - 6 Sicherheits-Ergaenzungen] [Track A/B + Track C/F + contracts] [nach Stabilitaets-Check + OCR + Whitelist/Vorschussbetrug] — Massimo hat sechs weitere Sicherheitsluecken bestaetigt, alle sechs sollen umgesetzt werden. Getrennte, unabhaengige Punkte:
+[2026-09-15] [teilweise erledigt: 1/2/3/4 siehe SYNC.md 19.09., Track C/F bewusst nicht gebaut; 5/6 weiterhin offen] [NEUE AUFTRAEGE - 6 Sicherheits-Ergaenzungen] [Track A/B + Track C/F + contracts] [nach Stabilitaets-Check + OCR + Whitelist/Vorschussbetrug] — Massimo hat sechs weitere Sicherheitsluecken bestaetigt, alle sechs sollen umgesetzt werden. Getrennte, unabhaengige Punkte:
 
 **1) Anzeigename-Spoofing-Erkennung (Track B):**
 Absender-Anzeigename (z.B. "PayPal Support") stimmt inhaltlich nicht mit der Domain der echten Absenderadresse ueberein (z.B. Anzeigename nennt eine bekannte Marke/Firma, tatsaechliche Adresse hat eine komplett andere/verdaechtige Domain). Neues Signal in security-classification, aehnliches Muster wie die bestehende Homoglyph-Erkennung: bekannte Markennamen-Liste (PayPal, Amazon, Bank-Namen etc. -- Startliste ausreichend, muss nicht vollstaendig sein) im Anzeigenamen gegen die tatsaechliche Absender-Domain abgleichen. Erhoeht bei Treffer classification-Konfidenz Richtung phishing.
