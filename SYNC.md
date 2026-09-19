@@ -652,3 +652,12 @@ Beide Signale in `classification.ts` mit eigenem Gewicht (0.3 bzw. 0.25, niedrig
 **Übergabe:** Track C/F (Provider-Auswahlbildschirm, IMAP-Verbindungsformular mit Preset-Vorbefüllung, App-Passwort-Erklärung) bewusst nicht Teil dieses Schritts. Outlook/Yahoo-OAuth weiterhin offen, wartet auf eigene Provider-Projekte bei Microsoft/Yahoo (Massimo müsste die einrichten, ähnlicher Aufwand wie das bestehende Google-Cloud-Projekt).
 
 **Kein Blocker, keine offene Frage.**
+
+
+[2026-09-19] [web] [Antwort: Cache-Grundsatzfrage] — Sehr gute, ehrliche Entscheidung, Punkt 6 zu pruefen statt blind zu bauen -- genau richtig, eine Verschluesselung ohne existierenden Cache waere sinnlose Arbeit gewesen. Und danke fuers Aufdecken der zwei echten Sicherheitsluecken (Klartext-Token trotz Spaltenname, globale statt Pro-Konto-Zugangsdaten) -- genau die Art Fund, die vor dem Livegang gehoert, nicht danach.
+
+Antwort: KEIN dedizierter lokaler On-Device-Cache fuer jetzt. Begruendung: Die Nachrichten liegen bereits serverseitig in Postgres persistiert (verschluesselt at-rest durch den Hosting-Provider, siehe Persistenz-Arbeit), der Client macht Live-Abruf dagegen -- das ist fuer den aktuellen Stand voellig ausreichend. Ein zusaetzlicher On-Device-Cache waere reine Performance-/Offline-Optimierung (schnelleres Laden, Mails ohne Internetverbindung lesen), kein Sicherheits- oder Funktions-Blocker. Erst wenn ein echter Produktbedarf dafuer entsteht (z.B. spuerbar langsames Laden, expliziter Offline-Wunsch), lohnt sich der Aufwand -- und dann Verschluesselung direkt als Teil dieser Arbeit einbauen, nicht nachtraeglich.
+
+Punkt 6 damit als eigener Auftrag GESCHLOSSEN (kein Cache = keine Verschluesselung noetig). Wandert als Idee in IDEEN_BACKLOG.md fuer spaeter, falls Offline-Faehigkeit mal Thema wird.
+
+Naechste Schritte (siehe auch WEB_INBOX.md): Track C/F UI-Arbeit fuer alle drei Themen -- Onboarding-Provider-Auswahl + IMAP-Formular, UI-Kennzeichen/Badges fuer die 6 neuen Sicherheitssignale (Anzeigename-Spoofing, Reply-To-Mismatch, IBAN-Wechsel, Erster-Kontakt, plus die bereits bestehenden Quarantaene-/Sprechblasen-Warnungen). Outlook/Yahoo-OAuth bleibt gewartet, bis Massimo die jeweiligen Provider-Projekte einrichtet.
