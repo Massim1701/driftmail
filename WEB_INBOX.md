@@ -650,3 +650,31 @@ Kein trainiertes Bilderkennungsmodell noetig. Stattdessen: Text per OCR aus dem 
 **Verhalten:** wie bei Text-IBAN/Kreditkarte -- NICHT blockierend, nur Warnhinweis (Sprechblase/Banner), User kann trotzdem senden wenn er wirklich will (z.B. legitimer Fall: eigenen Ausweis an eine Behoerde schicken). Gleiche Begruendung wie beim Text-Pendant: Warnung statt Verbot, da es legitime Anwendungsfaelle gibt.
 
 Kein Blocker, aber bitte NACH dem gerade angeforderten Stabilitaets-Check einordnen -- neue Funktionalitaet, nicht Teil der Stabilitaetspruefung selbst.
+
+
+[2026-09-15] [offen] [NEUER AUFTRAG] [contracts/db-schema.sql + contracts/api-spec.yaml + Track A/B + Track C/F] [nach Stabilitaets-Check + OCR-Auftrag] — Massimo: zwei getrennte Ergaenzungen zur Absender-Behandlung.
+
+**1) Whitelist fuer vertrauenswuerdige Absender (User-Entscheidung, nicht automatisch):**
+Der User soll einen Absender nach eigener Pruefung explizit als vertrauenswuerdig markieren koennen -- das ist eine bewusste User-Entscheidung, KEINE automatische Klassifikation.
+
+Neue Tabelle:
+```sql
+CREATE TABLE IF NOT EXISTS trusted_senders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  sender_address TEXT NOT NULL,
+  added_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, sender_address)
+);
+```
+
+Endpunkte: POST /trusted-senders (Adresse hinzufuegen, z.B. Button "Absender als vertrauenswuerdig markieren" in der Detailansicht einer Mail), GET /trusted-senders (Liste), DELETE /trusted-senders/{id} (entfernen). Wirkung: Mail von einer gelisteten Adresse wird beim naechsten Klassifikations-Durchlauf NICHT mehr als spam/phishing eingestuft (landet direkt in eingang), unabhaengig vom sonstigen Auth-/Link-Signal -- Whitelist hat Vorrang vor der automatischen Erkennung. Kein Ruecktausch bereits vorhandener alter Nachrichten noetig, wirkt nur fuer kuenftige Mail ab dem Zeitpunkt des Hinzufuegens.
+
+**2) Neue Auto-Loesch-Kategorie: klassischer Vorschussbetrug ("Prinz aus Nigeria"-Muster):**
+Bisher werden nur adult/gambling automatisch geloescht (nicht persistiert). Massimo moechte den klassischen Vorschussbetrug/Erbschafts-/Lotteriegewinn-Betrug (grosse Geldsumme, "lieber Freund", dringende Bitte um Bankdaten um Geld zu empfangen -- das bekannte Muster) genauso sofort loeschen wie adult/gambling, nicht nur in Quarantaene mit Warnhinweis.
+
+Vorschlag: neuer spam_subcategory-Wert 'advance_fee_scam' (Enum in message_security erweitern: adult|gambling|generic|marketing|advance_fee_scam), Keyword-/Muster-Heuristik in Track B's detectSpamSubcategory() ergaenzen (aehnliches Verfahren wie adult/gambling: mehrere typische Signalworte/-phrasen, nicht ein einzelnes Wort). Wenn 'advance_fee_scam' erkannt wird: gleiche Auto-Delete-Behandlung wie adult/gambling (nicht persistieren, Audit-Log ohne Inhalt).
+
+WICHTIG, Abgrenzung: das bleibt eine UNTERKATEGORIE von spam, NICHT von phishing. Klassische Phishing-Mails (Credential-Diebstahl, gefaelschte Login-Seiten) bleiben unveraendert bei der vorsichtigeren Quarantaene-mit-Warnhinweis-Behandlung -- dort ist das Risiko eines Fehlalarms teurer (koennte eine echte, wichtige Sicherheitswarnung sein), waehrend der Vorschussbetrug ein eindeutiges, seit Jahrzehnten bekanntes Muster ohne legitimen Graubereich ist.
+
+Kein Blocker, bitte nach dem Stabilitaets-Check und dem OCR-Auftrag einordnen. Beide Punkte unabhaengig voneinander umsetzbar, koennen parallel laufen.
