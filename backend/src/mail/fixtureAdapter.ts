@@ -11,6 +11,18 @@ import type { FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./
 const now = () => new Date();
 const daysAgo = (n: number) => new Date(now().getTime() - n * 24 * 3600 * 1000).toISOString();
 
+// [2026-09-19] Fund beim Bauen der Anzeigename-Spoofing-/Reply-To-Mismatch-
+// Erkennung (WEB_INBOX.md 15.09.): rawHeaders hatte bisher bei KEINER
+// Fixture einen echten "From"-Header, obwohl mehrere Erkennungsfunktionen
+// (detectHomoglyphs' From-Domain-Check, heloMismatch.ts extractSenderDomain,
+// jetzt auch displayNameSpoofing.ts/replyToMismatch.ts) genau den erwarten
+// -- nur `fromAddress`/`fromDisplayName` waren als strukturierte Felder
+// gesetzt. Gmail-/IMAP-Adapter kopieren bei echten Mails alle Header 1:1
+// (siehe gmailAdapter.ts), nur die FixtureMailAdapter-Testdaten hatten diese
+// Lücke. Ab hier nachgezogen: jede Fixture bekommt einen zu
+// fromDisplayName/fromAddress passenden "From"-Header (Fixture 2 zusätzlich
+// "Reply-To", passend zu ihrem bereits vorhandenen replyToAddress-Feld).
+
 const FIXTURES: FetchedMail[] = [
   {
     messageIdHeader: "<fixture-1@beispiel-versicherung.de>",
@@ -27,7 +39,12 @@ const FIXTURES: FetchedMail[] = [
     // Absender gesetzt (Grundlage für den IP-Reputations-Lookup, siehe
     // src/lookups/ipReputationMock.ts) -- kein echter Header eines echten
     // Versanddienstes.
-    rawHeaders: { "Received-SPF": "pass", "Content-Type": "text/plain", "X-Originating-IP": "[203.0.113.10]" },
+    rawHeaders: {
+      From: "Beispiel Versicherung <vertrag@beispiel-versicherung.de>",
+      "Received-SPF": "pass",
+      "Content-Type": "text/plain",
+      "X-Originating-IP": "[203.0.113.10]",
+    },
   },
   {
     messageIdHeader: "<fixture-2@sicherheit-konto-check.tk>",
@@ -56,6 +73,8 @@ const FIXTURES: FetchedMail[] = [
     // bei Phishing NICHT auslöst, obwohl ein syntaktisch gültiger Header
     // vorliegt -- gilt laut Auftrag ausschließlich für classification='spam'.
     rawHeaders: {
+      From: "Kundenservice <service@sicherheit-konto-check.tk>",
+      "Reply-To": "reply@andere-domain.ru",
       "Received-SPF": "fail",
       "Content-Type": "text/plain",
       "List-Unsubscribe": "<mailto:fake-unsubscribe@sicherheit-konto-check.tk>",
@@ -83,7 +102,12 @@ const FIXTURES: FetchedMail[] = [
     // Inhalt selbst. Ergibt classification "spam" + spamSubcategory
     // "marketing" (nicht adult/gambling, landet also regulär im
     // Spam-Ordner statt automatisch gelöscht zu werden, siehe Fixture 5).
-    rawHeaders: { "List-Unsubscribe": "<mailto:unsubscribe@newsletter-deals.example>", "Content-Type": "text/plain", "Received-SPF": "fail" },
+    rawHeaders: {
+      From: "Deals Newsletter <deals@newsletter-deals.example>",
+      "List-Unsubscribe": "<mailto:unsubscribe@newsletter-deals.example>",
+      "Content-Type": "text/plain",
+      "Received-SPF": "fail",
+    },
   },
   {
     messageIdHeader: "<fixture-4@kollegin.example.com>",
@@ -94,7 +118,7 @@ const FIXTURES: FetchedMail[] = [
     subject: "Projektupdate Q3",
     bodyText: "Hi, anbei das Update zum Projekt. Bitte antworten bis Freitag mit deinem Feedback. Danke!",
     receivedAt: daysAgo(0),
-    rawHeaders: { "Received-SPF": "pass", "Content-Type": "text/plain" },
+    rawHeaders: { From: "Anna Kollegin <kollegin@example.com>", "Received-SPF": "pass", "Content-Type": "text/plain" },
   },
   {
     // Auto-Delete-Pfad (WEB_INBOX.md 08.09.): eindeutiger Glücksspiel-Spam
@@ -124,6 +148,7 @@ const FIXTURES: FetchedMail[] = [
     // dass die automatische Abmeldung VOR dem Auto-Delete-Verwerfen läuft
     // (messageId=null, da diese Mail nie eine messages-Zeile bekommt).
     rawHeaders: {
+      From: "Casino Bonus Express <bonus@casino-bonus-express.example>",
       "Content-Type": "text/plain",
       "Received-SPF": "pass",
       "List-Unsubscribe": "<https://casino-bonus-express.example/unsubscribe?id=42>",
@@ -148,7 +173,16 @@ const FIXTURES: FetchedMail[] = [
       "Wir haben eine verdächtige Aktivität in Ihrem Konto festgestellt. Bitte bestätigen Sie sofort Ihre " +
       "Identität unter http://аpple.com/verify, sonst wird Ihr Konto gesperrt.",
     receivedAt: daysAgo(0),
-    rawHeaders: { "Received-SPF": "none", "Content-Type": "text/plain" },
+    // "From" hier zusaetzlich bewusst mit einem Markennamen-Anzeigenamen
+    // ueber einer fremden Domain (WEB_INBOX.md 15.09., "Anzeigename-
+    // Spoofing-Erkennung") -- dieselbe Fixture demonstriert damit jetzt
+    // BEIDE unabhaengigen Phishing-Signale (Homoglyph im Body-Link UND
+    // Anzeigename-Spoofing im Header), siehe smoketest.ts.
+    rawHeaders: {
+      From: "Apple Support <support@apple-id-verify.example>",
+      "Received-SPF": "none",
+      "Content-Type": "text/plain",
+    },
   },
   {
     // Auto-Delete-Pfad (WEB_INBOX.md 15.09., "Neue Auto-Loesch-Kategorie:
@@ -170,7 +204,60 @@ const FIXTURES: FetchedMail[] = [
       "next of kin ein Vermögen von mehreren Millionen US-Dollar hinterlassen hat. Bitte antworten Sie unter " +
       "strengster Geheimhaltung, damit wir die Übertragung einleiten können.",
     receivedAt: daysAgo(4),
-    rawHeaders: { "Content-Type": "text/plain", "Received-SPF": "pass" },
+    rawHeaders: {
+      From: "Rechtsanwaltskanzlei Dubois <kanzlei@erbschaft-mitteilung.example>",
+      "Content-Type": "text/plain",
+      "Received-SPF": "pass",
+    },
+  },
+  {
+    // IBAN-Wechsel im selben Thread (WEB_INBOX.md 15.09., "6 Sicherheits-
+    // Ergaenzungen" Punkt 3) -- Teil 1 eines zweiteiligen Rechnungs-Threads:
+    // die urspruengliche, unauffaellige Rechnung mit der ERSTEN IBAN. Fixture
+    // 9 (direkt danach) ist die Thread-Antwort mit einer ANDEREN IBAN --
+    // klassischer Rechnungsbetrug-Trick. Muss VOR Fixture 9 in diesem Array
+    // stehen, damit sie beim sequenziellen Sync bereits als Thread-
+    // Vorgaenger auffindbar ist (siehe mail/sync.ts, store.findMessageByHeader).
+    messageIdHeader: "<fixture-8@lieferant-beispiel.de>",
+    providerMessageId: null,
+    fromAddress: "buchhaltung@lieferant-beispiel.de",
+    fromDisplayName: "Lieferant Beispiel GmbH",
+    replyToAddress: null,
+    subject: "Rechnung Nr. 2026-0917",
+    bodyText:
+      "Anbei unsere Rechnung für die letzte Lieferung. Bitte überweisen Sie den Betrag auf unser Konto: " +
+      "DE89 3704 0044 0532 0130 00. Vielen Dank.",
+    receivedAt: daysAgo(5),
+    rawHeaders: {
+      From: "Lieferant Beispiel GmbH <buchhaltung@lieferant-beispiel.de>",
+      "Received-SPF": "pass",
+      "Content-Type": "text/plain",
+    },
+  },
+  {
+    // Thread-Antwort auf Fixture 8 (siehe "In-Reply-To") mit einer ANDEREN
+    // IBAN als der Original-Rechnung -- der eigentliche Testfall fuer
+    // ibanChangedInThread. Bewusst technisch "sauber" (SPF pass, kein
+    // Homoglyph/Link-Mismatch/Reply-To-Mismatch, keine starke
+    // Dringlichkeitssprache) -- genau das macht den IBAN-Wechsel-im-Thread-
+    // Check wertvoll: die anderen Signale allein wuerden diesen Betrugsfall
+    // nicht auffangen.
+    messageIdHeader: "<fixture-9@lieferant-beispiel.de>",
+    providerMessageId: null,
+    fromAddress: "buchhaltung@lieferant-beispiel.de",
+    fromDisplayName: "Lieferant Beispiel GmbH",
+    replyToAddress: null,
+    subject: "Re: Rechnung Nr. 2026-0917",
+    bodyText:
+      "Kurzes Update: bitte nutzen Sie ab sofort unser neues Konto für die Überweisung: " +
+      "DE68 2105 0170 0012 3456 78. Vielen Dank für Ihr Verständnis.",
+    receivedAt: daysAgo(4),
+    rawHeaders: {
+      From: "Lieferant Beispiel GmbH <buchhaltung@lieferant-beispiel.de>",
+      "In-Reply-To": "<fixture-8@lieferant-beispiel.de>",
+      "Received-SPF": "pass",
+      "Content-Type": "text/plain",
+    },
   },
 ];
 

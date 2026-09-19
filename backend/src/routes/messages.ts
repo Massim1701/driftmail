@@ -222,6 +222,10 @@ messagesRouter.post("/messages/send", async (req, res) => {
       receivedAt: new Date().toISOString(),
       folderId: gesendet.id,
       rawHeaders: null,
+      // Thread-Verknuepfung (WEB_INBOX.md 15.09.): bereits oben aus dem
+      // Request aufgeloest (inReplyToMessageId ist hier schon die interne
+      // UUID der Ursprungsnachricht, falls diese Mail eine Antwort ist).
+      inReplyToMessageId,
     });
     // TODO (bewusst offen, siehe backend/README.md "Anhänge"): die Bytes der
     // geprüften Anhänge werden NICHT tatsächlich in die ausgehende Mail
@@ -288,11 +292,12 @@ messagesRouter.get("/messages/:messageId", async (req, res) => {
   if (!owned) return;
   const { message } = owned;
 
-  const [security, quarantine] = await Promise.all([
+  const [security, quarantine, hasOtherMessage] = await Promise.all([
     store.getMessageSecurity(message.id),
     store.getQuarantineForMessage(message.id),
+    store.hasOtherMessageFromAddress(message.mailAccountId, message.fromAddress, message.id),
   ]);
-  res.json(toApiMessageDetail(message, security, quarantine));
+  res.json(toApiMessageDetail(message, security, quarantine, !hasOtherMessage));
 });
 
 // POST /messages/:messageId/quarantine — siehe api-spec.yaml

@@ -15,8 +15,16 @@ export interface SecurityResult {
   domainReputationScore: number | null;
   homoglyphDetected: boolean;
   linkMismatchDetected: boolean;
+  // Anzeigename-Spoofing / Reply-To-Mismatch (WEB_INBOX.md 15.09., "6
+  // Sicherheits-Ergaenzungen" Punkt 1+2).
+  displayNameSpoofingDetected: boolean;
+  replyToMismatchDetected: boolean;
   urgencyLanguageScore: number | null;
   containsNewIban: boolean;
+  // IBAN-Wechsel im selben Thread (WEB_INBOX.md 15.09.) -- immer `false` von
+  // der Mock-/Track-B-Logik, wird von Track A (mail/sync.ts) nach
+  // analyzeMail() als Nachbearbeitungsschritt befuellt.
+  ibanChangedInThread: boolean;
   classification: Classification;
   // Nur gesetzt wenn classification === "spam". "adult"/"gambling"/
   // "advance_fee_scam" loesen sofortiges Loeschen aus (kein

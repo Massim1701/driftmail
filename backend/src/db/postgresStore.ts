@@ -118,6 +118,7 @@ function rowToMessage(r: any): MessageRecord {
     receivedAt: r.received_at,
     folderId: r.folder_id,
     rawHeaders: r.raw_headers,
+    inReplyToMessageId: r.in_reply_to_message_id,
   };
 }
 
@@ -131,8 +132,11 @@ function rowToMessageSecurity(r: any): MessageSecurityRecord {
     domainReputationScore: r.domain_reputation_score,
     homoglyphDetected: r.homoglyph_detected,
     linkMismatchDetected: r.link_mismatch_detected,
+    displayNameSpoofingDetected: r.display_name_spoofing_detected,
+    replyToMismatchDetected: r.reply_to_mismatch_detected,
     urgencyLanguageScore: r.urgency_language_score,
     containsNewIban: r.contains_new_iban,
+    ibanChangedInThread: r.iban_changed_in_thread,
     classification: r.classification,
     spamSubcategory: r.spam_subcategory,
     ipReputationFlag: r.ip_reputation_flag,
@@ -453,8 +457,8 @@ export class PostgresStore implements Store {
     const { rows } = await this.pool.query(
       `INSERT INTO messages
          (mail_account_id, message_id_header, provider_message_id, from_address, from_display_name,
-          reply_to_address, subject, body_text, received_at, folder_id, raw_headers)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          reply_to_address, subject, body_text, received_at, folder_id, raw_headers, in_reply_to_message_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         input.mailAccountId,
@@ -468,6 +472,7 @@ export class PostgresStore implements Store {
         input.receivedAt,
         input.folderId,
         input.rawHeaders,
+        input.inReplyToMessageId,
       ],
     );
     return rowToMessage(rows[0]);
@@ -512,9 +517,10 @@ export class PostgresStore implements Store {
     await this.pool.query(
       `INSERT INTO message_security
          (message_id, spf_status, dkim_status, dmarc_status, sender_domain_age_days, domain_reputation_score,
-          homoglyph_detected, link_mismatch_detected, urgency_language_score, contains_new_iban, classification,
+          homoglyph_detected, link_mismatch_detected, display_name_spoofing_detected, reply_to_mismatch_detected,
+          urgency_language_score, contains_new_iban, iban_changed_in_thread, classification,
           spam_subcategory, ip_reputation_flag, helo_mismatch, image_to_text_ratio, confidence_score, analyzed_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
        ON CONFLICT (message_id) DO UPDATE SET
          spf_status = EXCLUDED.spf_status,
          dkim_status = EXCLUDED.dkim_status,
@@ -523,8 +529,11 @@ export class PostgresStore implements Store {
          domain_reputation_score = EXCLUDED.domain_reputation_score,
          homoglyph_detected = EXCLUDED.homoglyph_detected,
          link_mismatch_detected = EXCLUDED.link_mismatch_detected,
+         display_name_spoofing_detected = EXCLUDED.display_name_spoofing_detected,
+         reply_to_mismatch_detected = EXCLUDED.reply_to_mismatch_detected,
          urgency_language_score = EXCLUDED.urgency_language_score,
          contains_new_iban = EXCLUDED.contains_new_iban,
+         iban_changed_in_thread = EXCLUDED.iban_changed_in_thread,
          classification = EXCLUDED.classification,
          spam_subcategory = EXCLUDED.spam_subcategory,
          ip_reputation_flag = EXCLUDED.ip_reputation_flag,
@@ -541,8 +550,11 @@ export class PostgresStore implements Store {
         record.domainReputationScore,
         record.homoglyphDetected,
         record.linkMismatchDetected,
+        record.displayNameSpoofingDetected,
+        record.replyToMismatchDetected,
         record.urgencyLanguageScore,
         record.containsNewIban,
+        record.ibanChangedInThread,
         record.classification,
         record.spamSubcategory,
         record.ipReputationFlag,
@@ -568,6 +580,14 @@ export class PostgresStore implements Store {
           AND (LOWER(m.from_address) = LOWER($1) OR ($2::text IS NOT NULL AND split_part(LOWER(m.from_address), '@', 2) = $2))
         LIMIT 1`,
       [address, domain],
+    );
+    return rows.length > 0;
+  }
+
+  async hasOtherMessageFromAddress(mailAccountId: string, fromAddress: string, excludingMessageId: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      "SELECT 1 FROM messages WHERE mail_account_id = $1 AND id <> $2 AND LOWER(from_address) = LOWER($3) LIMIT 1",
+      [mailAccountId, excludingMessageId, fromAddress],
     );
     return rows.length > 0;
   }

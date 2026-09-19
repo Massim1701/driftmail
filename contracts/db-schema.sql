@@ -95,6 +95,14 @@ CREATE TABLE IF NOT EXISTS messages (
     received_at TIMESTAMPTZ NOT NULL,
     folder_id UUID NOT NULL REFERENCES folders(id),
     raw_headers JSONB,
+    -- Thread-Verknuepfung (WEB_INBOX.md 15.09., "IBAN-Wechsel im selben
+    -- Thread"): aus dem "In-Reply-To"-Header aufgeloest gegen
+    -- message_id_header desselben Kontos. NULL, wenn kein In-Reply-To-Header
+    -- vorhanden ist ODER die referenzierte Nachricht nicht in diesem Konto
+    -- synchronisiert wurde (externer/unsynchronisierter Thread-Vorgaenger) --
+    -- gleiches Grenzen-Muster wie ueberall sonst in diesem Schema (NULL statt
+    -- geraten). Self-Referencing FK, analog zu drafts.in_reply_to_message_id.
+    in_reply_to_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
     UNIQUE (mail_account_id, message_id_header)
   );
 
@@ -136,8 +144,21 @@ CREATE TABLE IF NOT EXISTS message_security (
     domain_reputation_score NUMERIC(3,2),
     homoglyph_detected BOOLEAN NOT NULL DEFAULT false,
     link_mismatch_detected BOOLEAN NOT NULL DEFAULT false,
+    -- Anzeigename-Spoofing / Reply-To-Mismatch (WEB_INBOX.md 15.09., "6
+    -- Sicherheits-Ergaenzungen" Punkt 1+2) -- siehe
+    -- contracts/ai-adapter-interface.ts SecurityResult fuer die Bedeutung.
+    display_name_spoofing_detected BOOLEAN NOT NULL DEFAULT false,
+    reply_to_mismatch_detected BOOLEAN NOT NULL DEFAULT false,
     urgency_language_score NUMERIC(3,2),
     contains_new_iban BOOLEAN NOT NULL DEFAULT false,
+    -- IBAN-Wechsel im selben Thread (WEB_INBOX.md 15.09., "6 Sicherheits-
+    -- Ergaenzungen" Punkt 3): true, wenn eine FRUEHERE Nachricht desselben
+    -- Threads (messages.in_reply_to_message_id-Kette) eine ANDERE IBAN
+    -- enthielt als die aktuelle Nachricht. Staerkeres Signal als
+    -- contains_new_iban allein (Rechnungsbetrug-typisch), zustandsbehaftet
+    -- -- kann analyzeMail() (Track B) nicht selbst liefern, wird von Track A
+    -- als Nachbearbeitungsschritt befuellt (siehe backend/README.md).
+    iban_changed_in_thread BOOLEAN NOT NULL DEFAULT false,
     classification TEXT NOT NULL DEFAULT 'unclear' CHECK (classification IN ('safe', 'spam', 'phishing', 'unclear')),
     -- Nur gesetzt wenn classification = 'spam'. 'adult'/'gambling'/
     -- 'advance_fee_scam' loesen sofortiges Loeschen aus (kein

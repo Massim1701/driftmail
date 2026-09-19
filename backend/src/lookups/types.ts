@@ -44,6 +44,17 @@ export interface IbanHistoryCheck {
   checkAndRecord(userId: string, senderAddress: string, ibans: string[]): Promise<boolean>;
 }
 
+/** Reale Implementierung von Anfang an (kein Mock noetig, siehe
+ * ibanThreadCheck.ts) -- arbeitet direkt gegen den eigenen Store, kein
+ * externer Dienst beteiligt (analog zu IbanHistoryCheck oben). WEB_INBOX.md
+ * 15.09., "IBAN-Wechsel im selben Thread": geht die
+ * in_reply_to_message_id-Kette der aktuellen Nachricht rueckwaerts durch und
+ * prueft, ob eine FRUEHERE Nachricht desselben Threads eine andere IBAN
+ * enthielt als die aktuellen `ibans`. */
+export interface IbanThreadCheck {
+  checkChanged(inReplyToMessageId: string | null, ibans: string[]): Promise<boolean>;
+}
+
 export type RecipientReputation = "safe" | "unknown" | "flagged";
 
 /** Reale Implementierung: Abgleich der Empfänger-Adresse gegen

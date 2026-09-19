@@ -357,6 +357,138 @@ Whitelist) ist bewusst **nicht** Teil dieses Schritts -- Contract + Track A/B
 (Backend-Endpunkte + Wirkung in der Sync-Pipeline) sind vollständig, siehe
 `SYNC.md`.
 
+## Anzeigename-Spoofing / Reply-To-Mismatch / "Erster Kontakt"
+
+Seit dem Contract-Update vom 19.09. (`WEB_INBOX.md` 15.09., "6 Sicherheits-
+Ergaenzungen" Punkt 1/2/4) drei zusätzliche, unabhängige Phishing-Signale.
+
+**1) Anzeigename-Spoofing (Track B, `displayNameSpoofingDetected`):**
+Bekannter Markenname im Absender-Anzeigenamen (z.B. "PayPal Support"), aber
+die tatsächliche Absenderdomain gehört nicht zu dieser Marke --
+`security-classification/src/displayNameSpoofing.ts`, Startliste
+bekannter Marken (PayPal, Amazon, Apple, Microsoft, Google, mehrere
+deutsche Banken, DHL, Netflix), bewusst nicht erschöpfend.
+
+**2) Reply-To-Mismatch (Track B, `replyToMismatchDetected`):**
+Reply-To-Header vorhanden UND dessen Domain weicht von der From-Domain ab
+-- klassischer BEC-Trick. Nur der Domain-Vergleich zählt (nicht die volle
+Adresse), ein anderer lokaler Teil auf derselben Domain (z.B. "no-reply@"
+vs. "support@" bei derselben Firma) ist üblich und wird NICHT geflaggt --
+`security-classification/src/replyToMismatch.ts`.
+
+Beide Signale fließen in `classify()` (`classification.ts`) mit eigenem
+Gewicht in den `phishingScore` ein (0.3 bzw. 0.25, siehe dortiger
+Kommentar) und verhindern zusätzlich die "safe"-Einstufung, wenn sie allein
+auftreten. Neue Spalten `message_security.display_name_spoofing_detected`/
+`reply_to_mismatch_detected` (Default `false`).
+
+**Fund beim Bauen:** die `FixtureMailAdapter`-Testdaten (`mail/
+fixtureAdapter.ts`) hatten bisher bei KEINER Fixture einen echten
+"From"-Header in `rawHeaders`, obwohl mehrere Erkennungsfunktionen (u.a.
+die bereits bestehende `detectHomoglyphs`) genau den erwarten -- nur die
+strukturierten Felder `fromAddress`/`fromDisplayName` waren gesetzt. Echte
+Gmail-/IMAP-Adapter kopieren alle Header 1:1 aus der echten Mail, dort gab
+es die Lücke nie. Nachgezogen: jede Fixture hat jetzt einen passenden
+"From"-Header (Fixture 2 zusätzlich "Reply-To", passend zu ihrem
+`replyToAddress`-Feld), Fixture 6 zeigt jetzt bewusst BEIDE unabhängigen
+Phishing-Signale (Homoglyph im Body-Link + Anzeigename-Spoofing im Header).
+
+**3) "Erster Kontakt"-Kennzeichnung (Track A, `MessageDetail.isNewSender`):**
+`true`, wenn es für das Konto keine ANDERE Nachricht mit derselben
+`fromAddress` gibt (`store.hasOtherMessageFromAddress()`). Kein neues
+Feld/Cache, zur Laufzeit bei `GET /messages/{messageId}` abgeleitet -- wie
+im Auftrag vorgesehen. Bewusste Design-Entscheidung: der Vergleich prüft
+nur "existiert eine andere Nachricht", nicht "existiert eine ÄLTERE
+Nachricht" -- bei nachträglich eintreffender älterer Mail (z.B. erneuter
+Sync mit größerem `limit`) kann sich `isNewSender` für eine bereits
+gesehene Nachricht rückwirkend auf `false` ändern. Für den Zweck (Warnhinweis
+bei neuen Absendern) unkritisch, aber bewusst dokumentiert statt
+stillschweigend in Kauf genommen. Ergänzt sich mit der Whitelist (siehe
+oben) -- die Client-UI kombiniert `isNewSender=true` mit "Absender nicht
+auf der Whitelist" für den eigentlichen Badge, das ist reine UI-Logik
+(Backend liefert nur das Rohsignal).
+
+**Übergabe:** Track C/F (UI-Kennzeichen "Neuer Absender" in Nachrichtenliste/
+-detailansicht) bewusst **nicht** Teil dieses Schritts, siehe `SYNC.md`.
+
+**Tests:** `security-classification` neue Dateien `displayNameSpoofing.ts`/
+`replyToMismatch.ts` mit je eigenem Testfile (12 neue Tests), plus
+Integrationstests in `index.test.ts`. Backend-Smoketest: Fixture 6 beweist
+`displayNameSpoofingDetected`, Fixture 2 beweist `replyToMismatchDetected`,
+Fixture 1/4 beweisen die jeweilige Negativabgrenzung (kein Fehlalarm bei
+legitimem Anzeigenamen bzw. fehlendem Reply-To). `isNewSender` über Fixture
+1/4 (beim ersten Kontakt `true`) sowie eine direkt eingefügte zweite
+Nachricht desselben Absenders (danach `false` für BEIDE Nachrichten dieses
+Absenders) verifiziert.
+
+**Nebenbei gefunden und behoben (nicht Teil des eigentlichen Auftrags, aber
+notwendig für zuverlässige Tests):** `GET /messages` (`listMessages()`)
+sortiert nur nach `received_at DESC` ohne Tiebreaker -- mehrere Fixtures
+teilen denselben `receivedAt`-Wert (`daysAgo(0)`), wodurch die Auswahl von
+"der ersten Nachricht" in `smoketest.ts` gegen echtes Postgres nicht
+deterministisch war (reproduzierbar beobachtet: traf einmal Fixture 4 statt
+der bisher immer unauffälligen Fixture 2/6, was spätere Fixture-4-
+spezifische Assertions zum Flackern brachte). Smoketest jetzt bewusst auf
+Fixture 2 fixiert statt auf eine mehrdeutige Sortierposition. Die
+zugrundeliegende fehlende Tiebreaker-Sortierung selbst ist NICHT behoben
+(kein Contract-/API-Verhalten geändert, nur der Test robuster gemacht) --
+falls das an anderer Stelle (z.B. Pagination) relevant wird, bitte dort
+gesondert aufgreifen.
+
+## IBAN-Wechsel im selben Thread
+
+Seit dem Contract-Update vom 19.09. (`WEB_INBOX.md` 15.09., "6 Sicherheits-
+Ergaenzungen" Punkt 3) ein weiteres, thread-bezogenes Betrugssignal.
+
+**Contract-Lücke entdeckt beim Bauen:** der Auftrag setzt eine
+"in_reply_to_message_id-Kette" für empfangene Mail voraus, die es bisher
+NICHT gab -- `messages` (empfangene Mail) hatte anders als `drafts`
+(Entwürfe) keine Thread-Verknüpfung. Nachgezogen (additive Contract-
+Ergänzung, keine Vorabankündigung nötig laut SYNC.md-Regel "kleinere
+Ergänzungen"): `messages.in_reply_to_message_id` (self-referencing FK,
+gleiches Muster wie bei `drafts`). Wird beim Sync aus dem "In-Reply-To"-
+Header aufgelöst (`src/mail/inReplyTo.ts`, `parseInReplyToHeader()`) gegen
+`message_id_header` desselben Kontos (`store.findMessageByHeader()`) --
+`null`, wenn kein Header vorhanden ist oder der Thread-Vorgänger nicht
+synchronisiert wurde (externer/unsynchronisierter Thread-Start), gleiches
+Grenzen-Muster wie überall sonst in diesem Backend. `POST /messages/send`
+befüllt das Feld ebenfalls (bereits vorhandene, aufgelöste
+`inReplyToMessageId` aus dem Request-Body wiederverwendet).
+
+**Erkennung (`src/lookups/ibanThreadCheck.ts`, `StoreIbanThreadCheck`):**
+reale Implementierung von Anfang an, kein Mock -- arbeitet nur gegen den
+eigenen Store, kein externer Dienst beteiligt (analog zu
+`ibanHistoryCheck.ts`). Geht die `in_reply_to_message_id`-Kette der
+aktuellen Nachricht rückwärts durch (bis zu 50 Ebenen, reine
+Sicherheitsgrenze gegen eine unerwartet lange/zyklische Kette), extrahiert
+je Vorgänger die IBAN-Kandidaten aus dessen `bodyText` (gleiche einfache
+Regex-Erkennung wie `ibanHistoryCheck.ts`, kein Mod-97-Check nötig für
+diesen Vergleich) und meldet `true`, sobald eine frühere Nachricht eine
+IBAN enthielt, die NICHT unter den IBANs der aktuellen Nachricht ist.
+
+**Abgrenzung zu `containsNewIban`/`ibanHistoryCheck` (bewusst zwei
+unabhängige Signale, nicht zusammengelegt):** `containsNewIban` fragt "hat
+DIESER Absender diese IBAN schon einmal genannt" (sender-bezogen, über alle
+Threads hinweg). `ibanChangedInThread` fragt "hat sich die IBAN INNERHALB
+DIESES Threads geändert" (thread-bezogen). Ein klassischer Rechnungsbetrug-
+Fall (Angreifer antwortet im bestehenden Rechnungs-Thread mit neuer IBAN)
+löst typischerweise BEIDE Signale aus, aber nicht jeder Fall von einem
+überschneidet sich mit dem anderen -- z.B. ein Absender, der in zwei
+komplett getrennten Threads unterschiedliche (jeweils legitime) IBANs
+nennt, triggert `containsNewIban`, aber NICHT `ibanChangedInThread`.
+
+**Tests:** Backend-Smoketest, zweiteiliger Fixture-Thread (Fixture 8:
+Original-Rechnung mit IBAN A, Fixture 9: Antwort per "In-Reply-To" mit
+IBAN B) -- verifiziert sowohl die Header-Auflösung
+(`messages.in_reply_to_message_id`) als auch `ibanChangedInThread=false`
+für Fixture 8 (erste Nachricht, kein Vorgänger) und `=true` für Fixture 9.
+Bewusst technisch "sauber" gehalten (SPF pass, keine weiteren Signale) --
+zeigt, dass dieser Check Fälle auffängt, die die übrigen Signale allein
+nicht erkennen würden.
+
+**Übergabe:** Track C/F (UI-Warnhinweis bei erkanntem IBAN-Wechsel) bewusst
+**nicht** Teil dieses Schritts, siehe `SYNC.md`.
+
 ## Automatische Abmeldung bei Spam
 
 Seit dem Contract-Update vom 09.09. (`WEB_INBOX.md` "Automatische Abmeldung

@@ -82,6 +82,12 @@ export interface MessageRecord {
   receivedAt: string;
   folderId: string;
   rawHeaders: Record<string, string> | null;
+  // Thread-Verknuepfung (WEB_INBOX.md 15.09., "IBAN-Wechsel im selben
+  // Thread"), aus dem "In-Reply-To"-Header aufgeloest gegen
+  // messageIdHeader desselben Kontos -- `null`, wenn kein In-Reply-To-Header
+  // vorhanden ist oder die referenzierte Nachricht nicht synchronisiert
+  // wurde. Siehe mail/inReplyTo.ts.
+  inReplyToMessageId: string | null;
 }
 
 // `message_attachments` (db-schema.sql, WEB_INBOX.md 09.09. "Erweiterung
@@ -151,8 +157,11 @@ export interface MessageSecurityRecord {
   domainReputationScore: number | null;
   homoglyphDetected: boolean;
   linkMismatchDetected: boolean;
+  displayNameSpoofingDetected: boolean;
+  replyToMismatchDetected: boolean;
   urgencyLanguageScore: number | null;
   containsNewIban: boolean;
+  ibanChangedInThread: boolean;
   classification: Classification;
   // Nur gesetzt wenn classification === "spam", siehe ai/types.ts.
   spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | "advance_fee_scam" | null;
@@ -301,8 +310,11 @@ export interface ApiSecurityResult {
   domainReputationScore: number | null;
   homoglyphDetected: boolean;
   linkMismatchDetected: boolean;
+  displayNameSpoofingDetected: boolean;
+  replyToMismatchDetected: boolean;
   urgencyLanguageScore: number | null;
   containsNewIban: boolean;
+  ibanChangedInThread: boolean;
   classification: Classification;
   spamSubcategory: "adult" | "gambling" | "generic" | "marketing" | "advance_fee_scam" | null;
   ipReputationFlag: "clean" | "known_botnet" | "unknown" | null;
@@ -322,6 +334,8 @@ export interface ApiMessageDetail extends ApiMessage {
   security: ApiSecurityResult | null;
   quarantine: ApiQuarantineInfo | null;
   canUnsubscribe: boolean;
+  // "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09.), siehe api-spec.yaml.
+  isNewSender: boolean;
 }
 
 export interface ApiMailSummary {

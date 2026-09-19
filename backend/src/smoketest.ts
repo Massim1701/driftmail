@@ -255,7 +255,20 @@ async function main() {
     const deletePapierkorbFolderRes = await fetch(`${base}/v1/folders/${papierkorbFolder.id}`, { method: "DELETE" });
     assert(deletePapierkorbFolderRes.status === 400, "Löschen des System-Ordners 'papierkorb' sollte 400 liefern");
 
-    const first = messages[0];
+    // [2026-09-19] Fund beim Testen gegen echtes Postgres (reproduzierbar,
+    // nicht nur einmal beobachtet): "messages[0]" ist NICHT deterministisch
+    // -- mehrere Fixtures teilen denselben receivedAt-Wert (daysAgo(0)),
+    // "ORDER BY received_at DESC" (postgresStore.ts listMessages()) hat
+    // keinen Tiebreaker. Das traf bisher zufällig meist Fixture 2/6 (beide
+    // ohnehin schon automatisch in Quarantäne wegen classification=
+    // "phishing", daher unauffällig), einmal aber Fixture 4 -- das brachte
+    // die weiter unten benannten Fixture-4-Assertions zum Flackern, weil
+    // Fixture 4 durch den generischen Quarantäne-Test hier plötzlich nicht
+    // mehr unquarantiniert war. Deshalb bewusst auf Fixture 2 fixiert
+    // (bereits automatisch quarantiniert, ein zusätzlicher manueller
+    // Quarantäne-Aufruf ändert an dessen Zustand nichts strukturell Neues)
+    // statt eine mehrdeutige Sortierposition zu verwenden.
+    const first = messages.find((m: { id: string }) => m.id === fixture2ForUnsub!.id) ?? messages[0];
 
     const moveRes = await fetch(`${base}/v1/messages/${first.id}/move`, {
       method: "POST",
@@ -728,6 +741,7 @@ async function main() {
         receivedAt: new Date().toISOString(),
         folderId: legacyWichtigFolder.id,
         rawHeaders: null,
+        inReplyToMessageId: null,
       });
       await ensureDemoUser(); // triggert migrateLegacySystemFolders() (Store hat bereits Ordner -> else-Zweig)
       const migratedMessage = await store.getMessage(legacyMessage.id);
@@ -832,6 +846,74 @@ async function main() {
       "Fixture 6 sollte durch die Homoglyph-Domain als phishing klassifiziert werden",
     );
 
+    // Anzeigename-Spoofing / Reply-To-Mismatch (WEB_INBOX.md 15.09., "6
+    // Sicherheits-Ergaenzungen" Punkt 1+2). Fixture 6 hat einen "From"-Header
+    // mit Markenname "Apple Support" ueber einer fremden Domain -> zweites,
+    // unabhaengiges Phishing-Signal on top vom Homoglyph-Fund oben.
+    assert(
+      fixture6Security.displayNameSpoofingDetected === true,
+      "Fixture 6 ('Apple Support' <support@apple-id-verify.example>) sollte als Anzeigename-Spoofing erkannt werden (Markenname, fremde Domain)",
+    );
+    assert(
+      fixture1Security.displayNameSpoofingDetected === false,
+      "Fixture 1 (kein bekannter Markenname im Anzeigenamen) sollte NICHT als Anzeigename-Spoofing erkannt werden",
+    );
+
+    // Fixture 2 hat einen Reply-To-Header, dessen Domain von der From-Domain
+    // abweicht (klassischer BEC-Trick) -- zusaetzliches Signal neben den
+    // bereits bestehenden (Auth-Fail, Dringlichkeit, IBAN, Botnetz-IP).
+    assert(
+      fixture2Security.replyToMismatchDetected === true,
+      "Fixture 2 (Reply-To auf andere-domain.ru, From auf sicherheit-konto-check.tk) sollte als Reply-To-Mismatch erkannt werden",
+    );
+    assert(
+      fixture4Security.replyToMismatchDetected === false,
+      "Fixture 4 (kein Reply-To-Header) sollte NICHT als Reply-To-Mismatch erkannt werden",
+    );
+
+    // "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09., Punkt 4): jede der
+    // sieben Fixtures kommt von einer bisher unbekannten Adresse -> beim
+    // JEWEILS ERSTEN Sync-Lauf muss isNewSender=true gelten. Nach einem
+    // zweiten Sync desselben Absenders (unten, Fixture 2 erneut simuliert
+    // über eine zweite Nachricht) muss es auf false kippen.
+    assert(fixture1Detail.isNewSender === true, "Fixture 1 sollte beim ersten Kontakt isNewSender=true liefern");
+    assert(fixture4Detail.isNewSender === true, "Fixture 4 sollte beim ersten Kontakt isNewSender=true liefern");
+
+    // Zweite Nachricht von Fixture 4s Absender direkt über den Store
+    // eingefügt (kein voller Sync-Durchlauf nötig) -- isNewSender wird zur
+    // Laufzeit abgeleitet (siehe store.hasOtherMessageFromAddress()-
+    // Kommentar), muss also für BEIDE Nachrichten dieses Absenders jetzt
+    // false liefern, sobald eine zweite existiert.
+    const secondMessageFromFixture4Sender = await store.insertMessage({
+      mailAccountId: account.id,
+      messageIdHeader: "<zweite-mail-von-kollegin@example.com>",
+      providerMessageId: null,
+      fromAddress: fixture4!.fromAddress,
+      fromDisplayName: fixture4!.fromDisplayName,
+      replyToAddress: null,
+      subject: "Re: Projektupdate Q3",
+      bodyText: "Kurze Rückfrage dazu.",
+      receivedAt: new Date().toISOString(),
+      folderId: fixture4!.folderId,
+      rawHeaders: { From: "Anna Kollegin <kollegin@example.com>" },
+      // Echte Thread-Antwort auf Fixture 4 (Subject "Re: ..." oben) --
+      // nebenbei Grundlage für den IBAN-Wechsel-im-Thread-Test unten.
+      inReplyToMessageId: fixture4!.id,
+    });
+    const fixture4DetailAfterSecond = (await (await fetch(`${base}/v1/messages/${fixture4!.id}`)).json()) as Record<string, unknown>;
+    assert(
+      fixture4DetailAfterSecond.isNewSender === false,
+      "sobald eine zweite Nachricht desselben Absenders existiert, sollte auch die ERSTE Nachricht isNewSender=false liefern (zur Laufzeit abgeleitet)",
+    );
+    const secondMessageDetail = (await (await fetch(`${base}/v1/messages/${secondMessageFromFixture4Sender.id}`)).json()) as Record<
+      string,
+      unknown
+    >;
+    assert(
+      secondMessageDetail.isNewSender === false,
+      "die zweite Nachricht selbst sollte ebenfalls isNewSender=false liefern (die erste existiert bereits)",
+    );
+
     // 3) IBAN-Historie: eine wiederholte IBAN vom selben Absender gilt NICHT
     // mehr als neu (der Sync-Lauf oben hat die IBAN aus Fixture 2 bereits
     // einmal gesehen/gespeichert), eine ANDERE IBAN vom selben Absender
@@ -843,6 +925,33 @@ async function main() {
     assert(repeatedIbanCheck === false, "eine bereits gesehene IBAN vom selben Absender sollte NICHT mehr als neu gelten");
     const newIbanCheck = await ibanHistoryCheck.checkAndRecord(account.userId, fixture2!.fromAddress, ["DE99999999999999999999"]);
     assert(newIbanCheck === true, "eine bisher nicht gesehene IBAN vom selben Absender sollte weiterhin als neu gelten");
+
+    // 3b) IBAN-Wechsel im selben Thread (WEB_INBOX.md 15.09., "6 Sicherheits-
+    // Ergaenzungen" Punkt 3): Fixture 8 (Original-Rechnung, IBAN A) + Fixture
+    // 9 (Thread-Antwort per "In-Reply-To", IBAN B) -- eigenständiges Signal,
+    // unabhängig von containsNewIban/ibanHistoryCheck (sender-basiert) oben.
+    const fixture8 = await store.findMessageByHeader(account.id, "<fixture-8@lieferant-beispiel.de>");
+    assert(fixture8 !== undefined, "Fixture 8 sollte importiert worden sein");
+    const fixture9 = await store.findMessageByHeader(account.id, "<fixture-9@lieferant-beispiel.de>");
+    assert(fixture9 !== undefined, "Fixture 9 sollte importiert worden sein");
+    assert(
+      fixture9!.inReplyToMessageId === fixture8!.id,
+      "Fixture 9s 'In-Reply-To'-Header sollte auf Fixture 8 aufgelöst werden (messages.in_reply_to_message_id)",
+    );
+
+    const fixture8Detail = (await (await fetch(`${base}/v1/messages/${fixture8!.id}`)).json()) as Record<string, unknown>;
+    const fixture8Security = fixture8Detail.security as Record<string, unknown>;
+    assert(
+      fixture8Security.ibanChangedInThread === false,
+      "Fixture 8 (erste Nachricht des Threads, kein Vorgänger) sollte ibanChangedInThread=false liefern",
+    );
+
+    const fixture9Detail = (await (await fetch(`${base}/v1/messages/${fixture9!.id}`)).json()) as Record<string, unknown>;
+    const fixture9Security = fixture9Detail.security as Record<string, unknown>;
+    assert(
+      fixture9Security.ibanChangedInThread === true,
+      "Fixture 9 (andere IBAN als Fixture 8, selber Thread) sollte ibanChangedInThread=true liefern",
+    );
 
     // 4) Recipient-Reputation-Lookup über POST /messages/draft/phishing-check
     // (recipientAddress, kleine Contract-Ergänzung siehe api-spec.yaml):

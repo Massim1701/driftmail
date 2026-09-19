@@ -940,6 +940,16 @@ components:
                 List-Unsubscribe-Header hat (unabhaengig von classification)
                 -- steuert, ob die Client-UI den manuellen Abmelden-Button
                 zu POST /messages/{messageId}/unsubscribe anbietet.
+            isNewSender:
+              type: boolean
+              description: >
+                "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09.): true,
+                wenn es fuer dieses Konto keine andere Nachricht von
+                derselben fromAddress gibt. Zur Laufzeit abgeleitet, kein
+                Ruecktausch bei spaeter eintreffender aelterer Mail. Ergaenzt
+                sich mit GET /trusted-senders -- die Client-UI kombiniert
+                beides (Badge nur bei isNewSender=true UND Absender nicht
+                auf der Whitelist).
 
     QuarantineInfo:
       type: object
@@ -972,8 +982,16 @@ components:
         domainReputationScore: { type: number, format: float, nullable: true }
         homoglyphDetected: { type: boolean }
         linkMismatchDetected: { type: boolean }
+        displayNameSpoofingDetected: { type: boolean }
+        replyToMismatchDetected: { type: boolean }
         urgencyLanguageScore: { type: number, format: float, nullable: true }
         containsNewIban: { type: boolean }
+        ibanChangedInThread:
+          type: boolean
+          description: >
+            true, wenn eine fruehere Nachricht desselben Threads eine andere
+            IBAN enthielt als diese Nachricht (WEB_INBOX.md 15.09.,
+            "IBAN-Wechsel im selben Thread").
         classification: { type: string, enum: [safe, spam, phishing, unclear] }
         spamSubcategory:
           type: string

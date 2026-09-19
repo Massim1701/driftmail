@@ -19,8 +19,21 @@ export interface SecurityResult {
   domainReputationScore: number | null; // 0.0 - 1.0
   homoglyphDetected: boolean;
   linkMismatchDetected: boolean;
+  // Anzeigename-Spoofing (WEB_INBOX.md 15.09.): bekannter Markenname im
+  // Absender-Anzeigenamen (z.B. "PayPal Support"), aber die tatsaechliche
+  // Absenderdomain gehoert nicht zu dieser Marke.
+  displayNameSpoofingDetected: boolean;
+  // Reply-To-Mismatch (WEB_INBOX.md 15.09.): Reply-To-Header vorhanden UND
+  // dessen Domain weicht von der From-Domain ab (klassischer BEC-Trick).
+  replyToMismatchDetected: boolean;
   urgencyLanguageScore: number | null; // 0.0 - 1.0
   containsNewIban: boolean;
+  // IBAN-Wechsel im selben Thread (WEB_INBOX.md 15.09.): braucht Zugriff auf
+  // vorherige Nachrichten desselben Threads -- zustandsbehaftet, kann dieses
+  // Interface (analyzeMail, zustandslos) nicht selbst liefern, immer `false`
+  // von der Implementierung. Wird von Track A als Nachbearbeitungsschritt
+  // befuellt, analog zu senderDomainAgeDays/domainReputationScore.
+  ibanChangedInThread: boolean;
   classification: Classification;
   // Nur gesetzt wenn classification === "spam". "adult"/"gambling" loesen
   // sofortiges Loeschen aus (kein Quarantaene-Pfad, kein 30-Tage-Aufheben,

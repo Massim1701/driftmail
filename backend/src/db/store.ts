@@ -101,6 +101,12 @@ export interface Store {
    * auf `messages`, weil das mit einer echten DB ein einzelnes SQL-Join
    * wird statt eines In-Memory-Scans. */
   hasPhishingMessageFrom(address: string, domain: string | null): Promise<boolean>;
+  /** "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09., "6 Sicherheits-
+   * Ergaenzungen" Punkt 4): true, wenn es fuer dieses Konto eine ANDERE
+   * Nachricht (ungleich excludingMessageId) mit derselben fromAddress gibt.
+   * Zur Laufzeit abgeleitet, kein eigenes Feld/Cache -- siehe
+   * routes/messages.ts. Case-insensitiver Adressvergleich. */
+  hasOtherMessageFromAddress(mailAccountId: string, fromAddress: string, excludingMessageId: string): Promise<boolean>;
 
   // ----- Quarantäne -----
   quarantineMessage(messageId: string, reason: string): Promise<QuarantineRecord>;
@@ -403,6 +409,13 @@ export class InMemoryStore implements Store {
       const security = this.messageSecurity.get(m.id);
       return security?.classification === "phishing";
     });
+  }
+
+  async hasOtherMessageFromAddress(mailAccountId: string, fromAddress: string, excludingMessageId: string): Promise<boolean> {
+    const normalized = fromAddress.toLowerCase();
+    return this.messages.some(
+      (m) => m.mailAccountId === mailAccountId && m.id !== excludingMessageId && m.fromAddress.toLowerCase() === normalized,
+    );
   }
 
   // ----- Quarantäne -----

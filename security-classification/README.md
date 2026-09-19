@@ -29,6 +29,8 @@ npm run build     # -> dist/
 | `src/authHeaders.ts` | SPF/DKIM/DMARC aus `Authentication-Results` (+ `Received-SPF`-Fallback) |
 | `src/homoglyph.ts` | Homoglyph-/IDN-Angriffe: Mixed-Script-Labels + explizite Unicode-Konfusionstabelle |
 | `src/linkMismatch.ts` | Anzeigetext-vs-href-Domain-Vergleich (HTML-`<a>` und Markdown-Links) |
+| `src/displayNameSpoofing.ts` | Bekannter Markenname im Absender-Anzeigenamen, aber Domain gehört nicht zur Marke (WEB_INBOX.md 15.09.) |
+| `src/replyToMismatch.ts` | Reply-To-Domain weicht von From-Domain ab — klassischer BEC-Trick (WEB_INBOX.md 15.09.) |
 | `src/urgencyLanguage.ts` | Keyword-Heuristik für Dringlichkeitssprache (DE/EN) |
 | `src/ibanDetection.ts` | IBAN-Erkennung per Regex + ISO-13616-Mod-97-Prüfsumme |
 | `src/classification.ts` | Kombiniert alle Signale zu `classification` + `confidenceScore` (regelbasiert) |
@@ -215,6 +217,21 @@ was ist Platzhalter" oben und "Übergabe an Track A" unten.
 
 ## Design-Entscheidungen
 
+- **`displayNameSpoofingDetected`/`replyToMismatchDetected` -- eigene, aber
+  niedrigere Gewichte als Homoglyph/Link-Mismatch (19.09., WEB_INBOX.md
+  15.09. "6 Sicherheits-Ergaenzungen" Punkt 1+2):** `classification.ts`
+  gewichtet beide mit 0.3 bzw. 0.25 (Homoglyph/Link-Mismatch: je 0.35).
+  Begründung: beide Signale sind eindeutige Phishing-Indikatoren, haben aber
+  etwas mehr legitimen Graubereich als Homoglyph (das praktisch nie
+  harmlos vorkommt) -- z.B. ein Assistent/Vertretungsfall mit eigener
+  Reply-To-Adresse, oder ein legitimer Reseller, der im Anzeigenamen auf
+  eine bekannte Marke verweist. `replyToMismatch.ts` vergleicht deshalb
+  bewusst nur die DOMAIN (nicht die volle Adresse) -- ein anderer lokaler
+  Teil auf derselben Domain (z.B. "no-reply@" vs. "support@") ist normal
+  und wird nicht geflaggt (gleiche "verwandte Domains"-Logik wie in
+  `linkMismatch.ts`/`heloMismatch.ts`, Subdomains in beide Richtungen
+  erlaubt). Beide Signale verhindern zusätzlich die "safe"-Einstufung in
+  `classify()`, auch wenn Auth komplett passt.
 - **`spamSubcategory` -- zweistufige Keyword-Schwelle statt einfachem
   Treffer-Zähler (08.09., erweitert 15.09.):** `adult`/`gambling`/
   `advance_fee_scam` lösen im Aufrufer sofortiges, endgültiges Löschen aus
@@ -495,6 +512,21 @@ dem `analyzeMail()`-Aufruf durchführt und das Feld nachträglich befüllt
 (vermutlich Track A, da das Backend Netzwerkzugriff hat), ist als offene
 Frage in SYNC.md "Offene Fragen" eingetragen -- nicht selbst entscheidbar,
 da plattform-/architekturübergreifend.
+
+## Übergabe an Track A (`ibanChangedInThread`)
+
+Dieses Modul liefert `ibanChangedInThread` immer als `false` (WEB_INBOX.md
+15.09., "IBAN-Wechsel im selben Thread") -- der Vergleich braucht Zugriff
+auf vorherige Nachrichten DESSELBEN Threads (`messages.in_reply_to_
+message_id`-Kette), also Zustand/DB-Zugriff, den dieses zustandslose Modul
+(nur `rawText`+`headers` der aktuellen Mail) nicht hat. Anders als bei
+`ipReputationFlag`/`recipientReputation` oben ist diese Übergabe bereits
+entschieden und umgesetzt (19.09., kein offenes SYNC.md-Item): Track A
+löst den "In-Reply-To"-Header auf (`backend/src/mail/inReplyTo.ts`) und
+befüllt das Feld als Nachbearbeitungsschritt (`backend/src/lookups/
+ibanThreadCheck.ts`), analog zu den vier bestehenden externen Lookups --
+siehe `backend/README.md` "Anzeigename-Spoofing / Reply-To-Mismatch /
+'Erster Kontakt'".
 
 ## Übergabe an Track A (`recipientReputation`, ausgehender Phishing-Check)
 

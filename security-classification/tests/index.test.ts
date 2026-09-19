@@ -21,8 +21,11 @@ describe("analyzeMail (integration)", () => {
       domainReputationScore: null,
       homoglyphDetected: false,
       linkMismatchDetected: false,
+      displayNameSpoofingDetected: false,
+      replyToMismatchDetected: false,
       urgencyLanguageScore: 0,
       containsNewIban: false,
+      ibanChangedInThread: false,
       classification: "safe",
       spamSubcategory: null,
       ipReputationFlag: "unknown",
@@ -62,6 +65,46 @@ describe("analyzeMail (integration)", () => {
     expect(result.imageToTextRatio).toBe(0);
   });
 
+  it("classifies a display-name-spoofed mail (brand name, wrong domain) combined with auth fail as phishing", async () => {
+    const rawText = "Bitte bestaetigen Sie umgehend Ihre Kontodaten, sonst wird Ihr Konto gesperrt.";
+    const headers = {
+      From: "PayPal Support <support@paypal-security-check.example>",
+      "Authentication-Results": "mx.example.com; spf=fail; dkim=none; dmarc=none",
+    };
+
+    const result = await analyzeMail(rawText, headers);
+
+    expect(result.displayNameSpoofingDetected).toBe(true);
+    expect(result.classification).toBe("phishing");
+  });
+
+  it("classifies a Reply-To-mismatched mail combined with auth fail as phishing", async () => {
+    const rawText = "Bitte antworten Sie umgehend auf diese Nachricht mit Ihren Zugangsdaten.";
+    const headers = {
+      From: "Kundenservice <service@sicherheit-konto-check.tk>",
+      "Reply-To": "reply@andere-domain.ru",
+      "Authentication-Results": "mx.example.com; spf=fail; dkim=none; dmarc=none",
+    };
+
+    const result = await analyzeMail(rawText, headers);
+
+    expect(result.replyToMismatchDetected).toBe(true);
+    expect(result.classification).toBe("phishing");
+  });
+
+  it("does not flag a legitimate Reply-To on the same domain as a mismatch", async () => {
+    const rawText = "Anbei die gewuenschten Unterlagen.";
+    const headers = {
+      From: "Newsletter <no-reply@firma.de>",
+      "Reply-To": "support@firma.de",
+      "Authentication-Results": "mx.example.com; spf=pass; dkim=pass; dmarc=pass",
+    };
+
+    const result = await analyzeMail(rawText, headers);
+
+    expect(result.replyToMismatchDetected).toBe(false);
+  });
+
   it("always returns senderDomainAgeDays and domainReputationScore as null (out of scope for this module)", async () => {
     const result = await analyzeMail("Hallo Welt", {});
     expect(result.senderDomainAgeDays).toBeNull();
@@ -71,6 +114,11 @@ describe("analyzeMail (integration)", () => {
   it("always returns ipReputationFlag as 'unknown' (needs external blocklist lookup, out of scope for this module)", async () => {
     const result = await analyzeMail("Hallo Welt", {});
     expect(result.ipReputationFlag).toBe("unknown");
+  });
+
+  it("always returns ibanChangedInThread as false (needs thread history, out of scope for this stateless module)", async () => {
+    const result = await analyzeMail("Neue IBAN: DE68 2105 0170 0012 3456 78", {});
+    expect(result.ibanChangedInThread).toBe(false);
   });
 
   it("returns a result matching the SecurityResult shape from contracts/ai-adapter-interface.ts", async () => {
@@ -84,8 +132,11 @@ describe("analyzeMail (integration)", () => {
         "domainReputationScore",
         "homoglyphDetected",
         "linkMismatchDetected",
+        "displayNameSpoofingDetected",
+        "replyToMismatchDetected",
         "urgencyLanguageScore",
         "containsNewIban",
+        "ibanChangedInThread",
         "classification",
         "spamSubcategory",
         "ipReputationFlag",

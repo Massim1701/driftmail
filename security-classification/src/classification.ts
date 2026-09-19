@@ -6,6 +6,8 @@ export interface ClassificationInput {
   dmarcStatus: AuthStatus;
   homoglyphDetected: boolean;
   linkMismatchDetected: boolean;
+  displayNameSpoofingDetected: boolean;
+  replyToMismatchDetected: boolean;
   urgencyLanguageScore: number;
   containsNewIban: boolean;
 }
@@ -35,6 +37,12 @@ export function classify(input: ClassificationInput): ClassificationOutput {
 
   if (input.homoglyphDetected) phishingScore += 0.35;
   if (input.linkMismatchDetected) phishingScore += 0.35;
+  // WEB_INBOX.md 15.09.: beides eigenstaendige Phishing-Signale, aehnlich
+  // stark wie Homoglyph/Link-Mismatch, aber mit etwas mehr legitimem
+  // Graubereich (z.B. ein Assistent mit eigener Reply-To-Adresse) --
+  // deshalb etwas niedriger gewichtet als die beiden oben.
+  if (input.displayNameSpoofingDetected) phishingScore += 0.3;
+  if (input.replyToMismatchDetected) phishingScore += 0.25;
 
   if (input.urgencyLanguageScore > 0.5) {
     phishingScore += 0.2 * input.urgencyLanguageScore;
@@ -53,6 +61,8 @@ export function classify(input: ClassificationInput): ClassificationOutput {
   const noOtherSignals =
     !input.homoglyphDetected &&
     !input.linkMismatchDetected &&
+    !input.displayNameSpoofingDetected &&
+    !input.replyToMismatchDetected &&
     !input.containsNewIban &&
     input.urgencyLanguageScore < 0.2;
 

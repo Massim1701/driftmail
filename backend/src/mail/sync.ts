@@ -13,6 +13,7 @@ import type { MailAdapter } from "./types";
 import { FixtureMailAdapter } from "./fixtureAdapter";
 import { GmailAdapter } from "./gmailAdapter";
 import { ImapAdapter } from "./imapAdapter";
+import { parseInReplyToHeader } from "./inReplyTo";
 import { parseListUnsubscribeHeader } from "./listUnsubscribe";
 import { store } from "../db/store";
 import type { AiAdapter } from "../ai/types";
@@ -22,6 +23,7 @@ import {
   extractIbanCandidates,
   extractSendingIp,
   ibanHistoryCheck,
+  ibanThreadCheck,
   ipReputationLookup,
 } from "../lookups";
 
@@ -172,6 +174,24 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
       const ibanCandidates = extractIbanCandidates(mail.bodyText ?? "");
       security.containsNewIban = await ibanHistoryCheck.checkAndRecord(account.userId, mail.fromAddress, ibanCandidates);
 
+      // Thread-Verknuepfung (WEB_INBOX.md 15.09., "IBAN-Wechsel im selben
+      // Thread"): "In-Reply-To"-Header gegen message_id_header desselben
+      // Kontos aufloesen -- null, wenn kein Header vorhanden ist oder der
+      // Thread-Vorgaenger nicht synchronisiert wurde (siehe inReplyTo.ts).
+      const inReplyToHeaderValue = parseInReplyToHeader(mail.rawHeaders);
+      const inReplyToMessage = inReplyToHeaderValue
+        ? await store.findMessageByHeader(account.id, inReplyToHeaderValue)
+        : undefined;
+      const inReplyToMessageId = inReplyToMessage?.id ?? null;
+
+      // IBAN-Wechsel im selben Thread (WEB_INBOX.md 15.09., "6 Sicherheits-
+      // Ergaenzungen" Punkt 3): staerkeres Signal als containsNewIban allein
+      // (Rechnungsbetrug-typisch: eine andere IBAN taucht INNERHALB eines
+      // bestehenden Threads auf), zustandsbehaftet -- Nachbearbeitungsschritt
+      // analog zu den vier bestehenden externen Lookups, siehe
+      // lookups/ibanThreadCheck.ts.
+      security.ibanChangedInThread = await ibanThreadCheck.checkChanged(inReplyToMessageId, ibanCandidates);
+
       // Auto-Delete-Pfad (WEB_INBOX.md 08.09., siehe SYNC.md): eindeutiger
       // Erotik-/Glücksspiel-Spam wird NIE persistiert -- weder als
       // messages-Zeile noch als Quarantäne-Eintrag. Anders als der normale
@@ -228,6 +248,7 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         receivedAt: mail.receivedAt,
         folderId,
         rawHeaders: mail.rawHeaders,
+        inReplyToMessageId,
       });
 
       await store.setMessageSecurity({

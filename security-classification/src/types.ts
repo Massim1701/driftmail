@@ -38,8 +38,18 @@ export interface SecurityResult {
   domainReputationScore: number | null; // 0.0 - 1.0
   homoglyphDetected: boolean;
   linkMismatchDetected: boolean;
+  // Anzeigename-Spoofing / Reply-To-Mismatch (WEB_INBOX.md 15.09., "6
+  // Sicherheits-Ergaenzungen" Punkt 1+2) -- siehe displayNameSpoofing.ts /
+  // replyToMismatch.ts.
+  displayNameSpoofingDetected: boolean;
+  replyToMismatchDetected: boolean;
   urgencyLanguageScore: number | null; // 0.0 - 1.0
   containsNewIban: boolean;
+  // Immer `false` -- braucht Zugriff auf vorherige Nachrichten desselben
+  // Threads, das kann dieses zustandslose Modul nicht selbst liefern. Wird
+  // von Track A (Backend) als Nachbearbeitungsschritt befuellt, siehe
+  // backend/src/lookups/ibanThreadCheck.ts.
+  ibanChangedInThread: boolean;
   classification: Classification;
   // Nur gesetzt wenn classification === "spam". Bei "phishing" (und
   // "safe"/"unclear") immer `null` -- das ist eine harte Contract-Regel,

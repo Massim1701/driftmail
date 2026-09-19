@@ -1,11 +1,13 @@
 import { parseAuthHeaders } from "./authHeaders.js";
 import { classify } from "./classification.js";
+import { detectDisplayNameSpoofing } from "./displayNameSpoofing.js";
 import { detectHeloMismatch } from "./heloMismatch.js";
 import { detectHomoglyphs } from "./homoglyph.js";
 import { detectNewIban } from "./ibanDetection.js";
 import { computeImageToTextRatio } from "./imageToTextRatio.js";
 import { detectIpReputation } from "./ipReputation.js";
 import { detectLinkMismatch } from "./linkMismatch.js";
+import { detectReplyToMismatch } from "./replyToMismatch.js";
 import { detectSpamSubcategory } from "./spamSubcategory.js";
 import type { SecurityResult } from "./types.js";
 import { scoreUrgencyLanguage } from "./urgencyLanguage.js";
@@ -65,6 +67,8 @@ export async function analyzeMail(
   const { spfStatus, dkimStatus, dmarcStatus } = parseAuthHeaders(headers);
   const homoglyphDetected = detectHomoglyphs(rawText, headers);
   const linkMismatchDetected = detectLinkMismatch(rawText);
+  const displayNameSpoofingDetected = detectDisplayNameSpoofing(headers);
+  const replyToMismatchDetected = detectReplyToMismatch(headers);
   const urgencyLanguageScore = scoreUrgencyLanguage(rawText);
   const containsNewIban = detectNewIban(rawText);
   const heloMismatch = detectHeloMismatch(headers);
@@ -77,6 +81,8 @@ export async function analyzeMail(
     dmarcStatus,
     homoglyphDetected,
     linkMismatchDetected,
+    displayNameSpoofingDetected,
+    replyToMismatchDetected,
     urgencyLanguageScore,
     containsNewIban,
   });
@@ -122,8 +128,11 @@ export async function analyzeMail(
     domainReputationScore: null,
     homoglyphDetected,
     linkMismatchDetected,
+    displayNameSpoofingDetected,
+    replyToMismatchDetected,
     urgencyLanguageScore,
     containsNewIban,
+    ibanChangedInThread: false,
     classification,
     spamSubcategory,
     ipReputationFlag,
@@ -142,6 +151,7 @@ export { extractCreditCardNumbers, detectCreditCard } from "./creditCardDetectio
 export { detectsCredentialOrPaymentRequest } from "./credentialRequestLanguage.js";
 export { checkDraftForPhishing } from "./draftPhishingCheck.js";
 export type { DraftPhishingCheckResult, RiskyLink, SensitiveDataKind, RecipientReputation } from "./draftPhishingCheck.js";
+export { detectDisplayNameSpoofing } from "./displayNameSpoofing.js";
 export { detectHeloMismatch } from "./heloMismatch.js";
 export { CONFUSABLES, containsConfusableChar, detectHomoglyphs, extractDomains, isHomoglyphDomain, isMixedScriptLabel } from "./homoglyph.js";
 export { detectNewIban, extractIbans } from "./ibanDetection.js";
@@ -150,5 +160,6 @@ export { detectIpReputation } from "./ipReputation.js";
 export { detectLinkMismatch, extractLinks, isLinkMismatch } from "./linkMismatch.js";
 export type { ExtractedLink } from "./linkMismatch.js";
 export { detectMrz } from "./mrzDetection.js";
+export { detectReplyToMismatch } from "./replyToMismatch.js";
 export { detectSpamSubcategory } from "./spamSubcategory.js";
 export { scoreUrgencyLanguage } from "./urgencyLanguage.js";

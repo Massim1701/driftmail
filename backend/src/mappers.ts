@@ -45,8 +45,11 @@ export function toApiSecurityResult(s: MessageSecurityRecord): ApiSecurityResult
     domainReputationScore: s.domainReputationScore,
     homoglyphDetected: s.homoglyphDetected,
     linkMismatchDetected: s.linkMismatchDetected,
+    displayNameSpoofingDetected: s.displayNameSpoofingDetected,
+    replyToMismatchDetected: s.replyToMismatchDetected,
     urgencyLanguageScore: s.urgencyLanguageScore,
     containsNewIban: s.containsNewIban,
+    ibanChangedInThread: s.ibanChangedInThread,
     classification: s.classification,
     spamSubcategory: s.spamSubcategory,
     ipReputationFlag: s.ipReputationFlag,
@@ -76,6 +79,7 @@ export function toApiMessageDetail(
   m: MessageRecord,
   security: MessageSecurityRecord | undefined,
   quarantine: QuarantineRecord | undefined,
+  isNewSender: boolean,
 ): ApiMessageDetail {
   return {
     ...toApiMessage(m, security),
@@ -83,6 +87,7 @@ export function toApiMessageDetail(
     security: security ? toApiSecurityResult(security) : null,
     quarantine: quarantine ? toApiQuarantineInfo(quarantine) : null,
     canUnsubscribe: parseListUnsubscribeHeader(m.rawHeaders) !== null,
+    isNewSender,
   };
 }
 
