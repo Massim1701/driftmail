@@ -1335,6 +1335,103 @@ echte Google-Zugangsdaten von Massimo nicht selbst end-to-end durchspielen —
 sobald das Google-Cloud-Projekt/die Credentials stehen, bitte einmal echt
 gegentesten. Web `npm run build`/`tsc -b` grün.
 
+### Provider-Support (19.09., WEB_INBOX.md 15.09. "ECHTE LUECKE ENTDECKT")
+
+Massimo hatte nachgefragt, ob der Einrichtungsassistent bereits gängige
+Mail-Provider unterstützt — verifiziert: nein, bisher ausschließlich
+Gmail-OAuth. Reihenfolge laut Auftrag: Gmail-OAuth zuerst fertigstellen
+(lief bereits, siehe oben), danach IMAP-Passwort-Weg mit Provider-Presets
+(GMX/web.de/iCloud/generisch); Outlook/Yahoo-OAuth warten (eigene
+Provider-Projekte bei Microsoft/Yahoo nötig, noch nicht eingerichtet).
+
+**Zwei echte, während der Umsetzung entdeckte Lücken, beide behoben:**
+
+1. **`mail_accounts.encrypted_oauth_token`/`encrypted_imap_credentials`
+   waren nie wirklich verschlüsselt.** Der Gmail-Refresh-Token landete seit
+   dem echten Login (10.09.) im Klartext in der Spalte, die "encrypted_*"
+   heißt — der Name versprach etwas, das der Code nicht einhielt. Neu:
+   `src/auth/credentialsEncryption.ts`, AES-256-GCM
+   (`encryptCredentials`/`decryptCredentials`), Schlüssel aus
+   `CREDENTIALS_ENCRYPTION_KEY` (scrypt-Ableitung) mit
+   Dev-Fallback-Schlüssel (siehe `.env.example` — **MUSS vor einem echten
+   Deploy gesetzt werden**, sonst ist die "Verschlüsselung" nur eine
+   Kodierung mit öffentlich in diesem Repo stehendem Schlüssel). Angewendet
+   auf beide Spalten: Gmail-Refresh-Token (`routes/auth.ts`
+   `GET /auth/google/callback`) und die neuen IMAP-Zugangsdaten (siehe
+   unten).
+2. **`account.encryptedOauthToken`/`encryptedImapCredentials` wurden vom
+   Mail-Sync selbst NIE gelesen.** Trotz echtem Gmail-Login (Refresh-Token
+   landete korrekt in der DB) lief der tatsächliche Sync für JEDES Konto
+   ausschließlich über die einzelnen, global-einen-Account-großen Env-Vars
+   (`GMAIL_REFRESH_TOKEN` bzw. `IMAP_HOST`/`IMAP_USER`/`IMAP_PASSWORD`) --
+   ein zweiter, echter User hätte nie seine eigene Mail gesehen, nur
+   (falls überhaupt konfiguriert) das eine Env-Var-Konto. `.env.example`
+   behauptete an dieser Stelle bereits das Gegenteil ("brauchen dafür KEINE
+   eigene Env-Var") -- ein Dokumentations-/Code-Auseinanderlaufen, jetzt
+   nachgezogen statt nur die Doku zu korrigieren. Fix:
+   `mail/sync.ts` `adapterForAccount()` versucht jetzt ZUERST die
+   Konto-eigenen (entschlüsselten) Zugangsdaten, die globalen Env-Vars
+   bleiben als Fallback für das Demo-/Dev-Konto ohne echten Login.
+
+**Neu: `GET /mail-providers`** (`routes/mailProviders.ts`,
+`contracts/mail-providers.json`) — statische Liste unterstützter Provider
+für die künftige Onboarding-Provider-Auswahl (Track C/F), EINE Quelle statt
+pro Plattform hartcodierter Presets (gleiches Prinzip wie
+`design-tokens.json`). Läuft vor dem Login (`security: []`, wie
+`authRouter`). Enthält Gmail (authType `oauth`, fertig), Outlook/Yahoo
+(authType `oauth`, `comingSoon: true`), iCloud/GMX/web.de (authType `imap`,
+vorbefüllte Host/Port/Secure-Presets für IMAP+SMTP) und `other_imap`
+(authType `imap`, Host-Felder `null` — User trägt selbst ein).
+`appPasswordHelpUrl`-Werte sind Best-Effort-Links auf offizielle
+Provider-Doku (Apple/GMX/web.de) — vor dem Verwenden in einer echten UI
+nochmal verifizieren, dass sie noch auflösen.
+
+**`POST /accounts` `provider=imap` ist jetzt echt** (vorher: `imapPassword`
+wurde entgegengenommen, aber nie ausgewertet). Neue optionale Body-Felder
+`imapHost`/`imapPort`/`imapSecure`/`imapUser`/`smtpHost`/`smtpPort`/
+`smtpSecure` (siehe `api-spec.yaml`), `imapUser` fällt auf `emailAddress`
+zurück, SMTP-Felder auf `imapHost` + Port 587/STARTTLS (identisches
+Fallback-Verhalten wie der bestehende Env-Var-Pfad). **Echter
+Verbindungstest vor dem Speichern:** `new ImapAdapter(credentials).
+testConnection()` (bereits vorhandene, echte `imapflow`-Implementierung,
+bisher nur für den Sync selbst genutzt) — schlägt der Login fehl, gibt es
+sofort `422` statt falsche Zugangsdaten stillschweigend zu speichern und
+erst beim nächsten Sync-Versuch scheitern zu lassen. Bei Erfolg werden die
+Zugangsdaten als ein JSON-Blob (`ImapCredentials`) verschlüsselt in
+`encrypted_imap_credentials` abgelegt.
+
+**Bewusste Grenze (wie beim bestehenden "kein Multi-Account"-Verhalten des
+gesamten Endpunkts):** gilt nur beim ERSTMALIGEN Verbinden dieser
+E-Mail-Adresse — ein zweiter `POST /accounts`-Aufruf mit derselben Adresse
+(z.B. nach einer App-Passwort-Rotation beim Provider) ändert die bereits
+gespeicherten IMAP-Zugangsdaten NICHT, es gibt in diesem Schritt keinen
+Update-Pfad. Kein neuer `provider`-Wert pro IMAP-Anbieter (GMX/web.de/
+iCloud/generisch teilen sich weiterhin `provider='imap'`, wie schon im
+Contract angelegt) — welcher Anbieter es war, ist reine Client-Auswahl-
+Information, für die Funktion selbst zählen nur die tatsächlichen
+Host/Port/Secure-Werte.
+
+**Getestet:** Backend-Smoketest neu: Verschlüsselungs-Rundreise
+(`encryptCredentials`/`decryptCredentials`, inkl. Prüfung, dass zwei
+Verschlüsselungen desselben Klartexts sich unterscheiden -- zufälliger IV),
+`GET /mail-providers` (unauthentifiziert, erwartete Presets für
+gmail/outlook/gmx/other_imap), `POST /accounts provider=imap` ohne
+imapHost/imapPassword → `400`, mit nicht auflösbarem Host → `422` UND
+verifiziert, dass dabei kein Mail-Konto angelegt wird. `npm run
+typecheck`/`npm test` grün, ohne UND mehrfach hintereinander mit
+`DATABASE_URL` gegen eine frisch aufgesetzte lokale Postgres-Instanz.
+**Wie beim Gmail-OAuth-Callback (siehe oben) kann ich einen ECHTEN,
+erfolgreichen IMAP-Login ohne eine reale Mailbox in dieser Umgebung nicht
+end-to-end durchspielen** — Massimo müsste einmal mit einem echten GMX-/
+web.de-/iCloud-Konto (App-Passwort) gegentesten, sobald eine Onboarding-UI
+dafür existiert oder testweise direkt per `curl` gegen `POST /accounts`.
+
+**Übergabe:** Track C/F (Onboarding-Provider-Auswahlbildschirm, IMAP-
+Verbindungsformular mit Preset-Vorbefüllung aus `GET /mail-providers`,
+App-Passwort-Erklärung mit Link) bewusst **nicht** Teil dieses Schritts,
+siehe `SYNC.md`. Outlook/Yahoo-OAuth ebenfalls offen (wartet laut Auftrag
+auf jeweils ein eigenes Provider-Projekt bei Microsoft/Yahoo).
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war

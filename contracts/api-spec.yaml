@@ -79,6 +79,26 @@ paths:
         "302":
           description: Redirect zu FRONTEND_URL/auth/callback mit token oder error
 
+  /mail-providers:
+    get:
+      summary: >
+        Liste unterstuetzter Mail-Provider fuer die Onboarding-Provider-
+        Auswahl (WEB_INBOX.md 15.09., "ECHTE LUECKE ENTDECKT"). Laeuft vor
+        dem Login, `security: []`. Statische Konfiguration aus
+        contracts/mail-providers.json, EINE Quelle fuer alle Plattformen
+        statt pro-Plattform hartcodierter Presets (gleiches Prinzip wie
+        design-tokens.json).
+      security: []
+      responses:
+        "200":
+          description: Liste der Provider-Presets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MailProvider"
+
   /accounts:
     get:
       summary: Verbundene Mail-Konten des angemeldeten Users auflisten
@@ -100,17 +120,30 @@ paths:
         Verbindung dieser E-Mail-Adresse einen neuen User + dessen 7
         Standard-Ordner an, sonst wird der bestehende User/das bestehende
         Konto wiederverwendet (kein Multi-Account pro User in diesem
-        Entwicklungsstand, siehe backend/README.md "Auth"). Echter
-        OAuth-Code-Austausch (Gmail) bzw. echte IMAP-Zugangsdaten-Pruefung
-        sind noch nicht angebunden (`oauthCode`/`imapPassword` werden
-        aktuell nicht ausgewertet) -- bewusste, dokumentierte Grenze, analog
-        zum bestehenden Fixture-Adapter-Muster fuer den Mail-Sync selbst.
-        [2026-09-10] Fuer Gmail mit konfiguriertem Google-OAuth (siehe
-        backend/README.md "Auth") ist `GET /auth/google/start` der echte,
-        empfohlene Weg -- dieser Endpoint bleibt als Fallback (kein Google-
-        OAuth konfiguriert) und fuer provider=imap. Unterliegt seitdem
-        derselben Allowlist-Pruefung (`ALLOWED_EMAILS`) wie der echte
-        Google-Login, `403` bei nicht freigeschalteter Adresse.
+        Entwicklungsstand, siehe backend/README.md "Auth"). [2026-09-10]
+        Fuer Gmail mit konfiguriertem Google-OAuth (siehe backend/README.md
+        "Auth") ist `GET /auth/google/start` der echte, empfohlene Weg --
+        dieser Endpoint bleibt als Fallback (kein Google-OAuth konfiguriert)
+        und `oauthCode` bleibt unausgewertet (Gmail laeuft ausschliesslich
+        ueber den Redirect-Flow, nie ueber einen im Body mitgeschickten
+        Code). Unterliegt derselben Allowlist-Pruefung (`ALLOWED_EMAILS`)
+        wie der echte Google-Login, `403` bei nicht freigeschalteter
+        Adresse.
+        [2026-09-19] Fuer `provider=imap` (WEB_INBOX.md 15.09., "ECHTE
+        LUECKE ENTDECKT": GMX/web.de/iCloud/generisches IMAP) sind
+        `imapHost`+`imapPassword` jetzt echt: die Zugangsdaten werden vor
+        dem Speichern per echtem IMAP-Login getestet (`422` bei
+        Fehlschlag), danach verschluesselt abgelegt
+        (`mail_accounts.encrypted_imap_credentials`) und vom Mail-Sync
+        dieses Kontos tatsaechlich verwendet -- keine Platzhalter-Pruefung
+        mehr. `imapUser` faellt auf `emailAddress` zurueck, wenn nicht
+        angegeben (haeufigster Fall: Login-Adresse = IMAP-User). SMTP-Felder
+        optional, fallen auf `imapHost`+Port 587 (STARTTLS) zurueck, falls
+        nicht angegeben (gleiches Verhalten wie beim bestehenden Env-Var-
+        Fallback-Pfad, siehe backend/README.md). Gilt nur beim ERSTMALIGEN
+        Verbinden -- ein zweiter Aufruf mit derselben E-Mail-Adresse
+        aendert die bereits gespeicherten Zugangsdaten NICHT (kein Update-
+        Pfad in diesem Schritt, siehe backend/README.md "Provider-Support").
       security: []
       requestBody:
         content:
@@ -121,8 +154,15 @@ paths:
               properties:
                 provider: { type: string, enum: [gmail, imap] }
                 emailAddress: { type: string }
-                oauthCode: { type: string, description: "Gmail: noch nicht ausgewertet, siehe summary" }
-                imapPassword: { type: string, description: "IMAP: noch nicht ausgewertet, siehe summary" }
+                oauthCode: { type: string, description: "Gmail: nicht ausgewertet, siehe summary -- echter Login laeuft ueber GET /auth/google/start" }
+                imapHost: { type: string, description: "IMAP: erforderlich fuer provider=imap, z.B. imap.gmx.net (siehe GET /mail-providers)" }
+                imapPort: { type: integer, description: "IMAP: Default 993" }
+                imapSecure: { type: boolean, description: "IMAP: Default true (implizites TLS)" }
+                imapUser: { type: string, description: "IMAP: Default = emailAddress, falls abweichend (selten)" }
+                imapPassword: { type: string, description: "IMAP: erforderlich fuer provider=imap, App-spezifisches Passwort" }
+                smtpHost: { type: string, description: "IMAP: optional, Default = imapHost" }
+                smtpPort: { type: integer, description: "IMAP: optional, Default 587" }
+                smtpSecure: { type: boolean, description: "IMAP: optional, Default false (STARTTLS statt implizitem TLS)" }
       responses:
         "200":
           description: Konto verbunden, neuer Session-Token ausgestellt
@@ -135,9 +175,11 @@ paths:
                     $ref: "#/components/schemas/MailAccount"
                   token: { type: string }
         "400":
-          description: provider oder emailAddress fehlt/ungueltig
+          description: provider/emailAddress fehlt/ungueltig, oder bei provider=imap fehlt imapHost/imapPassword
         "403":
           description: emailAddress ist nicht auf der Allowlist (ALLOWED_EMAILS)
+        "422":
+          description: provider=imap -- die angegebenen IMAP-Zugangsdaten konnten nicht verifiziert werden (echter Verbindungsversuch fehlgeschlagen)
 
   /folders:
     get:
@@ -875,6 +917,28 @@ components:
           nullable: true
           enum: [eingang, entwuerfe, gesendet, sonstiges, quarantaene, spam, papierkorb]
         sortOrder: { type: integer }
+
+    MailProvider:
+      type: object
+      description: >
+        Ein Eintrag aus contracts/mail-providers.json (GET /mail-providers).
+        Fuer authType=imap sind imapHost/imapPort/imapSecure/smtpHost/
+        smtpPort/smtpSecure Presets zum Vorbefuellen des Verbindungs-
+        Formulars -- `other_imap` hat bewusst null-Host-Felder (User muss
+        selbst eintragen).
+      properties:
+        id: { type: string }
+        label: { type: string }
+        authType: { type: string, enum: [oauth, imap] }
+        comingSoon: { type: boolean }
+        imapHost: { type: string, nullable: true }
+        imapPort: { type: integer, nullable: true }
+        imapSecure: { type: boolean, nullable: true }
+        smtpHost: { type: string, nullable: true }
+        smtpPort: { type: integer, nullable: true }
+        smtpSecure: { type: boolean, nullable: true }
+        requiresAppPassword: { type: boolean }
+        appPasswordHelpUrl: { type: string, nullable: true }
 
     TrustedSender:
       type: object

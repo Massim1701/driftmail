@@ -9,6 +9,7 @@ import { syncAccount } from "./mail/sync";
 import { aiAdapter } from "./ai";
 import { domainReputationLookup, extractIbanCandidates, ibanHistoryCheck } from "./lookups";
 import { ocrAdapter } from "./attachments";
+import { decryptCredentials, encryptCredentials } from "./auth/credentialsEncryption";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Server } from "node:http";
@@ -1142,7 +1143,89 @@ async function main() {
     );
     assert(deleteMissingTrustedRes.status === 404, "DELETE /trusted-senders/:id für unbekannte id sollte 404 liefern");
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung) end-to-end grün.");
+    // ----- Provider-Support (WEB_INBOX.md 15.09., "ECHTE LUECKE
+    // ENTDECKT"): Credentials-Verschlüsselung, GET /mail-providers, echter
+    // IMAP-Verbindungstest bei POST /accounts. -----
+
+    // Verschlüsselungs-Rundreise (auth/credentialsEncryption.ts) direkt
+    // geprüft, unabhängig von HTTP: Klartext muss nach der Rundreise exakt
+    // wiederhergestellt werden, UND das Chiffrat darf den Klartext nicht
+    // enthalten (sonst wäre es keine echte Verschlüsselung, nur Kodierung).
+    const plaintextSecret = "super-geheimes-app-passwort-DE68210501700012345678";
+    const encryptedSecret = encryptCredentials(plaintextSecret);
+    assert(encryptedSecret !== plaintextSecret, "verschlüsselter Wert darf nicht mit dem Klartext identisch sein");
+    assert(!encryptedSecret.includes(plaintextSecret), "verschlüsselter Wert darf den Klartext nicht im Chiffrat enthalten");
+    assert(decryptCredentials(encryptedSecret) === plaintextSecret, "Entschlüsseln sollte exakt den ursprünglichen Klartext liefern");
+    // Zwei Verschlüsselungen desselben Klartexts müssen sich unterscheiden
+    // (zufälliger IV pro Aufruf) -- sonst wäre ein wiederholtes Muster im
+    // Chiffrat erkennbar, obwohl der Klartext geheim bleiben soll.
+    assert(encryptCredentials(plaintextSecret) !== encryptedSecret, "zwei Verschlüsselungen desselben Klartexts sollten sich unterscheiden (zufälliger IV)");
+
+    // GET /mail-providers -- unauthentifiziert (Onboarding läuft vor dem Login).
+    const providersRes = await globalThis.fetch(`${base}/v1/mail-providers`);
+    assert(providersRes.status === 200, "GET /mail-providers sollte auch ohne Bearer-Token 200 liefern");
+    const providers = (await providersRes.json()) as Array<Record<string, unknown>>;
+    assert(Array.isArray(providers) && providers.length >= 6, "mind. 6 Provider-Presets erwartet (gmail, outlook, yahoo, icloud, gmx, web_de, other_imap)");
+    const gmailProvider = providers.find((p) => p.id === "gmail");
+    assert(gmailProvider?.authType === "oauth" && gmailProvider?.comingSoon === false, "gmail sollte authType=oauth und comingSoon=false liefern");
+    const outlookProvider = providers.find((p) => p.id === "outlook");
+    assert(outlookProvider?.authType === "oauth" && outlookProvider?.comingSoon === true, "outlook sollte authType=oauth und comingSoon=true liefern (wartet laut Auftrag)");
+    const gmxProvider = providers.find((p) => p.id === "gmx");
+    assert(
+      gmxProvider?.authType === "imap" && gmxProvider?.imapHost === "imap.gmx.net" && gmxProvider?.imapPort === 993,
+      "gmx sollte authType=imap mit vorbefülltem Host/Port liefern",
+    );
+    const otherImapProvider = providers.find((p) => p.id === "other_imap");
+    assert(
+      otherImapProvider?.authType === "imap" && otherImapProvider?.imapHost === null,
+      "other_imap sollte authType=imap mit imapHost=null liefern (User trägt selbst ein)",
+    );
+
+    // POST /accounts provider=imap ohne imapHost/imapPassword -> 400, kein
+    // Verbindungsversuch, keine Zeile angelegt.
+    const imapMissingFieldsRes = await globalThis.fetch(`${base}/v1/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "imap", emailAddress: "imap-missing-fields@example.com" }),
+    });
+    assert(imapMissingFieldsRes.status === 400, "POST /accounts provider=imap ohne imapHost/imapPassword sollte 400 liefern");
+
+    // POST /accounts provider=imap mit unerreichbarem Host -> echter
+    // Verbindungsversuch (ImapAdapter.testConnection()) schlägt fehl -> 422,
+    // NICHTS wird gespeichert (weder Konto noch verschlüsselte Zugangsdaten).
+    const imapBadHostEmail = "imap-bad-host-test@example.com";
+    const imapBadCredentialsRes = await globalThis.fetch(`${base}/v1/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider: "imap",
+        emailAddress: imapBadHostEmail,
+        imapHost: "imap.invalid.nonexistent-domain-for-driftmail-testing.example",
+        imapPassword: "falsches-passwort",
+      }),
+    });
+    assert(
+      imapBadCredentialsRes.status === 422,
+      "POST /accounts provider=imap mit nicht erreichbarem Host sollte 422 liefern (echter Verbindungstest schlägt fehl)",
+    );
+    const imapBadHostUser = await store.getUserByEmail(imapBadHostEmail);
+    if (imapBadHostUser) {
+      const imapBadHostAccount = await store.getMailAccountByUserId(imapBadHostUser.id);
+      assert(
+        imapBadHostAccount === undefined,
+        "bei fehlgeschlagenem IMAP-Verbindungstest darf kein Mail-Konto angelegt werden (User-Zeile allein ist unkritisch, siehe backend/README.md)",
+      );
+    }
+
+    // Hinweis (analog zur Gmail-OAuth-Testlücke, siehe backend/README.md
+    // "Auth" -> "Echter Google-Login"): ein ECHTER, erfolgreicher IMAP-Login
+    // (gültiger Host + echtes App-Passwort) lässt sich ohne eine reale
+    // Mailbox in dieser Umgebung nicht end-to-end durchspielen -- die
+    // Verbindungstest-/Verschlüsselungs-Logik selbst ist oben geprüft,
+    // Massimo müsste den kompletten Weg einmal mit einem echten GMX-/
+    // web.de-/iCloud-Konto gegentesten.
+
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support) end-to-end grün.");
   } finally {
     server.close();
     // Ohne das haelt der tesseract.js-Worker (worker_threads) den Prozess

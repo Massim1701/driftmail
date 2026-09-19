@@ -1,0 +1,82 @@
+{
+  "meta": {
+    "note": "Track 0 Contract (WEB_INBOX.md 15.09., 'ECHTE LUECKE ENTDECKT' -- Provider-Support). Served at runtime via GET /mail-providers (backend/src/routes/mailProviders.ts) so onboarding UIs (Track C/F) don't have to hardcode presets per platform. authType 'oauth' providers use the existing GET /auth/google/start-style redirect flow (currently only Gmail is wired up); authType 'imap' providers use POST /accounts with imapHost/imapPort/imapSecure/imapUser/imapPassword. appPasswordHelpUrl values are best-effort official provider documentation links -- verify they still resolve before surfacing them in a shipped UI.",
+    "order": "Reihenfolge laut WEB_INBOX.md 15.09.: Gmail-OAuth zuerst (fertig), danach IMAP-Passwort-Weg (GMX/web.de/iCloud/generisch, fertig 19.09.), Outlook/Yahoo-OAuth koennen warten (comingSoon: true, kein eigenes Provider-Projekt bei Microsoft/Yahoo eingerichtet)."
+  },
+  "providers": [
+    {
+      "id": "gmail",
+      "label": "Gmail",
+      "authType": "oauth",
+      "comingSoon": false
+    },
+    {
+      "id": "outlook",
+      "label": "Outlook / Microsoft 365",
+      "authType": "oauth",
+      "comingSoon": true
+    },
+    {
+      "id": "yahoo",
+      "label": "Yahoo",
+      "authType": "oauth",
+      "comingSoon": true
+    },
+    {
+      "id": "icloud",
+      "label": "iCloud Mail",
+      "authType": "imap",
+      "comingSoon": false,
+      "imapHost": "imap.mail.me.com",
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": "smtp.mail.me.com",
+      "smtpPort": 587,
+      "smtpSecure": false,
+      "requiresAppPassword": true,
+      "appPasswordHelpUrl": "https://support.apple.com/en-us/102654"
+    },
+    {
+      "id": "gmx",
+      "label": "GMX",
+      "authType": "imap",
+      "comingSoon": false,
+      "imapHost": "imap.gmx.net",
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": "mail.gmx.net",
+      "smtpPort": 587,
+      "smtpSecure": false,
+      "requiresAppPassword": true,
+      "appPasswordHelpUrl": "https://hilfe.gmx.net"
+    },
+    {
+      "id": "web_de",
+      "label": "web.de",
+      "authType": "imap",
+      "comingSoon": false,
+      "imapHost": "imap.web.de",
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": "smtp.web.de",
+      "smtpPort": 587,
+      "smtpSecure": false,
+      "requiresAppPassword": true,
+      "appPasswordHelpUrl": "https://hilfe.web.de"
+    },
+    {
+      "id": "other_imap",
+      "label": "Anderer Anbieter (IMAP)",
+      "authType": "imap",
+      "comingSoon": false,
+      "imapHost": null,
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": null,
+      "smtpPort": 587,
+      "smtpSecure": false,
+      "requiresAppPassword": false,
+      "appPasswordHelpUrl": null
+    }
+  ]
+}

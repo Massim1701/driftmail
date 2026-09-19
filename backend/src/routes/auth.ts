@@ -25,7 +25,9 @@
 import { Router } from "express";
 import { google } from "googleapis";
 import { isEmailAllowed } from "../auth/allowlist";
+import { encryptCredentials } from "../auth/credentialsEncryption";
 import { createSystemFoldersForUser, store } from "../db/store";
+import { ImapAdapter, type ImapCredentials } from "../mail/imapAdapter";
 import { toApiMailAccount } from "../mappers";
 import type { Provider } from "../types";
 
@@ -128,21 +130,27 @@ authRouter.get("/auth/google/callback", async (req, res) => {
   let user = await store.getUserByEmail(email);
   if (!user) user = await store.createUser(email);
 
+  // [2026-09-19] Fund: die Spalte heisst "encrypted_oauth_token", enthielt
+  // aber bisher den rohen Refresh-Token unverschluesselt -- der Spaltenname
+  // versprach etwas, das der Code nicht einhielt (siehe
+  // auth/credentialsEncryption.ts Kopfkommentar). Ab hier echt verschluesselt.
+  const encryptedRefreshToken = tokens.refresh_token ? encryptCredentials(tokens.refresh_token) : null;
+
   let account = await store.getMailAccountByUserId(user.id);
   if (!account) {
     account = await store.createMailAccount({
       userId: user.id,
       provider: "gmail",
       emailAddress: email,
-      encryptedOauthToken: tokens.refresh_token ?? null,
+      encryptedOauthToken: encryptedRefreshToken,
       encryptedImapCredentials: null,
       syncStatus: "pending",
       lastSyncedAt: null,
     });
-  } else if (tokens.refresh_token) {
+  } else if (encryptedRefreshToken) {
     // Google liefert ein refresh_token nur bei "prompt=consent" (s.o.) --
     // bei erneutem Login trotzdem immer den neuesten Stand übernehmen.
-    account = (await store.updateMailAccount(account.id, { encryptedOauthToken: tokens.refresh_token })) ?? account;
+    account = (await store.updateMailAccount(account.id, { encryptedOauthToken: encryptedRefreshToken })) ?? account;
   }
 
   if ((await store.listFolders(user.id)).length === 0) {
@@ -170,15 +178,63 @@ authRouter.post("/accounts", async (req, res) => {
   // Kein Multi-Account pro User in diesem Entwicklungsstand (gleiche
   // 1:1-Annahme wie schon bei ensureDemoUser()/drafts.ts) -- ein zweiter
   // POST /accounts-Aufruf mit derselben E-Mail gibt einfach das bestehende
-  // Konto zurück, statt ein zweites anzulegen.
+  // Konto zurück, statt ein zweites anzulegen. Gilt auch fuer IMAP: ein
+  // zweiter Aufruf mit (ggf. geaenderten) IMAP-Feldern aendert die bereits
+  // gespeicherten Zugangsdaten NICHT -- kein Update-Pfad in diesem Schritt,
+  // siehe api-spec.yaml-Summary/backend/README.md.
   let account = await store.getMailAccountByUserId(user.id);
   if (!account) {
+    let encryptedImapCredentials: string | null = null;
+
+    if (provider === "imap") {
+      const imapHost = typeof body.imapHost === "string" ? body.imapHost.trim() : "";
+      const imapPassword = typeof body.imapPassword === "string" ? body.imapPassword : "";
+      if (!imapHost || !imapPassword) {
+        return res.status(400).json({ error: "imapHost und imapPassword sind fuer provider=imap erforderlich" });
+      }
+      const imapPort = typeof body.imapPort === "number" ? body.imapPort : 993;
+      const imapSecure = typeof body.imapSecure === "boolean" ? body.imapSecure : true;
+      const imapUser = typeof body.imapUser === "string" && body.imapUser.trim() ? body.imapUser.trim() : emailAddress;
+      // SMTP-Fallback: gleiches Verhalten wie der bestehende Env-Var-Pfad
+      // in mail/sync.ts adapterForAccount() -- IMAP-Host + Port 587
+      // (STARTTLS), falls nicht explizit angegeben.
+      const smtpHost = typeof body.smtpHost === "string" && body.smtpHost.trim() ? body.smtpHost.trim() : imapHost;
+      const smtpPort = typeof body.smtpPort === "number" ? body.smtpPort : 587;
+      const smtpSecure = typeof body.smtpSecure === "boolean" ? body.smtpSecure : false;
+
+      const credentials: ImapCredentials = {
+        host: imapHost,
+        port: imapPort,
+        secure: imapSecure,
+        user: imapUser,
+        password: imapPassword,
+        smtpHost,
+        smtpPort,
+        smtpSecure,
+      };
+
+      // Echter Verbindungstest VOR dem Speichern (WEB_INBOX.md 15.09.,
+      // "ECHTE LUECKE ENTDECKT") -- kein Platzhalter mehr: falsche/
+      // abgelaufene Zugangsdaten werden sofort abgelehnt statt still
+      // gespeichert und erst beim naechsten Sync-Versuch zu scheitern.
+      try {
+        await new ImapAdapter(credentials).testConnection();
+      } catch (err) {
+        console.error(`[auth] IMAP-Verbindungstest fehlgeschlagen fuer ${imapHost}:`, err);
+        return res.status(422).json({
+          error: "IMAP-Zugangsdaten konnten nicht verifiziert werden -- bitte Host, Adresse und (App-)Passwort prüfen.",
+        });
+      }
+
+      encryptedImapCredentials = encryptCredentials(JSON.stringify(credentials));
+    }
+
     account = await store.createMailAccount({
       userId: user.id,
       provider,
       emailAddress,
       encryptedOauthToken: null,
-      encryptedImapCredentials: null,
+      encryptedImapCredentials,
       syncStatus: "pending",
       lastSyncedAt: null,
     });

@@ -8,6 +8,7 @@ import { capabilityRouter } from "./routes/capability";
 import { attachmentsRouter } from "./routes/attachments";
 import { draftsRouter } from "./routes/drafts";
 import { trustedSendersRouter } from "./routes/trustedSenders";
+import { mailProvidersRouter } from "./routes/mailProviders";
 import { internalRouter } from "./routes/internal";
 import { requireAuth } from "./middleware/auth";
 
@@ -24,6 +25,9 @@ export function createApp() {
   // keinen Token verlangen, um überhaupt einen zu bekommen). Alles danach
   // verlangt einen gültigen Bearer-Token.
   v1.use(authRouter);
+  // GET /mail-providers (WEB_INBOX.md 15.09.): laeuft VOR dem Login (Onboarding-
+  // Provider-Auswahl), deshalb wie authRouter vor requireAuth gemountet.
+  v1.use(mailProvidersRouter);
   v1.use(requireAuth);
   v1.use(accountsRouter);
   v1.use(foldersRouter);

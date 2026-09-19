@@ -10,9 +10,10 @@
 
 import type { MailAccountRecord, SystemFolderKey } from "../types";
 import type { MailAdapter } from "./types";
+import { decryptCredentials } from "../auth/credentialsEncryption";
 import { FixtureMailAdapter } from "./fixtureAdapter";
 import { GmailAdapter } from "./gmailAdapter";
-import { ImapAdapter } from "./imapAdapter";
+import { ImapAdapter, type ImapCredentials } from "./imapAdapter";
 import { parseInReplyToHeader } from "./inReplyTo";
 import { parseListUnsubscribeHeader } from "./listUnsubscribe";
 import { store } from "../db/store";
@@ -27,18 +28,36 @@ import {
   ipReputationLookup,
 } from "../lookups";
 
-/** Wählt den passenden Adapter für ein Konto. Fällt auf den Fixture-Adapter
- * zurück, wenn keine echten Zugangsdaten via Env konfiguriert sind. */
+/** Wählt den passenden Adapter für ein Konto.
+ *
+ * [2026-09-19] WEB_INBOX.md 15.09. ("ECHTE LUECKE ENTDECKT"): bis hierhin
+ * wurden `account.encryptedOauthToken`/`encryptedImapCredentials` NIRGENDS
+ * gelesen -- trotz echtem Gmail-Login (routes/auth.ts) bzw. jetzt echter
+ * IMAP-Zugangsdaten-Pruefung (siehe dort), lief der tatsaechliche Mail-Sync
+ * fuer JEDES Konto ausschliesslich ueber die globalen, EINEN-Account-
+ * grossen Env-Vars (GMAIL_REFRESH_TOKEN / IMAP_HOST+IMAP_USER+IMAP_PASSWORD).
+ * Ein zweiter, echter User haette also nie seine eigene Mail gesehen. Jetzt
+ * per-Konto zuerst versucht, Env-Vars bleiben als Fallback (Demo-/Dev-Konto
+ * ohne echten Login, gleiches Zero-Config-Muster wie zuvor). */
 export function adapterForAccount(account: MailAccountRecord): MailAdapter {
   if (account.provider === "gmail") {
     const clientId = process.env.GMAIL_CLIENT_ID;
     const clientSecret = process.env.GMAIL_CLIENT_SECRET;
-    const refreshToken = process.env.GMAIL_REFRESH_TOKEN;
+    // App-eigener OAuth-Client (clientId/clientSecret) ist immer derselbe
+    // fuer alle Konten -- nur das Refresh-Token ist pro-Konto. Eigenes
+    // Konto-Token hat Vorrang vor der globalen GMAIL_REFRESH_TOKEN-Env-Var.
+    const refreshToken = account.encryptedOauthToken
+      ? decryptCredentials(account.encryptedOauthToken)
+      : process.env.GMAIL_REFRESH_TOKEN;
     if (clientId && clientSecret && refreshToken) {
       return new GmailAdapter({ clientId, clientSecret, refreshToken });
     }
   }
   if (account.provider === "imap") {
+    if (account.encryptedImapCredentials) {
+      const credentials = JSON.parse(decryptCredentials(account.encryptedImapCredentials)) as ImapCredentials;
+      return new ImapAdapter(credentials);
+    }
     const host = process.env.IMAP_HOST;
     const user = process.env.IMAP_USER;
     const password = process.env.IMAP_PASSWORD;
