@@ -388,6 +388,105 @@ Klicktest. Web-Seite (nur Ordnername-Vorschlag, Header war schon da) per
 Browser-Automation end-to-end verifiziert, siehe `web/README.md`/
 SYNC.md.
 
+## [2026-09-19] Nachtrag: App-Sperre per Face ID/Touch ID (Punkt 5 von "6 Sicherheits-Ergänzungen")
+
+WEB_INBOX.md 15.09.: App selbst zusätzlich zum Mail-Konto-Login mit
+biometrischer Sperre schützen, optional (nicht erzwungen), empfohlen beim
+Onboarding.
+
+**Neu (`Security/BiometricLock.swift`, `Views/AppLockGateView.swift`):**
+- `BiometricLock`: dünner `LocalAuthentication`/`LAContext`-Wrapper.
+  `availableKind()` liefert Face ID/Touch ID/nur-Geräte-Code/nicht
+  verfügbar (steuert Icon+Text, ohne "Face ID" fest zu verdrahten).
+- **Design-Entscheidung (nicht explizit im Auftrag):**
+  `.deviceOwnerAuthentication` statt
+  `.deviceOwnerAuthenticationWithBiometrics` -- fällt bei fehlgeschlagener/
+  nicht eingerichteter Biometrie auf den Geräte-Code zurück statt den User
+  komplett auszusperren (z.B. Maske/Verletzung). Schützt trotzdem genau den
+  im Auftrag genannten Fall ("Gerät verloren/gestohlen, App noch
+  eingeloggt") -- wer weder Gesicht/Finger noch Geräte-Code kennt, kommt so
+  oder so nicht rein, exakt das Schutzniveau des iOS-Sperrbildschirms
+  selbst, zusätzlich auf driftmail angewendet. Ausführlich begründet im
+  Code-Kommentar.
+- `AppLockGateView<Content>`: sperrt den kompletten App-Inhalt, re-sperrt
+  bei jedem Verlassen des Vordergrunds (`scenePhase`-Beobachtung, nicht nur
+  beim Neustart -- eine kurze App-Wechsler-Vorschau reicht sonst nicht als
+  Schutzmoment). In `RootView.swift` um `FolderListView()` gelegt.
+- `AppLockToggleView`: ein Toggle, wiederverwendet im neuen zweiten
+  Onboarding-Schritt (`RootView.swift`, `OnboardingAppLockStepView`, direkt
+  nach dem Capability-Check) UND im neuen, ersten Settings-Sheet des
+  Scaffolds (`FolderListView.swift`, Zahnrad-Icon im Toolbar -- es gab
+  bisher gar keine Settings-Fläche). Beide lesen/schreiben denselben
+  `@AppStorage("appLockEnabled")`-Key, bleiben also garantiert synchron.
+- `Info.plist`: `NSFaceIDUsageDescription` ergänzt (`project.pbxproj`
+  `INFOPLIST_KEY_NSFaceIDUsageDescription`, Info.plist wird generiert, es
+  gibt keine physische Datei) -- ohne diesen String lehnt iOS
+  `LAContext.evaluatePolicy` mit Face ID kommentarlos ab.
+
+**Bewusst NICHT server-seitig/synchronisiert:** biometrische Registrierung
+ist geräte-gebunden, anders als die bereits im Contract vorhandenen
+Account-MFA-Einstellungen (`user_security_settings` in
+`contracts/db-schema.sql`, TOTP/SMS/Passkey beim Login) -- kein
+Contract-/Backend-Change für dieses Feature.
+
+**Tests:** `xcodebuild -scheme DriftmailApp -destination 'platform=iOS
+Simulator,name=iPhone 17 Pro' build` **BUILD SUCCEEDED**. Anders als beim
+09-15-Nachtrag oben war diesmal ein echter Simulator-Boot möglich
+(CoreSimulator hat sich beim ersten `simctl`-Aufruf selbst aktualisiert) --
+App installiert, gestartet, per Screenshot verifiziert, dass der
+bestehende Capability-Check-Screen weiterhin unverändert rendert (keine
+Regression durch die `RootView.swift`-Umbauten). Der neue zweite
+Onboarding-Schritt sowie das Settings-Sheet sind NICHT per Screenshot
+verifiziert -- Tap-Interaktionen sind in dieser Umgebung weiterhin nicht
+automatisierbar (kein `idb`, kein Zugriff auf die Simulator.app-UI per
+Accessibility, siehe frühere iOS-Einträge in SYNC.md mit derselben
+Einschränkung). Ein echter Face-ID-Match-Test bräuchte ohnehin entweder ein
+physisches Gerät oder eine manuell im Simulator eingerichtete Enrolled-
+Biometrie (`Features > Face ID > Enrolled`), beides nicht headless
+möglich.
+
+## [2026-09-19] Geprüft, nicht gebaut: Verschlüsselung der lokalen Mail-Datenbank (Punkt 6 von "6 Sicherheits-Ergänzungen")
+
+WEB_INBOX.md 15.09. ging davon aus, dass es bereits einen lokalen Mail-
+Cache gibt ("siehe frühere Diskussion zu lokalem IMAP-Cache"). **Verifiziert
+(nicht nur behauptet):** es gibt aktuell KEINE lokale Mail-Datenbank auf
+iOS. Der aktive Client ist `MockAPIClient` (In-Memory-Mockdaten,
+`AppEnvironment.swift`), `RemoteAPIClient` ist laut eigenem Kopfkommentar
+ein "SKELETON, not wired up yet" ohne jede Persistenz. Nachrichten würden,
+sobald `RemoteAPIClient` aktiv ist, bei jedem Laden live vom Backend
+geholt -- keine `CoreData`/`SQLite`/Datei-Cache im gesamten `ios/`-Baum
+(per Volltextsuche verifiziert). Es gibt also aktuell nichts, das eine
+Verschlüsselung sinnvoll abdecken könnte, ohne selbst erst eine komplette
+lokale Persistenzschicht zu erfinden -- das wäre eine eigene, große
+Architektur-Entscheidung (Cache ja/nein, welcher Umfang, welche
+Invalidierung), keine kleine Ergänzung, und nicht Teil dieses Auftrags.
+
+**Einordnung, warum das hier trotzdem kein Rückschritt ist:** genau das
+Risiko, das dieser Punkt adressieren sollte ("Gerät verloren/gestohlen,
+Mails lesbar"), wird für den aktuellen Stand bereits durch Punkt 5
+(App-Sperre, siehe oben) abgedeckt -- da nichts lokal gespeichert ist, gibt
+es keine ungeschützt auf der Platte liegenden Mails, die eine separate
+Verschlüsselung zusätzlich bräuchte; der Zugriffsschutz sitzt vor dem
+Live-Abruf.
+
+**Einzige tatsächlich lokal persistierte, sensible Größe aktuell: keine auf
+iOS** (kein Token-Storage vorhanden, siehe `RemoteAPIClient.swift`-
+Kommentar), **aber der Session-Token im Web-Client** (`localStorage`,
+`web/src/api.ts`). Dort ehrlich dokumentiert statt stillschweigend
+übergangen: `localStorage` ist grundsätzlich nicht at-rest-verschlüsselt
+und lässt sich das per Browser-JS nicht sinnvoll nachrüsten (ein per
+SubtleCrypto verschlüsselter Wert bräuchte einen Schlüssel, der demselben
+Origin-JS zugänglich sein müsste -- gewinnt nichts gegen die eigentliche
+Bedrohung, XSS im selben Origin). Für `RemoteAPIClient.swift` als
+Vormerkung hinterlegt: sobald dort Token-Persistenz dazukommt, gehört sie
+in die Keychain, nicht in `UserDefaults`.
+
+**Kein Code-Change für diesen Punkt** -- eine vorgetäuschte
+Verschlüsselung einer nicht existierenden Datenbank wäre irreführend
+gewesen. Massimo/Web müssten zuerst entscheiden, ob/wann ein echter lokaler
+Mail-Cache überhaupt gebaut werden soll (eigenes, größeres Thema), bevor
+"verschlüssele ihn" sinnvoll umsetzbar ist.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine
@@ -443,7 +542,8 @@ ios/
     Networking/      — APIClient-Protokoll + MockAPIClient + RemoteAPIClient-Skelett
       MockData/MockDatabase.json — Mock-Antworten passend zur api-spec.yaml
     AI/              — Swift-Port von contracts/ai-adapter-interface.ts
-    Views/           — Onboarding, Ordnerliste, Inbox, Detail, Quarantäne-Banner
+    Security/        — BiometricLock (Face ID/Touch ID App-Sperre, WEB_INBOX.md 15.09.)
+    Views/           — Onboarding, Ordnerliste, Inbox, Detail, Quarantäne-Banner, App-Lock-Gate
   README.md          — diese Datei
 ```
 

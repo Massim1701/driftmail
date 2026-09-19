@@ -34,6 +34,8 @@
 		DA8E86676314DFDDD036B6AF /* DriftmailApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BC22DCEB290A5E59433F09E /* DriftmailApp.swift */; };
 		E0A7C16ABBECCE7D921EEF0D /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B316CEEB06B495EE114590 /* RootView.swift */; };
 		E9F415386910CF66CF600E78 /* FolderListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD063563C80DCB4C97F9555C /* FolderListView.swift */; };
+		5D4325843CC54FD9985A8993 /* BiometricLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500C4ABF4AE3401184F25191 /* BiometricLock.swift */; };
+		02355BA28E1C42C69A8E7833 /* AppLockGateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF0C1B44A8174871A27378CE /* AppLockGateView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -65,6 +67,8 @@
 		E04FC8B982502B4009BD5E99 /* RemoteAPIClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RemoteAPIClient.swift; sourceTree = "<group>"; };
 		F0D6A93E7CB81AFA391B6F13 /* Draft.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Draft.swift; sourceTree = "<group>"; };
 		F6044B79C9FE8B86319E5853 /* Contract.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Contract.swift; sourceTree = "<group>"; };
+		500C4ABF4AE3401184F25191 /* BiometricLock.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BiometricLock.swift; sourceTree = "<group>"; };
+		EF0C1B44A8174871A27378CE /* AppLockGateView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLockGateView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +93,7 @@
 				5A001D4B95DF9648FFF6811A /* Models */,
 				1CD70C0F4C08BA42B379931D /* Networking */,
 				6CE5D1EDF86115B58845CD53 /* Resources */,
+				495EEC0072644AD589B36D21 /* Security */,
 				FD59A762F38A46E00113D5D7 /* Views */,
 			);
 			path = DriftmailApp;
@@ -205,8 +210,17 @@
 				7DDCF453B5648DAD69C4517F /* MessageRowView.swift */,
 				6B86F3D07CC73E890FB011D0 /* OnboardingCapabilityCheckView.swift */,
 				61B316CEEB06B495EE114590 /* RootView.swift */,
+				EF0C1B44A8174871A27378CE /* AppLockGateView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		495EEC0072644AD589B36D21 /* Security */ = {
+			isa = PBXGroup;
+			children = (
+				500C4ABF4AE3401184F25191 /* BiometricLock.swift */,
+			);
+			path = Security;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -303,6 +317,8 @@
 				17C4F14248E732BB8B07E467 /* MessageRowView.swift in Sources */,
 				2C051F1E1F7C145570751413 /* OnboardingCapabilityCheckView.swift in Sources */,
 				E0A7C16ABBECCE7D921EEF0D /* RootView.swift in Sources */,
+				5D4325843CC54FD9985A8993 /* BiometricLock.swift in Sources */,
+				02355BA28E1C42C69A8E7833 /* AppLockGateView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -436,6 +452,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = driftmail;
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "driftmail kann Face ID nutzen, um die App zu sperren und deinen lokalen Mail-Cache zu schützen, falls dein Gerät verloren geht oder gestohlen wird.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -462,6 +479,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = driftmail;
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "driftmail kann Face ID nutzen, um die App zu sperren und deinen lokalen Mail-Cache zu schützen, falls dein Gerät verloren geht oder gestohlen wird.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

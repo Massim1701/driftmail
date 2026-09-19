@@ -15,6 +15,11 @@ struct FolderListView: View {
     @State private var isCreatingFolder = false
     @State private var newFolderName = ""
     @State private var errorMessage: String?
+    // [2026-09-19] WEB_INBOX.md 15.09. "App-Sperre": erste Settings-Fläche
+    // in diesem Scaffold überhaupt, bewusst minimal (nur der eine Toggle)
+    // statt eines eigenen Screens/Tabs -- kann bei Bedarf zu einer echten
+    // Settings-Liste wachsen, sobald es mehr als eine Einstellung gibt.
+    @State private var isShowingSettings = false
 
     var body: some View {
         NavigationStack {
@@ -44,6 +49,14 @@ struct FolderListView: View {
             // account dann bewusst nil statt einen Ladezustand zu erzwingen).
             .navigationTitle(environment.account?.emailAddress ?? "driftmail")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        isShowingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("Einstellungen")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         newFolderName = ""
@@ -53,6 +66,9 @@ struct FolderListView: View {
                     }
                     .accessibilityLabel("Neuer Ordner")
                 }
+            }
+            .sheet(isPresented: $isShowingSettings) {
+                SettingsView()
             }
             .navigationDestination(for: Folder.self) { folder in
                 // "entwuerfe" zeigt GET /drafts, nicht GET /messages (siehe
@@ -153,6 +169,33 @@ private struct FolderRow: View {
             }
         }
         .padding(.vertical, DesignTokens.Spacing.xs)
+    }
+}
+
+/// Minimale Settings-Fläche (WEB_INBOX.md 15.09., "App-Sperre ... in den
+/// Einstellungen aktivierbar") -- bewusst nur der eine Toggle, kein
+/// Platzhalter für zukünftige Einstellungen, die es noch nicht gibt.
+private struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    private let biometricKind = BiometricLock.availableKind()
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    AppLockToggleView(kind: biometricKind)
+                } footer: {
+                    Text("Schützt deinen lokalen Mail-Cache zusätzlich zum Mail-Konto-Login, falls dein Gerät verloren geht oder gestohlen wird.")
+                }
+            }
+            .navigationTitle("Einstellungen")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Fertig") { dismiss() }
+                }
+            }
+        }
     }
 }
 

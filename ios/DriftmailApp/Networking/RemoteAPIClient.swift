@@ -7,6 +7,16 @@ import Foundation
 /// with `APIError.notImplemented` since there's nothing live to test
 /// against yet. Swap `MockAPIClient()` for `RemoteAPIClient()` in
 /// `AppEnvironment` (App/AppEnvironment.swift) once Track A ships.
+///
+/// **Für später vorgemerkt (WEB_INBOX.md 15.09., "Verschlüsselung der
+/// lokalen Mail-Datenbank", geprüft 19.09.):** sobald dieser Client den
+/// Session-Token persistiert (Bearer-Auth, siehe `backend/README.md`
+/// "Auth"), gehört der in die Keychain (z.B. über
+/// `kSecClassGenericPassword`), NICHT in `UserDefaults`/`@AppStorage` --
+/// Keychain-Einträge sind vom System at-rest verschlüsselt, UserDefaults
+/// (ein Plist im App-Container) nicht. Aktuell gibt es hier noch gar keine
+/// Token-Persistenz, deshalb kein Code dafür in diesem Schritt (siehe
+/// SYNC.md 19.09. für die vollständige Bestandsaufnahme).
 struct RemoteAPIClient: APIClient {
     private let baseURL = URL(string: "https://api.driftware.online/v1")!
     private let session: URLSession

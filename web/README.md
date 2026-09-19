@@ -316,6 +316,14 @@ Platzhaltertext).
 - Ordner-Reihenfolge (`sortOrder`) ist über `PATCH /folders/{id}` im
   Mock-Server änderbar, aber es gibt noch keine Drag&Drop-/Pfeil-UI dafür
   in der Sidebar — neue Ordner hängen sich einfach hinten an.
+- [2026-09-19] WEB_INBOX.md 15.09. "Verschlüsselung der lokalen Mail-
+  Datenbank" geprüft: es gibt hier keine lokale Mail-Datenbank (Nachrichten
+  leben nur im React-State, nie in `localStorage`/IndexedDB) — nichts zu
+  verschlüsseln. Einzige lokal persistierte, sensible Größe ist der
+  Session-Token in `localStorage` (`src/api.ts`), dazu eine ehrliche
+  Grenzen-Doku direkt im Code (browserseitig per JS nicht sinnvoll
+  nachrüstbar). Ausführlich in `ios/README.md` (Punkt 6 der "6 Sicherheits-
+  Ergänzungen") und `SYNC.md` 19.09.
 
 ## Projektstruktur
 

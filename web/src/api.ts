@@ -23,6 +23,23 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 // Client-Code unverändert gegen Mock- und echtes Backend läuft.
 const TOKEN_STORAGE_KEY = "driftmail.token";
 
+// [2026-09-19] WEB_INBOX.md 15.09. "Verschlüsselung der lokalen Mail-
+// Datenbank", geprüft für den Web-Client: es gibt hier (noch) keine lokale
+// Mail-Datenbank zum Verschlüsseln -- Nachrichten werden bei jedem Laden
+// live vom Backend geholt und nur im React-State gehalten, nie in
+// localStorage/IndexedDB geschrieben. Der einzige persistierte, sensible
+// Wert ist dieser Session-Token. Ehrliche Grenze (kein Web-Crypto-Workaround
+// vorgeschlagen): localStorage ist grundsätzlich nicht at-rest-verschlüsselt
+// und lässt sich das per Browser-JS auch nicht sinnvoll nachrüsten -- ein
+// mit SubtleCrypto verschlüsselter Wert bräuchte einen Schlüssel, der vom
+// selben Origin-JS lesbar sein müsste, um den Token wieder zu entschlüsseln,
+// und würde damit gegen genau die Bedrohung (XSS im selben Origin) nichts
+// gewinnen, vor der Verschlüsselung eigentlich schützen soll. Eine echte
+// Verbesserung (z.B. httpOnly-Cookie statt Bearer-Token-in-localStorage)
+// wäre eine eigene, groessere Auth-Architektur-Entscheidung -- siehe
+// SYNC.md 19.09. "Lokale Mail-Datenbank / Web-Token", nicht Teil dieses
+// Schritts.
+
 export function getStoredToken(): string | null {
   try {
     return localStorage.getItem(TOKEN_STORAGE_KEY);
