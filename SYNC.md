@@ -851,3 +851,20 @@ Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
 **Tests:** `tsc -b`/`vite build`/`oxlint` gruen (keine neuen Warnungen). Kompletter Flow per Browser-Automation gegen den Mock-Server verifiziert: Akzentfarben-Wechsel mit sichtbarer Live-Umfaerbung (Vorher/Nachher-Screenshot) + Persistenz nach Reload, App-Sperre-Toggle von der neuen Stelle aus (bekannte WebAuthn-Grenze in dieser Umgebung, keine Regression), KI-Einstellungen von der neuen Stelle aus (nach obigem Fix korrekt sichtbar), "Entfernen" bei einem Konto nachweislich deaktiviert, "Konto hinzufuegen" schliesst Settings korrekt und oeffnet den bestehenden Onboarding-Overlay sauber. Konsole ohne Fehler. Mock-Server bildet weiterhin nur EIN Konto ab (bereits bekannte, dokumentierte Grenze) -- der 400-Pfad fuer "letztes Konto" und die clientseitige Disabled-Logik sind trotzdem echt verifiziert.
 
 **Kein Blocker, keine offene Frage.** Damit sind beide Clients (Web + iOS) fuer Punkt 1 des Einstellungsbereichs fertig.
+
+
+[2026-09-21] [terminal] [A] — WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES", Backend-Grundlage fertig (Commit `571ee2c`). Drei von fuenf Punkten brauchten Backend-Arbeit, zwei nicht:
+
+**1) "Unbekannte Absender streng behandeln":** `users.strict_unknown_senders` (Default `true`), neues Feld in `GET`/`PUT /settings` neben `accentTheme` -- `updateUserAccentTheme()` zu `updateUserSettings()` verallgemeinert statt einer zweiten near-doppelten Methode.
+
+**2) Kontakt-Autovervollstaendigung:** neuer Endpunkt `GET /contacts` -- bekannte Adressen aus bisherigen Absenderadressen (ueber alle eigenen Konten) + `outgoing_send_log`, dedupliziert, sortiert. Kein eigenes Kontakte-Feature noetig, wie im Auftrag erlaubt.
+
+**3) Entwuerfe automatisch speichern:** KEINE Backend-Aenderung -- `POST`/`PATCH /drafts/{id}` existieren schon vollstaendig, reine Client-Aufgabe.
+
+**4) Threaded Ansicht:** `Message` (Listenform, `GET /messages`) bekommt `inReplyToMessageId` -- vorher nur auf `MessageDetail`. **Bewusste Grenze:** kein volles Thread-Konzept, zeigt weiterhin nur den direkten Elternteil (kein `References`-Header-Auflösen) -- client-seitiges Gruppieren funktioniert nur innerhalb derselben Ordner-Abfrage, ein Elternteil in einem anderen Ordner bleibt unverknuepft.
+
+**5) Manueller Abmelden-Button unabhaengig von Klassifikation:** ÜBERRASCHUNG beim Prüfen -- bereits VOLLSTAENDIG fertig, ohne dass dieser Schritt etwas tun musste. `canUnsubscribe` war schon immer rein Header-basiert (nie klassifikationsabhaengig), Web UND iOS zeigen den Button schon unabhaengig vom Spam-Status. Der einzige echte fehlende Teil (der echte Netzwerk-Aufruf) wurde bereits im vorherigen Schritt behoben.
+
+**Tests:** Smoketest deckt `strictUnknownSenders` (Default + unabhaengige Aenderung), `GET /contacts` (Dedupe, Sortierung) und `inReplyToMessageId` in der Liste ab. Migration fuer beide neuen `users`-Spalten manuell gegen eine simulierte Alt-Schema-DB verifiziert. Gruen in-memory + gegen Postgres.
+
+**Uebergabe an Track C/F:** UI fuer Punkt 1 (staerkeres Badge + Settings-Toggle), 2 (Autocomplete in To/CC/BCC), 3 (Autosave-Timer im Compose-Screen), 4 (Gruppierte Listenansicht) noch zu bauen. Punkt 5 ist komplett fertig, nur gegenpruefen dass beide Clients den Button wirklich ueberall zeigen.
