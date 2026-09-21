@@ -13,8 +13,20 @@ import SwiftUI
 @MainActor
 final class AppEnvironment: ObservableObject {
     @Published private(set) var apiClient: APIClient
+    /// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09., ersetzt WEB_INBOX.md
+    /// "ECHTE KI-ANBINDUNG" c3ec563): einziger lokaler AI-Adapter -- versucht
+    /// intern zuerst echte Apple-Foundation-Models-Aufrufe, faellt sonst auf
+    /// eine deterministische Heuristik zurueck (siehe OnDeviceAiAdapter.swift
+    /// Kopfkommentar). `CloudFallbackAiAdapter` (gemockter Fake-Cloud-Pfad)
+    /// entfaellt ersatzlos -- ein echter Cloud-Pfad laeuft jetzt ausschliesslich
+    /// ueber `apiClient` gegen das Backend (BYOK, siehe `summarize(messageId:
+    /// bodyText:)`/`requestReplyDraft(messageId:originalBodyText:)` unten).
     let onDeviceAdapter: AiAdapter = OnDeviceAiAdapter()
-    let cloudFallbackAdapter: AiAdapter = CloudFallbackAiAdapter()
+
+    /// KI-Cloud-Einstellung (BYOK) des Users, gespiegelt von `GET
+    /// /ai-settings` -- `nil` bis zum ersten `loadAiSettings()`-Aufruf
+    /// (z.B. beim Oeffnen der Einstellungen).
+    @Published var aiSettings: AiSettings?
 
     /// Gates `RootView`: false until an account is connected (fresh
     /// install) or found in the Keychain (relaunch after a previous
@@ -121,10 +133,57 @@ final class AppEnvironment: ObservableObject {
         trustedSenderAddresses = []
     }
 
-    /// Whichever adapter matches the capability check result, defaulting
-    /// to cloud fallback until the check has run.
-    var activeAdapter: AiAdapter {
-        capability?.activeMode == .onDevice ? onDeviceAdapter : cloudFallbackAdapter
+    /// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): Geraete-eigene KI
+    /// zuerst versuchen (Inhalt verlaesst dann nie das Geraet), `apiClient`
+    /// nur als Fallback -- das ruft bei `RemoteAPIClient` den echten
+    /// BYOK-/Heuristik-Pfad im Backend auf (siehe backend/README.md
+    /// "KI-Anbindung (BYOK)"), bei `MockAPIClient` dessen eigenen
+    /// On-Device-Stub-Aufruf. `OnDeviceAiAdapter.summarize()` faellt selbst
+    /// schon auf eine Heuristik zurueck, wenn Foundation Models nicht
+    /// verfuegbar ist -- deshalb hier nur einmal ueber
+    /// `OnDeviceModelAvailability.isAvailable` gegated (kein Sinn, den
+    /// echten Foundation-Models-Call zu versuchen, wenn er sicher
+    /// scheitert -- sofortiges Foundation-Models-Skip statt eines
+    /// garantiert fehlschlagenden Versuchs).
+    func summarize(messageId: String, bodyText: String) async -> MailSummary {
+        if OnDeviceModelAvailability.isAvailable, let result = try? await onDeviceAdapter.summarize(rawText: bodyText) {
+            return result
+        }
+        if let result = try? await apiClient.fetchSummary(messageId: messageId) {
+            return result
+        }
+        return MailSummary(summaryText: "Zusammenfassung nicht verfügbar.", actionRequired: false, actionDescription: nil, deadline: nil, source: .heuristic)
+    }
+
+    /// Analog zu `summarize(messageId:bodyText:)` oben, fuer den
+    /// KI-Entwurf-Button. `thread` wird vom Aufrufer (MessageDetailView)
+    /// aus der bereits geladenen `MessageDetail` zusammengebaut -- kein
+    /// zusaetzlicher Netzwerk-Roundtrip fuer den On-Device-Versuch noetig.
+    func requestReplyDraft(messageId: String, thread: MailThread) async -> (draftText: String, source: AiSource) {
+        if OnDeviceModelAvailability.isAvailable, let text = try? await onDeviceAdapter.draftReply(thread: thread), !text.isEmpty {
+            return (text, .onDevice)
+        }
+        if let result = try? await apiClient.requestReplyDraft(messageId: messageId) {
+            return result
+        }
+        return ("", .heuristic)
+    }
+
+    /// `GET /ai-settings` -- lädt die aktuelle BYOK-Einstellung. Stiller
+    /// Fehlschlag (z.B. `MockAPIClient`, das den Endpunkt nicht kennt) lässt
+    /// `aiSettings` einfach `nil`, die Settings-UI zeigt dann eine
+    /// Fehlermeldung statt eines veralteten Zustands.
+    func loadAiSettings() async {
+        aiSettings = try? await apiClient.fetchAiSettings()
+    }
+
+    /// `PUT /ai-settings`. Aktualisiert `aiSettings` bei Erfolg direkt aus
+    /// der Server-Antwort (Quelle der Wahrheit, kein optimistisches Update).
+    @discardableResult
+    func updateAiSettings(mode: AiPreferenceMode, byokProvider: AiProvider?, apiKey: String?, cloudConsent: Bool?) async throws -> AiSettings {
+        let updated = try await apiClient.updateAiSettings(mode: mode, byokProvider: byokProvider, apiKey: apiKey, cloudConsent: cloudConsent)
+        aiSettings = updated
+        return updated
     }
 
     /// Loads `folders` for the ACTIVE account once and caches it; pass

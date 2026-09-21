@@ -166,10 +166,48 @@ struct RemoteAPIClient: APIClient {
         try await get("/messages/\(messageId)/summary")
     }
 
-    func requestReplyDraft(messageId: String) async throws -> String {
-        struct DraftResponse: Decodable { let draftText: String }
+    func requestReplyDraft(messageId: String) async throws -> (draftText: String, source: AiSource) {
+        struct DraftResponse: Decodable { let draftText: String; let source: AiSource }
         let response: DraftResponse = try await post("/messages/\(messageId)/reply-draft", body: Optional<String>.none)
-        return response.draftText
+        return (response.draftText, response.source)
+    }
+
+    /// `GET /ai-settings` (TERMINAL_INBOX.md 21.09. KORREKTUR, BYOK).
+    func fetchAiSettings() async throws -> AiSettings {
+        try await get("/ai-settings")
+    }
+
+    /// `PUT /ai-settings` — eigener Request statt des generischen `post()`/
+    /// `patch()`-Helpers, weil 400 (ungueltige Provider-/Key-Kombination)
+    /// ein erwarteter, vom generischen Netzwerkfehler verschiedener
+    /// Ausgang ist (analog `sendMessage`/`connectImapAccount` oben).
+    func updateAiSettings(mode: AiPreferenceMode, byokProvider: AiProvider?, apiKey: String?, cloudConsent: Bool?) async throws -> AiSettings {
+        struct Body: Encodable { let mode: AiPreferenceMode; let byokProvider: AiProvider?; let apiKey: String?; let cloudConsent: Bool? }
+        struct ErrorResponse: Decodable { let error: String? }
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("/ai-settings"))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        authorize(&request)
+        request.httpBody = try JSONEncoder().encode(Body(mode: mode, byokProvider: byokProvider, apiKey: apiKey, cloudConsent: cloudConsent))
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.network(error)
+        }
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 200
+        if statusCode == 400 {
+            let decoded = try? decoder.decode(ErrorResponse.self, from: data)
+            throw APIError.badRequest(message: decoded?.error)
+        }
+        do {
+            return try decoder.decode(AiSettings.self, from: data)
+        } catch let error as DecodingError {
+            throw APIError.decodingFailed(error)
+        }
     }
 
     /// `POST /messages/send` — anders als die übrigen `post()`-Aufrufe

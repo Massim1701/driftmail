@@ -78,7 +78,22 @@ protocol APIClient {
     /// prüft das serverseitig).
     func permanentlyDeleteMessage(id: String) async throws
     func fetchSummary(messageId: String) async throws -> MailSummary
-    func requestReplyDraft(messageId: String) async throws -> String
+    /// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): liefert jetzt auch
+    /// `source` (vorher fehlte das Feld komplett in der Backend-Antwort,
+    /// siehe api-spec.yaml-Kommentar am Endpunkt) -- `AppEnvironment.
+    /// requestReplyDraft(messageId:thread:)` versucht davor bereits lokal
+    /// Foundation Models, dieser Aufruf ist nur der Fallback-Pfad.
+    func requestReplyDraft(messageId: String) async throws -> (draftText: String, source: AiSource)
+
+    /// `GET /ai-settings` (TERMINAL_INBOX.md 21.09. KORREKTUR, BYOK) --
+    /// eigene Cloud-KI-Einstellung des Users, ohne den Key selbst.
+    func fetchAiSettings() async throws -> AiSettings
+    /// `PUT /ai-settings`. `apiKey` darf `nil` sein, wenn nur `cloudConsent`
+    /// geändert wird und bereits ein Key hinterlegt ist (siehe
+    /// backend/README.md "KI-Anbindung (BYOK)"). Wirft `APIError.forbidden`
+    /// bei einem serverseitig noch nicht implementierten `byokProvider`
+    /// (400 -- Web-Client zeigt ohnehin nur `AiProvider.implemented` an).
+    func updateAiSettings(mode: AiPreferenceMode, byokProvider: AiProvider?, apiKey: String?, cloudConsent: Bool?) async throws -> AiSettings
     /// `POST /messages/send` — sendet eine Antwort auf `inReplyToMessageId`
     /// (das Konto wird backend-seitig aus der Ursprungsnachricht
     /// abgeleitet, siehe backend/README.md "Versand"). Gibt die
@@ -134,4 +149,8 @@ enum APIError: Error {
     /// `POST /accounts` — `emailAddress` is not on the backend's
     /// `ALLOWED_EMAILS` allowlist (403).
     case notAllowlisted
+    /// [2026-09-21] `PUT /ai-settings` — generische 400-Antwort (z.B. nicht
+    /// angebundener `byokProvider`, fehlender `apiKey`), `message` ist der
+    /// `error`-Text aus dem Response-Body, falls vorhanden.
+    case badRequest(message: String?)
 }

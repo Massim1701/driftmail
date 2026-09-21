@@ -330,6 +330,17 @@ private struct SettingsView: View {
                     Text("Verbundene Konten")
                 }
 
+                // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): BYOK-
+                // Einstellung fuer den optionalen Cloud-KI-Fallback, siehe
+                // AiSettingsView.swift.
+                Section {
+                    NavigationLink("KI-Anbindung") {
+                        AiSettingsView()
+                    }
+                } footer: {
+                    Text("Geräte-eigene KI läuft immer zuerst. Hier optional einen eigenen Cloud-Zugang hinterlegen.")
+                }
+
                 // [2026-09-21] WEB_INBOX.md 19.09. "Onboarding: Provider-
                 // Auswahlbildschirm" ("voll verdrahten"): mit einem echten
                 // Login-Gate in RootView braucht es zwingend einen Weg

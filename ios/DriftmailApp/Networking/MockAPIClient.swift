@@ -40,6 +40,12 @@ actor MockAPIClient: APIClient {
     /// `isNewSender=true` in MockDatabase.json).
     private var trustedSenders: [TrustedSender] = []
 
+    /// `GET`/`PUT /ai-settings` (TERMINAL_INBOX.md 21.09. KORREKTUR, BYOK)
+    /// -- rein In-Memory, kein Contract-Pendant in MockDatabase.json noetig
+    /// (analog zu `trustedSenders`/`drafts` oben), startet im Default-
+    /// Zustand ("aus", kein driftmail-finanzierter Cloud-Zugang).
+    private var aiSettings = AiSettings(mode: .off, byokProvider: nil, hasApiKey: false, cloudConsentGiven: false)
+
     private var drafts: [Draft] = [
         Draft(
             id: "draft-001",
@@ -270,7 +276,7 @@ actor MockAPIClient: APIClient {
         return try await OnDeviceAiAdapter().summarize(rawText: detail.bodyText ?? "")
     }
 
-    func requestReplyDraft(messageId: String) async throws -> String {
+    func requestReplyDraft(messageId: String) async throws -> (draftText: String, source: AiSource) {
         await delay()
         guard let detail = db.messages.first(where: { $0.id == messageId }) else {
             throw APIError.notFound
@@ -283,7 +289,46 @@ actor MockAPIClient: APIClient {
                 receivedAt: ISO8601DateFormatter().string(from: detail.receivedAt)
             )
         ])
-        return try await OnDeviceAiAdapter().draftReply(thread: thread)
+        // [2026-09-21] KORREKTUR: OnDeviceAiAdapter entscheidet intern schon
+        // selbst zwischen echtem Foundation-Models-Aufruf und Heuristik --
+        // der Mock muss diese Entscheidung nicht kennen, nur das Ergebnis
+        // ehrlich weiterreichen (nicht mehr pauschal `.onDevice` behaupten).
+        let draftText = try await OnDeviceAiAdapter().draftReply(thread: thread)
+        let source: AiSource = OnDeviceModelAvailability.isAvailable ? .onDevice : .heuristic
+        return (draftText, source)
+    }
+
+    /// `GET /ai-settings`, Mock: liefert den In-Memory-Zustand.
+    func fetchAiSettings() async throws -> AiSettings {
+        await delay()
+        return aiSettings
+    }
+
+    /// `PUT /ai-settings`, Mock: dieselbe Validierung wie das echte Backend
+    /// (`routes/aiSettings.ts`), damit die Settings-UI auch ohne
+    /// `RemoteAPIClient` sinnvoll durchtestbar ist.
+    func updateAiSettings(mode: AiPreferenceMode, byokProvider: AiProvider?, apiKey: String?, cloudConsent: Bool?) async throws -> AiSettings {
+        await delay()
+        if mode == .off {
+            aiSettings = AiSettings(mode: .off, byokProvider: nil, hasApiKey: false, cloudConsentGiven: false)
+            return aiSettings
+        }
+        guard let provider = byokProvider ?? aiSettings.byokProvider else {
+            throw APIError.badRequest(message: "byokProvider ist erforderlich, wenn mode=byok gesetzt wird")
+        }
+        guard AiProvider.implemented.contains(provider) else {
+            throw APIError.badRequest(message: "Anbieter '\(provider.rawValue)' ist noch nicht implementiert.")
+        }
+        guard apiKey != nil || aiSettings.hasApiKey else {
+            throw APIError.badRequest(message: "apiKey ist erforderlich, wenn noch kein Key hinterlegt ist")
+        }
+        aiSettings = AiSettings(
+            mode: .byok,
+            byokProvider: provider,
+            hasApiKey: apiKey != nil || aiSettings.hasApiKey,
+            cloudConsentGiven: cloudConsent ?? aiSettings.cloudConsentGiven
+        )
+        return aiSettings
     }
 
     /// `POST /messages/send`, Mock: kein echter Provider-Versand, kein

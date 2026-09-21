@@ -7,10 +7,14 @@ import UIKit
 /// reported back via POST /capability-check (contracts/api-spec.yaml),
 /// persisted server-side in db-schema.sql `user_ai_capability`.
 ///
-/// STUB: the "supported" heuristic below is a placeholder (OS version +
-/// a small device-model allowlist). A real check would probe for the
-/// actual on-device model runtime (e.g. required OS/Neural Engine
-/// availability) instead of guessing from device identifiers.
+/// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): `isLikelySupported`
+/// ist kein Platzhalter mehr -- fragt `SystemLanguageModel.default.
+/// isAvailable` (Apple Foundation Models, siehe `OnDeviceModelAvailability`
+/// in OnDeviceAiAdapter.swift) real ab, statt anhand des Geraetemodell-
+/// Strings zu raten. Faellt auf die alte Geraetemodell-Heuristik zurueck,
+/// wenn das Ziel unter iOS 26 liegt (Foundation Models existiert dort
+/// schlicht nicht) -- nicht mehr als grobe Approximation gedacht, sondern
+/// als ehrlicher "kein Foundation-Models-SDK auf dieser OS-Version"-Fall.
 enum CapabilityChecker {
 
     static func check() async -> UserAiCapability {
@@ -60,11 +64,24 @@ enum CapabilityChecker {
         #endif
     }
 
-    /// Placeholder allowlist: treat any iPhone/iPad hardware identifier
-    /// (e.g. "iPhone18,1", real device or simulated) as "supported", so the
-    /// demo can show both branches of the UI without needing real
-    /// device-capability data.
+    /// Echte Verfuegbarkeitspruefung (siehe Datei-Kopfkommentar). Die
+    /// Parameter (`deviceModel`/`osVersion`) werden nur noch fuer den
+    /// Alt-Pfad unter iOS 26 gebraucht -- `OnDeviceModelAvailability`
+    /// fragt das Geraet selbst, nicht diese Strings.
     private static func isLikelySupported(deviceModel: String, osVersion: String) -> Bool {
-        deviceModel.hasPrefix("iPhone") || deviceModel.hasPrefix("iPad")
+        if OnDeviceModelAvailability.isAvailable {
+            return true
+        }
+        if #available(iOS 26.0, *) {
+            // Framework existiert, aber SystemLanguageModel meldet
+            // `.unavailable` (Geraet nicht geeignet/Apple Intelligence aus/
+            // Modell noch nicht bereit) -- ehrlich `false`, kein Rate-Fallback.
+            return false
+        }
+        // Alt-Geraet unter iOS 26: Foundation Models existiert im SDK-Ziel
+        // gar nicht, bisherige grobe Geraetemodell-Heuristik als letzter
+        // Anhaltspunkt, damit die Demo-UI auf sehr alten Simulatoren/
+        // Geraeten weiterhin beide Zweige zeigen kann.
+        return deviceModel.hasPrefix("iPhone") || deviceModel.hasPrefix("iPad")
     }
 }

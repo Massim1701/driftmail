@@ -1,15 +1,24 @@
 import Foundation
+import FoundationModels
 
-/// STUB / MOCKED — first-pass implementation of `AiAdapter` that is meant
-/// to run on-device. It does NOT run a real ML model yet: it uses cheap
-/// keyword/heuristic checks so the app has a working, deterministic
-/// implementation to build the UI against. Swap the method bodies for a
-/// real on-device model (e.g. Core ML / Apple's on-device foundation model
-/// once available) without touching call sites — that's the whole point of
-/// going through the `AiAdapter` protocol.
+/// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09., ersetzt WEB_INBOX.md
+/// "ECHTE KI-ANBINDUNG" c3ec563): Geraete-eigene KI ist jetzt die PRIMAERE
+/// Quelle, siehe backend/README.md "KI-Anbindung (BYOK)" fuer die volle
+/// Begruendung. Dieser Adapter versucht fuer summarize/extractContract/
+/// draftReply zuerst einen ECHTEN Apple-Foundation-Models-Aufruf
+/// (`FoundationModels`, verfuegbar ab iOS 26 -- im SDK dieser Umgebung
+/// tatsaechlich vorhanden, per `.swiftinterface`-Inspektion verifiziert,
+/// keine Annahme). Nur wenn das Modell nicht verfuegbar ist (aeltere
+/// iOS-Version, Apple Intelligence nicht aktiviert, Geraet nicht
+/// geeignet, Modell noch nicht bereit) ODER der Aufruf selbst fehlschlaegt,
+/// faellt die Methode auf die bisherige deterministische Keyword-Heuristik
+/// zurueck (unveraendert erhalten, nicht geloescht) -- analog zum
+/// Graceful-Fallback-Prinzip des Backends (`src/ai/index.ts` `runAiTask()`).
 ///
-/// Real on-device execution would also need capability gating (see
-/// `CapabilityChecker`) before being trusted as `source: .onDevice`.
+/// `analyzeMail` (Spam-/Phishing-Klassifikation) ist bewusst NICHT Teil
+/// dieser Korrektur -- bleibt unveraendert die bestehende Text-Heuristik,
+/// genau wie beim Backend (Sicherheitsklassifikation soll nie von einer
+/// KI-/On-Device-Einstellung abhaengen).
 struct OnDeviceAiAdapter: AiAdapter {
 
     func analyzeMail(rawText: String, headers: [String: String]) async throws -> SecurityResult {
@@ -57,7 +66,18 @@ struct OnDeviceAiAdapter: AiAdapter {
         )
     }
 
+    // MARK: - extractContract (Foundation Models primaer, Heuristik-Fallback)
+
     func extractContract(rawText: String) async throws -> ContractData? {
+        if #available(iOS 26.0, *), OnDeviceModelAvailability.isAvailable {
+            if let result = try? await Self.extractContractWithFoundationModels(rawText) {
+                return result
+            }
+        }
+        return Self.extractContractHeuristic(rawText)
+    }
+
+    private static func extractContractHeuristic(_ rawText: String) -> ContractData? {
         let lower = rawText.lowercased()
         guard lower.contains("vertrag") || lower.contains("abo") || lower.contains("kündigung") else {
             return nil
@@ -73,7 +93,38 @@ struct OnDeviceAiAdapter: AiAdapter {
         )
     }
 
+    @available(iOS 26.0, *)
+    private static func extractContractWithFoundationModels(_ rawText: String) async throws -> ContractData? {
+        let session = LanguageModelSession(
+            instructions: "Du analysierst E-Mails auf Vertrags-/Abonnement-Daten (Mitgliedschaft, Abo, Vertrag). Antworte praezise und nur auf Basis des gegebenen Texts."
+        )
+        let prompt = "Analysiere folgende E-Mail auf Vertragsbezug:\n\n\(rawText)"
+        let response = try await session.respond(to: prompt, generating: GeneratedContractExtraction.self)
+        let generated = response.content
+        guard generated.hasContract else { return nil }
+
+        return ContractData(
+            providerName: generated.providerName ?? "Unbekannter Anbieter",
+            contractStart: generated.contractStart,
+            contractEnd: generated.contractEnd,
+            cancellationDeadline: generated.cancellationDeadline,
+            cancellationPeriodDays: generated.cancellationPeriodDays,
+            extractedConfidence: min(max(generated.confidence, 0), 1)
+        )
+    }
+
+    // MARK: - summarize (Foundation Models primaer, Heuristik-Fallback)
+
     func summarize(rawText: String) async throws -> MailSummary {
+        if #available(iOS 26.0, *), OnDeviceModelAvailability.isAvailable {
+            if let result = try? await Self.summarizeWithFoundationModels(rawText) {
+                return result
+            }
+        }
+        return Self.summarizeHeuristic(rawText)
+    }
+
+    private static func summarizeHeuristic(_ rawText: String) -> MailSummary {
         let firstSentence = rawText
             .split(separator: ".")
             .first
@@ -85,11 +136,44 @@ struct OnDeviceAiAdapter: AiAdapter {
             actionRequired: rawText.lowercased().contains("bitte"),
             actionDescription: nil,
             deadline: nil,
+            // [2026-09-21] KORREKTUR: reine Keyword-Heuristik ist KEIN
+            // KI-Modell, auch wenn sie on-device laeuft -- ehrlich als
+            // `.heuristic` gelabelt statt `.onDevice`, analog zum Backend
+            // (siehe AiSource-Kommentar in Models/Classification.swift).
+            source: .heuristic
+        )
+    }
+
+    @available(iOS 26.0, *)
+    private static func summarizeWithFoundationModels(_ rawText: String) async throws -> MailSummary {
+        let session = LanguageModelSession(
+            instructions: "Du fasst E-Mails fuer den Empfaenger in einem Satz auf Deutsch zusammen und bestimmst, ob eine Aktion noetig ist."
+        )
+        let prompt = "Fasse folgende E-Mail zusammen:\n\n\(rawText)"
+        let response = try await session.respond(to: prompt, generating: GeneratedSummary.self)
+        let generated = response.content
+
+        return MailSummary(
+            summaryText: generated.summaryText,
+            actionRequired: generated.actionRequired,
+            actionDescription: generated.actionDescription,
+            deadline: generated.deadline.flatMap { DriftmailDateDecoding.dateOnly.date(from: $0) },
             source: .onDevice
         )
     }
 
+    // MARK: - draftReply (Foundation Models primaer, Heuristik-Fallback)
+
     func draftReply(thread: MailThread) async throws -> String {
+        if #available(iOS 26.0, *), OnDeviceModelAvailability.isAvailable {
+            if let result = try? await Self.draftReplyWithFoundationModels(thread) {
+                return result
+            }
+        }
+        return Self.draftReplyHeuristic(thread)
+    }
+
+    private static func draftReplyHeuristic(_ thread: MailThread) -> String {
         guard let last = thread.messages.last else { return "" }
         return """
         Hallo,
@@ -99,38 +183,88 @@ struct OnDeviceAiAdapter: AiAdapter {
         Viele Grüße
         """
     }
+
+    @available(iOS 26.0, *)
+    private static func draftReplyWithFoundationModels(_ thread: MailThread) async throws -> String {
+        guard let last = thread.messages.last else { return "" }
+        let session = LanguageModelSession(
+            instructions: "Du schreibst hoefliche, kurze Antwortentwuerfe auf Deutsch. Antworte AUSSCHLIESSLICH mit dem Antworttext selbst -- keine Anrede-Floskeln wie \"Hier ist dein Entwurf\", keine Erklaerungen drumherum."
+        )
+        let prompt = "Von: \(last.fromAddress)\nBetreff: \(last.subject)\n\nMail-Text:\n\(last.bodyText)"
+        let response = try await session.respond(to: prompt)
+        let text = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw OnDeviceModelError.emptyResponse }
+        return text
+    }
 }
 
-/// STUB — cloud fallback path. Real implementation would call the backend
-/// (Track A / api-spec.yaml) which in turn calls a cloud AI provider
-/// (see db-schema.sql `ai_provider_config`: groq/gemini/openrouter).
-/// Here it just returns canned data so `activeMode == .cloudFallback`
-/// devices still get a working (if fake) result end-to-end.
-struct CloudFallbackAiAdapter: AiAdapter {
-    func analyzeMail(rawText: String, headers: [String: String]) async throws -> SecurityResult {
-        SecurityResult(
-            spfStatus: .none, dkimStatus: .none, dmarcStatus: .none,
-            senderDomainAgeDays: nil, domainReputationScore: nil,
-            homoglyphDetected: false, linkMismatchDetected: false,
-            displayNameSpoofingDetected: false, replyToMismatchDetected: false,
-            urgencyLanguageScore: nil, containsNewIban: false, ibanChangedInThread: false,
-            classification: .unclear, confidenceScore: 0.5
-        )
+// MARK: - Foundation-Models-Strukturtypen
+
+/// [2026-09-21] Strukturierte Ausgabe ueber `@Generable`/`@Guide`
+/// (FoundationModels-Makros) statt manuellem JSON-Parsing wie im
+/// Backend-Pendant (`backend/src/ai/cloudAdapter.ts`) -- auf iOS gibt es
+/// mit `respond(to:generating:)` einen typsicheren, vom System selbst
+/// schema-gefuehrten Weg, der robuster ist als Freitext-JSON aus einem
+/// String-Prompt zu parsen (kein Regex/JSON.parse-Fallback noetig).
+@available(iOS 26.0, *)
+@Generable
+private struct GeneratedSummary {
+    @Guide(description: "Zusammenfassung der E-Mail in einem Satz, auf Deutsch")
+    var summaryText: String
+    @Guide(description: "Ob der Empfaenger aktiv etwas tun muss")
+    var actionRequired: Bool
+    @Guide(description: "Kurze Beschreibung der noetigen Aktion, nil falls keine Aktion noetig ist")
+    var actionDescription: String?
+    @Guide(description: "Frist im Format YYYY-MM-DD, nil falls keine Frist genannt wird")
+    var deadline: String?
+}
+
+@available(iOS 26.0, *)
+@Generable
+private struct GeneratedContractExtraction {
+    @Guide(description: "Ob sich die E-Mail auf einen Vertrag/ein Abonnement bezieht")
+    var hasContract: Bool
+    @Guide(description: "Name des Anbieters, nil falls kein Vertragsbezug")
+    var providerName: String?
+    @Guide(description: "Vertragsbeginn im Format YYYY-MM-DD, nil falls unbekannt")
+    var contractStart: String?
+    @Guide(description: "Vertragsende im Format YYYY-MM-DD, nil falls unbekannt")
+    var contractEnd: String?
+    @Guide(description: "Kuendigungsfrist-Datum im Format YYYY-MM-DD, nil falls unbekannt")
+    var cancellationDeadline: String?
+    @Guide(description: "Kuendigungsfrist in Tagen, nil falls unbekannt")
+    var cancellationPeriodDays: Int?
+    @Guide(description: "Sicherheit der Erkennung zwischen 0 und 1")
+    var confidence: Double
+}
+
+enum OnDeviceModelError: Error {
+    case emptyResponse
+}
+
+/// [2026-09-21] Echte Verfuegbarkeitspruefung fuer Apple Intelligence/
+/// Foundation Models -- ersetzt die bisherige Geraetemodell-Ratelogik in
+/// `CapabilityChecker.swift` (siehe dort). Eigene, kleine Datei-lokale
+/// Stelle statt Duplikation zwischen OnDeviceAiAdapter und CapabilityChecker.
+enum OnDeviceModelAvailability {
+    static var isAvailable: Bool {
+        if #available(iOS 26.0, *) {
+            return SystemLanguageModel.default.isAvailable
+        }
+        return false
     }
 
-    func extractContract(rawText: String) async throws -> ContractData? { nil }
-
-    func summarize(rawText: String) async throws -> MailSummary {
-        MailSummary(
-            summaryText: "Zusammenfassung über Cloud-Fallback (gemockt).",
-            actionRequired: false,
-            actionDescription: nil,
-            deadline: nil,
-            source: .cloudFallback
-        )
-    }
-
-    func draftReply(thread: MailThread) async throws -> String {
-        "Entwurf über Cloud-Fallback (gemockt)."
+    /// Menschenlesbarer Grund, falls nicht verfuegbar -- fuer
+    /// CapabilityChecker-Report/Debugging, keine reine Debug-Ausgabe.
+    static var statusDescription: String {
+        if #available(iOS 26.0, *) {
+            switch SystemLanguageModel.default.availability {
+            case .available:
+                return "verfuegbar"
+            case .unavailable(let reason):
+                return "nicht verfuegbar (\(reason))"
+            }
+        }
+        return "nicht verfuegbar (iOS < 26)"
     }
 }

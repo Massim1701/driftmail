@@ -282,15 +282,32 @@ struct ComposeView: View {
 
     // MARK: - Actions
 
+    /// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): ruft jetzt
+    /// `AppEnvironment.requestReplyDraft(messageId:thread:)` statt direkt
+    /// `apiClient.requestReplyDraft` -- versucht davor lokal Foundation
+    /// Models (Geraete-eigene KI als primaere Quelle), `apiClient` ist nur
+    /// noch der Fallback-Pfad (siehe backend/README.md "KI-Anbindung
+    /// (BYOK)"). Kann praktisch nicht mehr fehlschlagen (beide Pfade
+    /// degradieren graceful bis zur Heuristik statt zu werfen), `do/catch`
+    /// bleibt trotzdem als Absicherung gegen den `apiClient`-Fallback-Pfad.
     private func requestAiDraft() async {
         guard let original else { return }
         isLoadingDraft = true
         defer { isLoadingDraft = false }
-        do {
-            bodyText = try await environment.apiClient.requestReplyDraft(messageId: original.id)
-            errorMessage = nil
-        } catch {
+        let thread = MailThread(messages: [
+            .init(
+                fromAddress: original.fromAddress,
+                subject: original.subject ?? "",
+                bodyText: original.bodyText ?? "",
+                receivedAt: ISO8601DateFormatter().string(from: original.receivedAt)
+            )
+        ])
+        let (draftText, _) = await environment.requestReplyDraft(messageId: original.id, thread: thread)
+        if draftText.isEmpty {
             errorMessage = "KI-Entwurf fehlgeschlagen."
+        } else {
+            bodyText = draftText
+            errorMessage = nil
         }
     }
 

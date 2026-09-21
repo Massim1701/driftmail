@@ -789,6 +789,121 @@ Punkt:** eine spätere Session mit Zugriff auf eine echte Test-Mailbox
 produktiven `AppEnvironment.init()`-Logik) sollte den authentifizierten
 Flow einmal live durchklicken.
 
+## [2026-09-21] Nachtrag: KI-Anbindung (BYOK) + echte Foundation-Models-Anbindung
+(TERMINAL_INBOX.md 21.09. "KORREKTUR", ersetzt WEB_INBOX.md 21.09. "ECHTE
+KI-ANBINDUNG" Commit c3ec563 vollständig -- siehe `backend/README.md`
+"KI-Anbindung (BYOK)" für die volle Begründung/Architektur, hier nur der
+iOS-Teil)
+
+**Kernentscheidung:** Geräte-eigene KI (Apple Foundation Models) ist die
+primäre Quelle, kein driftmail-finanzierter Cloud-Key mehr. Cloud-KI nur
+mit vom User selbst hinterlegtem BYOK-Key, gegen das Backend (`GET`/`PUT
+/ai-settings`, siehe `backend/README.md`).
+
+**Echte Foundation-Models-Integration, kein Stub:** `OnDeviceAiAdapter.swift`
+versucht für `summarize`/`extractContract`/`draftReply` zuerst einen
+ECHTEN `FoundationModels`-Aufruf (`SystemLanguageModel.default`,
+`LanguageModelSession`) -- verfügbar ab iOS 26, in dieser Umgebung
+tatsächlich im SDK vorhanden (Xcode 27.0/iPhoneSimulator-SDK 27.0,
+per `.swiftinterface`-Inspektion verifiziert, keine Annahme). `summarize`/
+`extractContract` nutzen `@Generable`/`@Guide` (FoundationModels-Makros)
+für typsichere strukturierte Ausgabe (`GeneratedSummary`/
+`GeneratedContractExtraction` in `OnDeviceAiAdapter.swift`) statt
+manuellem JSON-Parsing wie im Backend-Pendant (`cloudAdapter.ts`) -- auf
+iOS gibt es dafür einen vom System selbst schema-geführten Weg. Jeder
+Aufruf ist mit `@available(iOS 26.0, *)`/`if #available` gegated und
+fällt bei Nichtverfügbarkeit (ältere iOS-Version, Apple Intelligence
+nicht aktiviert, Gerät nicht geeignet, Modell noch nicht bereit) ODER
+einem Fehler im Aufruf selbst auf die bisherige deterministische
+Keyword-Heuristik zurück (unverändert erhalten) -- nie ein harter Fehler,
+analog zum Graceful-Fallback-Prinzip des Backends. Diese Heuristik-
+Fallback-Ergebnisse sind jetzt ehrlich als `.heuristic` statt `.onDevice`
+getaggt (dritter `AiSource`-Wert, siehe `Models/Classification.swift`).
+
+**`analyzeMail` bewusst unverändert:** Spam-/Phishing-Klassifikation ist
+explizit NICHT Teil dieser Korrektur, bleibt die bestehende Text-
+Heuristik -- Sicherheitsklassifikation soll nie von einer KI-/On-Device-
+Einstellung abhängen (gleiche Entscheidung wie im Backend).
+
+**`CapabilityChecker.swift`:** `isLikelySupported` ist kein Platzhalter
+mehr -- fragt `SystemLanguageModel.default.isAvailable` echt ab (neue
+`OnDeviceModelAvailability`-Hilfsstruktur in `OnDeviceAiAdapter.swift`),
+fällt nur auf iOS < 26 (Framework existiert dort gar nicht im SDK-Ziel)
+auf die alte Geräte-Identifier-Heuristik zurück.
+
+**`AppEnvironment.swift`:** das bisher komplett ungenutzte
+`activeAdapter`/`cloudFallbackAdapter`-Paar (basierte auf dem reinen
+Capability-Check, wurde nirgends aufgerufen) ist ersetzt durch echte
+`summarize(messageId:bodyText:)`/`requestReplyDraft(messageId:thread:)`-
+Methoden: 1) lokalen Foundation-Models-Versuch über `onDeviceAdapter`,
+2) sonst `apiClient.fetchSummary`/`requestReplyDraft` -- das ruft bei
+`RemoteAPIClient` den echten BYOK-/Heuristik-Pfad im Backend auf, bei
+`MockAPIClient` dessen eigenen On-Device-Stub-Aufruf. `MessageDetailView.swift`
+und `ComposeView.swift` (KI-Entwurf-Button) rufen jetzt diese
+`AppEnvironment`-Methoden statt direkt `apiClient` auf.
+
+**Neue Settings-UI (`Views/AiSettingsView.swift`):** eingehängt in
+`FolderListView.swift`s `SettingsView` (neuer Abschnitt "KI-Anbindung").
+Toggle für Cloud-KI an/aus, Provider-Picker (bewusst NUR `anthropic`/
+`openai` wählbar -- die einzigen serverseitig wirklich angebundenen, siehe
+`backend/README.md` -- `google`/`other` tauchen in der UI gar nicht erst
+auf, obwohl der Typ sie kennt), `SecureField` für den API-Key (nie
+angezeigt/geloggt), Consent-Toggle mit ausformuliertem Zustimmungstext.
+`APIClient` bekam `fetchAiSettings()`/`updateAiSettings(...)` (Protokoll +
+`RemoteAPIClient`/`MockAPIClient`), `requestReplyDraft` liefert jetzt
+zusätzlich `source` (vorher fehlte das Feld komplett, siehe api-spec.yaml-
+Korrektur im Backend-Commit). Neuer `APIError.badRequest(message:)`-Fall
+für die 400-Antwort bei nicht angebundenem Provider/fehlendem Key.
+
+**Bewusst KEIN eigener Onboarding-Schritt** -- lebt in den Einstellungen,
+gleiche Begründung wie im Backend (Default "aus", die meisten User
+brauchen nie einen Cloud-Consent-Dialog).
+
+**Tests:**
+1. `xcodebuild -scheme DriftmailApp -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build`
+   **BUILD SUCCEEDED**, inkl. der neuen `FoundationModels`-Abhängigkeit
+   (Swift Macro Plugin `FoundationModelsMacros` wird beim Build sichtbar
+   geladen).
+2. Sauberer Uninstall→Install→Launch auf einem echten gebooteten
+   Simulator (iPhone 17 Pro), Screenshot bestätigt den unveränderten
+   Onboarding-Screen (Provider-Auswahl rendert korrekt), `simctl spawn log
+   show` nach dem Kaltstart zeigt KEINEN Crash/`DecodingError`/
+   `fatalError` (nur die erwartete DNS-Fehlermeldung, weil ohne
+   `DRIFTMAIL_API_BASE_URL` gegen die echte, hier nicht erreichbare
+   Produktions-URL versucht wird).
+3. **Echte Verifikation der Foundation-Models-API außerhalb der App-UI**
+   (die authentifizierten Screens sind weiterhin durchs bekannte
+   Onboarding-Gate blockiert, siehe Nachtrag "Mehrfach-Konten"/"Compose-
+   Screen" oben -- keine echte Test-Mailbox in dieser Umgebung
+   verfügbar, kein erneuter Bypass-Versuch): ein eigenständiges
+   Swift-Kommandozeilen-Programm (nicht Teil der App, nur zur
+   Verifikation, danach gelöscht) mit exakt demselben API-Aufrufmuster
+   wie `OnDeviceAiAdapter.swift`, kompiliert gegen dieselbe SDK-Version
+   auf diesem Host:
+   - `SystemLanguageModel.default.availability` liefert echt `.available`
+     in dieser Umgebung (nicht angenommen, tatsächlich ausgeführt).
+   - Ein echter `LanguageModelSession.respond(to:)`-Aufruf (Freitext)
+     liefert eine echte Modellantwort.
+   - Ein echter `respond(to:generating:)`-Aufruf mit einem `@Generable`-
+     Testtyp (identisches Muster zu `GeneratedSummary`) liefert eine
+     echte strukturierte Antwort (`summaryText`/`actionRequired` korrekt
+     befüllt).
+   Das beweist, dass die verwendete API real funktioniert und nicht nur
+   typprüft -- **nicht** bewiesen ist, dass genau `OnDeviceAiAdapter.swift`
+   innerhalb der laufenden App denselben Pfad nimmt (dafür fehlt weiterhin
+   der Klick-Zugriff auf die authentifizierten Screens), aber Build-Erfolg
+   + identisches, extern verifiziertes API-Muster geben dafür hohe
+   Zuversicht.
+
+**Ehrlich benannte Verifikations-Grenze (unverändert seit den vorherigen
+Nachträgen):** die authentifizierten Screens (inkl. `AiSettingsView`
+selbst) ließen sich in dieser Umgebung weiterhin NICHT interaktiv
+durchklicken -- gleiche Ursache wie beim Compose-Screen-Nachtrag oben.
+**Offener Punkt für eine spätere Session:** `AiSettingsView` einmal mit
+echter Test-Mailbox oder einem XCTest-UI-Test-Target live durchklicken
+(Toggle → Provider wählen → Key eingeben → Speichern → Fehlerfall mit
+ungültigem Provider prüfen).
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

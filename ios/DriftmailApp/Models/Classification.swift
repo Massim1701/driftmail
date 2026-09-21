@@ -11,9 +11,14 @@ enum Classification: String, Codable {
 
 /// Mirrors `AiSource` in contracts/ai-adapter-interface.ts
 /// and message_ai_summary.source in db-schema.sql.
+/// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): dritter Wert
+/// `.heuristic` -- kein KI-Modell, kein externer Anbieter beteiligt,
+/// vorher fälschlich immer als `.cloudFallback` gelabelt (siehe
+/// backend/README.md "KI-Anbindung (BYOK)").
 enum AiSource: String, Codable {
     case onDevice = "on_device"
     case cloudFallback = "cloud_fallback"
+    case heuristic
 }
 
 enum PassFailNone: String, Codable {

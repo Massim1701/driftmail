@@ -291,14 +291,18 @@ struct MessageDetailView: View {
         }
     }
 
+    /// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): ruft jetzt
+    /// `AppEnvironment.summarize(messageId:bodyText:)` statt direkt
+    /// `apiClient.fetchSummary` -- versucht davor lokal Foundation Models
+    /// (Geraete-eigene KI als primaere Quelle, Inhalt verlaesst dann nie
+    /// das Geraet), `apiClient` ist nur noch der Fallback-Pfad (siehe
+    /// backend/README.md "KI-Anbindung (BYOK)"). Kann nicht mehr werfen --
+    /// beide Pfade degradieren graceful bis zu einer Heuristik-Antwort.
     private func loadSummary() async {
+        guard let bodyText = detail?.bodyText else { return }
         isLoadingSummary = true
         defer { isLoadingSummary = false }
-        do {
-            summary = try await environment.apiClient.fetchSummary(messageId: messageId)
-        } catch {
-            errorMessage = "Zusammenfassung fehlgeschlagen."
-        }
+        summary = await environment.summarize(messageId: messageId, bodyText: bodyText)
     }
 
     /// `POST /messages/{messageId}/unsubscribe` — manueller Pfad (siehe
@@ -404,8 +408,19 @@ struct ComposeAttachment: Identifiable {
 private struct SourceTag: View {
     let source: AiSource
 
+    /// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): dritte, ehrliche
+    /// Beschriftung fuer `.heuristic` -- kein KI-Modell beteiligt, weder
+    /// On-Device noch Cloud (siehe backend/README.md "KI-Anbindung (BYOK)").
+    private var label: String {
+        switch source {
+        case .onDevice: return "On-Device"
+        case .cloudFallback: return "Cloud (eigener Zugang)"
+        case .heuristic: return "Regelbasiert"
+        }
+    }
+
     var body: some View {
-        Text(source == .onDevice ? "On-Device" : "Cloud")
+        Text(label)
             .font(.system(size: DesignTokens.Typography.Size.caption, weight: .medium))
             .padding(.horizontal, DesignTokens.Spacing.sm)
             .padding(.vertical, 2)
