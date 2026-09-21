@@ -749,3 +749,20 @@ Mail voruebergehend aus dem Eingang ausblenden, taucht zum gewaehlten Zeitpunkt 
 **Bewusst NICHT uebernommen, zur Kenntnis:** Lesebestaetigungen/Sender-seitiges Oeffnungs-Tracking (wie bei Superhuman) passt nicht zur Philosophie von driftmail -- das ist genau das Gegenteil von Punkt 1 (wir blockieren Tracking, bauen keins fuer den eigenen Versand ein). Keine Aktion noetig, nur zur Abgrenzung dokumentiert.
 
 Kein Blocker, bitte nach der aktuell laufenden UI-Arbeit (Onboarding-Provider-Auswahl, Sicherheits-Badges) einordnen. Alle fuenf Punkte unabhaengig voneinander umsetzbar.
+
+
+[2026-09-21] [offen] [WICHTIGE LUECKE ENTDECKT - echter Malware-Scan] [contracts + Track A/B] [hohe Prioritaet, nach der aktuell laufenden UI-Arbeit] — Massimo hat nachgefragt, wie mit potenziell schadhaften Mail-Anhaengen/Fotos umgegangen wird. Geprueft (SYNC.md-Volltextsuche): Anhang-Scan existiert BISHER NUR beim SENDEN (POST /attachments), und selbst dort ist es laut eigener Dokumentation nur ein MOCK (attachmentScanMock.ts: Dateiendungs-Blockliste + ein deterministischer Test-Ausloeser, kein echter Virenscan). Fuer EINGEHENDE Mail-Anhaenge gibt es aktuell UEBERHAUPT KEINEN Scan -- eine Mail mit bösartigem Anhang landet ungeprueft im Postfach.
+
+**Bestaetigter Ansatz von Massimo:**
+
+1) **Echter Scan-Motor: ClamAV** (kostenlos, quelloffen, selbst hostbar) statt eines bezahlten Drittanbieter-Dienstes -- passt zur bisherigen Linie, keine unnoetigen externen Abhaengigkeiten. Ersetzt den bestehenden attachmentScanMock.ts durch eine echte ClamAV-Anbindung (z.B. per clamd-Daemon + clamscan/clamdscan-Client-Bibliothek, oder ueber einen kleinen eigenen Sidecar-Service, falls das Hosting-Setup das erfordert -- Track A entscheidet die konkrete Infrastruktur).
+
+2) **Scan in BEIDEN Richtungen:**
+   - Bestehend (Senden): attachmentScanMock.ts durch echten ClamAV-Aufruf ersetzen, scan_status-Logik (pending/clean/malicious/blocked_type/scan_failed) bleibt wie ist, nur die tatsaechliche Pruefung dahinter wird real.
+   - NEU (Empfangen): eingehende Mail-Anhaenge (inkl. Fotos/Bilder) werden beim Mail-Sync ebenfalls durch denselben ClamAV-Scan geschickt, BEVOR sie im Client anzeigbar/herunterladbar sind. message_attachments wird ja laut frueherer Notiz ("urspruenglich fuer Anhang-Scan bei eingehenden Mails gedacht") bereits fuer diesen Zweck vorgesehen -- message_id ist dafuer nicht mehr NULL (im Gegensatz zum Ausgehend-Fall mit uploaded_by_user_id). Falls ein Anhang als malicious erkannt wird: nicht automatisch loeschen (anders als bei den Spam-Auto-Delete-Faellen), sondern mit deutlicher Warnung anzeigen/blockieren -- der User soll die Mail selbst noch sehen koennen (koennte z.B. ein legitimer Absender mit einem versehentlich infizierten Anhang sein), nur der Anhang selbst bleibt gesperrt/nicht oeffenbar.
+
+3) **Magic-Bytes-Pruefung statt nur Dateiendung:** echten Dateityp anhand der ersten Bytes der Datei bestimmen (Signatur-Erkennung), nicht nur anhand der Dateiendung/des angegebenen MIME-Types -- verhindert den klassischen Trick, eine ausfuehrbare Datei durch Umbenennen als .jpg/.pdf/etc. zu tarnen. Kombiniert mit ClamAV als zweite Ebene.
+
+**Fotos brauchen keinen separaten Sonderweg** -- ein echter Scan-Motor plus Magic-Bytes-Pruefung deckt auch manipulierte/getarnte Bilddateien ab, kein zusaetzliches Bild-spezifisches Verfahren noetig fuer diesen Auftrag.
+
+Kein Contract-Bruch bei der Logik selbst (scan_status-Enum bleibt), aber die bisher dokumentierte Grenze "kein echter Virenscan" wird damit aufgehoben -- bitte SYNC.md entsprechend aktualisieren, sobald umgesetzt, nicht nur den Code-Kommentar. Hohe Prioritaet, da dies eine der zentralen Sicherheitsversprechen von driftmail direkt betrifft -- bitte zeitnah nach der aktuell laufenden UI-Arbeit einordnen, eher frueher als die 5 Wettbewerbs-Feature-Luecken von eben.
