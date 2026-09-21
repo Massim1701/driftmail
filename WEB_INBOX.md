@@ -998,3 +998,92 @@ Angreifer verstecken zunehmend bösartige Links in QR-Codes oder als Bild statt 
 Bisherige Link-Sicherheitspruefung (Homoglyph-Erkennung, Anzeigename-Spoofing) laeuft nur EINMAL beim Empfang der Mail. Enterprise-Loesungen pruefen zusaetzlich im Moment des tatsaechlichen Klicks erneut, da Angreifer eine zunaechst harmlose Zielseite registrieren, die erste Pruefung bestehen, und die Seite danach gegen eine bösartige tauschen ("verzoegerte Bewaffnung"/"time-of-click"-Angriff). Technisch: Links in Mails werden beim Anzeigen durch einen eigenen Redirect/Zwischenschritt umgeschrieben (aehnlich URL-Rewriting bei Proofpoint/Mimecast) -- beim Klick geht die Anfrage zuerst an einen eigenen Endpunkt (z.B. GET /link-check?url=...), der die Ziel-URL im Moment des Klicks nochmal prueft (Homoglyph/bekannte Phishing-Domain-Liste/etc.), und leitet erst danach zur echten Zielseite weiter. Bitte Umfang/Aufwand realistisch einschaetzen und in SYNC.md dokumentieren -- das ist die aufwendigere der beiden Ergaenzungen (neue Umleitungs-Infrastruktur), Punkt 1 ist einfacher (baut direkt auf Bestehendem auf).
 
 Kein Contract-Bruch bei 1 (nutzt bestehende Mechanismen). Bei 2 ggf. neue kleine Route/Contract-Ergaenzung, bitte dokumentieren. Bitte nach den aktuell laufenden Auftraegen einordnen, aber mit hoher Prioritaet -- das ist ein echtes Alleinstellungsmerkmal gegenueber jedem anderen Consumer-Mail-Client.
+
+
+[2026-09-21] [offen] [INHALTS-PAKET fuer driftware.online-Kachel] [Track C/F, gehoert zum driftmail-Repo] [WICHTIG: Rechtstexte sind Entwuerfe, MUESSEN vor Live-Schaltung von einem Anwalt geprueft werden -- Massimo hat das bestaetigt zur Kenntnis genommen] — Vollstaendiger Inhalt fuer die oeffentliche driftware.online-Seite/Kachel (siehe frueherer Auftrag "Einstellungsbereich + Info-Seite"). Bitte 1:1 als Grundlage fuer die Seiten-Komponenten verwenden, sprachlich/laenge bei Bedarf anpassen.
+
+---
+## SEITE 1: Was driftmail kann (Produktvorstellung)
+
+**Titel:** driftmail -- der Mail-Client, der mitdenkt
+
+**Kurzbeschreibung:** driftmail ist ein sicherheitsfokussierter E-Mail-Client. Er sortiert, warnt und schuetzt automatisch im Hintergrund -- ohne dass Mail-Inhalte an fremde Cloud-Dienste geschickt werden muessen.
+
+**Funktionsuebersicht (Stichpunkte, aus dem tatsaechlichen Funktionsumfang):**
+- Automatische Erkennung von Spam, Phishing und klassischem Vorschussbetrug ("Prinz aus Nigeria"-Muster) -- eindeutiger Muell wird automatisch aussortiert, Grenzfaelle landen mit Warnhinweis in Quarantaene statt geloescht zu werden.
+- Whitelist: du entscheidest selbst, welchen Absendern du vertraust.
+- Warnung vor dem Versand sensibler Daten (IBAN, Kreditkartennummern, bald auch Fotos von Ausweisen/Kreditkarten).
+- Erkennung von Anzeigename-Faelschung, abweichenden Antwort-Adressen und ploetzlichen IBAN-Wechseln in laufenden Gespraechen (klassischer Rechnungsbetrug).
+- Kennzeichnung neuer, unbekannter Absender.
+- Echter Virenscan fuer Anhaenge in beide Richtungen (Senden und Empfangen).
+- Schutz vor Phishing-Links in QR-Codes und Bildern -- ein Schutz, den sonst nur teure Unternehmenssoftware bietet.
+- KI-Funktionen (Zusammenfassung, Antwortvorschlaege, Vertragserkennung) laufen wo moeglich direkt auf deinem Geraet -- keine Kosten, keine Cloud-Uebertragung deiner Mail-Inhalte, es sei denn du bringst ausdruecklich einen eigenen KI-Zugang mit.
+- Unterstuetzt Gmail, iCloud Mail, GMX, web.de und jeden anderen IMAP-Anbieter.
+- Mehrere Mail-Konten gleichzeitig.
+- App-Sperre per Face ID/Touch ID.
+
+---
+## SEITE 2: Bedienungsanleitung
+
+**1. Konto verbinden:** Bei driftmail anmelden, Mail-Anbieter auswaehlen (Gmail, iCloud, GMX, web.de oder ein anderer IMAP-Anbieter). Bei Gmail: einmaliger Google-Anmelde-Bildschirm. Bei anderen Anbietern: E-Mail-Adresse plus ein App-spezifisches Passwort (nicht dein normales Passwort) -- eine kurze Anleitung dazu verlinken wir je nach Anbieter direkt im Formular.
+**2. Erster Blick ins Postfach:** Deine Mails werden automatisch geladen und in die passenden Ordner sortiert (Eingang, Sonstiges, Quarantaene, Spam).
+**3. Neue Mail schreiben:** Ueber den "Neue Nachricht"-Button. Bei mehreren Konten waehlst du den Absender aus.
+**4. Auf eine Warnung reagieren:** Sieht eine Mail verdaechtig aus (z.B. "Neuer Absender" oder ein Sicherheits-Hinweis), lies die Erklaerung dazu -- du kannst den Absender jederzeit mit einem Klick als vertrauenswuerdig markieren.
+**5. Einstellungen:** Weitere Konten hinzufuegen, Darstellung anpassen, Sicherheits-Features einsehen, App-Sperre aktivieren.
+
+---
+## SEITE 3: Haftungsausschluss (ENTWURF -- vor Verwendung anwaltlich pruefen)
+
+driftmail ist ein in Entwicklung befindliches Produkt. Trotz sorgfaeltiger technischer Umsetzung der Sicherheitsfunktionen (Spam-/Phishing-Erkennung, Virenscan, Betrugserkennung) kann keine Garantie fuer die vollstaendige Erkennung aller Bedrohungen uebernommen werden. Die Nutzung erfolgt auf eigene Verantwortung. Fuer Schaeden, die durch nicht erkannte Schadsoftware, Phishing-Versuche oder Betrugsmails entstehen, wird -- soweit gesetzlich zulaessig -- keine Haftung uebernommen, ausser bei Vorsatz oder grober Fahrlaessigkeit. Fuer die Inhalte verlinkter externer Webseiten (z.B. in empfangenen E-Mails) wird keine Verantwortung uebernommen.
+
+---
+## SEITE 4: AGB (ENTWURF -- vor Verwendung anwaltlich pruefen)
+
+**1. Geltungsbereich:** Diese Bedingungen gelten fuer die Nutzung von driftmail durch registrierte Nutzer.
+**2. Leistungsbeschreibung:** driftmail stellt eine Software zur Verwaltung bestehender E-Mail-Konten (Gmail, IMAP-Anbieter) bereit, inklusive automatisierter Sicherheitsfunktionen. driftmail betreibt keinen eigenen Mailserver und versendet/empfaengt Mails ausschliesslich ueber die Infrastruktur des jeweiligen Anbieters (Gmail, GMX, web.de, etc.).
+**3. Registrierung und Konto:** Der Nutzer ist fuer die Richtigkeit seiner Zugangsdaten sowie die Geheimhaltung seines driftmail-Zugangs verantwortlich.
+**4. Verfuegbarkeit:** Eine bestimmte Verfuegbarkeit der Software wird nicht zugesichert, insbesondere nicht bei Ausfaellen der genutzten Drittanbieter (Mail-Provider).
+**5. Nutzungsbeschraenkungen:** Die missbraeuchliche Nutzung von driftmail, insbesondere zum Versand von Spam, Schadsoftware oder betruegerischen Inhalten, ist untersagt.
+**6. Kuendigung:** Der Nutzer kann sein Konto jederzeit loeschen. driftmail behaelt sich vor, Konten bei Missbrauch zu sperren.
+**7. Aenderungen:** Diese AGB koennen bei wesentlichen Produktaenderungen angepasst werden, Nutzer werden hierueber informiert.
+
+---
+## SEITE 5: Datenschutzerklaerung (ENTWURF, DSGVO -- vor Verwendung anwaltlich pruefen)
+
+**Verantwortlicher:** [Name/Anschrift/Kontakt von Massimo einfuegen -- siehe Impressum]
+
+**Welche Daten werden verarbeitet:**
+- Zugangsdaten zu verbundenen Mail-Konten (OAuth-Token bzw. IMAP-Zugangsdaten) -- verschluesselt gespeichert (AES-256-GCM), niemals im Klartext.
+- Mail-Metadaten und -Inhalte, soweit fuer die Anzeige und die Sicherheitsfunktionen (Spam-/Phishing-Erkennung) notwendig -- Verarbeitung primaer auf dem Server des Nutzers/in der eigenen Datenbank, nicht an Dritte weitergegeben.
+- KI-Funktionen: laufen standardmaessig auf dem Geraet des Nutzers (kein Datenabfluss). Nur falls der Nutzer FREIWILLIG einen eigenen Zugang zu einem externen KI-Anbieter (z.B. Anthropic, OpenAI) hinterlegt, werden Mail-Inhalte zur Verarbeitung an diesen Anbieter uebermittelt -- ausschliesslich nach ausdruecklicher Zustimmung im Onboarding.
+- Sicherheits-Protokolldaten (z.B. erkannte Phishing-Versuche) fuer den Betrieb der Schutzfunktionen.
+
+**Rechtsgrundlage:** Vertragserfuellung (Art. 6 Abs. 1 lit. b DSGVO) fuer den Kernbetrieb, Einwilligung (Art. 6 Abs. 1 lit. a DSGVO) fuer optionale KI-Cloud-Nutzung.
+
+**Speicherdauer:** Daten werden geloescht, sobald das Nutzerkonto geloescht wird, soweit keine gesetzlichen Aufbewahrungspflichten entgegenstehen.
+
+**Rechte der Nutzer:** Auskunft, Berichtigung, Loeschung, Einschraenkung der Verarbeitung, Datenuebertragbarkeit, Widerspruch (Art. 15-21 DSGVO), Beschwerderecht bei einer Aufsichtsbehoerde.
+
+**Empfaenger/Drittlaender:** Bei optionaler Cloud-KI-Nutzung (nur nach Zustimmung) koennen Daten an Anbieter mit Sitz ausserhalb der EU (z.B. USA) uebermittelt werden -- hierfuer sind, je nach Anbieter, Standardvertragsklauseln oder ein Angemessenheitsbeschluss massgeblich. Bitte beim jeweiligen Anbieter (Anthropic/OpenAI) die aktuellen Datenschutzbedingungen ergaenzend verlinken.
+
+---
+## SEITE 6: Impressum -- KANN NICHT VON MIR AUSGEFUELLT WERDEN
+
+Ein Impressum nach § 5 TMG braucht echten Namen, Anschrift und Kontaktdaten des Betreibers -- das kann/darf ich nicht fuer Massimo erfinden. Platzhalter-Struktur:
+
+Angaben gemaess § 5 TMG:
+[Vor- und Nachname bzw. Firmenname]
+[Strasse, Hausnummer]
+[PLZ, Ort]
+
+Kontakt:
+E-Mail: [echte Kontakt-Adresse]
+[Telefon, falls gewuenscht -- optional]
+
+[Falls Gewerbe angemeldet: Handelsregister-Nummer/USt-IdNr., falls vorhanden]
+
+Massimo muss diese Angaben selbst final ausfuellen -- bitte NICHT mit Platzhaltern live schalten, das waere selbst ein Rechtsverstoss.
+
+---
+
+Track C/F: bitte diese sechs Inhalte in die entsprechenden Unterseiten/Bereiche der oeffentlichen driftware.online-Kachel einbauen. Rechtstexte (Seiten 3-5) klar als das kennzeichnen was sie sind, mit einem sichtbaren Hinweis "Entwurf, in anwaltlicher Pruefung" bis Massimo die Pruefung bestaetigt hat -- danach kann der Hinweis entfernt werden.
