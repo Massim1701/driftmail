@@ -433,6 +433,19 @@ export default function App() {
       .finally(() => setDetailLoading(false));
   }
 
+  // [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze") --
+  // gleiches Prinzip wie handleQuarantined/handleMoved: aus dem aktuellen
+  // Ordner entfernen (GET /messages liefert snoozed Nachrichten nicht mehr),
+  // Detailansicht bleibt aber offen (siehe MessageDetailPane onSnoozed-Prop).
+  function handleSnoozed(id: string) {
+    if (activeFolder) {
+      setMessagesByFolder((prev) => ({
+        ...prev,
+        [activeFolder]: (prev[activeFolder] ?? []).filter((m) => m.id !== id),
+      }));
+    }
+  }
+
   function handleQuarantined(id: string) {
     // Nachricht aus dem aktuellen Ordner entfernen und Quarantäne-Ordner neu laden
     if (activeFolder) {
@@ -545,6 +558,18 @@ export default function App() {
       .catch(() => setError("Entwurf konnte nicht gelöscht werden."));
   }
 
+  // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 8 ("Schedule Send"): Planung
+  // aufheben laesst den Entwurf selbst unangetastet (nur scheduledFor:null).
+  function handleCancelDraftSchedule(id: string) {
+    api
+      .updateDraft(id, { scheduledFor: null })
+      .then((updated) => {
+        setDrafts((prev) => prev.map((d) => (d.id === id ? updated : d)));
+        setError(null);
+      })
+      .catch(() => setError("Planung konnte nicht aufgehoben werden."));
+  }
+
   // [2026-09-10] echter Google-Login: ohne Token keine Anfragen an die API
   // (die würden ohnehin alle mit 401 scheitern) -- stattdessen der
   // OnboardingScreen (Provider-Auswahl + IMAP-Formular, WEB_INBOX.md 19.09.).
@@ -636,7 +661,12 @@ export default function App() {
                 emptyLabel="Keine Treffer."
               />
             ) : isEntwuerfeFolder ? (
-              <DraftList drafts={drafts} loading={draftsLoading && drafts.length === 0} onDelete={handleDeleteDraft} />
+              <DraftList
+                drafts={drafts}
+                loading={draftsLoading && drafts.length === 0}
+                onDelete={handleDeleteDraft}
+                onCancelSchedule={handleCancelDraftSchedule}
+              />
             ) : (
               <MessageList
                 messages={currentMessages}
@@ -670,6 +700,7 @@ export default function App() {
             onPermanentlyDeleted={handlePermanentlyDeleted}
             onReply={handleReply}
             onForward={handleForward}
+            onSnoozed={handleSnoozed}
           />
         </div>
       </div>
@@ -682,6 +713,7 @@ export default function App() {
           original={compose.original}
           onClose={() => setCompose(null)}
           onSent={handleSent}
+          onDraftScheduled={loadDrafts}
         />
       )}
 

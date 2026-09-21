@@ -16,14 +16,19 @@ function formatDate(iso: string): string {
 // Liste + Löschen, kein Bearbeiten -- ein Entwurf-Editor bräuchte einen
 // eigenen Compose-Screen (analog "neue Mail verfassen"), der ebenfalls noch
 // nicht Teil dieses Clients ist (siehe backend/README.md "Versand").
+// [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 8 ("Schedule Send"): ein per
+// ComposeModal geplanter Entwurf landet hier wie jeder andere Entwurf,
+// zusätzlich mit Badge + "Planung aufheben"-Aktion (PATCH scheduledFor:null).
 export function DraftList({
   drafts,
   loading,
   onDelete,
+  onCancelSchedule,
 }: {
   drafts: Draft[];
   loading: boolean;
   onDelete: (id: string) => void;
+  onCancelSchedule: (id: string) => void;
 }) {
   if (loading) {
     return <div className="message-list-status">Lade Entwürfe…</div>;
@@ -42,6 +47,14 @@ export function DraftList({
             </div>
             <div className="message-subject">{d.subject || "(kein Betreff)"}</div>
             {d.bodyText && <div className="draft-preview">{d.bodyText}</div>}
+            {d.scheduledFor && (
+              <div className="draft-scheduled-badge">
+                Geplant für {formatDate(d.scheduledFor)}
+                <button type="button" className="link-button" onClick={() => onCancelSchedule(d.id)}>
+                  Planung aufheben
+                </button>
+              </div>
+            )}
             <button type="button" className="btn btn-danger-outline draft-delete" onClick={() => onDelete(d.id)}>
               Löschen
             </button>

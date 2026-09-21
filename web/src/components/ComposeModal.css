@@ -49,6 +49,16 @@
   gap: var(--space-sm);
   padding: var(--space-lg);
   overflow-y: auto;
+  /* [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 2 (Undo Send): jetzt ein
+     <fieldset> statt <div>, damit disabled={fieldsDisabled} während des
+     Undo-Countdowns kaskadiert -- UA-Default-Rahmen zurücksetzen. */
+  border: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.compose-fields:disabled {
+  opacity: 0.7;
 }
 
 .compose-field {
@@ -104,4 +114,56 @@
 .compose-draft-source {
   font-size: var(--font-size-small);
   color: var(--color-text-muted);
+}
+
+/* [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
+   (Vertraulicher Modus) + "5 Wettbewerbs-Luecken" Punkt 8 (Schedule Send):
+   bewusst neutral/dezent gehalten (Design-Richtung: EIN Akzentfarbe pro
+   Ansicht, reserviert für Sicherheits-Badges) -- kein Blau/Akzent hier. */
+.compose-option-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-small);
+  color: var(--color-text-primary);
+}
+
+.compose-option-row input[type="datetime-local"] {
+  font-family: var(--font-family);
+  font-size: var(--font-size-small);
+  color: var(--color-text-primary);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.compose-hint-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-card);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+}
+
+.compose-hint-banner .btn {
+  flex-shrink: 0;
+}
+
+.undo-send-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+}
+
+.undo-send-bar .compose-modal-actions-spacer {
+  flex: 1;
 }

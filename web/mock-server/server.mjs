@@ -16,6 +16,7 @@ import {
   folders,
   messages,
   contracts,
+  breaches,
   folderSummary,
   folderById,
   folderBySystemKey,
@@ -56,8 +57,14 @@ const AI_IMPLEMENTED_PROVIDERS = ["anthropic", "openai"];
 // KOMFORT-FEATURES" Punkt 1) -- spiegelt users.accent_theme/
 // strict_unknown_senders (siehe backend/README.md "Einstellungsbereich" /
 // "Fuenf Komfort-Features").
-let userSettings = { accentTheme: "teal", strictUnknownSenders: true };
+let userSettings = { accentTheme: "teal", strictUnknownSenders: true, nudgeUnansweredEnabled: true };
 const ACCENT_THEME_VALUES = ["teal", "ocean_blue", "violett", "koralle", "ocean_verlauf"];
+
+// GET/PUT /privacy-settings (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 1,
+// "Tracking-Pixel-Blockierung") -- Default false wie im echten Backend
+// (siehe backend/README.md "Tracking-Schutz"), reines Vorlieben-Flag ohne
+// technische Wirkung (siehe types.ts-Kommentar bei PrivacySettings).
+let privacySettings = { blockRemoteImages: false, blockTrackingLinks: false };
 
 // GET/PUT /absence-responder (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
 // Abwesenheitsassistent") -- gleiche Validierung wie
@@ -78,10 +85,29 @@ function draftSummary(d) {
     inReplyToMessageId: d.inReplyToMessageId,
     to: d.to,
     cc: d.cc,
+    bcc: d.bcc,
     subject: d.subject,
     bodyText: d.bodyText,
+    // "5 Wettbewerbs-Luecken" Punkt 8 ("Schedule Send").
+    scheduledFor: d.scheduledFor,
     updatedAt: d.updatedAt,
   };
+}
+
+// Dieselbe einfache Heuristik wie messages/draft/phishing-check unten nutzt
+// -- IBAN/Kreditkarten-Muster, sonst ein paar Reizwörter fuer "other". Kein
+// Anspruch auf Vollstaendigkeit, reicht fuer den proaktiven Compose-Hinweis.
+function checkSensitiveData(bodyText) {
+  const found = [];
+  if (/\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){2,7}\b/.test(bodyText)) found.push("iban");
+  // Vierergruppen (klassisches Kartenformat) statt beliebiger Ziffernfolgen
+  // -- vermeidet Fehlalarme bei IBANs, deren letzte Gruppe meist keine 4
+  // Ziffern hat.
+  if (/\b\d{4}[ -]\d{4}[ -]\d{4}[ -]\d{4}\b/.test(bodyText)) found.push("credit_card");
+  if (found.length === 0 && /sozialversicherungsnummer|passwort|geheimzahl|steuer-id/i.test(bodyText)) {
+    found.push("other");
+  }
+  return found;
 }
 
 function send(res, status, body) {
@@ -409,6 +435,13 @@ const server = createServer(async (req, res) => {
     } else if (!accounts.some((a) => a.id === body.accountId)) {
       return badRequest(res, "accountId ist erforderlich, wenn keine inReplyToMessageId angegeben ist");
     }
+    // Vertraulicher Modus ("DREI WEITERE FEATURES - Gmail-Recherche" Punkt
+    // 3) -- muss in der Zukunft liegen, gleiche Validierung wie scheduledFor.
+    if (body.confidentialUntil !== undefined && body.confidentialUntil !== null) {
+      if (typeof body.confidentialUntil !== "string" || new Date(body.confidentialUntil).getTime() <= Date.now()) {
+        return badRequest(res, "confidentialUntil muss ein gültiger Zeitpunkt in der Zukunft sein");
+      }
+    }
     // Anhang-Gate (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
     // Eintrags von eben"), gleiche Prüfung wie im echten Backend.
     const attachmentIds = Array.isArray(body.attachmentIds) ? body.attachmentIds : [];
@@ -451,6 +484,7 @@ const server = createServer(async (req, res) => {
           confidenceScore: 0,
         },
         bodyText,
+        confidentialUntil: typeof body.confidentialUntil === "string" ? body.confidentialUntil : null,
       });
     }
 
@@ -463,6 +497,17 @@ const server = createServer(async (req, res) => {
     return send(res, 200, { sentMessageId });
   }
 
+  // POST /messages/draft/phishing-check -- hier nur fuer den proaktiven
+  // "Vertraulich senden?"-Vorschlag im Compose-Screen genutzt
+  // (containsSensitiveData), siehe checkSensitiveData() oben. MUSS vor dem
+  // generischen "/messages/{id}..."-Block unten stehen, sonst würde "draft"
+  // dort fälschlich als message-id interpretiert.
+  if (req.method === "POST" && parts.length === 3 && parts[0] === "messages" && parts[1] === "draft" && parts[2] === "phishing-check") {
+    const body = (await readJsonBody(req)) ?? {};
+    const bodyText = typeof body.bodyText === "string" ? body.bodyText : "";
+    return send(res, 200, { blocked: false, reason: null, containsSensitiveData: checkSensitiveData(bodyText) });
+  }
+
   // /drafts (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-
   // Eintrags") -- vereinfachter Mock, kein mailAccountId-Tracking (dieser
   // Mock-Server kennt ohnehin nur ein einziges Konto).
@@ -471,13 +516,22 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === "POST" && parts.length === 1 && parts[0] === "drafts") {
     const body = (await readJsonBody(req)) ?? {};
+    // Schedule Send ("5 Wettbewerbs-Luecken" Punkt 8): scheduledFor muss in
+    // der Zukunft liegen, gleiche Validierung wie beim echten Backend.
+    if (body.scheduledFor !== undefined && body.scheduledFor !== null) {
+      if (typeof body.scheduledFor !== "string" || new Date(body.scheduledFor).getTime() <= Date.now()) {
+        return badRequest(res, "scheduledFor muss ein gültiger Zeitpunkt in der Zukunft sein");
+      }
+    }
     const record = {
       id: randomUUID(),
       inReplyToMessageId: typeof body.inReplyToMessageId === "string" ? body.inReplyToMessageId : null,
       to: Array.isArray(body.to) ? body.to.filter((x) => typeof x === "string") : [],
       cc: Array.isArray(body.cc) ? body.cc.filter((x) => typeof x === "string") : [],
+      bcc: Array.isArray(body.bcc) ? body.bcc.filter((x) => typeof x === "string") : [],
       subject: typeof body.subject === "string" ? body.subject : null,
       bodyText: typeof body.bodyText === "string" ? body.bodyText : null,
+      scheduledFor: typeof body.scheduledFor === "string" ? body.scheduledFor : null,
       updatedAt: new Date().toISOString(),
     };
     drafts.push(record);
@@ -488,10 +542,19 @@ const server = createServer(async (req, res) => {
     if (req.method === "PATCH") {
       if (!draft) return notFound(res);
       const body = (await readJsonBody(req)) ?? {};
+      if (body.scheduledFor !== undefined && body.scheduledFor !== null) {
+        if (typeof body.scheduledFor !== "string" || new Date(body.scheduledFor).getTime() <= Date.now()) {
+          return badRequest(res, "scheduledFor muss ein gültiger Zeitpunkt in der Zukunft sein");
+        }
+      }
       if (Array.isArray(body.to)) draft.to = body.to.filter((x) => typeof x === "string");
       if (Array.isArray(body.cc)) draft.cc = body.cc.filter((x) => typeof x === "string");
+      if (Array.isArray(body.bcc)) draft.bcc = body.bcc.filter((x) => typeof x === "string");
       if (typeof body.subject === "string") draft.subject = body.subject;
       if (typeof body.bodyText === "string") draft.bodyText = body.bodyText;
+      // null hebt eine bestehende Planung explizit auf (DraftList.tsx
+      // "Planung aufheben") -- undefined laesst scheduledFor unangetastet.
+      if (body.scheduledFor !== undefined) draft.scheduledFor = body.scheduledFor;
       draft.updatedAt = new Date().toISOString();
       return send(res, 200, draftSummary(draft));
     }
@@ -525,6 +588,10 @@ const server = createServer(async (req, res) => {
     const q = url.searchParams.get("q");
     let result = messages;
     if (folderId) result = result.filter((m) => m.folderId === folderId);
+    // "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"): solange snoozedUntil in
+    // der Zukunft liegt, aus der Liste ausgeblendet (GET /messages/{id}
+    // direkt bleibt unbetroffen, siehe dortigen Handler).
+    result = result.filter((m) => !(m.snoozedUntil && new Date(m.snoozedUntil).getTime() > Date.now()));
     if (q) {
       const needle = q.toLowerCase();
       result = result.filter(
@@ -541,7 +608,7 @@ const server = createServer(async (req, res) => {
       result
         .slice()
         .sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1))
-        .map(messageSummary)
+        .map((m) => messageSummary(m, { nudgeEnabled: userSettings.nudgeUnansweredEnabled }))
     );
   }
 
@@ -553,7 +620,20 @@ const server = createServer(async (req, res) => {
     // GET /messages/{id}
     if (req.method === "GET" && parts.length === 2) {
       if (!msg) return notFound(res);
-      return send(res, 200, messageDetail(msg));
+      return send(res, 200, messageDetail(msg, { nudgeEnabled: userSettings.nudgeUnansweredEnabled }));
+    }
+
+    // POST /messages/{id}/snooze (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt
+    // 5, "Snooze") -- until:null hebt ein bestehendes Snooze sofort auf,
+    // GET /messages (Liste) filtert bereits oben entsprechend.
+    if (req.method === "POST" && parts.length === 3 && parts[2] === "snooze") {
+      if (!msg) return notFound(res);
+      const body = (await readJsonBody(req)) ?? {};
+      if (body.until !== null && typeof body.until !== "string") {
+        return badRequest(res, "until muss ein Zeitpunkt oder null sein");
+      }
+      msg.snoozedUntil = body.until ?? null;
+      return send(res, 200, messageSummary(msg, { nudgeEnabled: userSettings.nudgeUnansweredEnabled }));
     }
 
     // DELETE /messages/{id} (soft delete -> Papierkorb, siehe WEB_INBOX.md
@@ -563,7 +643,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "DELETE" && parts.length === 2) {
       if (!msg) return notFound(res);
       msg.folderId = folderBySystemKey("papierkorb").id;
-      return send(res, 200, messageSummary(msg));
+      return send(res, 200, messageSummary(msg, { nudgeEnabled: userSettings.nudgeUnansweredEnabled }));
     }
 
     // DELETE /messages/{id}/permanent (endgültiges Löschen, entfernt den
@@ -612,7 +692,7 @@ const server = createServer(async (req, res) => {
       const target = folderById(folderId);
       if (!target) return badRequest(res, "unbekannter Ziel-Ordner");
       msg.folderId = target.id;
-      return send(res, 200, messageSummary(msg));
+      return send(res, 200, messageSummary(msg, { nudgeEnabled: userSettings.nudgeUnansweredEnabled }));
     }
 
     // GET /messages/{id}/summary
@@ -720,9 +800,42 @@ const server = createServer(async (req, res) => {
         accentTheme: body.accentTheme !== undefined ? body.accentTheme : userSettings.accentTheme,
         strictUnknownSenders:
           body.strictUnknownSenders !== undefined ? body.strictUnknownSenders : userSettings.strictUnknownSenders,
+        nudgeUnansweredEnabled:
+          body.nudgeUnansweredEnabled !== undefined ? body.nudgeUnansweredEnabled : userSettings.nudgeUnansweredEnabled,
       };
       return send(res, 200, userSettings);
     }
+  }
+
+  // GET/PUT /privacy-settings (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 1,
+  // "Tracking-Pixel-Blockierung").
+  if (parts.length === 1 && parts[0] === "privacy-settings") {
+    if (req.method === "GET") {
+      return send(res, 200, privacySettings);
+    }
+    if (req.method === "PUT") {
+      const body = (await readJsonBody(req)) ?? {};
+      privacySettings = {
+        blockRemoteImages: body.blockRemoteImages !== undefined ? body.blockRemoteImages : privacySettings.blockRemoteImages,
+        blockTrackingLinks: body.blockTrackingLinks !== undefined ? body.blockTrackingLinks : privacySettings.blockTrackingLinks,
+      };
+      return send(res, 200, privacySettings);
+    }
+  }
+
+  // GET/PATCH /security/breaches (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt
+  // 3, "Darkweb-/Datenleck-Ueberwachung") -- PATCH akzeptiert nur
+  // acknowledged (siehe api.ts acknowledgeBreach), kein anderes Feld ist
+  // clientseitig aenderbar.
+  if (req.method === "GET" && parts.length === 2 && parts[0] === "security" && parts[1] === "breaches") {
+    return send(res, 200, breaches);
+  }
+  if (req.method === "PATCH" && parts.length === 3 && parts[0] === "security" && parts[1] === "breaches") {
+    const finding = breaches.find((b) => b.id === parts[2]);
+    if (!finding) return notFound(res);
+    const body = (await readJsonBody(req)) ?? {};
+    if (body.acknowledged !== undefined) finding.acknowledged = !!body.acknowledged;
+    return send(res, 200, finding);
   }
 
   // GET/PUT /absence-responder (WEB_INBOX.md 21.09. "NEUER AUFTRAG -

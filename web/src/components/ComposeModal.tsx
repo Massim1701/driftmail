@@ -4,6 +4,21 @@ import { api, ApiError } from "../api";
 import { tryDraftReplyOnDevice } from "../onDeviceAi";
 import "./ComposeModal.css";
 
+// [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
+// Punkt 1 ("Vergessener-Anhang-Erkennung") -- reine Client-Logik, einfache
+// Keyword-Liste reicht laut Auftrag, kein ML nötig.
+const FORGOTTEN_ATTACHMENT_PATTERN = /\b(im anhang|siehe anhang|anbei|attached|see attachment)\b/i;
+
+// [2026-09-21] WEB_INBOX.md "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 2
+// ("Undo Send") -- 8 Sekunden, wie im Auftrag vorgeschlagen ("z.B. 5-10
+// Sekunden"). Bewusst als reine Client-Verzögerung VOR dem eigentlichen
+// POST /messages/send-Aufruf umgesetzt (kein serverseitiger "vorläufiger
+// Versand"-Zustand nötig) -- der Compose-Dialog bleibt dafür während des
+// Countdowns geöffnet (Felder eingefroren) statt sich zu schließen und
+// später wieder zu öffnen: einfacher umzusetzen und der eingegebene Text
+// geht dabei garantiert nie verloren.
+const UNDO_SEND_SECONDS = 8;
+
 // [2026-09-21] Compose-Screen (WEB_INBOX.md 21.09. "BUG - Massimo beim
 // echten Live-Test entdeckt" + "ERGAENZUNG" + "DREI WEITERE
 // GRUNDFUNKTIONEN"): EIN gemeinsamer Compose-Dialog für alle drei Fälle
@@ -51,6 +66,32 @@ function formatDateTime(iso: string): string {
   });
 }
 
+function sensitiveDataLabel(kind: "iban" | "credit_card" | "other"): string {
+  switch (kind) {
+    case "iban":
+      return "eine IBAN";
+    case "credit_card":
+      return "eine Kreditkartennummer";
+    case "other":
+      return "sensible Daten";
+  }
+}
+
+// datetime-local liefert/erwartet lokale Zeit ohne Zeitzonen-Suffix --
+// new Date(value).toISOString() würde das als UTC fehlinterpretieren.
+function localDateTimeToIso(value: string): string {
+  return new Date(value).toISOString();
+}
+
+// Kleinster sinnvoller Default für die beiden datetime-local-Felder
+// (Vertraulich-bis / Später senden): 1h ab jetzt, als "YYYY-MM-DDTHH:mm".
+function defaultLocalDateTime(minutesFromNow: number): string {
+  const d = new Date(Date.now() + minutesFromNow * 60 * 1000);
+  d.setSeconds(0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function parseAddressList(value: string): string[] {
   return value
     .split(/[,;]/)
@@ -67,6 +108,7 @@ export function ComposeModal({
   original,
   onClose,
   onSent,
+  onDraftScheduled,
 }: {
   mode: ComposeMode;
   /** Sender-Auswahl (WEB_INBOX.md 21.09. "ERGAENZUNG"): nur relevant im
@@ -80,6 +122,11 @@ export function ComposeModal({
   /** POST /messages/send war erfolgreich -- App.tsx lädt den "gesendet"-
    * Ordner neu (analog zum bisherigen onSent in MessageDetailPane). */
   onSent: () => void;
+  /** [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 8 ("Schedule Send"): ein
+   * geplanter Versand legt (nur) einen Entwurf mit scheduledFor an, nichts
+   * wurde tatsächlich gesendet -- onSent (das den "gesendet"-Ordner neu
+   * lädt) wäre hier falsch, App.tsx lädt stattdessen die Entwürfe-Liste neu. */
+  onDraftScheduled: () => void;
 }) {
   const isReply = mode === "reply";
   const isForward = mode === "forward";
@@ -107,7 +154,7 @@ export function ComposeModal({
         `Datum: ${formatDateTime(original.receivedAt)}`,
         `Betreff: ${original.subject}`,
         "",
-        original.bodyText,
+        original.bodyText ?? "",
       ].join("\n");
       return { to: "", cc: "", bcc: "", subject, bodyText: quoted };
     }
@@ -127,6 +174,26 @@ export function ComposeModal({
   const [sendError, setSendError] = useState<string | null>(null);
   const [draftSource, setDraftSource] = useState<AiSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
+  // ("Vertraulicher Modus"): Checkbox + Ablaufzeitpunkt, Vorschlag kommt aus
+  // POST /messages/draft/phishing-check (containsSensitiveData), siehe
+  // sensitiveDataHint-Effekt unten.
+  const [confidential, setConfidential] = useState(false);
+  const [confidentialUntil, setConfidentialUntil] = useState(() => defaultLocalDateTime(24 * 60));
+  const [sensitiveDataHint, setSensitiveDataHint] = useState<string[] | null>(null);
+
+  // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 8 ("Schedule Send"): eigener
+  // Zweig statt direktem Senden -- legt/aktualisiert stattdessen den
+  // Autosave-Entwurf mit scheduledFor (siehe handleScheduleConfirm).
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState(() => defaultLocalDateTime(60));
+  const [scheduling, setScheduling] = useState(false);
+
+  // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 2 ("Undo Send"): null =
+  // normaler Bearbeitungszustand, sonst Sekunden bis zum tatsächlichen
+  // POST /messages/send (siehe UNDO_SEND_SECONDS-Kommentar oben).
+  const [undoSecondsLeft, setUndoSecondsLeft] = useState<number | null>(null);
 
   // Kontakt-Autovervollstaendigung (WEB_INBOX.md 21.09. "FUENF NEUE
   // KOMFORT-FEATURES" Punkt 2) -- einmal beim Oeffnen geladen, native
@@ -173,6 +240,26 @@ export function ComposeModal({
     return () => clearTimeout(timeout);
   }, [to, cc, subject, bodyText, isReply]);
 
+  // Vertraulicher Modus, Auto-Vorschlag (Punkt 2): entprellt wie das
+  // Autosave oben, prüft den Text auf IBAN/Kreditkarte/Sonstiges. Kein
+  // erneuter Aufruf mehr, sobald der Nutzer den Modus schon aktiviert hat --
+  // der Hinweis wäre dann überflüssig.
+  useEffect(() => {
+    if (confidential || bodyText.trim().length === 0) {
+      setSensitiveDataHint(null);
+      return;
+    }
+    const timeout = setTimeout(async () => {
+      try {
+        const result = await api.checkDraftForSensitiveData(bodyText);
+        setSensitiveDataHint(result.containsSensitiveData.length > 0 ? result.containsSensitiveData : null);
+      } catch {
+        // Vorschlag ist optional -- kein Fehler-Banner für einen fehlgeschlagenen Hintergrund-Check.
+      }
+    }, 1500);
+    return () => clearTimeout(timeout);
+  }, [bodyText, confidential]);
+
   // Reply/Forward auf Klick eines KI-Entwurfs (nur bei "reply" sinnvoll --
   // createReplyDraft() beantwortet die Ursprungsnachricht, kein Äquivalent
   // für "neue Mail"/"weiterleiten"). [2026-09-21] KORREKTUR
@@ -185,7 +272,7 @@ export function ComposeModal({
     }
     setDraftLoading(true);
     try {
-      const onDevice = await tryDraftReplyOnDevice(original);
+      const onDevice = await tryDraftReplyOnDevice({ ...original, bodyText: original.bodyText ?? "" });
       if (onDevice) {
         setBodyText(onDevice);
         setDraftSource("on_device");
@@ -230,8 +317,7 @@ export function ComposeModal({
   const toList = parseAddressList(to);
   const canSend = toList.length > 0 && bodyText.trim().length > 0 && !hasBlockingAttachment && (isReply || !!accountId);
 
-  async function handleSend() {
-    if (!canSend) return;
+  async function performSend() {
     setSending(true);
     setSendError(null);
     try {
@@ -248,6 +334,7 @@ export function ComposeModal({
         // angelegt wurde, raeumt das Backend ihn nach erfolgreichem Versand
         // automatisch auf (siehe backend/README.md "Versand", draftId-Feld).
         draftId: draftIdRef.current ?? undefined,
+        confidentialUntil: confidential ? localDateTimeToIso(confidentialUntil) : undefined,
       });
       onSent();
       onClose();
@@ -258,8 +345,73 @@ export function ComposeModal({
       } else {
         setSendError("Versand fehlgeschlagen. Bitte später erneut versuchen.");
       }
+      setUndoSecondsLeft(null);
     } finally {
       setSending(false);
+    }
+  }
+
+  // Undo Send (Punkt 2 der "5 Wettbewerbs-Luecken"): der eigentliche Klick
+  // startet nur den Countdown, performSend() läuft erst, wenn er auf 0
+  // abläuft, ohne dass "Rückgängig" gedrückt wurde.
+  function handleSendClick() {
+    if (!canSend) return;
+    // Vergessener-Anhang-Erkennung (Punkt 1 der "DREI WEITERE FEATURES"):
+    // reine Keyword-Heuristik, siehe FORGOTTEN_ATTACHMENT_PATTERN oben.
+    if (attachments.length === 0 && FORGOTTEN_ATTACHMENT_PATTERN.test(bodyText)) {
+      const proceed = window.confirm(
+        'Der Text erwähnt einen Anhang ("im Anhang", "anbei", …), es wurde aber keiner hinzugefügt. Trotzdem senden?',
+      );
+      if (!proceed) return;
+    }
+    setSendError(null);
+    setUndoSecondsLeft(UNDO_SEND_SECONDS);
+  }
+
+  function handleUndoSend() {
+    setUndoSecondsLeft(null);
+  }
+
+  useEffect(() => {
+    if (undoSecondsLeft === null) return;
+    if (undoSecondsLeft <= 0) {
+      performSend();
+      return;
+    }
+    const timeout = setTimeout(() => setUndoSecondsLeft((s) => (s ?? 1) - 1), 1000);
+    return () => clearTimeout(timeout);
+    // performSend liest bei Ablauf den zu diesem Zeitpunkt aktuellen State
+    // (Felder sind waehrend des Countdowns eingefroren, siehe JSX unten) --
+    // ein Abhaengen von den Formularfeldern wuerde den Countdown nur
+    // unnoetig neu starten.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoSecondsLeft]);
+
+  async function handleScheduleConfirm() {
+    if (!canSend || !scheduledFor) return;
+    setScheduling(true);
+    setSendError(null);
+    try {
+      const data = {
+        to: toList,
+        cc: parseAddressList(cc),
+        bcc: parseAddressList(bcc),
+        subject,
+        bodyText,
+        scheduledFor: localDateTimeToIso(scheduledFor),
+      };
+      if (draftIdRef.current) {
+        await api.updateDraft(draftIdRef.current, data);
+      } else {
+        const created = await api.createDraft(data);
+        draftIdRef.current = created.id;
+      }
+      onDraftScheduled();
+      onClose();
+    } catch {
+      setSendError("Planen fehlgeschlagen. Bitte später erneut versuchen.");
+    } finally {
+      setScheduling(false);
     }
   }
 
@@ -283,7 +435,7 @@ export function ComposeModal({
           </button>
         </div>
 
-        <div className="compose-fields">
+        <fieldset className="compose-fields" disabled={undoSecondsLeft !== null}>
           {mode === "new" && accounts.length > 1 && (
             <label className="compose-field">
               <span>Von</span>
@@ -351,6 +503,58 @@ export function ComposeModal({
             placeholder="Nachricht eingeben…"
           />
 
+          {sensitiveDataHint && (
+            <div className="compose-hint-banner">
+              <span>
+                Der Text enthält {sensitiveDataHint.map((k) => sensitiveDataLabel(k as "iban" | "credit_card" | "other")).join(" und ")}{" "}
+                — vertraulich senden?
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setConfidential(true);
+                  setSensitiveDataHint(null);
+                }}
+              >
+                Vertraulich senden
+              </button>
+            </div>
+          )}
+
+          {/* Vertraulicher Modus (Punkt 2): Ablauf-Zeitpunkt nur sichtbar,
+              wenn aktiviert -- Default 24h ab jetzt (defaultLocalDateTime). */}
+          <label className="compose-option-row">
+            <input type="checkbox" checked={confidential} onChange={(e) => setConfidential(e.target.checked)} />
+            <span>Vertraulich senden</span>
+          </label>
+          {confidential && (
+            <label className="compose-option-row">
+              <span>Läuft ab am</span>
+              <input
+                type="datetime-local"
+                value={confidentialUntil}
+                onChange={(e) => setConfidentialUntil(e.target.value)}
+              />
+            </label>
+          )}
+
+          {/* Schedule Send ("5 Wettbewerbs-Luecken" Punkt 8): eigener
+              Auslöser (Button unten), das Picker-Feld wird hier nur
+              eingeblendet, wenn "Später senden" angeklickt wurde. */}
+          {scheduleOpen && (
+            <label className="compose-option-row">
+              <span>Senden am</span>
+              <input type="datetime-local" value={scheduledFor} onChange={(e) => setScheduledFor(e.target.value)} />
+              <button type="button" className="btn btn-primary" onClick={handleScheduleConfirm} disabled={scheduling || !canSend}>
+                {scheduling ? "Plane…" : "Planen"}
+              </button>
+              <button type="button" className="link-button" onClick={() => setScheduleOpen(false)}>
+                Abbrechen
+              </button>
+            </label>
+          )}
+
           {attachments.length > 0 && (
             <ul className="attachment-list">
               {attachments.map((a) => (
@@ -382,33 +586,51 @@ export function ComposeModal({
           />
 
           {sendError && <p className="send-error">{sendError}</p>}
-        </div>
+        </fieldset>
 
-        <div className="compose-modal-actions">
-          <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
-            Anhang hinzufügen
-          </button>
-          {isReply && (
-            <button type="button" className="btn btn-secondary" onClick={requestAiDraft} disabled={draftLoading}>
-              {draftLoading ? "Erstelle Entwurf…" : "KI-Entwurf vorschlagen"}
+        {undoSecondsLeft !== null ? (
+          // Undo Send (Punkt 2): der Dialog bleibt offen (Felder eingefroren
+          // per fieldset disabled oben), diese Leiste ersetzt nur die
+          // normale Aktionszeile für die Dauer des Countdowns.
+          <div className="undo-send-bar">
+            <span>Wird in {undoSecondsLeft}s gesendet…</span>
+            <div className="compose-modal-actions-spacer" />
+            <button type="button" className="btn btn-secondary" onClick={handleUndoSend}>
+              Rückgängig
             </button>
-          )}
-          {isReply && draftSource && (
-            <span className="compose-draft-source">
-              {draftSource === "on_device" ? "On-Device" : draftSource === "cloud_fallback" ? "Cloud (eigener Zugang)" : "Regelbasiert"}
-            </span>
-          )}
-          {!isReply && draftSaveStatus !== "idle" && (
-            <span className="compose-draft-source">{draftSaveStatus === "saving" ? "Speichere Entwurf…" : "Entwurf gespeichert"}</span>
-          )}
-          <div className="compose-modal-actions-spacer" />
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
-            Verwerfen
-          </button>
-          <button type="button" className="btn btn-primary" onClick={handleSend} disabled={sending || !canSend}>
-            {sending ? "Sende…" : "Senden"}
-          </button>
-        </div>
+          </div>
+        ) : (
+          <div className="compose-modal-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
+              Anhang hinzufügen
+            </button>
+            {isReply && (
+              <button type="button" className="btn btn-secondary" onClick={requestAiDraft} disabled={draftLoading}>
+                {draftLoading ? "Erstelle Entwurf…" : "KI-Entwurf vorschlagen"}
+              </button>
+            )}
+            {isReply && draftSource && (
+              <span className="compose-draft-source">
+                {draftSource === "on_device" ? "On-Device" : draftSource === "cloud_fallback" ? "Cloud (eigener Zugang)" : "Regelbasiert"}
+              </span>
+            )}
+            {!isReply && draftSaveStatus !== "idle" && (
+              <span className="compose-draft-source">{draftSaveStatus === "saving" ? "Speichere Entwurf…" : "Entwurf gespeichert"}</span>
+            )}
+            {!isReply && !scheduleOpen && (
+              <button type="button" className="btn btn-secondary" onClick={() => setScheduleOpen(true)} disabled={!canSend}>
+                Später senden
+              </button>
+            )}
+            <div className="compose-modal-actions-spacer" />
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              Verwerfen
+            </button>
+            <button type="button" className="btn btn-primary" onClick={handleSendClick} disabled={sending || !canSend}>
+              {sending ? "Sende…" : "Senden"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

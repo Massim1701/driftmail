@@ -1,9 +1,45 @@
 import { useEffect, useState } from "react";
-import type { Folder, MailSummary, MessageDetail } from "../types";
+import type { AttachmentScanStatus, Folder, MailSummary, MessageDetail } from "../types";
 import { api } from "../api";
 import { trySummarizeOnDevice } from "../onDeviceAi";
 import { SecurityBadge, SecurityDetails, SecuritySignalBadges } from "./SecurityBadge";
 import "./MessageDetailPane.css";
+
+// [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan" -- gleiche
+// Label-Logik wie attachmentStatusLabel() in ComposeModal.tsx, hier nur für
+// bereits gescannte (nicht mehr hochladende) Anhänge.
+function scanStatusLabel(status: AttachmentScanStatus): string {
+  switch (status) {
+    case "pending":
+      return "Wird geprüft…";
+    case "clean":
+      return "Geprüft, unauffällig";
+    case "malicious":
+      return "Gefährlich — gesperrt";
+    case "blocked_type":
+      return "Dateityp nicht erlaubt — gesperrt";
+    case "scan_failed":
+      return "Prüfung fehlgeschlagen — gesperrt";
+  }
+}
+
+// [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze") --
+// ein paar sinnvolle Presets statt ausschließlich freier Datumsauswahl,
+// analog zu Gmail/Superhuman.
+function snoozePresetDate(preset: "1h" | "tomorrow" | "nextWeek"): string {
+  const now = new Date();
+  if (preset === "1h") return new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+  if (preset === "tomorrow") {
+    const d = new Date(now);
+    d.setDate(d.getDate() + 1);
+    d.setHours(8, 0, 0, 0);
+    return d.toISOString();
+  }
+  const d = new Date(now);
+  d.setDate(d.getDate() + 7);
+  d.setHours(8, 0, 0, 0);
+  return d.toISOString();
+}
 
 // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): drei statt zwei
 // Quellen, siehe backend/README.md "KI-Anbindung (BYOK)".
@@ -44,6 +80,7 @@ export function MessageDetailPane({
   onPermanentlyDeleted,
   onReply,
   onForward,
+  onSnoozed,
 }: {
   message: MessageDetail | null;
   loading: boolean;
@@ -78,6 +115,11 @@ export function MessageDetailPane({
    * nicht nur bei neuen Mails. */
   onReply: (message: MessageDetail) => void;
   onForward: (message: MessageDetail) => void;
+  /** [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"):
+   * die Nachricht verschwindet aus der Ordner-Liste (App.tsx entfernt sie
+   * dort), bleibt aber hier in der Detailansicht sichtbar -- gleiches
+   * Prinzip wie onQuarantined/onMoved. */
+  onSnoozed: (id: string) => void;
   /** [2026-09-21] WEB_INBOX.md 21.09. "KLEINE VERKNUEPFUNG - Neuer-
    * Absender-Badge mit Whitelist verbinden": App.tsx besitzt
    * trustedSenderAddresses zentral (auch für andere Nachrichten relevant),
@@ -96,12 +138,16 @@ export function MessageDetailPane({
   // [2026-09-21] "LUECKE SCHLIESSEN - echter Abmelde-Aufruf": nur noch
   // confirmed/failed, siehe api.ts-Kommentar.
   const [unsubscribeStatus, setUnsubscribeStatus] = useState<"confirmed" | "failed" | null>(null);
+  // [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze").
+  const [snoozeMenuOpen, setSnoozeMenuOpen] = useState(false);
+  const [snoozing, setSnoozing] = useState(false);
 
   // Beim Wechsel der Nachricht abgeleiteten Zustand zurücksetzen
   useEffect(() => {
     setSummary(null);
     setShowDetails(false);
     setUnsubscribeStatus(null);
+    setSnoozeMenuOpen(false);
   }, [message?.id]);
 
   if (loading) {
@@ -123,7 +169,7 @@ export function MessageDetailPane({
       // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): On-Device zuerst
       // versuchen (Inhalt verlässt dann nie das Gerät), Backend nur als
       // Fallback (siehe onDeviceAi.ts-Kopfkommentar für Details/Grenzen).
-      const onDevice = await trySummarizeOnDevice(message.bodyText);
+      const onDevice = await trySummarizeOnDevice(message.bodyText ?? "");
       if (onDevice) {
         setSummary({ ...onDevice, source: "on_device" });
       } else {
@@ -183,6 +229,18 @@ export function MessageDetailPane({
     }
   }
 
+  async function handleSnooze(until: string) {
+    if (!message) return;
+    setSnoozing(true);
+    try {
+      await api.snoozeMessage(message.id, until);
+      setSnoozeMenuOpen(false);
+      onSnoozed(message.id);
+    } finally {
+      setSnoozing(false);
+    }
+  }
+
   async function handlePermanentDelete() {
     if (!message) return;
     if (!window.confirm("Diese Nachricht endgültig löschen? Das kann nicht rückgängig gemacht werden.")) {
@@ -228,6 +286,16 @@ export function MessageDetailPane({
         <div className="trash-notice">
           Diese Nachricht liegt im Papierkorb. Verschiebe sie über „In Ordner verschieben…“ zurück
           oder lösche sie endgültig — anders als bei Quarantäne gibt es hier keine automatische Frist.
+        </div>
+      )}
+
+      {/* [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-
+          Recherche" Punkt 3 ("Vertraulicher Modus"). */}
+      {message.confidentialUntil && (
+        <div className="quarantine-notice">
+          {new Date(message.confidentialUntil).getTime() > Date.now()
+            ? `Vertraulich bis ${formatDateTime(message.confidentialUntil)} — danach wird der Text automatisch gelöscht.`
+            : "Diese Nachricht war vertraulich und ist inzwischen abgelaufen — der Text wurde serverseitig gelöscht."}
         </div>
       )}
 
@@ -283,6 +351,27 @@ export function MessageDetailPane({
         <button type="button" className="btn btn-secondary" onClick={() => onForward(message)}>
           Weiterleiten
         </button>
+        {/* [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 5
+            ("Snooze") -- ein paar sinnvolle Presets statt nur freier
+            Datumsauswahl. */}
+        <div className="snooze-menu-wrap">
+          <button type="button" className="btn btn-secondary" onClick={() => setSnoozeMenuOpen((v) => !v)} disabled={snoozing}>
+            {snoozing ? "…" : "Später erinnern"}
+          </button>
+          {snoozeMenuOpen && (
+            <div className="snooze-menu">
+              <button type="button" onClick={() => handleSnooze(snoozePresetDate("1h"))}>
+                In 1 Stunde
+              </button>
+              <button type="button" onClick={() => handleSnooze(snoozePresetDate("tomorrow"))}>
+                Morgen früh
+              </button>
+              <button type="button" onClick={() => handleSnooze(snoozePresetDate("nextWeek"))}>
+                Nächste Woche
+              </button>
+            </div>
+          )}
+        </div>
         {/* Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.): manueller
             Abmelden-Button, unabhängig von der Klassifikation -- nur wenn
             die Nachricht einen gültigen List-Unsubscribe-Header hat.
@@ -332,10 +421,25 @@ export function MessageDetailPane({
         </section>
       )}
 
+      {message.attachments.length > 0 && (
+        <section className="detail-section">
+          <ul className="attachment-list">
+            {message.attachments.map((a) => (
+              <li key={a.id} className={`attachment-item attachment-status-${a.scanStatus}`}>
+                <span className="attachment-filename">{a.filename}</span>
+                <span className="attachment-status">{scanStatusLabel(a.scanStatus)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="detail-body">
-        {message.bodyText.split("\n").map((line, i) => (
-          <p key={i}>{line || " "}</p>
-        ))}
+        {message.bodyText === null ? (
+          <p className="detail-body-empty">Kein Inhalt mehr verfügbar.</p>
+        ) : (
+          message.bodyText.split("\n").map((line, i) => <p key={i}>{line || " "}</p>)
+        )}
       </section>
     </div>
   );

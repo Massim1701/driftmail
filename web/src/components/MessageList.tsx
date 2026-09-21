@@ -10,6 +10,14 @@ function formatDate(iso: string): string {
     d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 }
 
+// [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
+// Punkt 2 ("Nudge") -- "Vor X Tagen erhalten, antworten?", X aus
+// receivedAt selbst berechnet (das Backend liefert nur das boolean-Signal).
+function nudgeLabel(receivedAt: string): string {
+  const days = Math.max(1, Math.floor((Date.now() - new Date(receivedAt).getTime()) / (24 * 3600 * 1000)));
+  return `Vor ${days} ${days === 1 ? "Tag" : "Tagen"} erhalten, antworten?`;
+}
+
 // Threaded Ansicht (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt
 // 4) -- gruppiert Nachrichten client-seitig ueber inReplyToMessageId-Ketten,
 // AUSSCHLIESSLICH innerhalb der aktuell geladenen Liste (siehe
@@ -81,6 +89,7 @@ function MessageRow({
       </div>
       <div className="message-subject">{message.subject}</div>
       {message.classification !== "safe" && <SecurityBadge classification={message.classification} compact />}
+      {message.awaitingReply && <div className="message-nudge-hint">{nudgeLabel(message.receivedAt)}</div>}
     </button>
   );
 }

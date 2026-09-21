@@ -15,3 +15,12 @@
   align-self: flex-end;
   margin-top: var(--space-xs);
 }
+
+/* [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 8 (Schedule Send). */
+.draft-scheduled-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}

@@ -152,3 +152,36 @@
 .absence-field-checkbox input {
   width: auto;
 }
+
+/* [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 3 ("Darkweb-/
+   Datenleck-Ueberwachung") -- echte Sicherheitswarnung, nutzt die
+   Warnfarbe (Design-Richtung erlaubt das ausdrücklich für Sicherheits-
+   Badges, alles andere bleibt neutral). */
+.settings-breach-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.settings-breach-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-surface-card));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body);
+}
+
+.settings-privacy-note {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AbsenceResponder, AccentTheme, MailAccount } from "../types";
+import type { AbsenceResponder, AccentTheme, DataBreachFinding, MailAccount, PrivacySettings } from "../types";
 import { api, ApiError } from "../api";
 import { ACCENT_THEMES, applyAccentTheme } from "../accentThemes";
 import "./ComposeModal.css";
@@ -60,6 +60,28 @@ export function SettingsModal({
   const [strictSaving, setStrictSaving] = useState(false);
   const [strictError, setStrictError] = useState<string | null>(null);
 
+  // [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
+  // Punkt 2 ("Nudge") -- eigener lokaler State + eigener GET/PUT, gleiches
+  // Prinzip wie accentTheme oben (kein anderer Screen braucht diesen Wert,
+  // anders als strictUnknownSenders, das in App.tsx lebt).
+  const [nudgeEnabled, setNudgeEnabled] = useState(true);
+  const [nudgeSaving, setNudgeSaving] = useState(false);
+  const [nudgeError, setNudgeError] = useState<string | null>(null);
+
+  // [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 1
+  // ("Tracking-Pixel-Blockierung").
+  const [privacySettings, setPrivacySettings] = useState<PrivacySettings | null>(null);
+  const [privacyLoading, setPrivacyLoading] = useState(true);
+  const [privacySaving, setPrivacySaving] = useState<keyof PrivacySettings | null>(null);
+  const [privacyError, setPrivacyError] = useState<string | null>(null);
+
+  // [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 3 ("Darkweb-/
+  // Datenleck-Ueberwachung") -- nur unbestaetigte Treffer werden hier
+  // prominent gezeigt, siehe handleAcknowledgeBreach.
+  const [breaches, setBreaches] = useState<DataBreachFinding[]>([]);
+  const [breachesLoading, setBreachesLoading] = useState(true);
+  const [acknowledgingBreachId, setAcknowledgingBreachId] = useState<string | null>(null);
+
   const [appLockPending, setAppLockPending] = useState(false);
   const [appLockError, setAppLockError] = useState(false);
 
@@ -100,9 +122,31 @@ export function SettingsModal({
   useEffect(() => {
     api
       .getSettings()
-      .then((s) => setAccentTheme(s.accentTheme))
+      .then((s) => {
+        setAccentTheme(s.accentTheme);
+        setNudgeEnabled(s.nudgeUnansweredEnabled);
+      })
       .catch(() => setAccentError("Einstellungen konnten nicht geladen werden."))
       .finally(() => setAccentLoading(false));
+  }, []);
+
+  useEffect(() => {
+    api
+      .getPrivacySettings()
+      .then(setPrivacySettings)
+      .catch(() => setPrivacyError("Privatsphäre-Einstellungen konnten nicht geladen werden."))
+      .finally(() => setPrivacyLoading(false));
+  }, []);
+
+  useEffect(() => {
+    api
+      .listBreaches()
+      .then(setBreaches)
+      .catch(() => {
+        // Kein harter Fehler: die Sicherheits-Übersicht funktioniert auch
+        // ohne diesen Abschnitt, ohnehin nur relevant, falls es Treffer gibt.
+      })
+      .finally(() => setBreachesLoading(false));
   }, []);
 
   useEffect(() => {
@@ -141,6 +185,53 @@ export function SettingsModal({
       if (!ok) setStrictError("Einstellung konnte nicht gespeichert werden.");
     } finally {
       setStrictSaving(false);
+    }
+  }
+
+  async function handleToggleNudge() {
+    if (nudgeSaving) return;
+    setNudgeSaving(true);
+    setNudgeError(null);
+    const previous = nudgeEnabled;
+    setNudgeEnabled(!previous);
+    try {
+      await api.updateSettings({ nudgeUnansweredEnabled: !previous });
+    } catch {
+      setNudgeEnabled(previous);
+      setNudgeError("Einstellung konnte nicht gespeichert werden.");
+    } finally {
+      setNudgeSaving(false);
+    }
+  }
+
+  async function handleTogglePrivacySetting(key: keyof PrivacySettings) {
+    if (!privacySettings || privacySaving) return;
+    setPrivacySaving(key);
+    setPrivacyError(null);
+    const previous = privacySettings;
+    const next = { ...previous, [key]: !previous[key] };
+    setPrivacySettings(next);
+    try {
+      setPrivacySettings(await api.updatePrivacySettings({ [key]: next[key] }));
+    } catch {
+      setPrivacySettings(previous);
+      setPrivacyError("Einstellung konnte nicht gespeichert werden.");
+    } finally {
+      setPrivacySaving(null);
+    }
+  }
+
+  async function handleAcknowledgeBreach(id: string) {
+    setAcknowledgingBreachId(id);
+    try {
+      const updated = await api.acknowledgeBreach(id);
+      setBreaches((prev) => prev.map((b) => (b.id === id ? updated : b)));
+    } catch {
+      // Best effort -- der Treffer bleibt einfach sichtbar, User kann es
+      // erneut versuchen, kein harter Fehlerzustand nötig für eine reine
+      // "als gesehen markieren"-Aktion.
+    } finally {
+      setAcknowledgingBreachId(null);
     }
   }
 
@@ -286,6 +377,36 @@ export function SettingsModal({
 
           <section className="settings-section">
             <h3 className="settings-section-title">Sicherheit</h3>
+
+            {/* [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 3
+                ("Darkweb-/Datenleck-Ueberwachung") -- nur unbestaetigte
+                Treffer werden hier gezeigt, direkt oben im Sicherheits-
+                Abschnitt (echte Warnung, soll auffallen). Nutzt die
+                bestehende Warnfarbe (Design-Richtung: Akzentfarbe bleibt
+                Sicherheits-Badges vorbehalten). */}
+            {!breachesLoading && breaches.some((b) => !b.acknowledged) && (
+              <ul className="settings-breach-list">
+                {breaches
+                  .filter((b) => !b.acknowledged)
+                  .map((b) => (
+                    <li key={b.id} className="settings-breach-item">
+                      <span>
+                        Deine Adresse wurde im Datenleck „{b.breachName}“ gefunden
+                        {b.breachDate ? ` (${new Date(b.breachDate).toLocaleDateString("de-DE")})` : ""}.
+                      </span>
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => handleAcknowledgeBreach(b.id)}
+                        disabled={acknowledgingBreachId === b.id}
+                      >
+                        {acknowledgingBreachId === b.id ? "…" : "Verstanden"}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+
             {appLockSupported && (
               <div className="settings-row">
                 <button
@@ -324,11 +445,11 @@ export function SettingsModal({
 
             {/* Plain-language Sicherheits-Übersicht (WEB_INBOX.md 21.09.,
                 "kurze, verstaendliche Uebersicht der aktiven Sicherheits-
-                Features") -- bewusst KEINE technischen Details, siehe
-                Malware-Scan-Zeile: der ist noch ein Mock
-                (backend/src/lookups/attachmentScanMock.ts), deshalb
-                ehrlich "in Vorbereitung" statt fälschlich als aktiv
-                dargestellt. */}
+                Features") -- bewusst KEINE technischen Details. [2026-09-21]
+                "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": Malware-
+                Scan-Zeile aktualisiert -- laeuft jetzt echt ueber ClamAV
+                (siehe backend/README.md "Malware-Scan"), nicht mehr nur
+                ein Mock. */}
             <p className="settings-security-intro">driftmail schützt dich automatisch im Hintergrund:</p>
             <ul className="settings-security-list">
               <li>Erkennt Spam, Phishing und klassischen Vorschussbetrug automatisch</li>
@@ -336,9 +457,67 @@ export function SettingsModal({
               <li>Kennzeichnet neue, unbekannte Absender</li>
               <li>Whitelist: du entscheidest, wem du vertraust</li>
               <li>Warnt vor dem Versand sensibler Daten (IBAN, Kreditkartennummern)</li>
-              <li>Malware-Scan für Anhänge: in Vorbereitung</li>
+              <li>Echter Virenscan für Anhänge, beim Senden und Empfangen</li>
+              <li>Warnt, falls deine Adresse in einem bekannten Datenleck auftaucht</li>
               <li>KI-Funktionen laufen wo möglich direkt auf deinem Gerät – keine Kosten, keine Cloud-Übertragung, außer du richtest ausdrücklich einen eigenen KI-Zugang ein</li>
             </ul>
+          </section>
+
+          {/* [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 1
+              ("Tracking-Pixel-Blockierung"). */}
+          <section className="settings-section">
+            <h3 className="settings-section-title">Privatsphäre</h3>
+            {privacyLoading ? (
+              <p>Lade…</p>
+            ) : (
+              privacySettings && (
+                <>
+                  <div className="settings-row">
+                    <button
+                      type="button"
+                      className={`btn btn-secondary${privacySettings.blockRemoteImages ? " active" : ""}`}
+                      onClick={() => handleTogglePrivacySetting("blockRemoteImages")}
+                      disabled={privacySaving === "blockRemoteImages"}
+                    >
+                      {privacySaving === "blockRemoteImages" ? "…" : privacySettings.blockRemoteImages ? "Externe Bilder blockieren: an" : "Externe Bilder blockieren: aus"}
+                    </button>
+                  </div>
+                  <p className="settings-privacy-note">
+                    driftmail zeigt Mails grundsätzlich als Klartext an, ohne automatisch ladende Bilder oder Tracking-Pixel –
+                    Absender können so nicht sehen, ob und wann du eine Mail geöffnet hast. Dieser Schalter ist also eher eine
+                    Bestätigung dieses Schutzes als eine Funktion mit zusätzlicher sichtbarer Wirkung.
+                  </p>
+                  <div className="settings-row">
+                    <button
+                      type="button"
+                      className={`btn btn-secondary${privacySettings.blockTrackingLinks ? " active" : ""}`}
+                      onClick={() => handleTogglePrivacySetting("blockTrackingLinks")}
+                      disabled={privacySaving === "blockTrackingLinks"}
+                    >
+                      {privacySaving === "blockTrackingLinks" ? "…" : privacySettings.blockTrackingLinks ? "Tracking-Links blockieren: an" : "Tracking-Links blockieren: aus"}
+                    </button>
+                  </div>
+                  {privacyError && <p className="send-error">{privacyError}</p>}
+                </>
+              )
+            )}
+          </section>
+
+          {/* [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-
+              Recherche" Punkt 2 ("Nudge"). */}
+          <section className="settings-section">
+            <h3 className="settings-section-title">Erinnerungen</h3>
+            <div className="settings-row">
+              <button
+                type="button"
+                className={`btn btn-secondary${nudgeEnabled ? " active" : ""}`}
+                onClick={handleToggleNudge}
+                disabled={nudgeSaving || accentLoading}
+              >
+                {nudgeSaving ? "…" : nudgeEnabled ? "An unbeantwortete Mails erinnern: an" : "An unbeantwortete Mails erinnern: aus"}
+              </button>
+            </div>
+            {nudgeError && <p className="send-error">{nudgeError}</p>}
           </section>
 
           <section className="settings-section">

@@ -65,6 +65,42 @@ export interface UserSettings {
   // Darstellungsentscheidung -- steuert nur, ob isNewSender-Nachrichten
   // staerker hervorgehoben werden, das Backend-Signal selbst ist unverändert.
   strictUnknownSenders: boolean;
+  // [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
+  // Punkt 2 ("Nudge"), Default true -- steuert Message.awaitingReply.
+  nudgeUnansweredEnabled: boolean;
+}
+
+// [2026-09-21] WEB_INBOX.md "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 1
+// ("Tracking-Pixel-Blockierung"). blockRemoteImages hat aktuell KEINE
+// technische Wirkung -- driftmail rendert nirgends HTML/laedt nirgends
+// automatisch entfernte Bilder (Nachrichtentext ist immer Klartext), siehe
+// backend/README.md "Tracking-Schutz". blockTrackingLinks braucht die noch
+// nicht implementierte message_links-Extraktion, ebenfalls ohne Wirkung.
+export interface PrivacySettings {
+  blockRemoteImages: boolean;
+  blockTrackingLinks: boolean;
+}
+
+// GET/PATCH /security/breaches (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 3,
+// "Darkweb-/Datenleck-Ueberwachung") -- Mock-Anbindung im Backend, siehe
+// backend/README.md.
+// POST /messages/draft/phishing-check -- WEB_INBOX.md "DREI WEITERE
+// FEATURES - Gmail-Recherche" Punkt 3 ("Vertraulicher Modus") nutzt nur
+// containsSensitiveData fuer den proaktiven "Vertraulich senden?"-Vorschlag,
+// deshalb hier nur ein schlankes Subset des vollen Backend-Schemas.
+export interface DraftPhishingCheckResult {
+  blocked: boolean;
+  reason: string | null;
+  containsSensitiveData: Array<"iban" | "credit_card" | "other">;
+}
+
+export interface DataBreachFinding {
+  id: string;
+  accountId: string;
+  breachName: string;
+  breachDate: string | null;
+  discoveredAt: string;
+  acknowledged: boolean;
 }
 
 export interface MailAccount {
@@ -86,6 +122,34 @@ export interface Message {
   // ("Threaded Ansicht") -- vorher nur auf MessageDetail. Zeigt nur den
   // DIREKTEN Elternteil, kein volles Thread-Konzept (siehe backend/README.md).
   inReplyToMessageId: string | null;
+  // [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
+  // Punkt 2 ("Nudge") -- true, wenn seit mind. 3 Tagen unbeantwortet UND
+  // der Schalter (UserSettings.nudgeUnansweredEnabled) an ist. Zur Laufzeit
+  // abgeleitet, kein eigenes Feld im Backend-Schema.
+  awaitingReply: boolean;
+  // [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
+  // Punkt 3 ("Vertraulicher Modus") -- nur bei selbst gesendeten Nachrichten
+  // gesetzt. Nach Ablauf wird bodyText serverseitig geloescht (siehe
+  // MessageDetail.bodyText), dieses Feld bleibt erhalten.
+  confidentialUntil: string | null;
+  // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze") -- solange in
+  // der Zukunft, wird die Nachricht aus GET /messages (Liste) ausgeblendet;
+  // ueber GET /messages/{id} direkt bleibt sie sichtbar.
+  snoozedUntil: string | null;
+}
+
+// [2026-09-21] WEB_INBOX.md "WICHTIGE LUECKE ENTDECKT - echter Malware-
+// Scan": Anhaenge einer Nachricht, bereits gescannt (ClamAV + Magic-Bytes),
+// BEVOR sie hier sichtbar werden. Ein nicht-'clean' Anhang darf die UI
+// NICHT zum Oeffnen/Herunterladen anbieten.
+export interface MessageAttachment {
+  id: string;
+  filename: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  scanStatus: AttachmentScanStatus;
+  isDangerousType: boolean;
+  containsSensitiveDocument: "none" | "credit_card" | "id_document";
 }
 
 export interface SecurityResult {
@@ -110,7 +174,9 @@ export interface SecurityResult {
 }
 
 export interface MessageDetail extends Message {
-  bodyText: string;
+  // [2026-09-21] Vertraulicher Modus: kann null sein, wenn confidentialUntil
+  // in der Vergangenheit liegt -- der Text wurde dann serverseitig geloescht.
+  bodyText: string | null;
   security: SecurityResult;
   // Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.): steuert, ob der
   // "Abmelden"-Button für POST /messages/{id}/unsubscribe angezeigt wird --
@@ -121,6 +187,8 @@ export interface MessageDetail extends Message {
   // gibt. Kombiniert sich mit GET /trusted-senders -- Badge nur zeigen, wenn
   // isNewSender=true UND Absender nicht auf der Whitelist (siehe api-spec.yaml).
   isNewSender: boolean;
+  // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan".
+  attachments: MessageAttachment[];
 }
 
 // GET/POST/DELETE /trusted-senders (WEB_INBOX.md 15.09. "Whitelist
@@ -156,8 +224,12 @@ export interface Draft {
   inReplyToMessageId: string | null;
   to: string[];
   cc: string[];
+  bcc: string[];
   subject: string | null;
   bodyText: string | null;
+  // [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule
+  // Send") -- gesetzt = wird automatisch verschickt, sobald erreicht.
+  scheduledFor: string | null;
   updatedAt: string;
 }
 

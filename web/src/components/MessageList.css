@@ -102,3 +102,14 @@
   gap: var(--space-xs);
   border-left: 2px solid var(--color-border);
 }
+
+/* [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
+   Punkt 2 ("Nudge") -- bewusst neutral/gedaempft, kein Akzent/Warnfarbe:
+   ist ein Hinweis, keine Sicherheitswarnung (Design-Richtung: "genau EIN
+   Akzent pro Ansicht", reserviert fuer Sicherheits-Badges). */
+.message-nudge-hint {
+  margin-top: 2px;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+  font-style: italic;
+}

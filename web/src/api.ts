@@ -16,13 +16,16 @@ import type {
   AiSource,
   AttachmentScanStatus,
   Contract,
+  DataBreachFinding,
   Draft,
+  DraftPhishingCheckResult,
   Folder,
   MailAccount,
   MailProvider,
   MailSummary,
   Message,
   MessageDetail,
+  PrivacySettings,
   TrustedSender,
   UserSettings,
 } from "./types";
@@ -219,6 +222,20 @@ export const api = {
   moveMessage: (id: string, folderId: string) =>
     request<Message>(`/messages/${id}/move`, { method: "POST", body: JSON.stringify({ folderId }) }),
 
+  // POST /messages/{id}/snooze (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 5,
+  // "Snooze") -- until:null hebt ein bestehendes Snooze sofort auf.
+  snoozeMessage: (id: string, until: string | null) =>
+    request<Message>(`/messages/${id}/snooze`, { method: "POST", body: JSON.stringify({ until }) }),
+
+  // POST /messages/draft/phishing-check -- hier nur fuer den proaktiven
+  // "Vertraulich senden?"-Vorschlag genutzt (containsSensitiveData), siehe
+  // ComposeModal.tsx.
+  checkDraftForSensitiveData: (bodyText: string) =>
+    request<DraftPhishingCheckResult>("/messages/draft/phishing-check", {
+      method: "POST",
+      body: JSON.stringify({ bodyText, links: [] }),
+    }),
+
   quarantineMessage: (id: string) =>
     request<unknown>(`/messages/${id}/quarantine`, { method: "POST" }),
 
@@ -269,6 +286,9 @@ export const api = {
     bodyText: string;
     attachmentIds?: string[];
     draftId?: string;
+    // [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
+    // Punkt 3 ("Vertraulicher Modus") -- muss in der Zukunft liegen.
+    confidentialUntil?: string;
   }) => request<{ sentMessageId: string }>("/messages/send", { method: "POST", body: JSON.stringify(data) }),
 
   // POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
@@ -299,11 +319,22 @@ export const api = {
   // Entwürfe-Ansicht) -- die aktuelle UI nutzt nur list/delete.
   listDrafts: () => request<Draft[]>("/drafts"),
 
-  createDraft: (data: { inReplyToMessageId?: string; to?: string[]; cc?: string[]; subject?: string; bodyText?: string }) =>
-    request<Draft>("/drafts", { method: "POST", body: JSON.stringify(data) }),
+  createDraft: (data: {
+    inReplyToMessageId?: string;
+    to?: string[];
+    cc?: string[];
+    bcc?: string[];
+    subject?: string;
+    bodyText?: string;
+    // [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule
+    // Send") -- muss in der Zukunft liegen, sonst 400.
+    scheduledFor?: string;
+  }) => request<Draft>("/drafts", { method: "POST", body: JSON.stringify(data) }),
 
-  updateDraft: (id: string, data: { to?: string[]; cc?: string[]; subject?: string; bodyText?: string }) =>
-    request<Draft>(`/drafts/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  updateDraft: (
+    id: string,
+    data: { to?: string[]; cc?: string[]; bcc?: string[]; subject?: string; bodyText?: string; scheduledFor?: string | null },
+  ) => request<Draft>(`/drafts/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
 
   deleteDraft: (id: string) => request<unknown>(`/drafts/${id}`, { method: "DELETE" }),
 
@@ -315,8 +346,22 @@ export const api = {
   // backend/README.md "Einstellungsbereich".
   getSettings: () => request<UserSettings>("/settings"),
 
-  updateSettings: (data: { accentTheme?: AccentTheme; strictUnknownSenders?: boolean }) =>
+  updateSettings: (data: { accentTheme?: AccentTheme; strictUnknownSenders?: boolean; nudgeUnansweredEnabled?: boolean }) =>
     request<UserSettings>("/settings", { method: "PUT", body: JSON.stringify(data) }),
+
+  // GET/PUT /privacy-settings (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 1,
+  // "Tracking-Pixel-Blockierung").
+  getPrivacySettings: () => request<PrivacySettings>("/privacy-settings"),
+
+  updatePrivacySettings: (data: Partial<PrivacySettings>) =>
+    request<PrivacySettings>("/privacy-settings", { method: "PUT", body: JSON.stringify(data) }),
+
+  // GET/PATCH /security/breaches (WEB_INBOX.md "5 Wettbewerbs-Luecken"
+  // Punkt 3, "Darkweb-/Datenleck-Ueberwachung").
+  listBreaches: () => request<DataBreachFinding[]>("/security/breaches"),
+
+  acknowledgeBreach: (id: string) =>
+    request<DataBreachFinding>(`/security/breaches/${id}`, { method: "PATCH", body: JSON.stringify({ acknowledged: true }) }),
 
   // GET /contacts (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 2
   // "Kontakt-Autovervollstaendigung") -- bekannte Adressen fuer An/CC/BCC-

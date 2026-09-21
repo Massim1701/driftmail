@@ -229,6 +229,7 @@ const RECHNUNGEN = "f1000000-0000-0000-0000-000000000003";
 const QUARANTAENE = folderBySystemKey("quarantaene").id;
 const SPAM = folderBySystemKey("spam").id;
 const PAPIERKORB = folderBySystemKey("papierkorb").id;
+const GESENDET = folderBySystemKey("gesendet").id;
 const FAMILIE = "f2000000-0000-0000-0000-000000000001";
 
 // message: { id, fromAddress, fromDisplayName, subject, receivedAt, folderId, classification, bodyText, security }
@@ -244,6 +245,22 @@ export const messages = [
     security: securityOk(),
     bodyText:
       "Hallo Massimo,\n\nanbei Ihre Gehaltsabrechnung für August. Bei Rückfragen wenden Sie sich gerne an die Personalabteilung.\n\nViele Grüße\nIhre Personalabteilung",
+    // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": bewusst
+    // ein sonst voellig unauffaelliger, vertrauenswuerdiger Absender mit
+    // einem versehentlich infizierten Anhang -- genau der im Auftrag
+    // beschriebene Fall, nicht die naheliegendere Kombination "Phishing-Mail
+    // + böser Anhang".
+    attachments: [
+      {
+        id: "at100000-0000-0000-0000-000000000001",
+        filename: "gehaltsabrechnung_august.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 84213,
+        scanStatus: "malicious",
+        isDangerousType: false,
+        containsSensitiveDocument: "none",
+      },
+    ],
   },
   {
     id: "b1000000-0000-0000-0000-000000000002",
@@ -287,6 +304,11 @@ export const messages = [
     inReplyToMessageId: "b1000000-0000-0000-0000-000000000003",
     bodyText:
       "Sehr geehrter Herr Manca,\n\nkurze Erinnerung: der Termin sollte idealerweise bis Ende der Woche stattfinden.\n\nMit freundlichen Grüßen\nNotariat Weber",
+    // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
+    // ("Nudge"): einzige Fixture mit gesetztem awaitingReplyCandidate --
+    // messageSummary() macht daraus awaitingReply=true, sofern
+    // UserSettings.nudgeUnansweredEnabled an ist (Default).
+    awaitingReplyCandidate: true,
   },
 
   // ---- sonstiges ----
@@ -333,6 +355,19 @@ export const messages = [
     security: securityOk(),
     bodyText:
       "Ihre monatliche Rechnung über 12,99 € für den Zeitraum 01.09.–30.09. steht zum Download bereit. Vertragslaufzeit verlängert sich automatisch, sofern nicht bis 15.09. gekündigt wird.",
+    // Gegenbeispiel zum "malicious"-Anhang oben (Punkt "Malware-Scan
+    // Anzeige"): ein unauffälliger, geprüft sauberer Anhang.
+    attachments: [
+      {
+        id: "at100000-0000-0000-0000-000000000002",
+        filename: "rechnung_september.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 51022,
+        scanStatus: "clean",
+        isDangerousType: false,
+        containsSensitiveDocument: "none",
+      },
+    ],
   },
   {
     id: "b3000000-0000-0000-0000-000000000002",
@@ -379,6 +414,18 @@ export const messages = [
     security: securityPhishing(),
     bodyText:
       "Ihre Zahlungsmethode konnte nicht verifiziert werden. Klicken Sie hier, um Ihre Zahlungsdaten innerhalb von 12 Stunden zu aktualisieren, sonst wird Ihre Bestellung storniert.",
+    // Drittes Anhang-Beispiel: nicht erlaubter Dateityp statt Virenfund.
+    attachments: [
+      {
+        id: "at100000-0000-0000-0000-000000000003",
+        filename: "rechnungskopie.exe",
+        mimeType: "application/x-msdownload",
+        sizeBytes: 129044,
+        scanStatus: "blocked_type",
+        isDangerousType: true,
+        containsSensitiveDocument: "none",
+      },
+    ],
   },
   {
     id: "b4000000-0000-0000-0000-000000000003",
@@ -463,13 +510,48 @@ export const messages = [
     security: securityOk(),
     bodyText: "Hallo Schatz,\n\nkommst du am Sonntag zum Mittagessen? Es gibt deine Lieblingspasta.\n\nLiebe Grüße,\nMama",
   },
+
+  // ---- gesendet (Beispiele für "Vertraulicher Modus") ----
+  {
+    id: "b8000000-0000-0000-0000-000000000001",
+    fromAddress: "massimo@example.com",
+    fromDisplayName: null,
+    subject: "Zugangsdaten für das neue Kundenportal",
+    receivedAt: "2026-09-20T14:00:00Z",
+    folderId: GESENDET,
+    security: securityOk(),
+    bodyText: "Hallo,\n\nhier die Zugangsdaten wie besprochen. Bitte nach dem ersten Login sofort ändern.\n\nViele Grüße\nMassimo",
+    // Noch nicht abgelaufen -- messageDetail() zeigt bodyText normal an,
+    // Client rendert den "Vertraulich bis..."-Hinweis.
+    confidentialUntil: "2026-09-27T14:00:00Z",
+  },
+  {
+    id: "b8000000-0000-0000-0000-000000000002",
+    fromAddress: "massimo@example.com",
+    fromDisplayName: null,
+    subject: "Einmalcode für die Kontofreischaltung",
+    receivedAt: "2026-09-10T09:30:00Z",
+    folderId: GESENDET,
+    security: securityOk(),
+    bodyText: "Der Einmalcode lautete 483920 und war nur für 24 Stunden gültig.",
+    // In der Vergangenheit -- messageDetail() liefert bodyText:null (siehe
+    // dortige confidentialExpired-Prüfung), Client zeigt "war vertraulich
+    // und ist abgelaufen" statt des eigentlichen Inhalts.
+    confidentialUntil: "2026-09-11T09:30:00Z",
+  },
 ];
 
 function classificationOf(msg) {
   return msg.security.classification;
 }
 
-export function messageSummary(msg) {
+// opts.nudgeEnabled (WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
+// Punkt 2, "Nudge"): steuert, ob awaitingReplyCandidate-Fixtures als
+// awaitingReply:true ausgeliefert werden -- Default true (Server-Default,
+// siehe server.mjs userSettings), nur der GET /messages-Listen-Handler
+// übergibt den tatsächlichen userSettings.nudgeUnansweredEnabled-Wert.
+export function messageSummary(msg, opts = {}) {
+  const nudgeEnabled = opts.nudgeEnabled !== false;
   // Message-Schema (ohne bodyText/security)
   return {
     id: msg.id,
@@ -482,16 +564,38 @@ export function messageSummary(msg) {
     // WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 4 ("Threaded
     // Ansicht") -- vorher nur in messageDetail() gespiegelt.
     inReplyToMessageId: msg.inReplyToMessageId ?? null,
+    awaitingReply: nudgeEnabled && msg.awaitingReplyCandidate === true,
+    confidentialUntil: msg.confidentialUntil ?? null,
+    // "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze").
+    snoozedUntil: msg.snoozedUntil ?? null,
   };
 }
 
-export function messageDetail(msg) {
+function messageAttachmentSummary(a) {
   return {
-    ...messageSummary(msg),
-    bodyText: msg.bodyText,
+    id: a.id,
+    filename: a.filename,
+    mimeType: a.mimeType ?? null,
+    sizeBytes: a.sizeBytes ?? null,
+    scanStatus: a.scanStatus,
+    isDangerousType: a.isDangerousType === true,
+    containsSensitiveDocument: a.containsSensitiveDocument ?? "none",
+  };
+}
+
+export function messageDetail(msg, opts = {}) {
+  // Vertraulicher Modus: nach Ablauf liefert das (echte) Backend keinen
+  // bodyText mehr zurück (serverseitig gelöscht) -- hier zeitbasiert
+  // berechnet statt den Fixture-Text tatsächlich zu löschen, damit derselbe
+  // Mock-Datensatz bei jedem Request konsistent bleibt.
+  const confidentialExpired = !!msg.confidentialUntil && new Date(msg.confidentialUntil).getTime() < Date.now();
+  return {
+    ...messageSummary(msg, opts),
+    bodyText: confidentialExpired ? null : msg.bodyText,
     security: msg.security,
     canUnsubscribe: msg.hasListUnsubscribe === true,
     isNewSender: msg.isNewSender === true,
+    attachments: (msg.attachments ?? []).map(messageAttachmentSummary),
   };
 }
 
@@ -574,6 +678,29 @@ export function summaryFor(msg) {
     source: "heuristic",
   };
 }
+
+// GET/PATCH /security/breaches (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 3,
+// "Darkweb-/Datenleck-Ueberwachung") -- zwei Beispielfunde, einer
+// unbestaetigt (fuer die Sofort-Sichtbarkeit im Einstellungsbereich) und
+// einer bereits bestaetigt (zeigt den "Verstanden"-Endzustand).
+export const breaches = [
+  {
+    id: "br100000-0000-0000-0000-000000000001",
+    accountId: accounts[0].id,
+    breachName: "ExampleForum-Datenleck 2024",
+    breachDate: "2024-03-15",
+    discoveredAt: "2026-09-18T09:00:00Z",
+    acknowledged: false,
+  },
+  {
+    id: "br100000-0000-0000-0000-000000000002",
+    accountId: accounts[0].id,
+    breachName: "ShopXYZ-Datenleck 2023",
+    breachDate: "2023-11-02",
+    discoveredAt: "2026-09-10T09:00:00Z",
+    acknowledged: true,
+  },
+];
 
 function shortSummary(msg) {
   if (msg.folderId === RECHNUNGEN) {

@@ -913,6 +913,138 @@ zeigt vier Sicherheits-Badges klar farbig neben durchgehend neutralen
 Aktions-Buttons (Loeschen/Check Mail/Antworten/Weiterleiten). Konsole in
 allen Schritten ohne Fehler.
 
+## [2026-09-21] Nachtrag: Neun neue Features (Nudge, Vertraulicher Modus, Anhang-Erinnerung, Malware-Scan-Anzeige, Tracking-Schutz-Einstellungen, Undo Send, Datenleck-Ueberwachung, Schedule Send, Snooze)
+
+WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche" + "NEUE AUFTRAEGE - 5
+Wettbewerbs-Luecken" (Track F): das Backend fuer alle neun Punkte war beim
+Start dieses Schritts bereits fertig und auf `origin/main`, hier nur die
+Web-UI + der Mock-Server (`mock-server/server.mjs`/`data.mjs`) dafuer.
+
+**1) Nudge (unbeantwortete Mails):** `MessageList.tsx` zeigt unter Zeilen
+mit `awaitingReply=true` einen dezenten, kursiven Hinweis ("Vor X Tagen
+erhalten, antworten?" -- Formel siehe `nudgeLabel()`), bewusst neutral
+(`--color-text-muted`) statt farbig, passend zur Design-Richtung ("ein
+Akzent pro Ansicht, reserviert fuer Sicherheits-Badges"). Toggle in den
+Einstellungen ("Erinnerungen"-Sektion). Getestet: Mock-Fixture
+"Notariat Weber (Re: ...)" zeigt den Hinweis, Toggle in den Einstellungen
+sichtbar aktiv.
+
+**2) Vertraulicher Modus:** Checkbox + Ablauf-Datetime im Compose-Dialog,
+Default 24h ab jetzt. Auto-Vorschlag: 1,5s nach Tippstopp prueft
+`POST /messages/draft/phishing-check` (`containsSensitiveData`), zeigt bei
+Treffer eine Hinweisleiste mit direktem "Vertraulich senden"-Button.
+Detailansicht zeigt vor Ablauf eine Banner-Zeile mit dem Ablaufdatum, nach
+Ablauf "war vertraulich und ist inzwischen abgelaufen" plus
+"Kein Inhalt mehr verfuegbar." (bodyText wird serverseitig als `null`
+berechnet, sobald `confidentialUntil` in der Vergangenheit liegt -- im
+Mock-Server zeitbasiert bei jedem Request neu berechnet, nicht einmalig
+geloescht, damit die Fixtures bei jedem Testlauf denselben Zustand zeigen).
+Getestet End-to-End per Browser: Mail mit Kreditkartennummer im Text ->
+Hinweisleiste -> "Vertraulich senden" -> gesendet -> Detailansicht zeigt
+Banner "Vertraulich bis ..."; zwei zusaetzliche Mock-Fixtures im
+"Gesendet"-Ordner zeigen den Vorher-/Nachher-Zustand ohne eigenes Zutun.
+
+**3) Vergessener-Anhang-Erkennung:** rein client-seitig, keine
+Server-Aenderung. `FORGOTTEN_ATTACHMENT_PATTERN` (Keywords: "im anhang",
+"siehe anhang", "anbei", "attached", "see attachment") prueft beim Klick
+auf "Senden", wenn keine Anhaenge vorhanden sind -- bei Treffer ein
+`window.confirm()` vor dem eigentlichen Senden. **Nicht per Browser-
+Automation testbar**: native `confirm()`-Dialoge duerfen von den
+Browser-Tools laut Sicherheitsrichtlinie nicht ausgeloest werden (sie
+blockieren die restliche Steuerung). Stattdessen per Code-Review
+verifiziert (`handleSendClick()` in `ComposeModal.tsx`) und indirekt
+bestaetigt, dass der Normalpfad (Text OHNE Trigger-Keyword) den Dialog
+korrekt NICHT ausloest.
+
+**4) Malware-Scan-Anzeige:** `GET /messages/{id}` liefert jetzt
+`attachments[]` mit `scanStatus`. Detailansicht listet sie (bestehende
+`.attachment-list`/`.attachment-item`-Klassen aus `ComposeModal.css`
+wiederverwendet, keine Dopplung), nicht-`clean`-Anhaenge zeigen ein rot
+hervorgehobenes Label ("Gefaehrlich -- gesperrt" fuer `malicious` etc.) und
+bieten bewusst KEINEN Oeffnen/Herunterladen-Button an (es gibt ohnehin
+keinen -- dieser Client zeigt Anhaenge nur als Metadaten-Zeile, nie mit
+echtem Datei-Inhalt, siehe "Was ist gemockt"). Mock-Fixtures: ein sonst
+unauffaelliger Absender (Arbeitgeber GmbH) mit `malicious`-Anhang (bewusst
+NICHT die naheliegendere Phishing+Anhang-Kombination, siehe Kommentar in
+`data.mjs`), eine Rechnung mit `clean`-Anhang, eine Quarantaene-Mail mit
+`blocked_type`-Anhang. Getestet per Browser: alle drei Zustaende korrekt
+angezeigt, `malicious` klar rot markiert.
+
+**5) Tracking-Pixel-Blockierung (Einstellungen):** neue "Privatsphaere"-
+Sektion mit zwei Toggle-Buttons (`blockRemoteImages`/`blockTrackingLinks`,
+`GET`/`PUT /privacy-settings`). Direkt darunter ein erklaerender Hinweistext
+-- ehrlich formuliert, dass `blockRemoteImages` aktuell **keine sichtbare
+technische Wirkung** hat, weil driftmail nirgends HTML rendert oder
+automatisch Bilder laedt (Nachrichtentext ist immer Klartext), positiv
+gerahmt als "Bestaetigung dieses Schutzes" statt als leeres Versprechen.
+Getestet: Toggle laesst sich umschalten, Zustand bleibt nach Neuladen der
+Einstellungen erhalten (Mock-Server persistiert in-memory).
+
+**6) Undo Send:** bewusst OHNE Prop-Redesign/App.tsx-State umgesetzt --
+der Compose-Dialog bleibt beim Klick auf "Senden" fuer 8 Sekunden
+**geoeffnet** (Felder per `<fieldset disabled>` eingefroren, siehe
+`compose-fields`-CSS-Reset) statt sich sofort zu schliessen und eine
+externe Undo-Leiste zu zeigen. Ein Klick auf "Rueckgaengig" bricht den
+`setTimeout`-Countdown ab und gibt die Felder unveraendert wieder frei --
+der eingegebene Text geht dabei garantiert nie verloren, ohne dass eine
+zweite Kopie des Compose-Zustands durch `App.tsx` geschleust werden muss.
+Laeuft der Countdown ab, passiert exakt der bisherige `POST /messages/send`-
+Aufruf. Getestet End-to-End per Browser: Senden -> Countdown-Leiste
+"Wird in Xs gesendet..." -> Rueckgaengig -> Inhalt unveraendert vorhanden
+-> erneut Senden -> Countdown laeuft ab -> Mail landet in "Gesendet".
+
+**7) Darkweb-/Datenleck-Ueberwachung:** `GET`/`PATCH /security/breaches`.
+Unbestaetigte Funde erscheinen prominent (warnfarben) ganz oben in der
+"Sicherheit"-Sektion der Einstellungen, mit direktem "Verstanden"-Button
+(`PATCH` mit `acknowledged:true`) -- bestaetigte Funde werden nicht mehr
+angezeigt. Getestet: Mock-Fixture zeigt einen unbestaetigten Fund, Klick
+auf "Verstanden" entfernt ihn sofort aus der Ansicht.
+
+**8) Schedule Send:** `POST`/`PATCH /drafts` akzeptieren jetzt `bcc`/
+`scheduledFor`. Compose-Dialog: separater "Spaeter senden"-Button (statt
+in der Undo-Send-Leiste unterzubringen, andere Aktion mit anderer
+Bedeutung) oeffnet ein Datetime-Feld + "Planen"-Bestaetigung, legt/
+aktualisiert den Autosave-Entwurf mit `scheduledFor` (kein echter Versand
+zu diesem Zeitpunkt). `DraftList.tsx` zeigt geplante Entwuerfe mit einem
+"Geplant fuer ..."-Badge + "Planung aufheben"-Link (`scheduledFor:null`).
+**Bewusste Grenze:** der Mock-Server fuehrt geplante Entwuerfe nicht
+automatisch aus (kein Hintergrund-Job in einem reinen Request/Response-
+Mock-Server sinnvoll abbildbar) -- das Fael­ligwerden selbst ist Aufgabe
+des echten Backends. Getestet: Entwurf mit zukuenftigem `scheduledFor`
+anlegen/aktualisieren funktioniert, ein Datum in der Vergangenheit wird
+vom Mock-Server mit 400 abgelehnt (per `curl` verifiziert).
+
+**9) Snooze:** `POST /messages/{id}/snooze` (`until:null` hebt es auf).
+Detailansicht: "Spaeter erinnern"-Button mit Dropdown (1h/morgen frueh/
+naechste Woche, `snoozePresetDate()`). `GET /messages` (Liste) blendet
+Nachrichten mit `snoozedUntil` in der Zukunft aus, `GET /messages/{id}`
+direkt bleibt unveraendert sichtbar (Detailansicht schliesst sich beim
+Snoozen also nicht, siehe `App.tsx` `handleSnoozed`). Getestet per Browser
+UND `curl`: Snooze setzen -> Nachricht verschwindet aus der Eingang-Liste
+(Zaehler sinkt), direkter Abruf zeigt weiterhin `snoozedUntil` gesetzt,
+Snooze mit `until:null` aufheben -> Nachricht wieder in der Liste.
+
+**Mock-Server-Ergaenzungen** (`mock-server/data.mjs`/`server.mjs`, damit
+alle neun Punkte ohne echtes Backend durchtestbar sind): `messageSummary()`/
+`messageDetail()` liefern jetzt `awaitingReply`/`confidentialUntil`/
+`snoozedUntil`/`attachments`; `userSettings` um `nudgeUnansweredEnabled`
+ergaenzt; neuer In-Memory-Zustand fuer `privacySettings`/`breaches`; neue
+Routen `POST /messages/{id}/snooze`, `POST /messages/draft/phishing-check`
+(einfache IBAN-/Kreditkarten-Regex, siehe `checkSensitiveData()` --
+bewusst kein Anspruch auf Vollstaendigkeit, reicht fuer den proaktiven
+Compose-Hinweis), `GET`/`PUT /privacy-settings`, `GET`/`PATCH
+/security/breaches`; `drafts`/`POST /messages/send` um `bcc`/`scheduledFor`/
+`confidentialUntil` erweitert (mit derselben "muss in der Zukunft liegen"-
+Validierung wie im echten Backend).
+
+**Tests:** `tsc -b`/`vite build`/`oxlint` gruen, exakt die bestehende
+6-Warnungen-Baseline (keine neuen). Alle neun Punkte per echter
+Browser-Automation gegen den Mock-Server durchgeklickt (siehe Punkte oben
+fuer Details je Feature), Konsole ohne Fehler waehrend der gesamten
+Session. Einzige Ausnahme: der `window.confirm()`-Dialog bei Punkt 3 kann
+aus Sicherheitsgruenden nicht per Browser-Automation ausgeloest werden
+(siehe dort).
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge
