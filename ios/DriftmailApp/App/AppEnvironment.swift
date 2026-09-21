@@ -1,14 +1,25 @@
 import SwiftUI
 
 /// Single place wiring up which `APIClient` and `AiAdapter` the app uses.
-/// Today: mock everywhere. Once Track A's backend exists, flip
-/// `apiClient` to `RemoteAPIClient()` — nothing downstream should need to
-/// change since views only ever talk to the `APIClient` protocol.
+///
+/// [2026-09-21] WEB_INBOX.md 19.09. "Onboarding: Provider-Auswahlbildschirm"
+/// ("voll verdrahten" per Rückfrage an Massimo, 21.09.): `apiClient` is now
+/// swappable at runtime instead of a fixed `let` — the app boots against
+/// `MockAPIClient` until an account is connected (`RootView` gates on
+/// `isAuthenticated`), then `completeAccountConnection(account:token:)`
+/// swaps it for a token-bearing `RemoteAPIClient` for the rest of the
+/// session. If a session token is already in the Keychain at launch (a
+/// previous connection), the app skips straight to `RemoteAPIClient`.
 @MainActor
 final class AppEnvironment: ObservableObject {
-    let apiClient: APIClient
+    @Published private(set) var apiClient: APIClient
     let onDeviceAdapter: AiAdapter = OnDeviceAiAdapter()
     let cloudFallbackAdapter: AiAdapter = CloudFallbackAiAdapter()
+
+    /// Gates `RootView`: false until an account is connected (fresh
+    /// install) or found in the Keychain (relaunch after a previous
+    /// connection). See type-level comment above.
+    @Published private(set) var isAuthenticated: Bool
 
     @Published var capability: UserAiCapability?
 
@@ -27,8 +38,58 @@ final class AppEnvironment: ObservableObject {
     /// Account-Switcher (laut Auftrag aber kein Muss für diesen Schritt).
     @Published var account: MailAccount?
 
-    init(apiClient: APIClient = MockAPIClient()) {
-        self.apiClient = apiClient
+    /// `GET /trusted-senders` (WEB_INBOX.md 15.09.), kombiniert mit
+    /// `MessageDetail.isNewSender` in `MessageDetailView`'s Badges. Nur die
+    /// Adressen, nicht die vollen `TrustedSender`-Objekte -- schnellerer
+    /// Lookup, hier reicht Mitgliedschaft.
+    @Published var trustedSenderAddresses: Set<String> = []
+
+    /// [2026-09-21] Session-Bootstrap: `RemoteAPIClient` nur, wenn bereits
+    /// ein Token in der Keychain liegt (vorherige Verbindung), sonst wie
+    /// bisher `MockAPIClient` -- siehe Typ-Kommentar oben.
+    init() {
+        if let token = SessionStore.loadToken() {
+            self.apiClient = RemoteAPIClient(token: token)
+            self.isAuthenticated = true
+        } else {
+            self.apiClient = MockAPIClient()
+            self.isAuthenticated = false
+        }
+    }
+
+    /// Test-/Preview-Hook: erzwingt einen bestimmten Client unabhängig von
+    /// der Keychain (z.B. `AppEnvironment(previewClient: MockAPIClient())`
+    /// in `#Preview`-Blöcken, die bewusst den Onboarding-Zustand überspringen
+    /// wollen).
+    init(previewClient: APIClient, authenticated: Bool = true) {
+        self.apiClient = previewClient
+        self.isAuthenticated = authenticated
+    }
+
+    /// Called once `OnboardingAccountConnectView` gets a successful
+    /// `{account, token}` back from `POST /accounts` (or a future Gmail
+    /// OAuth callback). Persists the token to the Keychain and switches the
+    /// whole app over to a real, token-bearing `RemoteAPIClient` — nothing
+    /// downstream needs to change since views only ever talk to the
+    /// `APIClient` protocol.
+    func completeAccountConnection(account: MailAccount, token: String) {
+        SessionStore.save(token: token)
+        self.account = account
+        self.apiClient = RemoteAPIClient(token: token)
+        self.isAuthenticated = true
+    }
+
+    /// "Abmelden" (`SettingsView`) — löscht den Token, fällt zurück auf
+    /// `MockAPIClient` und cached lokalen Zustand, damit `RootView` wieder
+    /// den Onboarding-Provider-Auswahlbildschirm zeigt statt mit veralteten
+    /// Konto-Daten in der Hauptansicht hängen zu bleiben.
+    func logOut() {
+        SessionStore.clear()
+        apiClient = MockAPIClient()
+        isAuthenticated = false
+        account = nil
+        folders = []
+        trustedSenderAddresses = []
     }
 
     /// Whichever adapter matches the capability check result, defaulting
@@ -57,5 +118,15 @@ final class AppEnvironment: ObservableObject {
     func loadAccount() async {
         if account != nil { return }
         account = try? await apiClient.fetchAccounts().first
+    }
+
+    /// `GET /trusted-senders`, gecacht wie `folders`/`account`. Fehler
+    /// bleiben still (leere Liste) -- die "Neuer Absender"-Badge zeigt sich
+    /// dann im Zweifel für alle `isNewSender=true`-Nachrichten, statt die
+    /// Detailansicht zu blockieren (gleiches Prinzip wie im Web-Client).
+    func loadTrustedSenders() async {
+        if !trustedSenderAddresses.isEmpty { return }
+        let senders = (try? await apiClient.fetchTrustedSenders()) ?? []
+        trustedSenderAddresses = Set(senders.map(\.senderAddress))
     }
 }

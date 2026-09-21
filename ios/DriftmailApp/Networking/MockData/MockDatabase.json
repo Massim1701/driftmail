@@ -91,6 +91,7 @@
       "folderId": "folder-eingang",
       "classification": "safe",
       "canUnsubscribe": false,
+      "isNewSender": false,
       "bodyText": "Hallo, bitte schick mir bis Freitag ein kurzes Update zum Projektstand. Danke!",
       "security": {
         "spfStatus": "pass",
@@ -100,8 +101,11 @@
         "domainReputationScore": 0.95,
         "homoglyphDetected": false,
         "linkMismatchDetected": false,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
         "urgencyLanguageScore": 0.1,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "safe",
         "confidenceScore": 0.97
       }
@@ -115,6 +119,7 @@
       "folderId": "folder-eingang",
       "classification": "safe",
       "canUnsubscribe": false,
+      "isNewSender": true,
       "bodyText": "Guten Tag, bitte reichen Sie die fehlenden Belege bis zum 30.09. nach.",
       "security": {
         "spfStatus": "pass",
@@ -124,8 +129,11 @@
         "domainReputationScore": 0.88,
         "homoglyphDetected": false,
         "linkMismatchDetected": false,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
         "urgencyLanguageScore": 0.05,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "safe",
         "confidenceScore": 0.93
       }
@@ -139,6 +147,7 @@
       "folderId": "folder-sonstiges",
       "classification": "safe",
       "canUnsubscribe": true,
+      "isNewSender": false,
       "bodyText": "Nur diese Woche: 20% Rabatt auf das gesamte Sortiment. Jetzt shoppen!",
       "security": {
         "spfStatus": "pass",
@@ -148,8 +157,11 @@
         "domainReputationScore": 0.7,
         "homoglyphDetected": false,
         "linkMismatchDetected": false,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
         "urgencyLanguageScore": 0.2,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "safe",
         "confidenceScore": 0.8
       }
@@ -163,6 +175,7 @@
       "folderId": "folder-sonstiges",
       "classification": "safe",
       "canUnsubscribe": false,
+      "isNewSender": false,
       "bodyText": "Wir laden alle Mitglieder herzlich zur Jahreshauptversammlung am 20.09. ein.",
       "security": {
         "spfStatus": "pass",
@@ -172,8 +185,11 @@
         "domainReputationScore": 0.75,
         "homoglyphDetected": false,
         "linkMismatchDetected": false,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
         "urgencyLanguageScore": 0.0,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "safe",
         "confidenceScore": 0.85
       }
@@ -187,6 +203,7 @@
       "folderId": "folder-rechnungen",
       "classification": "safe",
       "canUnsubscribe": false,
+      "isNewSender": false,
       "bodyText": "Anbei Ihre Jahresrechnung. Ihr Vertrag läuft bis 31.12.2026, Kündigungsfrist 6 Wochen zum Vertragsende.",
       "security": {
         "spfStatus": "pass",
@@ -196,8 +213,11 @@
         "domainReputationScore": 0.9,
         "homoglyphDetected": false,
         "linkMismatchDetected": false,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
         "urgencyLanguageScore": 0.0,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "safe",
         "confidenceScore": 0.96
       }
@@ -211,6 +231,7 @@
       "folderId": "folder-rechnungen",
       "classification": "safe",
       "canUnsubscribe": false,
+      "isNewSender": false,
       "bodyText": "Ihr Streaming+-Abo wurde verlängert. Laufzeit bis 15.03.2027, jederzeit kündbar mit 30 Tagen Frist.",
       "security": {
         "spfStatus": "pass",
@@ -220,8 +241,11 @@
         "domainReputationScore": 0.82,
         "homoglyphDetected": false,
         "linkMismatchDetected": false,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
         "urgencyLanguageScore": 0.0,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "safe",
         "confidenceScore": 0.9
       }
@@ -235,6 +259,7 @@
       "folderId": "folder-quarantaene",
       "classification": "phishing",
       "canUnsubscribe": false,
+      "isNewSender": false,
       "bodyText": "Dringend: Ihr Konto wurde gesperrt. Bestätigen Sie Ihre Daten innerhalb von 24 Stunden, sonst wird das Konto endgültig gelöscht. Neue IBAN zur Verifizierung erforderlich.",
       "security": {
         "spfStatus": "fail",
@@ -244,8 +269,11 @@
         "domainReputationScore": 0.05,
         "homoglyphDetected": true,
         "linkMismatchDetected": true,
+        "displayNameSpoofingDetected": true,
+        "replyToMismatchDetected": true,
         "urgencyLanguageScore": 0.9,
         "containsNewIban": true,
+        "ibanChangedInThread": true,
         "classification": "phishing",
         "confidenceScore": 0.98
       }
@@ -259,6 +287,7 @@
       "folderId": "folder-quarantaene",
       "classification": "phishing",
       "canUnsubscribe": false,
+      "isNewSender": false,
       "bodyText": "Letzte Warnung: Ihre Apple-ID wird gesperrt. Bitte loggen Sie sich sofort über den folgenden Link ein, um dies zu verhindern.",
       "security": {
         "spfStatus": "fail",
@@ -268,8 +297,11 @@
         "domainReputationScore": 0.02,
         "homoglyphDetected": true,
         "linkMismatchDetected": true,
+        "displayNameSpoofingDetected": true,
+        "replyToMismatchDetected": true,
         "urgencyLanguageScore": 0.95,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "phishing",
         "confidenceScore": 0.97
       }
@@ -283,6 +315,7 @@
       "folderId": "folder-spam",
       "classification": "spam",
       "canUnsubscribe": true,
+      "isNewSender": false,
       "bodyText": "Herzlichen Glückwunsch! Sie haben 10.000 EUR gewonnen. Klicken Sie hier, um Ihren Gewinn abzuholen.",
       "security": {
         "spfStatus": "none",
@@ -292,8 +325,11 @@
         "domainReputationScore": 0.15,
         "homoglyphDetected": false,
         "linkMismatchDetected": true,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
         "urgencyLanguageScore": 0.6,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "spam",
         "confidenceScore": 0.9
       }
@@ -307,6 +343,7 @@
       "folderId": "folder-spam",
       "classification": "spam",
       "canUnsubscribe": true,
+      "isNewSender": false,
       "bodyText": "Riesenrabatt nur heute! Jetzt bestellen und sparen.",
       "security": {
         "spfStatus": "none",
@@ -316,8 +353,11 @@
         "domainReputationScore": 0.1,
         "homoglyphDetected": false,
         "linkMismatchDetected": false,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
         "urgencyLanguageScore": 0.4,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "spam",
         "confidenceScore": 0.85
       }
@@ -331,6 +371,7 @@
       "folderId": "folder-familie",
       "classification": "safe",
       "canUnsubscribe": false,
+      "isNewSender": false,
       "bodyText": "Kommt ihr am Sonntag zum Essen vorbei? Es gibt Braten. Meld dich kurz.",
       "security": {
         "spfStatus": "pass",
@@ -340,8 +381,11 @@
         "domainReputationScore": 0.98,
         "homoglyphDetected": false,
         "linkMismatchDetected": false,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
         "urgencyLanguageScore": 0.0,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "safe",
         "confidenceScore": 0.99
       }
@@ -355,6 +399,7 @@
       "folderId": "folder-papierkorb",
       "classification": "safe",
       "canUnsubscribe": false,
+      "isNewSender": false,
       "bodyText": "Hiermit bestätigen wir die Kündigung deiner Mitgliedschaft zum Monatsende. Schade, dass du gehst!",
       "security": {
         "spfStatus": "pass",
@@ -364,8 +409,11 @@
         "domainReputationScore": 0.9,
         "homoglyphDetected": false,
         "linkMismatchDetected": false,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
         "urgencyLanguageScore": 0.0,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "safe",
         "confidenceScore": 0.94
       }
@@ -379,6 +427,7 @@
       "folderId": "folder-papierkorb",
       "classification": "safe",
       "canUnsubscribe": true,
+      "isNewSender": false,
       "bodyText": "Die wichtigsten Nachrichten der Woche kompakt zusammengefasst.",
       "security": {
         "spfStatus": "pass",
@@ -388,8 +437,11 @@
         "domainReputationScore": 0.6,
         "homoglyphDetected": false,
         "linkMismatchDetected": false,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
         "urgencyLanguageScore": 0.0,
         "containsNewIban": false,
+        "ibanChangedInThread": false,
         "classification": "safe",
         "confidenceScore": 0.75
       }

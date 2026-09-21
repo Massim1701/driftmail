@@ -5,6 +5,24 @@ import Foundation
 /// `RemoteAPIClient` (URLSession against https://api.driftware.online/v1)
 /// once Track A's backend is live — no call sites should need to change.
 protocol APIClient {
+    /// `GET /mail-providers` (WEB_INBOX.md 15.09./19.09. "Onboarding:
+    /// Provider-Auswahlbildschirm") -- öffentlich (kein Token nötig, läuft
+    /// vor jedem Login), treibt den Provider-Auswahlbildschirm samt
+    /// IMAP-Preset-Vorbefüllung.
+    func fetchMailProviders() async throws -> [MailProvider]
+    /// `POST /accounts` mit `provider=imap` -- Login-/Registrierungsweg für
+    /// Anbieter ohne OAuth (iCloud/GMX/web.de/generisches IMAP). Ebenfalls
+    /// öffentlich; liefert bei Erfolg das verbundene Konto + einen neuen
+    /// Session-Token (vom Aufrufer in der Keychain zu speichern, siehe
+    /// `Security/SessionStore.swift`). Wirft `APIError.verificationFailed`
+    /// bei fehlgeschlagenem IMAP-Login (422) und `APIError.notAllowlisted`
+    /// bei nicht freigeschalteter Adresse (403).
+    func connectImapAccount(emailAddress: String, imapHost: String, imapPort: Int, imapSecure: Bool, imapUser: String?, imapPassword: String, smtpHost: String?, smtpPort: Int?, smtpSecure: Bool?) async throws -> (account: MailAccount, token: String)
+    /// `GET /trusted-senders` (WEB_INBOX.md 15.09. "Whitelist
+    /// vertrauenswürdiger Absender") -- kombiniert sich mit
+    /// `MessageDetail.isNewSender` (siehe dortigen Kommentar).
+    func fetchTrustedSenders() async throws -> [TrustedSender]
+
     func fetchAccounts() async throws -> [MailAccount]
 
     // Ordner (contracts/api-spec.yaml `/folders`, `/folders/{folderId}`).
@@ -87,4 +105,10 @@ enum APIError: Error {
     /// check (422, `blocked: true`) — `reason` is the human-readable
     /// explanation from the response body, if the server sent one.
     case blocked(reason: String?)
+    /// `POST /accounts` (`provider=imap`) — the IMAP credentials could not
+    /// be verified against the real mail server (422).
+    case verificationFailed
+    /// `POST /accounts` — `emailAddress` is not on the backend's
+    /// `ALLOWED_EMAILS` allowlist (403).
+    case notAllowlisted
 }

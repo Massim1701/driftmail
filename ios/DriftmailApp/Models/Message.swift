@@ -24,8 +24,15 @@ struct SecurityResult: Codable, Hashable {
     let domainReputationScore: Double?
     let homoglyphDetected: Bool
     let linkMismatchDetected: Bool
+    // [2026-09-21] WEB_INBOX.md 19.09. "Sichtbare Kennzeichen/Badges für
+    // die neuen Sicherheitssignale" -- Felder existieren im Contract/
+    // Backend bereits seit den Sicherheits-Ergänzungen vom 15.09., waren
+    // hier bisher nicht gespiegelt (analog zum Web-Client vor demselben Fix).
+    let displayNameSpoofingDetected: Bool
+    let replyToMismatchDetected: Bool
     let urgencyLanguageScore: Double?
     let containsNewIban: Bool
+    let ibanChangedInThread: Bool
     let classification: Classification
     let confidenceScore: Double
 }
@@ -47,6 +54,12 @@ struct MessageDetail: Codable, Identifiable, Hashable {
     /// (unabhängig von classification) -- steuert den "Von Absender
     /// abmelden"-Button in MessageDetailView, siehe backend/README.md.
     let canUnsubscribe: Bool
+    /// "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09./19.09.): true,
+    /// wenn es für dieses Konto keine andere Nachricht von derselben
+    /// `fromAddress` gibt. Kombiniert sich mit `GET /trusted-senders` --
+    /// Badge nur zeigen, wenn `isNewSender=true` UND Absender nicht auf der
+    /// Whitelist, siehe api-spec.yaml und `MessageDetailView`.
+    let isNewSender: Bool
 
     var asMessage: Message {
         Message(
@@ -74,7 +87,8 @@ struct MessageDetail: Codable, Identifiable, Hashable {
             classification: classification,
             bodyText: bodyText,
             security: security,
-            canUnsubscribe: canUnsubscribe
+            canUnsubscribe: canUnsubscribe,
+            isNewSender: isNewSender
         )
     }
 }

@@ -36,6 +36,10 @@
 		E9F415386910CF66CF600E78 /* FolderListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD063563C80DCB4C97F9555C /* FolderListView.swift */; };
 		5D4325843CC54FD9985A8993 /* BiometricLock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500C4ABF4AE3401184F25191 /* BiometricLock.swift */; };
 		02355BA28E1C42C69A8E7833 /* AppLockGateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF0C1B44A8174871A27378CE /* AppLockGateView.swift */; };
+		CDF260CB83A8BB9239ADF905 /* MailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 485DBFDAC04173358373894B /* MailProvider.swift */; };
+		689E46E1971421446498BF2F /* TrustedSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9FCDE9892BAE90D849D0DD8 /* TrustedSender.swift */; };
+		AF7B28B5DC85681902EA027D /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80514C76AD43F6907485DFF /* SessionStore.swift */; };
+		B7F7E4294BE911E327E403DC /* OnboardingAccountConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -69,6 +73,11 @@
 		F6044B79C9FE8B86319E5853 /* Contract.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Contract.swift; sourceTree = "<group>"; };
 		500C4ABF4AE3401184F25191 /* BiometricLock.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BiometricLock.swift; sourceTree = "<group>"; };
 		EF0C1B44A8174871A27378CE /* AppLockGateView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppLockGateView.swift; sourceTree = "<group>"; };
+		485DBFDAC04173358373894B /* MailProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MailProvider.swift; sourceTree = "<group>"; };
+		C9FCDE9892BAE90D849D0DD8 /* TrustedSender.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TrustedSender.swift; sourceTree = "<group>"; };
+		C80514C76AD43F6907485DFF /* SessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingAccountConnectView.swift; sourceTree = "<group>"; };
+		D3A1F4C6E0904A2F8C7B1E5A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +96,7 @@
 			isa = PBXGroup;
 			children = (
 				33857EC54CCC1D72FEBD5496 /* Assets.xcassets */,
+				D3A1F4C6E0904A2F8C7B1E5A /* Info.plist */,
 				D9D9D2F8AE27B659C9F38312 /* AI */,
 				763791E06818B1AF1C45D457 /* App */,
 				735E690308EB44841B5092AD /* DesignSystem */,
@@ -121,6 +131,8 @@
 				7E694A0F7D60CC52D976EDB1 /* Folder.swift */,
 				09F1D97854BA9AAB832DF815 /* MailAccount.swift */,
 				0EEFBE0EFB24A881316C051F /* Message.swift */,
+				485DBFDAC04173358373894B /* MailProvider.swift */,
+				C9FCDE9892BAE90D849D0DD8 /* TrustedSender.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -211,6 +223,7 @@
 				6B86F3D07CC73E890FB011D0 /* OnboardingCapabilityCheckView.swift */,
 				61B316CEEB06B495EE114590 /* RootView.swift */,
 				EF0C1B44A8174871A27378CE /* AppLockGateView.swift */,
+				B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -219,6 +232,7 @@
 			isa = PBXGroup;
 			children = (
 				500C4ABF4AE3401184F25191 /* BiometricLock.swift */,
+				C80514C76AD43F6907485DFF /* SessionStore.swift */,
 			);
 			path = Security;
 			sourceTree = "<group>";
@@ -319,6 +333,10 @@
 				E0A7C16ABBECCE7D921EEF0D /* RootView.swift in Sources */,
 				5D4325843CC54FD9985A8993 /* BiometricLock.swift in Sources */,
 				02355BA28E1C42C69A8E7833 /* AppLockGateView.swift in Sources */,
+				CDF260CB83A8BB9239ADF905 /* MailProvider.swift in Sources */,
+				689E46E1971421446498BF2F /* TrustedSender.swift in Sources */,
+				AF7B28B5DC85681902EA027D /* SessionStore.swift in Sources */,
+				B7F7E4294BE911E327E403DC /* OnboardingAccountConnectView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -450,11 +468,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QTHBKGW58E;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = driftmail;
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "driftmail kann Face ID nutzen, um die App zu sperren und deinen lokalen Mail-Cache zu schützen, falls dein Gerät verloren geht oder gestohlen wird.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_FILE = DriftmailApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 0.1.0;
@@ -477,11 +491,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = QTHBKGW58E;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = driftmail;
-				INFOPLIST_KEY_NSFaceIDUsageDescription = "driftmail kann Face ID nutzen, um die App zu sperren und deinen lokalen Mail-Cache zu schützen, falls dein Gerät verloren geht oder gestohlen wird.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_FILE = DriftmailApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
 				MARKETING_VERSION = 0.1.0;

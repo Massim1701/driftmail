@@ -1,30 +1,95 @@
 import Foundation
 
-/// SKELETON, not wired up yet — real `APIClient` implementation against
-/// Track A's backend once it exists. Base URL taken straight from
-/// contracts/api-spec.yaml `servers[0].url`. Endpoint paths are already
-/// filled in; only response handling for a couple of endpoints is stubbed
-/// with `APIError.notImplemented` since there's nothing live to test
-/// against yet. Swap `MockAPIClient()` for `RemoteAPIClient()` in
-/// `AppEnvironment` (App/AppEnvironment.swift) once Track A ships.
+/// Real `APIClient` implementation against Track A's backend
+/// (contracts/api-spec.yaml). Was a "skeleton, not wired up" until
+/// WEB_INBOX.md 19.09. "Onboarding: Provider-Auswahlbildschirm" ("voll
+/// verdrahten" per Rückfrage an Massimo, 21.09.) — now the real client once
+/// an account is connected (see `AppEnvironment.completeAccountConnection`).
 ///
-/// **Für später vorgemerkt (WEB_INBOX.md 15.09., "Verschlüsselung der
-/// lokalen Mail-Datenbank", geprüft 19.09.):** sobald dieser Client den
-/// Session-Token persistiert (Bearer-Auth, siehe `backend/README.md`
-/// "Auth"), gehört der in die Keychain (z.B. über
-/// `kSecClassGenericPassword`), NICHT in `UserDefaults`/`@AppStorage` --
-/// Keychain-Einträge sind vom System at-rest verschlüsselt, UserDefaults
-/// (ein Plist im App-Container) nicht. Aktuell gibt es hier noch gar keine
-/// Token-Persistenz, deshalb kein Code dafür in diesem Schritt (siehe
-/// SYNC.md 19.09. für die vollständige Bestandsaufnahme).
+/// **Base URL:** defaults to `servers[0].url` from api-spec.yaml
+/// (`https://api.driftware.online/v1`), overridable via the
+/// `DRIFTMAIL_API_BASE_URL` environment variable (Xcode scheme → Run →
+/// Arguments → Environment Variables) for local development against
+/// `backend/` (e.g. `http://localhost:3000/v1`, same pattern as
+/// `web/`'s `VITE_API_BASE_URL`). Plain-HTTP localhost needs the
+/// `NSAllowsLocalNetworking` ATS exception in the build settings
+/// (`INFOPLIST_FILE_ADDITIONAL_CONTENT`) — see `ios/README.md`.
+///
+/// **Token:** the session token from `POST /accounts`/`GET
+/// /auth/google/callback` is attached as `Authorization: Bearer <token>`
+/// on every request once set — persisted by the caller in the Keychain
+/// (`Security/SessionStore.swift`), never here (this struct is stateless
+/// beyond the token string itself, matching `MockAPIClient`'s "no I/O
+/// beyond its own responsibility" shape).
 struct RemoteAPIClient: APIClient {
-    private let baseURL = URL(string: "https://api.driftware.online/v1")!
+    private let baseURL: URL
     private let session: URLSession
     private let decoder: JSONDecoder
+    private let token: String?
 
-    init(session: URLSession = .shared) {
+    init(session: URLSession = .shared, token: String? = nil) {
         self.session = session
         self.decoder = DriftmailDateDecoding.makeDecoder()
+        self.token = token
+        if let override = ProcessInfo.processInfo.environment["DRIFTMAIL_API_BASE_URL"], let url = URL(string: override) {
+            self.baseURL = url
+        } else {
+            self.baseURL = URL(string: "https://api.driftware.online/v1")!
+        }
+    }
+
+    /// `GET /mail-providers` — unauthenticated (`security: []` im
+    /// Contract, läuft vor jedem Login).
+    func fetchMailProviders() async throws -> [MailProvider] {
+        try await get("/mail-providers")
+    }
+
+    /// `POST /accounts` (`provider=imap`) — ebenfalls unauthenticated.
+    /// Eigene Status-Code-Behandlung wie bei `sendMessage`, weil 422
+    /// (Zugangsdaten falsch) und 403 (nicht freigeschaltet) aussagekräftige,
+    /// vom generischen Netzwerkfehler verschiedene Ergebnisse sind.
+    func connectImapAccount(emailAddress: String, imapHost: String, imapPort: Int, imapSecure: Bool, imapUser: String?, imapPassword: String, smtpHost: String?, smtpPort: Int?, smtpSecure: Bool?) async throws -> (account: MailAccount, token: String) {
+        struct Body: Encodable {
+            let provider = "imap"
+            let emailAddress: String
+            let imapHost: String
+            let imapPort: Int
+            let imapSecure: Bool
+            let imapUser: String?
+            let imapPassword: String
+            let smtpHost: String?
+            let smtpPort: Int?
+            let smtpSecure: Bool?
+        }
+        struct Response: Decodable { let account: MailAccount; let token: String }
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("/accounts"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(Body(emailAddress: emailAddress, imapHost: imapHost, imapPort: imapPort, imapSecure: imapSecure, imapUser: imapUser, imapPassword: imapPassword, smtpHost: smtpHost, smtpPort: smtpPort, smtpSecure: smtpSecure))
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.network(error)
+        }
+        switch (response as? HTTPURLResponse)?.statusCode ?? 200 {
+        case 422: throw APIError.verificationFailed
+        case 403: throw APIError.notAllowlisted
+        default: break
+        }
+        do {
+            let decoded = try decoder.decode(Response.self, from: data)
+            return (decoded.account, decoded.token)
+        } catch let error as DecodingError {
+            throw APIError.decodingFailed(error)
+        }
+    }
+
+    func fetchTrustedSenders() async throws -> [TrustedSender] {
+        try await get("/trusted-senders")
     }
 
     func fetchAccounts() async throws -> [MailAccount] {
@@ -117,6 +182,7 @@ struct RemoteAPIClient: APIClient {
         var request = URLRequest(url: baseURL.appendingPathComponent("/messages/send"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        authorize(&request)
         request.httpBody = try JSONEncoder().encode(Body(inReplyToMessageId: inReplyToMessageId, to: to, subject: subject, bodyText: bodyText, attachmentIds: attachmentIds, draftId: draftId))
 
         let data: Data
@@ -153,6 +219,7 @@ struct RemoteAPIClient: APIClient {
         var request = URLRequest(url: baseURL.appendingPathComponent("/attachments"))
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        authorize(&request)
         request.httpBody = body
 
         do {
@@ -191,13 +258,24 @@ struct RemoteAPIClient: APIClient {
 
     private struct EmptyResponse: Decodable {}
 
+    /// Attaches `Authorization: Bearer <token>` when a token is set (i.e.
+    /// for every real endpoint once an account is connected). No-op for the
+    /// two unauthenticated onboarding endpoints, where `token` is still nil.
+    private func authorize(_ request: inout URLRequest) {
+        if let token {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+    }
+
     private func get<T: Decodable>(_ path: String) async throws -> T {
         try await get(baseURL.appendingPathComponent(path))
     }
 
     private func get<T: Decodable>(_ url: URL) async throws -> T {
+        var request = URLRequest(url: url)
+        authorize(&request)
         do {
-            let (data, _) = try await session.data(from: url)
+            let (data, _) = try await session.data(for: request)
             return try decoder.decode(T.self, from: data)
         } catch let error as DecodingError {
             throw APIError.decodingFailed(error)
@@ -210,6 +288,7 @@ struct RemoteAPIClient: APIClient {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        authorize(&request)
         if let body {
             request.httpBody = try JSONEncoder().encode(body)
         }
@@ -227,6 +306,7 @@ struct RemoteAPIClient: APIClient {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = "PATCH"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        authorize(&request)
         request.httpBody = try JSONEncoder().encode(body)
         do {
             let (data, _) = try await session.data(for: request)
@@ -243,6 +323,7 @@ struct RemoteAPIClient: APIClient {
     private func delete(_ path: String) async throws {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = "DELETE"
+        authorize(&request)
         do {
             _ = try await session.data(for: request)
         } catch {

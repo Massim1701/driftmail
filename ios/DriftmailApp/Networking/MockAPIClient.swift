@@ -33,6 +33,13 @@ actor MockAPIClient: APIClient {
     /// diesem Schritt), deshalb ein einzelner fest verdrahteter
     /// Beispiel-Entwurf, damit die "entwuerfe"-Ansicht trotzdem etwas
     /// zeigt statt immer leer zu sein.
+    /// `GET/POST/DELETE /trusted-senders` (WEB_INBOX.md 15.09.) -- kein
+    /// Contract-Pendant in MockDatabase.json nötig (analog zu `drafts`
+    /// oben), startet leer, damit die "Neuer Absender"-Badge in der Mock-UI
+    /// überhaupt sichtbar wird (siehe die eine Fixture-Nachricht mit
+    /// `isNewSender=true` in MockDatabase.json).
+    private var trustedSenders: [TrustedSender] = []
+
     private var drafts: [Draft] = [
         Draft(
             id: "draft-001",
@@ -62,6 +69,28 @@ actor MockAPIClient: APIClient {
 
     private func delay() async {
         try? await Task.sleep(nanoseconds: simulatedLatencyNanoseconds)
+    }
+
+    func fetchMailProviders() async throws -> [MailProvider] {
+        await delay()
+        return MailProvider.mocked
+    }
+
+    /// `POST /accounts` (`provider=imap`), Mock: nimmt jede Eingabe an
+    /// (kein echter IMAP-Verbindungstest möglich ohne echten Server) --
+    /// legt/aktualisiert `db.accounts[0]` und liefert einen Platzhalter-
+    /// Token, analog zum Mock-Server-Verhalten auf Web
+    /// (`web/mock-server/server.mjs` `POST /accounts`).
+    func connectImapAccount(emailAddress: String, imapHost: String, imapPort: Int, imapSecure: Bool, imapUser: String?, imapPassword: String, smtpHost: String?, smtpPort: Int?, smtpSecure: Bool?) async throws -> (account: MailAccount, token: String) {
+        await delay()
+        let account = MailAccount(id: UUID().uuidString, provider: .imap, emailAddress: emailAddress, syncStatus: .ok)
+        db.accounts = [account]
+        return (account, "mock-session-token")
+    }
+
+    func fetchTrustedSenders() async throws -> [TrustedSender] {
+        await delay()
+        return trustedSenders
     }
 
     func fetchAccounts() async throws -> [MailAccount] {
@@ -256,7 +285,8 @@ actor MockAPIClient: APIClient {
                 classification: .unclear,
                 bodyText: bodyText,
                 security: nil,
-                canUnsubscribe: false
+                canUnsubscribe: false,
+                isNewSender: false
             )
             db.messages.append(sent)
         }

@@ -487,6 +487,120 @@ gewesen. Massimo/Web müssten zuerst entscheiden, ob/wann ein echter lokaler
 Mail-Cache überhaupt gebaut werden soll (eigenes, größeres Thema), bevor
 "verschlüssele ihn" sinnvoll umsetzbar ist.
 
+## [2026-09-21] Nachtrag: Onboarding-Provider-Auswahl + Sicherheits-Badges + echte Account-Verbindung (WEB_INBOX.md 19.09., "voll verdrahten" per Rückfrage an Massimo, 21.09.)
+
+Zwei UI-Punkte aus dem 19.09.-Auftrag, plus (auf Massimos ausdrücklichen
+Wunsch, siehe Rückfrage) eine echte Session-Architektur, die es auf iOS
+bisher gar nicht gab.
+
+**1) Onboarding: Provider-Auswahl + IMAP-Formular.** Neuer erster
+Onboarding-Schritt `Views/OnboardingAccountConnectView.swift`, läuft in
+`RootView.swift` VOR allem anderen (auch vor dem bestehenden Capability-
+Check) -- gated über `AppEnvironment.isAuthenticated`. Karten-Liste aus
+`GET /mail-providers` (Fallback: `MailProvider.mocked`, hand-gepflegter
+Swift-Mirror von `contracts/mail-providers.json`, gleiches Prinzip wie
+`DesignTokens.swift`). Gmail ist gelistet, aber **bewusst nicht
+klickbar-funktional** -- siehe Grenze weiter unten. iCloud/GMX/web.de/
+generisches IMAP öffnen ein Formular (vorbefüllt aus dem Provider-Preset,
+Servereinstellungen für den Normalfall eingeklappt), das `POST /accounts`
+(`provider=imap`) aufruft.
+
+**2) Sicherheits-Badges.** `Models/Message.swift`: `SecurityResult` +3
+Felder (`displayNameSpoofingDetected`/`replyToMismatchDetected`/
+`ibanChangedInThread`), `MessageDetail` +1 Feld (`isNewSender`) -- beide
+waren im Contract/Backend bereits seit den Sicherheits-Ergänzungen vom
+15.09. vorhanden, auf iOS bisher nicht gespiegelt (analog zum Web-Client
+vor demselben Fix). `Views/MessageDetailView.swift`s private
+`SecurityBadgesView` bekommt vier neue Pills, in derselben `badge()`/
+`flag()`-Optik wie die bestehenden SPF/DKIM/Homoglyph-Anzeigen -- "Neuer
+Absender" nutzt `DesignTokens.Color.warning` statt `.danger` (bisher
+ungenutzter Token), da es kein Angriffssignal, sondern ein Kontext-Hinweis
+ist. `isNewSender` wird vor der Anzeige mit `GET /trusted-senders`
+abgeglichen (`AppEnvironment.loadTrustedSenders()`), exakt wie in
+`api-spec.yaml` beschrieben.
+
+**3) "Voll verdrahtet" statt UI-only (Rückfrage-Ergebnis, siehe SYNC.md):**
+iOS lief bis hierhin ausschließlich gegen `MockAPIClient` --
+`RemoteAPIClient` war ein unbenutztes Skeleton, es gab keine
+Token-Persistenz, keinen "eingeloggt"-Zustand. Statt die neue
+Onboarding-UI nur gegen Mock zu verdrahten (hohl, ohne Wirkung auf den
+Rest der App), wurde die Session-Architektur jetzt echt gebaut:
+- `Security/SessionStore.swift`: Keychain-Wrapper (`kSecClassGenericPassword`)
+  für den Session-Token -- wie im `RemoteAPIClient`-Kopfkommentar seit dem
+  15.09.-Punkt-6-Nachtrag vorgemerkt.
+- `AppEnvironment.apiClient` ist jetzt `@Published private(set) var` statt
+  `let`: startet als `MockAPIClient`, oder direkt als token-tragender
+  `RemoteAPIClient`, falls die Keychain beim Start schon einen Token hat.
+  `completeAccountConnection(account:token:)` schaltet nach erfolgreicher
+  Verbindung für den Rest der App-Session auf `RemoteAPIClient` um --
+  nichts unterhalb von `AppEnvironment` musste angefasst werden, das war
+  genau der Sinn des `APIClient`-Protokolls von Anfang an.
+- `RemoteAPIClient`: war Skeleton, ist jetzt der echte, aktiv genutzte
+  Pfad. Ergänzt: `Authorization: Bearer <token>`-Header auf JEDEM Request
+  (fehlte komplett), konfigurierbare Base-URL per
+  `DRIFTMAIL_API_BASE_URL`-Env-Var (Xcode-Scheme, Default bleibt
+  `https://api.driftware.online/v1` aus dem Contract) für lokale
+  Entwicklung gegen `backend/` (analog `web/`s `VITE_API_BASE_URL`).
+- `Info.plist`: von `GENERATE_INFOPLIST_FILE` auf eine echte, eingecheckte
+  Datei umgestellt (die `INFOPLIST_FILE_ADDITIONAL_CONTENT`-Build-Setting
+  für die nötige `NSAllowsLocalNetworking`-ATS-Ausnahme wurde beim Bauen
+  verifiziert NICHT angewendet -- stiller Fehler, erst durch Vergleich des
+  tatsächlich generierten `Info.plist`-Inhalts per `plutil -p` entdeckt).
+  **Wichtig für zukünftige Änderungen:** alle Standard-Pflichtschlüssel
+  (`CFBundleExecutable` etc.) müssen jetzt explizit im `Info.plist` stehen
+  (per `$(VARIABLE)`-Substitution) -- die werden bei einer statischen
+  Datei NICHT mehr automatisch injiziert, anders als bei
+  `GENERATE_INFOPLIST_FILE=YES`. Ohne diese Korrektur wäre die App
+  installierbar, aber nicht startfähig gewesen (fehlendes
+  `CFBundleExecutable`) -- per `simctl install`+`simctl launch` auf einem
+  echten Simulator verifiziert, nicht nur `BUILD SUCCEEDED` vertraut.
+- `Views/FolderListView.swift`s `SettingsView`: neuer "Konto trennen"-
+  Button (mit Bestätigungsdialog) -- ohne den wäre ein falsch verbundenes
+  Konto mit einem echten Login-Gate nicht mehr korrigierbar gewesen ohne
+  App-Neuinstallation.
+
+**Bewusste Grenze: Gmail-OAuth auf iOS nicht funktional.** `GET
+/auth/google/start` ist ein Browser-Redirect-Flow; der native iOS-Weg dafür
+wäre `ASWebAuthenticationSession`. Das scheitert aber an einer echten
+Backend-Grenze: `GET /auth/google/callback` redirected nach Erfolg fest zu
+`FRONTEND_URL` (eine einzelne, global konfigurierte Web-Origin) --
+`ASWebAuthenticationSession` braucht einen Redirect zu einem
+Custom-URL-Scheme, das der Server nicht kennt. Ohne eine
+Backend-Erweiterung (z.B. `redirect_uri`/`platform`-Query-Param auf `/auth/
+google/start`, der den finalen Redirect-Ziel-Wert bestimmt statt des
+fest verdrahteten `FRONTEND_URL`) ist das serverseitig gar nicht
+lösbar -- kein iOS-Client-Problem. Deshalb: Gmail ist in der Liste
+sichtbar, aber ein Tap zeigt eine ehrliche Erklärung statt einen kaputten
+Flow zu starten oder eine Fake-Anmeldung vorzutäuschen. Als offene Frage
+an Track A in SYNC.md vermerkt.
+
+**Tests:** `xcodebuild -scheme DriftmailApp -destination 'generic/platform=iOS
+Simulator' build` **BUILD SUCCEEDED**. Diesmal zusätzlich per `simctl
+install`+`simctl launch` auf einem echten Simulator (iPhone 17 Pro)
+verifiziert, nicht nur gebaut -- Provider-Auswahlbildschirm per Screenshot
+bestätigt (alle 7 Provider korrekt gelistet, Gmail/Outlook/Yahoo optisch
+als eingeschränkt erkennbar). Gegen den echten lokalen `backend/`
+(`DRIFTMAIL_API_BASE_URL=http://localhost:3000/v1` über
+`SIMCTL_CHILD_`-Env-Var) blieb `GET /mail-providers` beim Laden auf die
+Fallback-Liste zurückfallen, obwohl derselbe Endpunkt gegen denselben
+Backend-Prozess per `curl` UND aus dem Web-Client (siehe `web/README.md`)
+nachweislich funktioniert -- vermutlich eine Simulator-/Xcode-27-
+spezifische Netzwerk-Eigenheit dieser Umgebung, nicht als Code-Fehler
+verifizierbar in der verfügbaren Zeit (kein `curl` im Simulator-Sandbox
+verfügbar für eine direkte Gegenprobe, `simctl spawn` scheiterte daran).
+**Offen für eine spätere Sitzung mit echtem Xcode-Zugriff:** den
+Fallback-Pfad selbst (Mock-Daten, Providerliste, IMAP-Formular-UI,
+Sicherheits-Badges) hat ein echter Simulator-Lauf bestätigt -- nur der
+Weg über `RemoteAPIClient` gegen `localhost` in DIESER Simulator-Instanz
+nicht. Kein Blocker für den Code selbst (identisches Muster wie die
+bereits funktionierenden `get()`/`post()`-Aufrufe für alle anderen
+Endpunkte), aber nicht abschließend verifiziert.
+
+**Übergabe:** Track F (Web) hat denselben Auftrag bereits umgesetzt
+(siehe `web/README.md`). Massimo müsste den echten IMAP-Verbindungsweg auf
+iOS einmal mit einem echten Konto gegentesten, sobald die
+`RemoteAPIClient`-Netzwerk-Eigenheit oben geklärt ist.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

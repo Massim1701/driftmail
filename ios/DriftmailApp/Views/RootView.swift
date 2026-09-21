@@ -10,6 +10,7 @@ import SwiftUI
 /// is no Settings screen yet in this scaffold, so for now it's one-and-done
 /// per app install.
 struct RootView: View {
+    @EnvironmentObject private var environment: AppEnvironment
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var onboardingStep: OnboardingStep = .capabilityCheck
 
@@ -19,7 +20,18 @@ struct RootView: View {
     }
 
     var body: some View {
-        if hasCompletedOnboarding {
+        // [2026-09-21] WEB_INBOX.md 19.09. "Onboarding: Provider-
+        // Auswahlbildschirm" ("voll verdrahten"): Konto-Verbindung ist ein
+        // eigenes, VORGESCHALTETES Gate -- unabhängig von
+        // `hasCompletedOnboarding` (Capability-Check/App-Sperre-Empfehlung),
+        // die weiterhin nur einmal pro Installation laufen. Ohne verbundenes
+        // Konto gibt es noch nichts, worüber die restliche Onboarding-
+        // Sequenz sinnvoll reden könnte.
+        if !environment.isAuthenticated {
+            OnboardingAccountConnectView { account, token in
+                environment.completeAccountConnection(account: account, token: token)
+            }
+        } else if hasCompletedOnboarding {
             AppLockGateView {
                 FolderListView()
             }

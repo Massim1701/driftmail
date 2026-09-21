@@ -23,6 +23,18 @@ struct OnDeviceAiAdapter: AiAdapter {
         let hasHomoglyphHint = lower.contains("аpple") || lower.contains("paypal-verifizierung")
         let spf = headers["Authentication-Results"]?.contains("spf=pass") == true ? PassFailNone.pass : .none
 
+        // [2026-09-21] WEB_INBOX.md 19.09. "Sichtbare Kennzeichen/Badges für
+        // die neuen Sicherheitssignale" -- echte Erkennung (Anzeigename vs.
+        // tatsächliche Absenderdomain, Reply-To vs. From, IBAN-Wechsel im
+        // Thread) braucht Header-/Thread-Kontext, den dieser einfache
+        // Text-Heuristik-Stub nicht auswertet (siehe Datei-Kopfkommentar:
+        // "cheap keyword/heuristic checks", kein echtes Header-Parsing wie
+        // die übrigen Felder hier auch nicht). Bleiben deshalb `false` --
+        // echte Erkennung läuft serverseitig (security-classification/,
+        // siehe backend/README.md).
+        let hasDisplayNameSpoofingHint = false
+        let hasReplyToMismatchHint = false
+
         let suspicious = urgencyScore > 0.3 || mentionsIban || hasHomoglyphHint
         let classification: Classification = suspicious ? .phishing : .safe
         let confidence = suspicious ? 0.6 + urgencyScore * 0.1 : 0.9
@@ -35,8 +47,11 @@ struct OnDeviceAiAdapter: AiAdapter {
             domainReputationScore: nil,
             homoglyphDetected: hasHomoglyphHint,
             linkMismatchDetected: false,
+            displayNameSpoofingDetected: hasDisplayNameSpoofingHint,
+            replyToMismatchDetected: hasReplyToMismatchHint,
             urgencyLanguageScore: urgencyScore,
             containsNewIban: mentionsIban,
+            ibanChangedInThread: false,
             classification: classification,
             confidenceScore: min(confidence, 1.0)
         )
@@ -97,7 +112,8 @@ struct CloudFallbackAiAdapter: AiAdapter {
             spfStatus: .none, dkimStatus: .none, dmarcStatus: .none,
             senderDomainAgeDays: nil, domainReputationScore: nil,
             homoglyphDetected: false, linkMismatchDetected: false,
-            urgencyLanguageScore: nil, containsNewIban: false,
+            displayNameSpoofingDetected: false, replyToMismatchDetected: false,
+            urgencyLanguageScore: nil, containsNewIban: false, ibanChangedInThread: false,
             classification: .unclear, confidenceScore: 0.5
         )
     }

@@ -177,7 +177,9 @@ private struct FolderRow: View {
 /// Platzhalter für zukünftige Einstellungen, die es noch nicht gibt.
 private struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var environment: AppEnvironment
     private let biometricKind = BiometricLock.availableKind()
+    @State private var showLogoutConfirm = false
 
     var body: some View {
         NavigationStack {
@@ -187,6 +189,21 @@ private struct SettingsView: View {
                 } footer: {
                     Text("Schützt deinen lokalen Mail-Cache zusätzlich zum Mail-Konto-Login, falls dein Gerät verloren geht oder gestohlen wird.")
                 }
+
+                // [2026-09-21] WEB_INBOX.md 19.09. "Onboarding: Provider-
+                // Auswahlbildschirm" ("voll verdrahten"): mit einem echten
+                // Login-Gate in RootView braucht es zwingend einen Weg
+                // zurück, sonst ist ein falsch verbundenes Konto nicht mehr
+                // korrigierbar ohne App-Neuinstallation.
+                Section {
+                    Button("Konto trennen", role: .destructive) {
+                        showLogoutConfirm = true
+                    }
+                } footer: {
+                    if let account = environment.account {
+                        Text("Aktuell verbunden: \(account.emailAddress)")
+                    }
+                }
             }
             .navigationTitle("Einstellungen")
             .navigationBarTitleDisplayMode(.inline)
@@ -194,6 +211,19 @@ private struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Fertig") { dismiss() }
                 }
+            }
+            .confirmationDialog(
+                "Konto trennen?",
+                isPresented: $showLogoutConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Konto trennen", role: .destructive) {
+                    environment.logOut()
+                    dismiss()
+                }
+                Button("Abbrechen", role: .cancel) {}
+            } message: {
+                Text("Du musst dich danach erneut mit einem E-Mail-Konto verbinden.")
             }
         }
     }

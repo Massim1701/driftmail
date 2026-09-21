@@ -67,7 +67,10 @@ struct MessageDetailView: View {
                     }
 
                     if let security = detail.security {
-                        SecurityBadgesView(security: security)
+                        SecurityBadgesView(
+                            security: security,
+                            isNewSender: detail.isNewSender && !environment.trustedSenderAddresses.contains(detail.fromAddress)
+                        )
                     }
 
                     Text(detail.bodyText ?? "")
@@ -120,6 +123,7 @@ struct MessageDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await environment.loadFolders()
+            await environment.loadTrustedSenders()
             await loadDetail()
         }
         .confirmationDialog(
@@ -630,6 +634,11 @@ private struct SourceTag: View {
 
 private struct SecurityBadgesView: View {
     let security: SecurityResult
+    /// [2026-09-21] WEB_INBOX.md 19.09. "Sichtbare Kennzeichen/Badges für
+    /// die neuen Sicherheitssignale": bereits mit `GET /trusted-senders`
+    /// abgeglichen übergeben (siehe `MessageDetailView` -- Whitelist-Check
+    /// gehört nicht in diese rein darstellende View).
+    let isNewSender: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
@@ -645,8 +654,20 @@ private struct SecurityBadgesView: View {
                 if security.linkMismatchDetected {
                     flag("Link-Ziel weicht ab")
                 }
+                if security.displayNameSpoofingDetected {
+                    flag("Anzeigename gefälscht")
+                }
+                if security.replyToMismatchDetected {
+                    flag("Antwort-Adresse weicht ab")
+                }
                 if security.containsNewIban {
                     flag("Neue IBAN")
+                }
+                if security.ibanChangedInThread {
+                    flag("IBAN im Verlauf geändert")
+                }
+                if isNewSender {
+                    flag("Neuer Absender", tone: .warning)
                 }
             }
             Text("Konfidenz: \(Int(security.confidenceScore * 100))%")
@@ -667,13 +688,22 @@ private struct SecurityBadgesView: View {
             .background(Capsule().stroke(color, lineWidth: 1))
     }
 
-    private func flag(_ label: String) -> some View {
-        Text(label)
+    /// Zwei Varianten: `danger` (bisheriges Verhalten für Homoglyph/Link-
+    /// Mismatch/IBAN-Signale, Text in `dangerText`) und `warning` (neu, nur
+    /// für "Neuer Absender" -- Text direkt in `DesignTokens.Color.warning`,
+    /// analog zu web/src/components/SecurityBadge.tsx's `tone-warning`,
+    /// dort ebenfalls das einzige Signal mit dieser Tonalität statt Danger).
+    private enum FlagTone { case danger, warning }
+
+    private func flag(_ label: String, tone: FlagTone = .danger) -> some View {
+        let color = tone == .danger ? DesignTokens.Color.danger : DesignTokens.Color.warning
+        let textColor = tone == .danger ? DesignTokens.Color.dangerText : DesignTokens.Color.warning
+        return Text(label)
             .font(.system(size: DesignTokens.Typography.Size.caption, weight: .medium))
-            .foregroundStyle(DesignTokens.Color.dangerText)
+            .foregroundStyle(textColor)
             .padding(.horizontal, DesignTokens.Spacing.sm)
             .padding(.vertical, 2)
-            .background(Capsule().fill(DesignTokens.Color.danger.opacity(0.15)))
+            .background(Capsule().fill(color.opacity(0.15)))
     }
 }
 
