@@ -779,7 +779,7 @@ Kein Contract-Bruch bei der Logik selbst (scan_status-Enum bleibt), aber die bis
 Das ist ein echter Blocker fuer den laufenden manuellen IMAP-Verifikationstest -- bitte zeitnah beheben, danach kann Massimo den web.de-Test fortsetzen.
 
 
-[2026-09-21] [offen] [BUG - Massimo beim echten Live-Test entdeckt] [Track F, vermutlich auch Track C] [hohe Prioritaet] — Erster erfolgreicher End-to-End-Test mit echtem web.de-Konto (nach IMAP-Aktivierung + CORS-Fix): Login, Ordnerliste, Header-Anzeige (E-Mail-Adresse statt "Driftmail" -- funktioniert korrekt), "Neuer Ordner"-Feld -- alles bestaetigt funktionsfaehig.
+[2026-09-21] [teilweise erledigt: Track F (18f36eb), Track C weiterhin offen] [BUG - Massimo beim echten Live-Test entdeckt] [Track F, vermutlich auch Track C] [hohe Prioritaet] — Erster erfolgreicher End-to-End-Test mit echtem web.de-Konto (nach IMAP-Aktivierung + CORS-Fix): Login, Ordnerliste, Header-Anzeige (E-Mail-Adresse statt "Driftmail" -- funktioniert korrekt), "Neuer Ordner"-Feld -- alles bestaetigt funktionsfaehig.
 
 **Aber:** Es gibt AN KEINER STELLE der Web-Oberflaeche einen sichtbaren "Neue Nachricht"/"Verfassen"-Button oder Aehnliches, um eine komplett NEUE Mail zu schreiben (nicht als Antwort auf eine bestehende). Screenshot des leeren Eingangs zeigt nur die Ordnerliste + "Neuer Ordner"-Feld, keinen Compose-Einstieg.
 
@@ -788,6 +788,8 @@ Wichtig, Abgrenzung zum frueheren Auftrag "Antworten ohne KI-Zwang" (WEB_INBOX.m
 Bitte pruefen: existiert ein POST /messages/send-faehiger Compose-Screen fuer NEUE Mails (mit leerem To-Feld, nicht vorausgefuellt aus einer Antwort) ueberhaupt im Code, nur ohne sichtbaren Einstiegspunkt in der UI (dann reicht ein UI-Fix: z.B. Button oben in der Sidebar oder Ordneransicht)? Oder fehlt der ganze Neu-Verfassen-Flow strukturell? Bitte auch Track C (iOS) auf dieselbe Luecke pruefen.
 
 Hohe Prioritaet -- ohne diesen Einstiegspunkt ist driftmail aktuell nur zum Lesen/Antworten nutzbar, nicht um selbst aktiv eine neue Konversation zu beginnen. Bitte vor den 5 Wettbewerbs-Features und dem Malware-Scan-Auftrag einordnen, da dies eine Kernfunktion betrifft, nicht eine Erweiterung.
+
+**Track F (Web) erledigt (18f36eb):** "Neue Nachricht"-Button oben in der Sidebar, oeffnet einen echten Compose-Dialog (`ComposeModal.tsx`, siehe web/README.md) mit leerem To-Feld -- der zugrundeliegende `POST /messages/send`-Weg existierte im Code bereits (`accountId`+`to`+`bodyText` ohne `inReplyToMessageId`), es fehlte nur der UI-Einstiegspunkt, wie hier vermutet. Track C (iOS) weiterhin offen.
 
 
 [2026-09-21] [erledigt: Punkt 1 (b2ac424+c6dea5f), Punkt 2 Backend (b6add62) + Web-UI (987ab9c) + iOS-UI (74e75d4)] [SEHR WICHTIGE LUECKE - HOECHSTE PRIORITAET] [contracts + Track A + Track C/F] — Massimo hat eine Testmail an sein web.de-Testkonto geschickt und erwartet, dass sie automatisch ankommt. Geprueft: es gibt AKTUELL NUR EINEN EINMALIGEN SYNC beim ersten Verbinden eines Kontos ("Initialer Sync"), danach passiert nichts mehr automatisch -- keine Polling-Schleife, kein Cron, kein IMAP IDLE (Volltextsuche in SYNC.md: keine Treffer fuer Polling/Sync-Intervall/Cron/periodisch). Ausserdem bestaetigt: es gibt bisher KEINEN Account-Switcher in der UI (bewusst zurueckgestellt bei einem frueheren Auftrag), obwohl mail_accounts schon mehrere Konten pro User im Schema erlaubt.
@@ -811,25 +813,30 @@ Kein Contract-Bruch bei mail_accounts selbst (existiert schon fuer genau diesen 
 HOECHSTE PRIORITAET -- bitte vor allen anderen aktuell offenen Punkten (fehlender Compose-Button, 5 Wettbewerbs-Features, Malware-Scan) einordnen, da dies die Kernfunktion "wird ueberhaupt neue Mail angezeigt, von wie vielen Konten" direkt betrifft.
 
 
-[2026-09-21] [offen] [ERGAENZUNG - verbindet die zwei Auftraege von eben] [Track C/F] — Massimo: wenn mehrere Konten empfangen koennen, muss das Verfassen-Fenster (der fehlende Compose-Button, siehe Eintrag "BUG - Massimo beim echten Live-Test entdeckt" von eben) auch eine ABSENDER-AUSWAHL haben, sobald mehr als ein Konto verbunden ist -- nicht einfach implizit vom ersten/aktuell aktiven Konto senden.
+[2026-09-21] [teilweise erledigt: Track F (18f36eb), Track C weiterhin offen] [ERGAENZUNG - verbindet die zwei Auftraege von eben] [Track C/F] — Massimo: wenn mehrere Konten empfangen koennen, muss das Verfassen-Fenster (der fehlende Compose-Button, siehe Eintrag "BUG - Massimo beim echten Live-Test entdeckt" von eben) auch eine ABSENDER-AUSWAHL haben, sobald mehr als ein Konto verbunden ist -- nicht einfach implizit vom ersten/aktuell aktiven Konto senden.
 
 Konkret: Compose-Screen bekommt ein "Von"-Feld/Dropdown mit allen verbundenen Konten (nur sichtbar/relevant, wenn mehr als eins existiert -- bei genau einem Konto kein unnoetiges UI-Element). Server-seitig muss POST /messages/send dann wissen, ueber WELCHES Konto/welchen Provider tatsaechlich versendet wird (relevant fuer OAuth-Token-Auswahl bei Gmail vs. IMAP-SMTP-Zugangsdaten bei anderen Kontenarten) -- pruefen, ob der Endpunkt das schon unterstuetzt oder ob ein accountId-Feld noch ergaenzt werden muss.
+
+**Track F (Web) erledigt (18f36eb):** `POST /messages/send` unterstuetzte `accountId` bereits (kein Backend-Change noetig). `ComposeModal.tsx` zeigt ein "Von"-Dropdown, nur sichtbar bei mehr als einem verbundenen Konto. Track C (iOS) weiterhin offen.
 
 Bitte beide Auftraege (fehlender Compose-Button + Mehrfach-Konten-Unterstuetzung) zusammen einplanen, nicht den Compose-Screen zuerst ohne Absender-Auswahl bauen und spaeter nochmal anfassen muessen.
 
 
-[2026-09-21] [teilweise erledigt: Punkt 2 (9c3a3ec) + Punkt 3 Backend (9c3a3ec), Punkt 1 + Punkt 2/3 UI noch offen] [DREI WEITERE GRUNDFUNKTIONEN - systematisch gegengeprueft] [contracts + Track A + Track C/F] [gleiche hohe Prioritaet wie Sync/Mehrfach-Konten/Compose von eben] — Nach den drei vorherigen Funden wurde die komplette Grundfunktions-Liste eines Mail-Clients gegen SYNC.md geprueft. Drei weitere echte Luecken bestaetigt (Volltextsuche, keine Fehltreffer):
+[2026-09-21] [teilweise erledigt: Track F alle drei Punkte (18f36eb), Track C (iOS) fuer alle drei Punkte weiterhin offen] [DREI WEITERE GRUNDFUNKTIONEN - systematisch gegengeprueft] [contracts + Track A + Track C/F] [gleiche hohe Prioritaet wie Sync/Mehrfach-Konten/Compose von eben] — Nach den drei vorherigen Funden wurde die komplette Grundfunktions-Liste eines Mail-Clients gegen SYNC.md geprueft. Drei weitere echte Luecken bestaetigt (Volltextsuche, keine Fehltreffer):
 
-**1) Weiterleiten (Forward):**
+**1) Weiterleiten (Forward):** [Track F erledigt: 18f36eb]
 Bestehender Treffer fuer "Weiterleitung" war ein Fehltreffer (bezog sich auf OAuth-Redirect, nicht auf E-Mail-Weiterleiten). Es gibt aktuell KEINE Moeglichkeit, eine empfangene Mail an eine andere Adresse weiterzuleiten. Vorschlag: neuer Endpunkt oder Erweiterung von POST /messages/send um einen forwardOf-Bezug (analog zu inReplyToMessageId bei Antworten), Compose-Screen vorausgefuellt mit Betreff "Fwd: ..." und zitiertem Originaltext, inkl. Original-Anhaenge optional mit weiterleitbar.
+Kein forwardOf-Bezug noetig: Weiterleiten ist technisch eine normale neue Mail ueber POST /messages/send (accountId statt inReplyToMessageId) mit vorausgefuelltem "Fwd:"-Betreff + zitiertem Originaltext -- kein Contract-Change. "Weiterleiten"-Button in MessageDetailPane.tsx, oeffnet denselben ComposeModal wie "Antworten"/"Neue Nachricht". Original-Anhaenge bewusst NICHT automatisch mitgenommen (im Auftrag als "optional" markiert) -- User kann aber neue Anhaenge ganz normal hinzufuegen.
 
-**2) Suche ueber Mails:** [Backend erledigt: 9c3a3ec]
+**2) Suche ueber Mails:** [Backend erledigt: 9c3a3ec, Track F UI erledigt: 18f36eb]
 Kein einziger Treffer fuer eine Suchfunktion. User muss aktuell jede Mail einzeln durchklicken, keine Moeglichkeit nach Absender/Betreff/Inhalt zu suchen. Vorschlag: GET /messages/search?q=... (oder Query-Parameter am bestehenden Nachrichten-Listen-Endpunkt), mindestens Betreff+Absender durchsuchbar, Volltextsuche im Nachrichtentext als Ausbaustufe falls einfach machbar.
-GET /messages akzeptiert jetzt q (Substring-Suche ueber subject/from_address/from_display_name/body_text). UI-Suchfeld in Web/iOS noch zu bauen.
+GET /messages akzeptiert jetzt q (Substring-Suche ueber subject/from_address/from_display_name/body_text). Suchfeld ueber der Nachrichtenliste (kontoweit, ersetzt bei nicht-leerem Suchbegriff die Ordneransicht). iOS-Suchfeld noch zu bauen.
 
-**3) CC/BCC beim Verfassen:** [Backend erledigt: 9c3a3ec]
+**3) CC/BCC beim Verfassen:** [Backend erledigt: 9c3a3ec, Track F UI erledigt: 18f36eb]
 Kein einziger Treffer fuer cc/bcc im gesamten Code/Contract. Aktuell vermutlich nur ein einzelnes "An"-Feld beim Senden moeglich. Vorschlag: POST /messages/send und der Compose-Screen (der ja laut Auftrag von eben ohnehin neu/erweitert gebaut wird) um cc- und bcc-Empfaengerlisten ergaenzen -- bietet sich an, direkt zusammen mit dem Compose-Screen und der Absender-Auswahl bei Mehrfach-Konten zu bauen, nicht als getrennter Schritt.
-POST /messages/send akzeptiert jetzt bcc (analog zu cc, bereits vorhanden). CC/BCC-Felder im Compose-Screen selbst (Web/iOS) noch zu bauen -- gehoert zusammen mit dem noch fehlenden Compose-Screen/Absender-Auswahl aus dem Auftrag von eben.
+POST /messages/send akzeptiert jetzt bcc (analog zu cc, bereits vorhanden). ComposeModal.tsx zeigt CC/BCC hinter einem "CC/BCC hinzufuegen"-Link eingeklappt (Superhuman-Prinzip: nur zeigen, was gebraucht wird). iOS-CC/BCC-Felder noch zu bauen.
+
+**Uebergabe an Track C (iOS):** alle drei Punkte oben sowie der Compose-Button/die Absender-Auswahl aus den zwei Auftraegen davor sind fuer Web (Track F) komplett fertig -- Details in web/README.md Abschnitt "Compose-Screen (neue Mail, Antworten, Weiterleiten, Suche)". iOS hat fuer all das noch NICHTS gebaut (kein Compose-Button, kein Weiterleiten, keine Suche, kein CC/BCC) -- das ist jetzt der naechste Schritt.
 
 **Kontext, ehrlich benannt:** diese sechs Luecken zusammen (automatischer Abruf, Mehrfach-Konten, Compose-Button, Weiterleiten, Suche, CC/BCC) haetten von Anfang an als explizite Grundfunktions-Checkliste behandelt werden muessen, nicht erst durch Massimos eigenes Live-Testen auffallen. Bitte alle sechs als zusammenhaengenden Block VOR den 5 Wettbewerbs-Features und dem Malware-Scan-Auftrag einordnen -- das sind keine "nice-to-haves", sondern fehlende Grundfunktionen eines Mail-Clients.
 
