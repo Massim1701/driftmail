@@ -1053,3 +1053,18 @@ Cmd/Ctrl+K: echter globaler `keydown`-Listener in `App.tsx` fokussiert das beste
 **Uebergabe an Track C/F:** UI fuer alle fuenf Punkte noch zu bauen.
 
 **Kein Blocker.**
+
+
+[2026-09-21] [terminal] [A] — WEB_INBOX.md 21.09. "ZWEI ENTERPRISE-SICHERHEITS-FEATURES - echtes Alleinstellungsmerkmal" (hohe Prioritaet), Backend fertig (Commit `3f54fec`).
+
+**1) "Quishing"-Schutz:** Bild-Anhaenge werden auf boesartige Links geprueft, die als QR-Code (jsqr + jimp zum Dekodieren) oder als reiner Bildtext (Wiederverwendung des bestehenden OCR-Adapters, kein zweiter OCR-Pfad) versteckt sind. Gefundene URLs durchlaufen DIESELBE Homoglyph-Domain-Pruefung wie normale Text-Links (`extractDomains`/`isHomoglyphDomain` aus `@driftmail/security-classification`) -- keine neue Erkennungslogik, wie im Auftrag ausdruecklich verlangt. Ein Treffer escaliert `security.homoglyphDetected` und klassifiziert die Nachricht neu ueber dieselbe `classify()`-Funktion, die auch `analyzeMail()` intern benutzt.
+
+**2) Klick-Zeit-Link-Pruefung:** `GET /link-check?url=...` prueft eine Ziel-URL erneut im Moment des Klicks, nicht nur einmalig beim Empfang -- schuetzt vor "time-of-click"-Angriffen. Bewusst unauthentifiziert (`security: []`, gleiches Prinzip wie `GET /mail-providers`): eine echte Browser-Navigation haengt keinen Bearer-Token an. Bei Unauffaelligkeit 302-Weiterleitung zur echten Zielseite, bei Verdacht (Homoglyph oder niedrige Domain-Reputation) eine selbststaendige Warn-Seite mit "Trotzdem oeffnen"-Option statt automatischer Weiterleitung.
+
+**Realistische Aufwands-Einschaetzung fuer Punkt 2 (wie im Auftrag ausdruecklich verlangt, da als "die aufwendigere der beiden Ergaenzungen" markiert):** dieser Endpunkt ist die vollstaendige, eigenstaendig testbare BACKEND-Haelfte. Fuer die VOLLE Funktion im echten Klick-Fluss fehlt noch eine groessere, bewusst NICHT Teil dieses Schritts gewordene Client-Aenderung: driftmail zeigt Mail-Text aktuell durchgaengig als reinen Klartext an (kein HTML-Rendering, siehe backend/README.md "Tracking-Schutz") -- URLs im Nachrichtentext sind dadurch aktuell gar nicht klickbar/verlinkt, weder in Web noch iOS. Damit dieser Endpunkt im echten Klick-Fluss ueberhaupt erreicht wird, braeuchte es zusaetzlich (a) URLs im Klartext erkennen/verlinken (Auto-Linkify) und (b) deren `href` auf `${API_BASE}/link-check?url=<encodeURIComponent(url)>` statt direkt auf die Original-URL umschreiben -- ein eigener, groesserer UI-Auftrag, den ich als naechstes einordnen wuerde, aber noch nicht begonnen habe.
+
+**Tests:** echter QR-Code mit Homoglyph-Phishing-Link (neue Fixture 10, sonst technisch "saubere" Mail -- der einzige Phishing-Hinweis steckt im QR-Code-Bildanhang, nicht im Mail-Text) verifiziert die Escalation end-to-end. `GET /link-check` unauthentifiziert getestet fuer sichere URL (302+Location), verdaechtige URL (200+Warn-Seite) und fehlenden Parameter (400). Gruen in-memory + gegen frisches Postgres (kein Contract-/Schema-Aenderungsbedarf bei beiden Features).
+
+**Uebergabe an Track C/F:** UI fuer Punkt 1 ist rein informativ (Quishing-Treffer zeigen sich einfach als ein staerker klassifiziertes Sicherheits-Signal in der bestehenden Detailansicht, kein neues UI-Element noetig). Punkt 2 braucht den oben beschriebenen separaten Auto-Linkify-Auftrag, bevor er im Client ueberhaupt sichtbar wird.
+
+**Kein Blocker.**
