@@ -58,6 +58,12 @@ const AI_IMPLEMENTED_PROVIDERS = ["anthropic", "openai"];
 // "Fuenf Komfort-Features").
 let userSettings = { accentTheme: "teal", strictUnknownSenders: true };
 const ACCENT_THEME_VALUES = ["teal", "ocean_blue", "violett", "koralle", "ocean_verlauf"];
+
+// GET/PUT /absence-responder (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+// Abwesenheitsassistent") -- gleiche Validierung wie
+// backend/src/routes/absenceResponder.ts (active:true verlangt startDate +
+// subject + body).
+let absenceResponder = { active: false, startDate: null, endDate: null, subject: null, body: null };
 // POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
 // Eintrags von eben") -- nur Metadaten, kein Dateiinhalt (siehe
 // backend/README.md "Anhänge", gleiche Grenze wie im echten Backend).
@@ -716,6 +722,37 @@ const server = createServer(async (req, res) => {
           body.strictUnknownSenders !== undefined ? body.strictUnknownSenders : userSettings.strictUnknownSenders,
       };
       return send(res, 200, userSettings);
+    }
+  }
+
+  // GET/PUT /absence-responder (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+  // Abwesenheitsassistent") -- PUT ist ein partielles Update, bei
+  // active:true (neu oder bereits vorher aktiv) verlangt der Server
+  // startDate + subject (nicht-leer) + body (nicht-leer), gleiche Logik wie
+  // backend/src/routes/absenceResponder.ts.
+  if (parts.length === 1 && parts[0] === "absence-responder") {
+    if (req.method === "GET") {
+      return send(res, 200, absenceResponder);
+    }
+    if (req.method === "PUT") {
+      const body = (await readJsonBody(req)) ?? {};
+      const resultingActive = body.active !== undefined ? body.active : absenceResponder.active;
+      if (resultingActive) {
+        const startDate = body.startDate !== undefined ? body.startDate : absenceResponder.startDate;
+        const subject = body.subject !== undefined ? body.subject : absenceResponder.subject;
+        const messageBody = body.body !== undefined ? body.body : absenceResponder.body;
+        if (!startDate || !subject?.trim() || !messageBody?.trim()) {
+          return badRequest(res, "active=true verlangt startDate, subject und body");
+        }
+      }
+      absenceResponder = {
+        active: body.active !== undefined ? body.active : absenceResponder.active,
+        startDate: body.startDate !== undefined ? body.startDate : absenceResponder.startDate,
+        endDate: body.endDate !== undefined ? body.endDate : absenceResponder.endDate,
+        subject: body.subject !== undefined ? body.subject : absenceResponder.subject,
+        body: body.body !== undefined ? body.body : absenceResponder.body,
+      };
+      return send(res, 200, absenceResponder);
     }
   }
 

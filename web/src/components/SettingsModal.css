@@ -110,3 +110,45 @@
   color: var(--color-accent);
   font-weight: var(--font-weight-medium);
 }
+
+.absence-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+}
+
+.absence-field input,
+.absence-field textarea {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: var(--space-xs) var(--space-sm);
+  outline: none;
+}
+
+.absence-field input:focus,
+.absence-field textarea:focus {
+  border-color: var(--color-accent);
+}
+
+.absence-field-textarea textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.absence-field-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+}
+
+.absence-field-checkbox input {
+  width: auto;
+}

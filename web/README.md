@@ -766,6 +766,80 @@ korrekt als eine Zeile + "+1 ältere", Aufklappen zeigt die ältere
 Nachricht als Unterzeile, beide Zeilen öffnen die richtige Nachricht in
 der Detailansicht. Konsole ohne Fehler.
 
+## [2026-09-21] Nachtrag: Abwesenheitsassistent
+(WEB_INBOX.md 21.09. "NEUER AUFTRAG - Abwesenheitsassistent", Web-UI --
+Track A/Backend fertig in Commits `fc4e287`/`7215149`, siehe
+`backend/README.md` "Signaturen & Abwesenheitsassistent" für die
+serverseitige Ausloese-Logik, Sicherheits-Ausnahmen und den dabei
+gefundenen/behobenen `mail-actions`-Packaging-Fehler.)
+
+**Formular im Einstellungsbereich:** neuer Abschnitt "Abwesenheitsassistent"
+in `SettingsModal.tsx` (zwischen "Sicherheit" und "Anleitung") -- Checkbox
+"Automatische Antwort aktiv", Start-/Ende-Datumsfelder (`<input
+type="date">`, Ende optional), Betreff- und Nachrichtentext-Felder,
+gebunden an neue `api.getAbsenceResponder()`/`updateAbsenceResponder()`
+(`GET`/`PUT /absence-responder`, neue `AbsenceResponder`-Typdefinition in
+`types.ts`). **Bewusst ein einzelner "Speichern"-Button für das ganze
+Formular** statt Sofort-Speichern pro Feld wie bei den übrigen
+Settings-Toggles -- die Felder gehören inhaltlich zusammen (ein Aktivieren
+ohne bereits eingetragenen Betreff wäre sonst serverseitig sofort ein
+400). **Validierung läuft bewusst nicht client-seitig doppelt:** die drei
+Pflichtfelder bei `active: true` (Start, Betreff, Text) werden nur einmal
+serverseitig geprüft (`backend/src/routes/absenceResponder.ts`), die
+resultierende 400-Fehlermeldung wird direkt im Formular angezeigt statt
+dieselbe Regel zusätzlich im Client zu pflegen. Kein eigenes
+Signatur-Feld hier -- die bestehende Default-Signatur des Kontos wird
+serverseitig automatisch angehängt (siehe backend/README.md).
+
+**Eigener Ladevorgang statt Prop-Synchronisation:** das Formular lädt
+seinen Anfangszustand über einen eigenen `GET /absence-responder`-Aufruf
+beim Öffnen des Dialogs (gleiches Prinzip wie das bestehende
+`accentTheme`-Laden direkt darüber in derselben Datei) statt sich per
+Effekt aus einer App.tsx-Prop zu synchronisieren -- letzteres hätte einen
+`react(set-state-in-effect)`-Lint-Befund erzeugt (State-Zuweisung
+synchron im Effekt-Body statt in einem `.then()`), ersteres passt genau
+in die bestehende Konvention dieser Datei und bleibt warnungsfrei.
+
+**Banner mit Schnellaktion:** `AbsenceResponderBanner.tsx` (neue
+Komponente) -- rendert nur, wenn der Assistent aktiv ist, zeigt optional
+das Enddatum, "Jetzt beenden" setzt per `PUT { active: false }`
+ausschließlich das Aktiv-Flag (Datumsfelder/Betreff/Text bleiben
+gespeichert, damit ein erneutes Aktivieren später das zuletzt eingetragene
+Formular wiederfindet). Der Zustand lebt dafür zusätzlich in App.tsx
+(eigener `GET /absence-responder`-Aufruf nach Login, unabhängig vom
+Einstellungsdialog, damit der Banner auch sichtbar ist, ohne dass Settings
+je geöffnet wurde) -- `SettingsModal.tsx` meldet ein erfolgreiches
+Speichern über eine `onAbsenceResponderChange`-Callback-Prop dorthin
+zurück, damit der Banner sofort mitzieht statt erst beim nächsten Laden.
+
+**Layout-Anpassung:** `.app-shell` hat festes `height: 100vh` für den
+(häufigeren) bannerlosen Fall. Mit aktivem Banner wird `.app-shell`
+zusätzlich in einen neuen `.app-viewport`-Flex-Container (`height: 100vh`,
+`flex-direction: column`) gehängt und bekommt dort `flex: 1` statt seiner
+eigenen `height: 100vh` -- sonst hätte Banner-Höhe + `.app-shell`
+zusammen mehr als einen Viewport beansprucht. Der Wrapper existiert nur,
+wenn der Banner tatsächlich gerendert wird.
+
+**Mock-Server:** neuer `GET`/`PUT /absence-responder`-Handler in
+`mock-server/server.mjs`, gleiche Pflichtfeld-Validierung wie das
+Backend (`badRequest()`-Helfer, bestehende Konvention dieser Datei --
+liefert `{ error: "bad_request", message: "..." }`, anders als das echte
+Backend, das die volle Meldung direkt in `.error` liefert; dieser
+Unterschied besteht bereits bei jedem anderen `badRequest()`-Aufruf in
+diesem Mock-Server und ist keine neue Abweichung).
+
+**Tests:** `tsc -b`/`vite build`/`oxlint` grün (keine neuen Warnungen über
+die bestehende Baseline hinaus). Per Browser-Automation gegen den
+Mock-Server durchgeklickt: Aktivieren ohne Pflichtfelder zeigt die
+400-Fehlermeldung im Formular; vollständiges Ausfüllen (Start 25.09.2026,
+Betreff, Text) + Speichern zeigt den Banner sofort ohne Neuladen; "Jetzt
+beenden" im Banner lässt ihn verschwinden UND per direktem `curl GET
+/absence-responder` bestätigt, dass `active: false` server-seitig
+tatsächlich gesetzt ist, während `startDate`/`subject`/`body` unverändert
+erhalten blieben; erneutes Öffnen des Einstellungsbereichs zeigt das
+Formular korrekt mit den zuvor gespeicherten (jetzt inaktiven) Werten
+vorausgefüllt. Konsole ohne Fehler während des gesamten Durchlaufs.
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge

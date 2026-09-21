@@ -10,6 +10,7 @@
 // getAiSettings/setAiSettings unten).
 
 import type {
+  AbsenceResponder,
   AccentTheme,
   AiSettings,
   AiSource,
@@ -321,4 +322,13 @@ export const api = {
   // "Kontakt-Autovervollstaendigung") -- bekannte Adressen fuer An/CC/BCC-
   // Vorschlaege im Compose-Screen, dedupliziert + sortiert vom Backend.
   listContacts: () => request<string[]>("/contacts"),
+
+  // GET/PUT /absence-responder (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+  // Abwesenheitsassistent") -- PUT ist ein partielles Update (nur
+  // übergebene Felder ändern sich), bei active:true prüft das Backend
+  // startDate/subject/body serverseitig (400 sonst).
+  getAbsenceResponder: () => request<AbsenceResponder>("/absence-responder"),
+
+  updateAbsenceResponder: (data: Partial<AbsenceResponder>) =>
+    request<AbsenceResponder>("/absence-responder", { method: "PUT", body: JSON.stringify(data) }),
 };

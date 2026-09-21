@@ -187,3 +187,16 @@ export interface UserAiCapability {
   onDeviceSupported: boolean;
   activeMode: AiSource;
 }
+
+// GET/PUT /absence-responder (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+// Abwesenheitsassistent") -- startDate/endDate als "YYYY-MM-DD"-Strings
+// (HTML <input type="date">-Format), endDate optional (automatisches
+// Abschalten). Bestehende Default-Signatur wird serverseitig automatisch
+// angehängt, kein eigenes Signatur-Feld hier.
+export interface AbsenceResponder {
+  active: boolean;
+  startDate: string | null;
+  endDate: string | null;
+  subject: string | null;
+  body: string | null;
+}

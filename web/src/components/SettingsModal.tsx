@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AccentTheme, MailAccount } from "../types";
+import type { AbsenceResponder, AccentTheme, MailAccount } from "../types";
 import { api, ApiError } from "../api";
 import { ACCENT_THEMES, applyAccentTheme } from "../accentThemes";
 import "./ComposeModal.css";
@@ -21,6 +21,7 @@ export function SettingsModal({
   onAppLockChange,
   strictUnknownSenders,
   onStrictUnknownSendersChange,
+  onAbsenceResponderChange,
   onOpenAiSettings,
   onClose,
 }: {
@@ -44,6 +45,10 @@ export function SettingsModal({
    * hier. Gleiches Prop-Muster wie appLockEnabled/onAppLockChange oben. */
   strictUnknownSenders: boolean;
   onStrictUnknownSendersChange: (enabled: boolean) => Promise<boolean>;
+  /** [2026-09-21] WEB_INBOX.md 21.09. "NEUER AUFTRAG - Abwesenheitsassistent"
+   * -- meldet ein erfolgreiches Speichern hier an App.tsx zurück, damit der
+   * dortige (von diesem Dialog unabhängige) Banner sofort mitzieht. */
+  onAbsenceResponderChange: (updated: AbsenceResponder) => void;
   onOpenAiSettings: () => void;
   onClose: () => void;
 }) {
@@ -60,6 +65,37 @@ export function SettingsModal({
 
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
+
+  // Lokales Formular fuer den Abwesenheitsassistenten -- eigener Ladevorgang
+  // beim Öffnen dieses Dialogs, gleiches Prinzip wie accentTheme direkt
+  // darüber (eigener GET-Aufruf statt Prop-Synchronisation aus App.tsx, das
+  // haette bei jedem Prop-Update einen Effekt gebraucht, der State während
+  // des Renderns synchronisiert -- App.tsx hat GET /absence-responder
+  // trotzdem selbst, weil der Banner dort unabhängig von diesem Dialog
+  // sichtbar sein muss). Erst ein erfolgreiches Speichern meldet den neuen
+  // Stand ueber onAbsenceResponderChange zurueck an App.tsx (fuer den Banner).
+  const [absenceActive, setAbsenceActive] = useState(false);
+  const [absenceStartDate, setAbsenceStartDate] = useState("");
+  const [absenceEndDate, setAbsenceEndDate] = useState("");
+  const [absenceSubject, setAbsenceSubject] = useState("");
+  const [absenceBody, setAbsenceBody] = useState("");
+  const [absenceLoading, setAbsenceLoading] = useState(true);
+  const [absenceSaving, setAbsenceSaving] = useState(false);
+  const [absenceError, setAbsenceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .getAbsenceResponder()
+      .then((a) => {
+        setAbsenceActive(a.active);
+        setAbsenceStartDate(a.startDate ?? "");
+        setAbsenceEndDate(a.endDate ?? "");
+        setAbsenceSubject(a.subject ?? "");
+        setAbsenceBody(a.body ?? "");
+      })
+      .catch(() => setAbsenceError("Abwesenheitsassistent konnte nicht geladen werden."))
+      .finally(() => setAbsenceLoading(false));
+  }, []);
 
   useEffect(() => {
     api
@@ -105,6 +141,36 @@ export function SettingsModal({
       if (!ok) setStrictError("Einstellung konnte nicht gespeichert werden.");
     } finally {
       setStrictSaving(false);
+    }
+  }
+
+  // Ein "Speichern"-Button fuer das gesamte Formular statt Sofort-Speichern
+  // pro Feld (anders als die einzelnen Toggles oben) -- mehrere Felder
+  // gehoeren inhaltlich zusammen (z.B. waere ein Aktivieren ohne bereits
+  // eingetragenen Betreff sonst serverseitig sofort ein 400). Validierung
+  // selbst laeuft NICHT client-seitig doppelt, sondern zeigt die 400-
+  // Fehlermeldung vom Server direkt an (siehe absenceError unten) --
+  // dieselben drei Pflichtfelder waeren sonst an zwei Stellen zu pflegen.
+  async function handleSaveAbsenceResponder() {
+    setAbsenceSaving(true);
+    setAbsenceError(null);
+    try {
+      const updated = await api.updateAbsenceResponder({
+        active: absenceActive,
+        startDate: absenceStartDate || null,
+        endDate: absenceEndDate || null,
+        subject: absenceSubject || null,
+        body: absenceBody || null,
+      });
+      onAbsenceResponderChange(updated);
+    } catch (err) {
+      if (err instanceof ApiError && typeof err.body === "object" && err.body && "error" in err.body) {
+        setAbsenceError(String((err.body as { error: unknown }).error));
+      } else {
+        setAbsenceError("Abwesenheitsassistent konnte nicht gespeichert werden.");
+      }
+    } finally {
+      setAbsenceSaving(false);
     }
   }
 
@@ -273,6 +339,57 @@ export function SettingsModal({
               <li>Malware-Scan für Anhänge: in Vorbereitung</li>
               <li>KI-Funktionen laufen wo möglich direkt auf deinem Gerät – keine Kosten, keine Cloud-Übertragung, außer du richtest ausdrücklich einen eigenen KI-Zugang ein</li>
             </ul>
+          </section>
+
+          <section className="settings-section">
+            <h3 className="settings-section-title">Abwesenheitsassistent</h3>
+            {/* WEB_INBOX.md 21.09. "NEUER AUFTRAG - Abwesenheitsassistent":
+                Ein/Aus + Zeitraum + Betreff/Text. Bestehende Default-
+                Signatur wird serverseitig automatisch angehängt (siehe
+                backend/README.md), deshalb kein eigenes Signatur-Feld hier.
+                Speichern ist bewusst ein einzelner Button für das ganze
+                Formular statt Sofort-Speichern pro Feld, siehe
+                handleSaveAbsenceResponder-Kommentar. */}
+            {absenceLoading ? (
+              <p>Lade…</p>
+            ) : (
+              <>
+                <label className="absence-field absence-field-checkbox">
+                  <input type="checkbox" checked={absenceActive} onChange={(e) => setAbsenceActive(e.target.checked)} />
+                  Automatische Antwort aktiv
+                </label>
+                <label className="absence-field">
+                  <span>Start</span>
+                  <input type="date" value={absenceStartDate} onChange={(e) => setAbsenceStartDate(e.target.value)} />
+                </label>
+                <label className="absence-field">
+                  <span>Ende (optional)</span>
+                  <input type="date" value={absenceEndDate} onChange={(e) => setAbsenceEndDate(e.target.value)} />
+                </label>
+                <label className="absence-field">
+                  <span>Betreff</span>
+                  <input
+                    type="text"
+                    value={absenceSubject}
+                    onChange={(e) => setAbsenceSubject(e.target.value)}
+                    placeholder="Automatische Abwesenheitsantwort"
+                  />
+                </label>
+                <label className="absence-field absence-field-textarea">
+                  <span>Nachricht</span>
+                  <textarea
+                    value={absenceBody}
+                    onChange={(e) => setAbsenceBody(e.target.value)}
+                    rows={4}
+                    placeholder="Ich bin derzeit nicht erreichbar und melde mich nach meiner Rückkehr."
+                  />
+                </label>
+                {absenceError && <p className="send-error">{absenceError}</p>}
+                <button type="button" className="btn btn-secondary" onClick={handleSaveAbsenceResponder} disabled={absenceSaving}>
+                  {absenceSaving ? "Speichere…" : "Speichern"}
+                </button>
+              </>
+            )}
           </section>
 
           <section className="settings-section">

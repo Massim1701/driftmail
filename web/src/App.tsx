@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, getStoredToken, setStoredToken } from "./api";
-import type { Draft, Folder, MailAccount, Message, MessageDetail } from "./types";
+import type { AbsenceResponder, Draft, Folder, MailAccount, Message, MessageDetail } from "./types";
 import { FolderSidebar } from "./components/FolderSidebar";
 import { MessageList } from "./components/MessageList";
 import { DraftList } from "./components/DraftList";
@@ -10,6 +10,7 @@ import { AppLockGate } from "./components/AppLockGate";
 import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
 import { AiSettingsModal } from "./components/AiSettingsModal";
 import { SettingsModal } from "./components/SettingsModal";
+import { AbsenceResponderBanner } from "./components/AbsenceResponderBanner";
 import { applyAccentTheme } from "./accentThemes";
 import { useTheme } from "./useTheme";
 import { useAppLock } from "./useAppLock";
@@ -78,6 +79,15 @@ export default function App() {
   // Badge-Darstellung brauchen. Default true (Server-Default), bis GET
   // /settings zurückkommt.
   const [strictUnknownSenders, setStrictUnknownSenders] = useState(true);
+
+  // GET/PUT /absence-responder (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+  // Abwesenheitsassistent") -- lebt hier (nicht nur in SettingsModal), weil
+  // der aktive Banner unten im Layout unabhängig davon sichtbar sein muss,
+  // ob der Einstellungsdialog gerade offen ist. SettingsModal besitzt das
+  // volle Bearbeitungsformular und meldet erfolgreiche Speicherungen über
+  // onAbsenceResponderChange zurück, damit der Banner sofort mitzieht statt
+  // erst beim nächsten Reload.
+  const [absenceResponder, setAbsenceResponder] = useState<AbsenceResponder | null>(null);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -294,6 +304,33 @@ export default function App() {
     } catch {
       setStrictUnknownSenders(previous);
       return false;
+    }
+  }
+
+  // WEB_INBOX.md 21.09. "NEUER AUFTRAG - Abwesenheitsassistent" -- einmal
+  // nach Login laden, damit der Banner (falls aktiv) ohne den Einstellungs-
+  // dialog sichtbar ist. Kein harter Fehler bei 401/Netzwerkfehler, der
+  // Banner bleibt dann einfach unsichtbar (Default active:false).
+  useEffect(() => {
+    if (!token) return;
+    api
+      .getAbsenceResponder()
+      .then(setAbsenceResponder)
+      .catch(() => {});
+  }, [token]);
+
+  // AbsenceResponderBanner.tsx ruft das über "Jetzt beenden" auf -- setzt
+  // NUR active:false, Datumsfelder/Betreff/Text bleiben unangetastet
+  // gespeichert (partielles Update, siehe api.ts-Kommentar), damit ein
+  // erneutes Aktivieren später das zuletzt eingetragene Formular wiederfindet.
+  async function handleDeactivateAbsenceResponder(): Promise<void> {
+    const previous = absenceResponder;
+    if (previous) setAbsenceResponder({ ...previous, active: false });
+    try {
+      const updated = await api.updateAbsenceResponder({ active: false });
+      setAbsenceResponder(updated);
+    } catch {
+      setAbsenceResponder(previous);
     }
   }
 
@@ -524,91 +561,99 @@ export default function App() {
 
   return (
     <AppLockGate locked={appLock.locked} unlocking={appLock.unlocking} unlockError={appLock.unlockError} onUnlock={appLock.unlock}>
-      <div className="app-shell">
-        <FolderSidebar
-          folders={folders}
-          active={activeFolder}
-          onSelect={handleSelectFolder}
-          counts={counts}
-          accounts={accounts}
-          activeAccountId={activeAccountId}
-          onSwitchAccount={handleSwitchAccount}
-          onAddAccount={handleAddAccount}
-          onSyncNow={handleSyncNow}
-          isSyncing={isSyncing}
-          onNewMessage={handleNewMessage}
-          theme={theme}
-          onThemeChange={setTheme}
-          onCreateFolder={handleCreateFolder}
-          onRenameFolder={handleRenameFolder}
-          onDeleteFolder={handleDeleteFolder}
-          onOpenSettings={() => setSettingsOpen(true)}
-        />
-
-        <div className="message-column">
-          <div className="message-column-header">
-            <h2>{isSearching ? `Suche: „${searchQuery.trim()}“` : (activeFolderDef?.name ?? "—")}</h2>
-            <span className="message-column-count">
-              {isSearching ? searchResults.length : isEntwuerfeFolder ? drafts.length : currentMessages.length}
-            </span>
-          </div>
-          {/* Suche (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN",
-              Punkt 2): kontoweit, ersetzt bei nicht-leerem Suchbegriff die
-              Ordner-/Entwürfe-Ansicht darunter (siehe searchQuery-Kommentar
-              oben). */}
-          <input
-            type="search"
-            className="message-search-input"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Nach Betreff, Absender oder Inhalt suchen…"
-            aria-label="Mails durchsuchen"
+      {/* app-viewport nur als Höhen-Rahmen für den optionalen Banner
+          darüber -- app-shell behält sein eigenständiges height:100vh für
+          den (häufigeren) Fall ohne Banner, siehe App.css. */}
+      <div className={absenceResponder?.active ? "app-viewport" : undefined}>
+        {absenceResponder?.active && (
+          <AbsenceResponderBanner absenceResponder={absenceResponder} onDeactivate={handleDeactivateAbsenceResponder} />
+        )}
+        <div className="app-shell">
+          <FolderSidebar
+            folders={folders}
+            active={activeFolder}
+            onSelect={handleSelectFolder}
+            counts={counts}
+            accounts={accounts}
+            activeAccountId={activeAccountId}
+            onSwitchAccount={handleSwitchAccount}
+            onAddAccount={handleAddAccount}
+            onSyncNow={handleSyncNow}
+            isSyncing={isSyncing}
+            onNewMessage={handleNewMessage}
+            theme={theme}
+            onThemeChange={setTheme}
+            onCreateFolder={handleCreateFolder}
+            onRenameFolder={handleRenameFolder}
+            onDeleteFolder={handleDeleteFolder}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
-          {error && <div className="app-error">{error}</div>}
-          {isSearching ? (
-            <MessageList
-              messages={searchResults}
-              selectedId={selectedId}
-              onSelect={handleSelectMessage}
-              loading={searchLoading && searchResults.length === 0}
-              emptyLabel="Keine Treffer."
-            />
-          ) : isEntwuerfeFolder ? (
-            <DraftList drafts={drafts} loading={draftsLoading && drafts.length === 0} onDelete={handleDeleteDraft} />
-          ) : (
-            <MessageList
-              messages={currentMessages}
-              selectedId={selectedId}
-              onSelect={handleSelectMessage}
-              loading={listLoading && currentMessages.length === 0}
-              emptyLabel={
-                isQuarantineFolder
-                  ? "Keine Nachrichten in Quarantäne."
-                  : isPapierkorbFolder
-                    ? "Papierkorb ist leer."
-                    : "Keine Nachrichten in diesem Ordner."
-              }
-            />
-          )}
-        </div>
 
-        <MessageDetailPane
-          message={selectedDetail}
-          loading={detailLoading}
-          folders={folders}
-          quarantaeneFolderId={quarantaeneFolder?.id ?? null}
-          papierkorbFolderId={papierkorbFolder?.id ?? null}
-          spamFolderId={spamFolder?.id ?? null}
-          trustedSenderAddresses={trustedSenderAddresses}
-          strictUnknownSenders={strictUnknownSenders}
-          onTrustSender={handleTrustSender}
-          onQuarantined={handleQuarantined}
-          onMoved={handleMoved}
-          onDeleted={handleDeleted}
-          onPermanentlyDeleted={handlePermanentlyDeleted}
-          onReply={handleReply}
-          onForward={handleForward}
-        />
+          <div className="message-column">
+            <div className="message-column-header">
+              <h2>{isSearching ? `Suche: „${searchQuery.trim()}“` : (activeFolderDef?.name ?? "—")}</h2>
+              <span className="message-column-count">
+                {isSearching ? searchResults.length : isEntwuerfeFolder ? drafts.length : currentMessages.length}
+              </span>
+            </div>
+            {/* Suche (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN",
+                Punkt 2): kontoweit, ersetzt bei nicht-leerem Suchbegriff die
+                Ordner-/Entwürfe-Ansicht darunter (siehe searchQuery-Kommentar
+                oben). */}
+            <input
+              type="search"
+              className="message-search-input"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Nach Betreff, Absender oder Inhalt suchen…"
+              aria-label="Mails durchsuchen"
+            />
+            {error && <div className="app-error">{error}</div>}
+            {isSearching ? (
+              <MessageList
+                messages={searchResults}
+                selectedId={selectedId}
+                onSelect={handleSelectMessage}
+                loading={searchLoading && searchResults.length === 0}
+                emptyLabel="Keine Treffer."
+              />
+            ) : isEntwuerfeFolder ? (
+              <DraftList drafts={drafts} loading={draftsLoading && drafts.length === 0} onDelete={handleDeleteDraft} />
+            ) : (
+              <MessageList
+                messages={currentMessages}
+                selectedId={selectedId}
+                onSelect={handleSelectMessage}
+                loading={listLoading && currentMessages.length === 0}
+                emptyLabel={
+                  isQuarantineFolder
+                    ? "Keine Nachrichten in Quarantäne."
+                    : isPapierkorbFolder
+                      ? "Papierkorb ist leer."
+                      : "Keine Nachrichten in diesem Ordner."
+                }
+              />
+            )}
+          </div>
+
+          <MessageDetailPane
+            message={selectedDetail}
+            loading={detailLoading}
+            folders={folders}
+            quarantaeneFolderId={quarantaeneFolder?.id ?? null}
+            papierkorbFolderId={papierkorbFolder?.id ?? null}
+            spamFolderId={spamFolder?.id ?? null}
+            trustedSenderAddresses={trustedSenderAddresses}
+            strictUnknownSenders={strictUnknownSenders}
+            onTrustSender={handleTrustSender}
+            onQuarantined={handleQuarantined}
+            onMoved={handleMoved}
+            onDeleted={handleDeleted}
+            onPermanentlyDeleted={handlePermanentlyDeleted}
+            onReply={handleReply}
+            onForward={handleForward}
+          />
+        </div>
       </div>
 
       {compose && (
@@ -634,6 +679,7 @@ export default function App() {
           onAppLockChange={appLock.setEnabled}
           strictUnknownSenders={strictUnknownSenders}
           onStrictUnknownSendersChange={handleStrictUnknownSendersChange}
+          onAbsenceResponderChange={setAbsenceResponder}
           onOpenAiSettings={() => setAiSettingsOpen(true)}
           onClose={() => setSettingsOpen(false)}
         />
