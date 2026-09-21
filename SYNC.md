@@ -945,3 +945,18 @@ Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
 **Tests:** `tsc -b`/`vite build`/`oxlint` grün (keine neuen Warnungen über die bestehende Baseline hinaus). Per Browser-Automation gegen den Mock-Server durchgeklickt: Aktivieren ohne Pflichtfelder zeigt die 400-Fehlermeldung; vollständiges Ausfüllen + Speichern zeigt den Banner sofort; "Jetzt beenden" lässt ihn verschwinden UND per direktem `curl GET /absence-responder` bestätigt, dass `active: false` server-seitig gesetzt ist, während Start/Betreff/Text erhalten blieben; erneutes Öffnen der Einstellungen zeigt das Formular korrekt vorausgefüllt. Konsole ohne Fehler.
 
 **Kein Blocker.** Damit ist der Abwesenheitsassistent (Backend + iOS + Web) komplett fertig.
+
+
+[2026-09-21] [terminal] [A] — WEB_INBOX.md 21.09. "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2 ("Nudge") + Punkt 3 ("Vertraulicher Modus"), Backend fertig (Commit `1a82351`). Punkt 1 (Vergessener-Anhang-Erkennung) braucht keine Backend-Aenderung, reine Client-Logik.
+
+**Nudge:** `Message.awaitingReply` (zur Laufzeit abgeleitet, kein Cache/eigenes Feld) ist true, wenn eine Nachricht mind. 3 Tage (Default, konfigurierbar) unbeantwortet ist -- geprueft wird gezielt die GEGENUEBERLIEGENDE Ordner-Richtung desselben Kontos (eingang -> gesendet bzw. umgekehrt), damit nur eine echte Antwort DES USERS zaehlt und nicht jede weitere Mail im selben Thread (z.B. ein Nachfass-Schreiben desselben externen Absenders faelschlich als "beantwortet" gilt). Nie bei spam/phishing. `users.nudge_unanswered_enabled` (Default true, wie Gmail) schaltet die Berechnung serverseitig komplett ab. Geprueft, ob die bestehende `reminders`/`contracts-logic/src/scheduler.ts`-Infrastruktur wiederverwendbar ist (wie im Auftrag vorgeschlagen) -- bewusst NICHT wiederverwendet, da `Reminder` fest an `contractId` (Vertragserkennung) gebunden ist, ein eigener kleiner Ableitungsmechanismus passt hier sauberer.
+
+**Vertraulicher Modus:** `messages.confidential_until`, setzbar per `POST /messages/send` (muss ein gueltiger, in der Zukunft liegender Zeitpunkt sein, sonst 400). Kein Hintergrund-Job (gleiche bewusste Grenze wie ueberall sonst im Projekt) -- der Ablauf wird lazy beim naechsten Lesezugriff geprueft und dann EINMALIG echt persistiert geloescht (`bodyText` -> `NULL`), nicht nur pro Response maskiert. `confidentialUntil` selbst bleibt erhalten, damit der Client "war vertraulich, seit X abgelaufen" anzeigen kann. Der automatische Vorschlag "Vertraulich senden?" bei erkannten sensiblen Daten braucht keine Backend-Aenderung -- `POST /messages/draft/phishing-check` liefert `containsSensitiveData` (iban/credit_card/other) bereits seit laengerem.
+
+**Dabei gefunden und behoben:** `PostgresStore.updateUserSettings()` kannte `nudgeUnansweredEnabled` zunaechst nicht (nur `InMemoryStore` war vollstaendig) -- `PUT /settings` mit diesem Feld hatte gegen eine echte Postgres-DB stillschweigend keine Wirkung. Nur der Postgres-Smoketest-Lauf deckte das auf (der In-Memory-Lauf blieb faelschlich gruen) -- guter Beleg dafuer, warum konsequent gegen beide Stores getestet wird.
+
+**Tests:** Smoketest deckt beide Features end-to-end ab (siehe Commit-Message/README fuer Details). Migration (`messages.confidential_until` + `users.nudge_unanswered_enabled`) manuell gegen eine simulierte Alt-Schema-DB verifiziert (beide Spalten fehlten vorher komplett, `migrate()` legt sie korrekt nach). Gruen in-memory + zweimal hintereinander gegen dieselbe frische Postgres-DB (Migrations-Idempotenz).
+
+**Uebergabe an Track C/F:** UI fuer alle drei Punkte noch zu bauen, siehe WEB_INBOX.md-Originaltext fuer die genauen Vorschlaege.
+
+**Kein Blocker.**

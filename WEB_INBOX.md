@@ -975,7 +975,7 @@ Kein Contract-Bruch (additive neue Tabelle/Erweiterung). Bitte nach dem aktuelle
 Kein Contract-Bruch (unsubscribe_actions-Struktur bleibt, nur echte Ausfuehrung statt Attrappe). Bitte zeitnah einordnen, da das eine bereits als "fertig" kommunizierte Funktion tatsaechlich lueckenhaft macht.
 
 
-[2026-09-21] [offen] [DREI WEITERE FEATURES - Gmail-Recherche] [contracts + Track A + Track C/F] — Massimo hat nach Recherche zu Gmail-spezifischen Funktionen drei Uebernahmen bestaetigt.
+[2026-09-21] [teilweise erledigt: Backend 1a82351 (Punkt 2 Nudge + Punkt 3 Vertraulicher Modus; Punkt 1 braucht keine Backend-Aenderung); Track C/F (UI fuer alle drei Punkte) noch offen] [DREI WEITERE FEATURES - Gmail-Recherche] [contracts + Track A + Track C/F] — Massimo hat nach Recherche zu Gmail-spezifischen Funktionen drei Uebernahmen bestaetigt.
 
 **1) Vergessener-Anhang-Erkennung (Track A + C/F):**
 Beim Klick auf "Senden": Compose-Text nach typischen Phrasen durchsuchen ("im Anhang", "siehe Anhang", "anbei", "attached", "see attachment" -- deutsch+englisch, einfache Keyword-Liste reicht, kein ML noetig). Falls ein Treffer vorliegt UND kein Anhang tatsaechlich beigefuegt wurde: kurzer Warnhinweis vor dem eigentlichen Versand ("Du hast 'im Anhang' geschrieben, aber keinen Anhang hinzugefuegt -- trotzdem senden?"), User kann bestaetigen und trotzdem senden. Reine Client-seitige Pruefung im Compose-Screen, kein Contract-Aenderung noetig.
