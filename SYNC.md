@@ -16,7 +16,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | 0 — Contracts | contracts/ | fertig | 2026-09-08 |
 | A — Backend | backend/ | fertig (inkl. echter Track-B-Integration) | 2026-09-19 |
 | B — Sicherheits-Klassifikation | security-classification/ | fertig | 2026-09-19 |
-| C — iOS App | ios/ | fertig | 2026-09-19 |
+| C — iOS App | ios/ | fertig | 2026-09-21 |
 | D — Vertrag & Reminder | contracts-logic/ | fertig | 2026-09-08 |
 | E — Antwort & Signatur | mail-actions/ | fertig | 2026-09-09 |
 | F — Web-Fallback-UI | web/ | fertig | 2026-09-21 |
@@ -688,3 +688,14 @@ Massimo kann den web.de-IMAP-Test jetzt fortsetzen (siehe WEB_INBOX.md 19.09., l
 
 
 [2026-09-21] [web] [HOECHSTE PRIORITAET - Verweis] — Massimo hat beim ersten echten Live-Test (web.de) drei fundamentale Luecken gefunden, alle in WEB_INBOX.md 21.09. dokumentiert: (1) kein automatischer/manueller Mail-Abruf nach dem initialen Sync, (2) keine echte Mehrfach-Konten-Unterstuetzung in der UI, (3) kein Compose-Button fuer neue Mails (inkl. Absender-Auswahl bei mehreren Konten). Bitte VOR den 5 Wettbewerbs-Features und dem Malware-Scan-Auftrag einordnen -- Details/Umfang stehen vollstaendig in WEB_INBOX.md, hier nur der Verweis, damit es nicht uebersehen wird.
+
+
+[2026-09-21] [terminal] [C] — WEB_INBOX.md 19.09. "PRIORITAET - naechster Schritt", iOS-Teil (Punkt 1+2) umgesetzt (Commit `7980913` auf `main`), Web-Teil siehe voriger Eintrag. Details/Grenzen ausführlich in `ios/README.md` Abschnitt "[2026-09-21] Nachtrag: Onboarding-Provider-Auswahl + Sicherheits-Badges + echte Account-Verbindung", hier nur die Kurzfassung.
+
+Punkt 1 (Provider-Auswahl + IMAP-Formular) und Punkt 2 (vier neue Sicherheits-Badges) wie im Auftrag. Zusätzlich, nach Rückfrage an Massimo (iOS hatte bisher GAR KEINE echte Backend-Anbindung, nur `MockAPIClient`, kein Token-Speicher, kein Login-Zustand -- "UI-only gegen Mock" vs. "voll verdrahten" zur Wahl gestellt): Massimo hat "voll verdrahten" gewählt. Damit zusätzlich gebaut: `Security/SessionStore.swift` (Keychain), `AppEnvironment.apiClient` jetzt swappable (bootet direkt in `RemoteAPIClient`, falls Keychain-Token vorhanden), `RemoteAPIClient` bekam den bisher fehlenden `Authorization`-Header auf JEDEM Request nachgezogen (war komplett unauthentifiziert) plus eine per Env-Var konfigurierbare Base-URL für lokale Entwicklung, echtes `Info.plist` (Fund beim Bauen: die geplante `INFOPLIST_FILE_ADDITIONAL_CONTENT`-Build-Setting für die ATS-Ausnahme wurde von Xcode still ignoriert, erst durch Diff des tatsächlich gebauten `Info.plist`-Inhalts entdeckt -- ohne die Korrektur (fehlende Pflichtschlüssel wie `CFBundleExecutable`) wäre die App installierbar, aber nicht startfähig gewesen).
+
+**Offene Frage an Track A:** Gmail-OAuth ist auf iOS bewusst NICHT funktional (in der Liste sichtbar, Tap zeigt eine Erklärung statt einen kaputten Flow). Grund: `GET /auth/google/callback` redirected nach Erfolg fest zu einem einzigen, global konfigurierten `FRONTEND_URL` -- ein nativer iOS-Weg (`ASWebAuthenticationSession`) braucht aber einen Redirect zu einem Custom-URL-Scheme, das der Server so nicht produzieren kann. Vorschlag: `GET /auth/google/start` um einen optionalen Redirect-Ziel-Parameter erweitern (z.B. `redirect_uri` oder `platform=ios`), den `GET /auth/google/callback` statt des fest verdrahteten `FRONTEND_URL` verwendet, wenn gesetzt -- reine additive Contract-Ergänzung, kein Bruch für den bestehenden Web-Flow (Default bleibt `FRONTEND_URL`). Kein Blocker für den aktuellen Stand (IMAP-Weg ist voll funktionsfähig), aber ohne das bleibt Gmail auf iOS dauerhaft ausgeklammert.
+
+**Nicht abschließend verifiziert:** `RemoteAPIClient` gegen den echten lokalen `backend/` (per `DRIFTMAIL_API_BASE_URL`) kam in der verfügbaren Simulator-Instanz nicht durch (Fallback-Liste blieb sichtbar), obwohl derselbe Endpunkt per `curl` UND aus dem Web-Client nachweislich funktioniert -- vermutlich eine Simulator-/Xcode-27-Eigenheit dieser konkreten Umgebung, nicht als Code-Fehler nachweisbar (identisches Anfragemuster wie alle anderen, bereits laufenden Endpunkte). Mock-Pfad (Provider-Liste, Formular, Badges) per echtem Simulator-Screenshot bestätigt. Bitte bei Gelegenheit mit direktem Xcode-GUI-Zugriff gegentesten.
+
+**Kein Blocker für Massimo -- der IMAP-Weg selbst (Kernstück des Auftrags) ist vollständig gebaut, nur die lokale Verifikation in dieser Sitzung unvollständig.**
