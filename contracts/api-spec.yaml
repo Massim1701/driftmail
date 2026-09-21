@@ -383,6 +383,25 @@ paths:
         "204":
           description: Entfernt
 
+  /contacts:
+    get:
+      summary: >
+        [2026-09-21] WEB_INBOX.md "FUENF NEUE KOMFORT-FEATURES", Punkt 2
+        "Kontakt-Autovervollstaendigung beim Verfassen": bekannte
+        Adressen fuer An/CC/BCC-Vorschlaege im Compose-Screen. Einfache
+        Ableitung aus bisherigen Absenderadressen (empfangene Mail, ueber
+        alle eigenen Konten) und bereits gesendeten Adressen
+        (outgoing_send_log) -- kein eigenes Kontakte-Feature/eigene
+        Tabelle.
+      responses:
+        "200":
+          description: Bekannte Adressen, dedupliziert, alphabetisch sortiert
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
+
   /messages:
     get:
       summary: >
@@ -1091,6 +1110,7 @@ paths:
               type: object
               properties:
                 accentTheme: { type: string, enum: [teal, ocean_blue, violett, koralle, ocean_verlauf] }
+                strictUnknownSenders: { type: boolean }
       responses:
         "200":
           description: Gespeicherte Einstellungen
@@ -1197,6 +1217,16 @@ components:
         classification:
           type: string
           enum: [safe, spam, phishing, unclear]
+        inReplyToMessageId:
+          type: string
+          format: uuid
+          nullable: true
+          description: >
+            [2026-09-21] WEB_INBOX.md "FUENF NEUE KOMFORT-FEATURES", Punkt 4
+            "Threaded Ansicht" -- vorher nur auf MessageDetail. Grundlage fuer
+            client-seitiges Gruppieren von Nachrichten in der Listenansicht
+            (Eltern-Verweis nur innerhalb desselben Kontos aufloesbar, siehe
+            backend/README.md).
 
     MessageDetail:
       allOf:
@@ -1326,6 +1356,16 @@ components:
             Zeile, aktiver Ordner) -- siehe design-tokens.json
             color.accentThemes. danger/warning/success bleiben fest für
             alle User.
+        strictUnknownSenders:
+          type: boolean
+          description: >
+            [2026-09-21] WEB_INBOX.md "FUENF NEUE KOMFORT-FEATURES" Punkt 1:
+            wenn true (Default), zeigen Web/iOS Mails von Absendern ohne
+            Whitelist-Eintrag (isNewSender=true, siehe MessageDetail)
+            staerker hervorgehoben an als das bestehende dezente "Neuer
+            Absender"-Badge -- reine Client-Darstellungsentscheidung, das
+            Backend liefert isNewSender unveraendert, nur dieser Schalter
+            neu.
 
     Contract:
       type: object

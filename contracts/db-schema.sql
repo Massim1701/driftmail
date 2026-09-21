@@ -6,12 +6,16 @@
 -- [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09.,
 -- "Ansicht: Akzentfarben-Auswahl"): accent_theme neu, siehe
 -- design-tokens.json color.accentThemes fuer die 5 moeglichen Werte.
--- Tabelle war schon von echtem Code beschrieben (Auth/Login) -- echte
--- ALTER-TABLE-Migration in postgresStore.ts noetig, siehe dort.
+-- [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 1 ("Unbekannte
+-- Absender streng behandeln"): strict_unknown_senders neu, Default true
+-- (wie im Auftrag vorgegeben). Tabelle war schon von echtem Code
+-- beschrieben (Auth/Login) -- echte ALTER-TABLE-Migration in
+-- postgresStore.ts noetig, siehe dort.
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
     accent_theme TEXT NOT NULL DEFAULT 'teal' CHECK (accent_theme IN ('teal', 'ocean_blue', 'violett', 'koralle', 'ocean_verlauf')),
+    strict_unknown_senders BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 

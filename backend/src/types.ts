@@ -58,6 +58,9 @@ export interface User {
   id: string;
   email: string;
   accentTheme: AccentTheme;
+  // [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 1 ("Unbekannte
+  // Absender streng behandeln"), Default true.
+  strictUnknownSenders: boolean;
   createdAt: string;
 }
 
@@ -324,6 +327,9 @@ export interface ApiMessage {
   receivedAt: string;
   folderId: string;
   classification: Classification;
+  // [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES", Punkt 4
+  // "Threaded Ansicht" -- siehe mappers.ts toApiMessage()-Kommentar.
+  inReplyToMessageId: string | null;
 }
 
 export interface ApiDraft {

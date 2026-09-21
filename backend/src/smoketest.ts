@@ -798,6 +798,14 @@ async function main() {
     const gesendetMessagesRes = await fetch(`${base}/v1/messages?folderId=${gesendetFolder.id}`);
     const gesendetMessages = (await gesendetMessagesRes.json()) as Array<Record<string, unknown>>;
     assert(gesendetMessages.length >= 3, "mindestens 3 lokale Nachrichten im 'gesendet'-Ordner erwartet (3 erfolgreiche Sends oben)");
+    // WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 4 ("Threaded
+    // Ansicht"): inReplyToMessageId muss jetzt auch in der LISTE (nicht nur
+    // im Detail) ankommen -- sendReplyRes oben war eine echte Antwort auf
+    // replyTarget.
+    assert(
+      gesendetMessages.some((m) => m.inReplyToMessageId === replyTarget.id),
+      "die per sendReplyRes gesendete Antwort sollte in der Liste inReplyToMessageId=replyTarget.id tragen",
+    );
 
     // ----- Suche (WEB_INBOX.md 21.09. "Suche ueber Mails", GET
     // /messages?q=...) -- ILIKE/`.includes()`-Substring-Suche über subject,
@@ -1320,6 +1328,40 @@ async function main() {
     const settingsAfterRes = await fetch(`${base}/v1/settings`);
     const settingsAfter = (await settingsAfterRes.json()) as Record<string, unknown>;
     assert(settingsAfter.accentTheme === "ocean_verlauf", "GET /v1/settings sollte die gespeicherte Änderung widerspiegeln");
+
+    // strictUnknownSenders (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-
+    // FEATURES" Punkt 1): Default true, unabhängig von accentTheme änderbar.
+    assert(settingsDefault.strictUnknownSenders === true, "Default fuer strictUnknownSenders sollte true sein");
+    const settingsStrictOffRes = await fetch(`${base}/v1/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ strictUnknownSenders: false }),
+    });
+    assert(settingsStrictOffRes.status === 200, "PUT /v1/settings mit strictUnknownSenders sollte 200 liefern");
+    const settingsStrictOff = (await settingsStrictOffRes.json()) as Record<string, unknown>;
+    assert(settingsStrictOff.strictUnknownSenders === false, "strictUnknownSenders sollte auf false gesetzt worden sein");
+    assert(
+      settingsStrictOff.accentTheme === "ocean_verlauf",
+      "accentTheme sollte durch das reine strictUnknownSenders-Update unangetastet bleiben",
+    );
+
+    // ----- GET /contacts (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-
+    // FEATURES" Punkt 2 "Kontakt-Autovervollstaendigung") -----
+    const contactsRes = await fetch(`${base}/v1/contacts`);
+    assert(contactsRes.status === 200, "GET /v1/contacts sollte 200 liefern");
+    const contacts = (await contactsRes.json()) as string[];
+    assert(Array.isArray(contacts), "GET /v1/contacts sollte ein Array liefern");
+    // kollegin@example.com ist sowohl Absenderin einer Fixture-Mail als auch
+    // Empfaengerin mehrerer POST /messages/send-Aufrufe weiter oben -- muss
+    // trotz beider Quellen nur EINMAL auftauchen (Dedupe).
+    assert(
+      contacts.filter((c) => c === "kollegin@example.com").length === 1,
+      "kollegin@example.com sollte genau einmal in den Kontakten auftauchen (dedupliziert)",
+    );
+    assert(
+      [...contacts].sort((a, b) => a.localeCompare(b)).join(",") === contacts.join(","),
+      "GET /v1/contacts sollte alphabetisch sortiert sein",
+    );
 
     // ----- Autorisierung (echte Auth, [2026-09-10]): ein zweiter, echter
     // User darf NICHT auf die Nachrichten/Ordner des ersten zugreifen, nur

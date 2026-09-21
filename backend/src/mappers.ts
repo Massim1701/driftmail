@@ -76,6 +76,12 @@ export function toApiMessage(m: MessageRecord, security: MessageSecurityRecord |
     receivedAt: m.receivedAt,
     folderId: m.folderId,
     classification: security?.classification ?? "unclear",
+    // [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES", Punkt 4
+    // "Threaded Ansicht": vorher nur auf MessageDetail vorhanden -- der
+    // Client braucht das aber schon in der LISTE, um Nachrichten client-
+    // seitig gruppieren zu koennen, ohne fuer jede einzeln GET /messages/:id
+    // nachzuladen.
+    inReplyToMessageId: m.inReplyToMessageId,
   };
 }
 

@@ -23,7 +23,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Store } from "./store";
 import type {
-  AccentTheme,
   AiPreferenceRecord,
   ContractRecord,
   DraftRecord,
@@ -70,7 +69,13 @@ function configureTypeParsers(): void {
 const SCHEMA_PATH = join(__dirname, "../../../contracts/db-schema.sql");
 
 function rowToUser(r: any): User {
-  return { id: r.id, email: r.email, accentTheme: r.accent_theme, createdAt: r.created_at };
+  return {
+    id: r.id,
+    email: r.email,
+    accentTheme: r.accent_theme,
+    strictUnknownSenders: r.strict_unknown_senders,
+    createdAt: r.created_at,
+  };
 }
 
 function rowToSession(r: any): SessionRecord {
@@ -372,18 +377,23 @@ export class PostgresStore implements Store {
   }
 
   /** [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09.,
-   * "Ansicht: Akzentfarben-Auswahl"): `users.accent_theme` neu. Anders als
-   * die vorige Migration eine reine ADD-COLUMN-Ergaenzung (kein Umbau einer
-   * bestehenden Constraint), `IF NOT EXISTS` macht sie idempotent -- der
-   * DEFAULT sorgt automatisch fuer ein gueltiges Backfill bei bestehenden
-   * Zeilen, kein separater UPDATE-Schritt noetig. */
+   * "Ansicht: Akzentfarben-Auswahl"): `users.accent_theme` neu. [2026-09-21]
+   * "FUENF NEUE KOMFORT-FEATURES" Punkt 1: `users.strict_unknown_senders`
+   * ebenfalls hier ergaenzt, gleiches Muster. Beides reine ADD-COLUMN-
+   * Ergaenzungen (kein Umbau einer bestehenden Constraint), `IF NOT EXISTS`
+   * macht sie idempotent -- der jeweilige DEFAULT sorgt automatisch fuer
+   * ein gueltiges Backfill bei bestehenden Zeilen, kein separater UPDATE-
+   * Schritt noetig. */
   private async migrateUsersAccentTheme(): Promise<void> {
     const { rows: exists } = await this.pool.query(`SELECT to_regclass('users') AS reg`);
-    if (!exists[0]?.reg) return; // frische DB -- CREATE TABLE unten legt die Spalte gleich mit an
+    if (!exists[0]?.reg) return; // frische DB -- CREATE TABLE unten legt die Spalten gleich mit an
 
     await this.pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS accent_theme TEXT NOT NULL DEFAULT 'teal'
         CHECK (accent_theme IN ('teal', 'ocean_blue', 'violett', 'koralle', 'ocean_verlauf'))
+    `);
+    await this.pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS strict_unknown_senders BOOLEAN NOT NULL DEFAULT true
     `);
   }
 
@@ -409,8 +419,15 @@ export class PostgresStore implements Store {
     return rows[0] ? rowToUser(rows[0]) : undefined;
   }
 
-  async updateUserAccentTheme(id: string, accentTheme: AccentTheme): Promise<User | undefined> {
-    const { rows } = await this.pool.query("UPDATE users SET accent_theme = $2 WHERE id = $1 RETURNING *", [id, accentTheme]);
+  async updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders">>): Promise<User | undefined> {
+    const { rows } = await this.pool.query(
+      `UPDATE users SET
+         accent_theme = COALESCE($2, accent_theme),
+         strict_unknown_senders = COALESCE($3, strict_unknown_senders)
+       WHERE id = $1
+       RETURNING *`,
+      [id, patch.accentTheme ?? null, patch.strictUnknownSenders ?? null],
+    );
     return rows[0] ? rowToUser(rows[0]) : undefined;
   }
 
@@ -1017,6 +1034,22 @@ export class PostgresStore implements Store {
       [input.userId, input.recipientAddress, input.timeSinceDraftShownMs ?? null, wasNewRecipient],
     );
     return rowToOutgoingSendLog(rows[0]);
+  }
+
+  async listKnownContactAddresses(userId: string): Promise<string[]> {
+    const { rows } = await this.pool.query(
+      `SELECT DISTINCT LOWER(address) AS address FROM (
+         SELECT m.from_address AS address
+         FROM messages m
+         JOIN mail_accounts ma ON ma.id = m.mail_account_id
+         WHERE ma.user_id = $1
+         UNION
+         SELECT recipient_address AS address FROM outgoing_send_log WHERE user_id = $1
+       ) AS contacts
+       ORDER BY address`,
+      [userId],
+    );
+    return rows.map((r) => r.address);
   }
 
   // ----- Anhänge -----

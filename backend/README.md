@@ -1906,6 +1906,77 @@ einfachen Text-Uebersicht der aktiven Sicherheits-Features, Link zur
 Installationsanleitung) ist noch zu bauen -- dieser Nachtrag liefert nur
 die dafuer noetigen neuen Endpunkte.
 
+## Fuenf Komfort-Features (Backend-Grundlage) -- [2026-09-21] Nachtrag
+(WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES")
+
+Backend-Bausteine fuer drei der fuenf vorgeschlagenen Komfort-Features
+(UI folgt in Web/iOS). Die anderen zwei brauchten keine Backend-Aenderung
+bzw. existierten bereits, siehe unten.
+
+**1) "Unbekannte Absender streng behandeln":** `users.strict_unknown_senders`
+(Default `true`, wie im Auftrag vorgegeben) -- neues Feld in `GET`/`PUT
+/settings` neben `accentTheme` (siehe Abschnitt "Einstellungsbereich"
+oben, `updateUserAccentTheme()` dafuer zu `updateUserSettings()`
+verallgemeinert statt einer zweiten near-doppelten Methode). Reine
+Client-Darstellungsentscheidung -- das Backend liefert `isNewSender`
+unveraendert weiter, nur dieser Schalter ist neu. Migration laeuft ueber
+dieselbe `migrateUsersAccentTheme()`-Methode wie `accent_theme` (gleiches
+ADD-COLUMN-Muster, dort inzwischen treffender benannt "beide neuen
+users-Spalten").
+
+**2) Kontakt-Autovervollstaendigung:** neuer Endpunkt `GET /contacts`
+(`src/routes/contacts.ts`) -- bekannte Adressen fuer An/CC/BCC-Vorschlaege
+im Compose-Screen. Einfache Ableitung aus bisherigen Absenderadressen
+(empfangene Mail, ueber ALLE eigenen Konten hinweg) und bereits gesendeten
+Adressen (`outgoing_send_log`), dedupliziert (case-insensitive) und
+alphabetisch sortiert -- kein eigenes Kontakte-Feature/keine eigene
+Tabelle, wie im Auftrag ausdruecklich als ausreichend markiert.
+
+**3) Entwuerfe automatisch speichern:** KEINE Backend-Aenderung noetig --
+`POST`/`PATCH /drafts/{id}` existieren bereits vollstaendig (seit
+09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags"). Reine
+Client-Aufgabe: periodisch/bei Fokus-Verlust denselben Mechanismus
+aufrufen, den ein manuelles Speichern schon nutzen wuerde.
+
+**4) Threaded Ansicht:** `Message` (die LISTEN-Form, `GET /messages`)
+bekommt `inReplyToMessageId` -- vorher nur auf `MessageDetail` vorhanden.
+Ohne dieses Feld haette der Client fuer jede einzelne Nachricht in der
+Liste extra `GET /messages/{id}` nachladen muessen, nur um sie gruppieren
+zu koennen. **Bewusste Grenze:** kein serverseitiges "vollstaendiges
+Thread"-Konzept (kein `thread_id`, keine Mehrfach-Message-ID-Aufloesung
+ueber den `References`-Header) -- `inReplyToMessageId` zeigt weiterhin nur
+auf den DIREKTEN Elternteil (siehe `mail/inReplyTo.ts`-Kommentar, "mehr
+Praezision braeuchte echtes Threading ueber References, nicht Umfang
+dieses Auftrags"). Client-seitiges Gruppieren kann deshalb nur Ketten
+INNERHALB derselben Ordner-Abfrage aufloesen; ein Elternteil in einem
+anderen Ordner (z.B. eine Antwort in "gesendet" auf eine Mail in
+"eingang") bleibt unverknuepft. Dokumentiert als Ausbaustufe, nicht Teil
+dieses Schritts.
+
+**5) Manueller Abmelden-Button auf jeder Mail mit List-Unsubscribe-Header:**
+bereits VOLLSTAENDIG erledigt, ohne dass dieser Schritt noch etwas tun
+musste -- `MessageDetail.canUnsubscribe` (`src/mappers.ts`) war schon
+immer rein von der Existenz eines gueltigen Headers abgeleitet
+(`parseListUnsubscribeHeader(m.rawHeaders) !== null`), NIE von der
+Spam-Klassifikation abhaengig. Web (`MessageDetailPane.tsx`) und iOS
+(`MessageDetailView.swift`) zeigen den Button entsprechend schon
+unabhaengig von der Klassifikation. Der einzige echte Fehlteil war der
+zuvor behobene fehlende ECHTE Netzwerk-Aufruf (siehe Abschnitt "Automatische
+Abmeldung bei Spam" oben, "LUECKE SCHLIESSEN" Nachtrag) -- der ist bereits
+fertig.
+
+**Tests:** `smoketest.ts` deckt `strictUnknownSenders` (Default,
+unabhaengige Aenderung ohne `accentTheme` zu beruehren) und `GET /contacts`
+(Dedupe ueber zwei Quellen, Sortierung) ab, sowie `inReplyToMessageId` in
+der Nachrichtenliste anhand der bereits gesendeten Test-Antwort. Migration
+manuell gegen eine simulierte Alt-Schema-DB verifiziert. Gruen in-memory +
+gegen frisches Postgres.
+
+**Uebergabe an Track C/F:** UI fuer alle fuenf Punkte noch zu bauen (Punkt
+5 ist Backend-seitig schon fertig, aber pruefen ob Web/iOS den Button
+wirklich schon ueberall zeigen, nicht nur behaupten). Details siehe
+WEB_INBOX.md-Originaltext fuer die genauen UI-Vorschlaege pro Punkt.
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war

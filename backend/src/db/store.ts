@@ -18,7 +18,6 @@
 import { randomUUID } from "node:crypto";
 import { PostgresStore } from "./postgresStore";
 import type {
-  AccentTheme,
   AiPreferenceRecord,
   ContractRecord,
   DraftRecord,
@@ -57,7 +56,10 @@ export interface Store {
   /** Für GET/PUT /settings (routes/settings.ts) -- Auth liefert nur
    * req.userId, kein volles User-Objekt. */
   getUserById(id: string): Promise<User | undefined>;
-  updateUserAccentTheme(id: string, accentTheme: AccentTheme): Promise<User | undefined>;
+  /** [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 1: erweitert um
+   * strictUnknownSenders, `updateUserAccentTheme` bewusst nicht zu einer
+   * zweiten near-doppelten Methode ausgebaut. */
+  updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders">>): Promise<User | undefined>;
   createMailAccount(input: Omit<MailAccountRecord, "id">): Promise<MailAccountRecord>;
   listMailAccounts(): Promise<MailAccountRecord[]>;
   getMailAccount(id: string): Promise<MailAccountRecord | undefined>;
@@ -169,6 +171,14 @@ export interface Store {
   hasSentTo(userId: string, recipientAddress: string): Promise<boolean>;
   recordOutgoingSend(input: { userId: string; recipientAddress: string; timeSinceDraftShownMs?: number | null }): Promise<OutgoingSendLogRecord>;
 
+  /** [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES", Punkt 2
+   * "Kontakt-Autovervollstaendigung": einfache Ableitung aus bisherigen
+   * From-Adressen (empfangene Mail, ueber alle Konten des Users) UND
+   * bereits an sie gesendeten Adressen (outgoing_send_log) -- kein eigenes
+   * Kontakte-Feature/-Tabelle noetig, wie im Auftrag ausdruecklich erlaubt.
+   * Dedupliziert, alphabetisch sortiert. */
+  listKnownContactAddresses(userId: string): Promise<string[]>;
+
   // ----- Anhänge (POST /attachments + POST /messages/send, WEB_INBOX.md
   // 09.09. "Erweiterung des Send-Endpunkt-Eintrags von eben") -----
   insertAttachment(input: Omit<MessageAttachmentRecord, "id">): Promise<MessageAttachmentRecord>;
@@ -259,7 +269,13 @@ export class InMemoryStore implements Store {
   // ----- Users / Accounts -----
 
   async createUser(email: string): Promise<User> {
-    const user: User = { id: randomUUID(), email, accentTheme: "teal", createdAt: new Date().toISOString() };
+    const user: User = {
+      id: randomUUID(),
+      email,
+      accentTheme: "teal",
+      strictUnknownSenders: true,
+      createdAt: new Date().toISOString(),
+    };
     this.users.push(user);
     return user;
   }
@@ -272,10 +288,11 @@ export class InMemoryStore implements Store {
     return this.users.find((u) => u.id === id);
   }
 
-  async updateUserAccentTheme(id: string, accentTheme: AccentTheme): Promise<User | undefined> {
+  async updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders">>): Promise<User | undefined> {
     const user = await this.getUserById(id);
     if (!user) return undefined;
-    user.accentTheme = accentTheme;
+    if (patch.accentTheme !== undefined) user.accentTheme = patch.accentTheme;
+    if (patch.strictUnknownSenders !== undefined) user.strictUnknownSenders = patch.strictUnknownSenders;
     return user;
   }
 
@@ -655,6 +672,14 @@ export class InMemoryStore implements Store {
     };
     this.outgoingSendLog.push(record);
     return record;
+  }
+
+  async listKnownContactAddresses(userId: string): Promise<string[]> {
+    const accountIds = new Set((await this.listMailAccountsByUserId(userId)).map((a) => a.id));
+    const fromAddresses = this.messages.filter((m) => accountIds.has(m.mailAccountId)).map((m) => m.fromAddress);
+    const sentAddresses = this.outgoingSendLog.filter((e) => e.userId === userId).map((e) => e.recipientAddress);
+    const unique = new Set([...fromAddresses, ...sentAddresses].map((a) => a.toLowerCase()));
+    return Array.from(unique).sort();
   }
 
   // ----- Anhänge -----
