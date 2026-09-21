@@ -918,3 +918,23 @@ Kein Contract-Bruch, reine UI-/Content-Arbeit. Bitte NACH dem laufenden Testen (
 
 
 [2026-09-21] [offen] [KLEINE VERKNUEPFUNG - Neuer-Absender-Badge mit Whitelist verbinden] [Track C/F] — Massimo: wenn eine Mail das "Neuer Absender"-Kennzeichen zeigt (isNewSender, siehe fruehere Sicherheits-Ergaenzung), soll der User direkt an dieser Stelle die Moeglichkeit haben, den Absender zur Whitelist (trusted_senders, POST /trusted-senders existiert bereits) hinzuzufuegen -- z.B. ein kleiner Button/Link direkt neben oder unter dem Badge ("Absender vertrauen"), nicht erst ueber die Einstellungen suchen muessen. Nach Klick verschwindet das Neuer-Absender-Kennzeichen fuer kuenftige Mails von dieser Adresse (Whitelist greift wie bereits spezifiziert). Kein Contract-Bruch (Endpunkt existiert), reine UI-Verknuepfung zweier bereits bestehender Features. Kein Blocker, kleine Ergaenzung.
+
+
+[2026-09-21] [offen] [FUENF NEUE KOMFORT-FEATURES] [contracts + Track A + Track C/F] — Massimo hat fuenf weitere Vorschlaege bestaetigt, alle sollen umgesetzt werden. Vorab geklaert: dauerhafte Anmeldung ist bereits geloest (iOS Keychain, Web localStorage), kein Bug.
+
+**1) Unbekannte Absender standardmaessig kritisch behandeln, per Einstellung aenderbar (Track A + C/F):**
+Mails von Absendern, die NICHT auf der Whitelist stehen (isNewSender=true), sollen visuell staerker als "kritisch zu pruefen" markiert werden (z.B. deutlicheres Badge/Rahmen, nicht nur der bestehende dezente "Neuer Absender"-Hinweis), bis der User ueber den neuen "Absender vertrauen"-Button (siehe frueherer Auftrag) bestaetigt. Verhalten soll in den Einstellungen (siehe neuer Einstellungsbereich-Auftrag) umschaltbar sein -- z.B. "Unbekannte Absender streng behandeln" an/aus, Default AN.
+
+**2) Kontakt-Autovervollstaendigung beim Verfassen (Track A + C/F):**
+Im An/CC/BCC-Feld des Compose-Screens: waehrend der User tippt, Vorschlaege aus bereits bekannten Absendern/Empfaengern (aus messages-Historie ableitbar, kein neues Kontakte-Feature noetig fuer v1 -- einfache Ableitung aus bisherigen From/To-Adressen des Users reicht).
+
+**3) Entwuerfe automatisch speichern waehrend des Tippens (Track A + C/F):**
+Compose-Screen speichert periodisch (z.B. alle paar Sekunden oder bei Fokus-Verlust) automatisch als Entwurf in die bestehende drafts-Tabelle, ohne dass der User explizit "Speichern" klicken muss -- nichts geht bei Absturz/versehentlichem Schliessen verloren.
+
+**4) Threaded Ansicht (Track A + C/F):**
+Mails, die zum selben Gespraech gehoeren (ueber in_reply_to_message_id-Kette, wird ja bereits fuer den IBAN-Wechsel-Check verwendet), sollen in der Listenansicht gruppiert/zusammengefasst dargestellt werden statt als voellig getrennte Eintraege -- z.B. nur die neueste Nachricht sichtbar mit Anzahl "+3 aeltere", aufklappbar.
+
+**5) Manueller Abmelden-Button auf einzelnen Mails (Track A + C/F):**
+Zusaetzlich zur bestehenden automatischen Spam-Abmeldung: ein sichtbarer "Abmelden"-Button auf JEDER Mail, die einen List-Unsubscribe-Header hat (RFC-8058), unabhaengig von der Spam-Klassifikation -- z.B. auch fuer legitime Newsletter, die der User einfach nicht mehr will. Nutzt denselben bestehenden Unsubscribe-Mechanismus, nur als manuell auffindbare UI-Aktion statt nur automatisch bei erkanntem Spam.
+
+Kein Contract-Bruch bei 1/2/5 (additive UI/Ableitung aus bestehenden Daten). Bei 3/4 bitte kurz Umfang/Grenzen in SYNC.md dokumentieren. Bitte nach dem aktuell laufenden Testen und dem Einstellungsbereich-Auftrag einordnen, kein Blocker.
