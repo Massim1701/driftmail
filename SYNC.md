@@ -785,3 +785,18 @@ Damit sind alle vier WEB_INBOX.md-21.09.-Auftraege (Compose/Absender-Auswahl/Wei
 **Tests:** `tsc -b`/`vite build`/`oxlint` gruen, kompletter Flow (aktivieren/Key/Consent/speichern/Reload-Persistenz/ausschalten-setzt-zurueck, inkl. des CORS-Fixes) per Browser-Automation gegen den erweiterten Mock-Server verifiziert. Details in `web/README.md` "KI-Anbindung (BYOK) + On-Device-KI-Versuch".
 
 Track C (iOS) laeuft parallel in einer eigenen Session, hier nicht angefasst.
+
+
+[2026-09-21] [terminal] [C] — Track C (iOS) der KI-Anbindungs-Korrektur (TERMINAL_INBOX.md 21.09. "KORREKTUR", ersetzt WEB_INBOX.md "ECHTE KI-ANBINDUNG" c3ec563) fertig, Commit `a422e06`. Backend war bereits `efca792`, Web `24c08ca`.
+
+**Echte Foundation-Models-Anbindung, kein Stub:** `OnDeviceAiAdapter.swift` versucht fuer `summarize`/`extractContract`/`draftReply` zuerst einen echten `FoundationModels`-Aufruf (`SystemLanguageModel`, `LanguageModelSession`, `@Generable`/`@Guide` fuer strukturierte Ausgabe bei `summarize`/`extractContract` statt manuellem JSON-Parsing wie im Backend) -- verfuegbar ab iOS 26, im SDK dieser Umgebung (Xcode 27.0) tatsaechlich vorhanden, per `.swiftinterface`-Inspektion verifiziert statt angenommen. Faellt bei Nichtverfuegbarkeit/Fehler graceful auf die bestehende Keyword-Heuristik zurueck, jetzt ehrlich als `AiSource.heuristic` statt `.onDevice` getaggt (dritter Wert, mirrort Backend/Web). `analyzeMail` bewusst unveraendert (Sicherheitsklassifikation haengt nie von KI-Einstellungen ab). `CapabilityChecker.swift` fragt jetzt `SystemLanguageModel.default.isAvailable` echt ab statt einer Geraetemodell-Ratelogik.
+
+**Echte Verifikation ausserhalb der App-UI:** die authentifizierten Screens sind weiterhin durchs bekannte Onboarding-Gate blockiert (keine Test-Mailbox in dieser Umgebung, kein erneuter Bypass-Versuch). Stattdessen ein eigenstaendiges Swift-Testprogramm (nicht Teil der App) mit identischem API-Aufrufmuster, kompiliert gegen dieselbe SDK-Version auf diesem Host: `SystemLanguageModel.default.availability` liefert echt `.available`, ein echter `respond(to:)`-Freitextaufruf UND ein echter `respond(to:generating:)`-Aufruf mit einem `@Generable`-Testtyp liefern beide echte Modellantworten (nicht nur Typ-Check). Beweist, dass die verwendete API real funktioniert, nicht dass exakt `OnDeviceAiAdapter.swift` innerhalb der laufenden App denselben Pfad nimmt (dafuer fehlt weiterhin der Klick-Zugriff).
+
+**`AppEnvironment.swift`:** ersetzt das nie tatsaechlich aufgerufene `activeAdapter`/`cloudFallbackAdapter`-Paar durch echte `summarize(messageId:bodyText:)`/`requestReplyDraft(messageId:thread:)` (On-Device zuerst, `apiClient` -- also Backend-BYOK/Heuristik -- als Fallback). Neue `AiSettingsView.swift` (Settings-UI: Provider-Toggle nur `anthropic`/`openai`, `SecureField`, Consent-Text) unter `FolderListView`s Settings-Sheet eingehaengt. `APIClient` bekam `fetchAiSettings()`/`updateAiSettings(...)`, `requestReplyDraft` liefert jetzt zusaetzlich `source` (vorher fehlte das Feld, siehe Backend-Fix).
+
+**Tests:** `xcodebuild build` BUILD SUCCEEDED, sauberer Uninstall/Install/Launch im Simulator, `simctl spawn log show` ohne Crash/`DecodingError`/`fatalError`. Details in `ios/README.md` "KI-Anbindung (BYOK) + echte Foundation-Models-Anbindung".
+
+**Weitergabe an Track A:** Web hat einen echten CORS-Bug im Backend gefunden (`backend/src/middleware/cors.ts` fehlt `PUT` in `Access-Control-Allow-Methods`, `PUT /ai-settings` schlaegt deshalb aus einem echten Browser fehl, obwohl der Smoketest gruen ist -- Node-`fetch()` im Smoketest umgeht CORS-Preflight komplett). Bewusst nicht selbst gefixt (iOS-Track-Scope), siehe voriger Eintrag.
+
+Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
