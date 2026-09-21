@@ -841,7 +841,7 @@ POST /messages/send akzeptiert jetzt bcc (analog zu cc, bereits vorhanden). Comp
 **Kontext, ehrlich benannt:** diese sechs Luecken zusammen (automatischer Abruf, Mehrfach-Konten, Compose-Button, Weiterleiten, Suche, CC/BCC) haetten von Anfang an als explizite Grundfunktions-Checkliste behandelt werden muessen, nicht erst durch Massimos eigenes Live-Testen auffallen. Bitte alle sechs als zusammenhaengenden Block VOR den 5 Wettbewerbs-Features und dem Malware-Scan-Auftrag einordnen -- das sind keine "nice-to-haves", sondern fehlende Grundfunktionen eines Mail-Clients.
 
 
-[2026-09-21] [teilweise erledigt: Track C (b32eedf) -- Track F noch offen] [DESIGN-RICHTUNG - von Massimo bestaetigt] [Track C/F, Design/Polish-Ebene] — Massimo hat nach Recherche zu den bestbewerteten Mail-Clients (Superhuman durchgehend als Testsieger in mehreren unabhaengigen Rankings 2026) eine Design-Richtung bestaetigt, per Mockup gezeigt und freigegeben ("so ist schon gut, Farben koennen wir aendern" -- Struktur bestaetigt, Farbwerte bleiben flexibel/Detailarbeit fuer spaeter).
+[2026-09-21] [erledigt: Track C (b32eedf) + Track F (8184b4f)] [DESIGN-RICHTUNG - von Massimo bestaetigt] [Track C/F, Design/Polish-Ebene] — Massimo hat nach Recherche zu den bestbewerteten Mail-Clients (Superhuman durchgehend als Testsieger in mehreren unabhaengigen Rankings 2026) eine Design-Richtung bestaetigt, per Mockup gezeigt und freigegeben ("so ist schon gut, Farben koennen wir aendern" -- Struktur bestaetigt, Farbwerte bleiben flexibel/Detailarbeit fuer spaeter).
 
 **Bestaetigte Struktur-Prinzipien (Referenz: Superhuman-Stil):**
 1. Sehr schmale, reduzierte Sidebar -- nur Ordnernamen mit kleinem Icon, kein visuelles Uebergewicht.

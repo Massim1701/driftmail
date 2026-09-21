@@ -1004,3 +1004,16 @@ App war bereits sehr nah an der Zielrichtung (schlanke `.plain`-Listen ohne Kart
 **Tests:** `xcodebuild` BUILD SUCCEEDED, sauberer Uninstall/Install/Launch im Simulator, `log show` ohne Crash/Fatal. Gleiche bekannte Grenze wie bei jedem vorherigen iOS-Nachtrag: kein Weg am Onboarding-Gate vorbei ohne echte Test-Mailbox, die eigentliche Ordner-/Nachrichtenliste liess sich deshalb nur per Code-Review + erfolgreichem Build verifizieren, nicht live durchklicken.
 
 **Kein Blocker.**
+
+
+[2026-09-21] [terminal] [F] — WEB_INBOX.md 21.09. "DESIGN-RICHTUNG - von Massimo bestaetigt", Track F fertig (Commit `8184b4f`), aufbauend auf Track C (`b32eedf`, siehe SYNC.md-Eintrag von eben).
+
+Sidebar 220px -> 188px, weniger visuelles Gewicht (kleineres Brand-Label, Schatten auf dem aktiven Theme-Umschalter entfernt). Listenzeilen: Karten-Optik (Rahmen + `border-radius` + `box-shadow` im aktiven Zustand) entfernt, ersetzt durch duenne `border-bottom`-Trennlinien und einen schlanken linken Akzent-Balken (2px) fuer die Auswahl statt Vollrahmen+Schatten. Repo-weite Pruefung (`grep` ueber alle `components/*.css` nach Hex-Farben/`rgba()` ausserhalb `color-mix()`) fand keinen einzigen Fund ausserhalb der drei erlaubten Rollen (accent/danger/warning/success) -- das bestehende Design-System war schon diszipliniert, die einzige noetige Aenderung war das Entfernen der card-artigen Schatten/Raender, die optisch mit den Sicherheits-Badges konkurrierten.
+
+Cmd/Ctrl+K: echter globaler `keydown`-Listener in `App.tsx` fokussiert das bestehende Suchfeld, dezenter `⌘K`-Hinweis in der Sidebar (`.cmdk-hint`) -- bewusst kein volles Befehlspaletten-Overlay (Auftrag: "kein Muss fuer den ersten Entwurf").
+
+**Bewusst nicht umgesetzt:** derselbe Fund wie bei Track C -- kein Ungelesen-Punkt, da `Message`/`MessageDetail` im Contract kein Gelesen/Ungelesen-Feld haben (Auftrag verlangt ausdruecklich "Kein Contract-Change"), ein reiner Client-Fake (z.B. `localStorage`) waere irrefuehrend und geraete-uebergreifend inkonsistent.
+
+**Tests:** `tsc -b`/`vite build`/`oxlint` gruen (bestehende 6er-Warnungs-Baseline, keine neuen). Per Browser-Automation gegen den Mock-Server verifiziert: Sidebar sichtbar schmaler, Quarantaene-Ordner zeigt drei Mails mit dem "Phishing-Verdacht"-Badge als einzigem farbigen Element in der Zeile, ausgewaehlte Zeile mit schlankem Akzent-Balken statt Vollrahmen, Cmd+K fokussiert das Suchfeld und liefert ein echtes Suchergebnis, Detailansicht einer Quarantaene-Mail zeigt vier Sicherheits-Badges klar farbig neben durchgehend neutralen Aktions-Buttons. Konsole in allen Schritten ohne Fehler.
+
+**Kein Blocker.** Damit sind beide Clients (iOS + Web) fuer diesen Auftrag fertig.
