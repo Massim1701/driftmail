@@ -813,3 +813,6 @@ Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
 **Tests:** `smoketest.ts` nutzt die vorhandenen Fixtures, um echtes Verhalten zu beweisen: Fixture 3s `mailto:`-Ziel laeuft ueber den `FixtureMailAdapter` (simuliert immer Erfolg) -> `confirmed`. Fixture 5s `https:`-Ziel zeigt auf eine frei erfundene, nicht aufloesbare Test-Domain -- der jetzt echte HTTP-Aufruf schlaegt zwangslaeufig fehl (DNS-Fehler) -> `failed`, der Beweis, dass hier wirklich ein Netzwerk-Request passiert. Gruen in-memory + gegen frisches Postgres. iOS `xcodebuild` BUILD SUCCEEDED, Web `tsc -b`/`vite build` gruen.
 
 **Kein Blocker, keine offene Frage.**
+
+
+[2026-09-21] [terminal] [C/F] — Zwei kleine WEB_INBOX.md-21.09.-Auftraege erledigt (Commit `96d9472`): "Inhalt" -> "Check Mail" (Label-Umbenennung, ausdruecklich von Massimo entschieden) und ein "Absender vertrauen"-Button direkt am "Neuer Absender"-Badge in der Detailansicht (ruft `POST /trusted-senders` auf, Endpunkt existierte im Contract bereits, war aber nur lesend angebunden -- optimistisches Update auf beiden Plattformen, Badge verschwindet sofort fuer alle Nachrichten dieses Absenders). Web `tsc -b`/`vite build`/`oxlint` gruen, iOS `xcodebuild` BUILD SUCCEEDED, sauberer Uninstall/Install/Launch ohne Crash. Kein Blocker.
