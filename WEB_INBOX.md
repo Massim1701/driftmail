@@ -809,3 +809,10 @@ Viele User haben mehrere Mail-Konten (privat, geschaeftlich, verschiedene Anbiet
 Kein Contract-Bruch bei mail_accounts selbst (existiert schon fuer genau diesen Zweck), aber POST /accounts/GET /accounts und der Sync-Mechanismus muessen fuer "mehrere aktive Konten gleichzeitig" statt "genau ein Konto" gedacht werden, falls das bisher implizit nur fuer eins ausgelegt war -- bitte pruefen und in SYNC.md dokumentieren.
 
 HOECHSTE PRIORITAET -- bitte vor allen anderen aktuell offenen Punkten (fehlender Compose-Button, 5 Wettbewerbs-Features, Malware-Scan) einordnen, da dies die Kernfunktion "wird ueberhaupt neue Mail angezeigt, von wie vielen Konten" direkt betrifft.
+
+
+[2026-09-21] [offen] [ERGAENZUNG - verbindet die zwei Auftraege von eben] [Track C/F] — Massimo: wenn mehrere Konten empfangen koennen, muss das Verfassen-Fenster (der fehlende Compose-Button, siehe Eintrag "BUG - Massimo beim echten Live-Test entdeckt" von eben) auch eine ABSENDER-AUSWAHL haben, sobald mehr als ein Konto verbunden ist -- nicht einfach implizit vom ersten/aktuell aktiven Konto senden.
+
+Konkret: Compose-Screen bekommt ein "Von"-Feld/Dropdown mit allen verbundenen Konten (nur sichtbar/relevant, wenn mehr als eins existiert -- bei genau einem Konto kein unnoetiges UI-Element). Server-seitig muss POST /messages/send dann wissen, ueber WELCHES Konto/welchen Provider tatsaechlich versendet wird (relevant fuer OAuth-Token-Auswahl bei Gmail vs. IMAP-SMTP-Zugangsdaten bei anderen Kontenarten) -- pruefen, ob der Endpunkt das schon unterstuetzt oder ob ein accountId-Feld noch ergaenzt werden muss.
+
+Bitte beide Auftraege (fehlender Compose-Button + Mehrfach-Konten-Unterstuetzung) zusammen einplanen, nicht den Compose-Screen zuerst ohne Absender-Auswahl bauen und spaeter nochmal anfassen muessen.
