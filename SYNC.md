@@ -868,3 +868,18 @@ Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
 **Tests:** Smoketest deckt `strictUnknownSenders` (Default + unabhaengige Aenderung), `GET /contacts` (Dedupe, Sortierung) und `inReplyToMessageId` in der Liste ab. Migration fuer beide neuen `users`-Spalten manuell gegen eine simulierte Alt-Schema-DB verifiziert. Gruen in-memory + gegen Postgres.
 
 **Uebergabe an Track C/F:** UI fuer Punkt 1 (staerkeres Badge + Settings-Toggle), 2 (Autocomplete in To/CC/BCC), 3 (Autosave-Timer im Compose-Screen), 4 (Gruppierte Listenansicht) noch zu bauen. Punkt 5 ist komplett fertig, nur gegenpruefen dass beide Clients den Button wirklich ueberall zeigen.
+
+
+[2026-09-21] [terminal] [C] — WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES", iOS-UI fuer Punkte 1-4 fertig (Commit `cbfbeec`), aufbauend auf der Backend-Grundlage aus dem vorherigen Schritt (`571ee2c`). Web-Teil laeuft parallel in einem anderen Fork.
+
+**1) Unbekannte Absender streng behandeln:** neuer Toggle in den Einstellungen (Default an, `AppEnvironment.strictUnknownSenders`), wirkt sich nur auf `MessageDetailView` aus (staerkere Hervorhebung bei `isNewSender && !trusted`) -- die Liste selbst hat das Signal im Contract nicht.
+
+**2) Kontakt-Autovervollstaendigung:** `ComposeView` zeigt bis zu 5 Vorschlaege aus `GET /contacts` unter dem fokussierten Feld (To/CC/BCC), matcht gegen das letzte unfertige Adress-Fragment.
+
+**3) Entwuerfe automatisch speichern:** 3s-Debounce nach Tipp-Stille + Flush beim Verlassen des Screens, erster Autosave = `POST /drafts`, danach `PATCH /drafts/{id}`. **Bekannte Luecke:** der Drafts-Contract hat kein `bcc`-Feld -- ein getipptes BCC wird waehrend des Autosaves nicht persistiert (geht beim eigentlichen Senden nicht verloren, aber bei erneutem Oeffnen eines nur autogespeicherten Entwurfs schon).
+
+**4) Threaded Ansicht:** `InboxListView` gruppiert ueber `inReplyToMessageId` bis zum am weitesten zurueckverfolgbaren Elternteil, zeigt nur die neueste Nachricht + "+N aeltere" zum Aufklappen. Gleiche bewusste Grenze wie im Backend dokumentiert: nur innerhalb der geladenen Ordner-Liste, kein Nachladen aus anderen Ordnern. `MockDatabase.json` um eine echte Antwortkette (`msg-014` auf `msg-001`) erweitert, damit die Gruppierung ueberhaupt sichtbares Testmaterial hat.
+
+**Tests:** `xcodebuild` BUILD SUCCEEDED, sauberer Uninstall/Install/Launch ohne Crash/Decode-Fehler (bestaetigt u.a. die neue `inReplyToMessageId`-Spalte in allen Mock-Nachrichten), Screenshot des unveraenderten Onboarding-Screens. Wie bei allen vorherigen iOS-Schritten dieser Session liessen sich die neuen Screens selbst NICHT interaktiv durchklicken (kein Weg am Onboarding-Gate vorbei ohne echte Test-Mailbox, kein Auth-Bypass versucht).
+
+**Kein Blocker.** Damit ist Track C fuer diesen Auftrag fertig; Track F (Web) folgt separat.
