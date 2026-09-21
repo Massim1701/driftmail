@@ -982,3 +982,14 @@ Haftungsausschluss/AGB/Datenschutzerklaerung tragen alle drei einen deutlich sic
 **Berechtigung/Prozess-Hinweis:** da `driftware` ein anderes, bereits live deploytes Repo als das aktuelle Arbeitsverzeichnis ist, hat das Sandbox-Berechtigungssystem den finalen Kachel-Link-Fix zunaechst blockiert ("Out-of-Place Publication") -- Massimo per Rueckfrage explizit um Erlaubnis gebeten, bekommen, dann den Fix gemacht UND (nach einer zweiten expliziten Rueckfrage wegen des Live-Deploys via GitHub Pages) gepusht.
 
 **Kein Blocker.**
+
+
+[2026-09-21] [terminal] [F] — Massimo direkt im Chat: driftmail sollte kein eigenes Impressum mit Platzhaltern bekommen, sondern auf das bereits bestehende Impressum der driftware.online-Landingpage verlinken. Umgesetzt und gleich weiter gedacht: statt nur driftmail umzustellen, gleich SITE-WEIT zentralisiert (driftware-Repo Commit `7fc57b9`, auf Massimos Wunsch "site-weit: alle Apps").
+
+`driftmail/`, `kitchen-king/`, `orakel/` hatten je ein eigenes, inhaltlich identisches Impressum -- jetzt jeweils durch einen minimalen Redirect auf `/impressum.html` ersetzt, interne Links zeigen direkt dorthin. Zusaetzlich alle 15 Dekaden-/Stimmungs-Musikseiten (70er bis 2020er, Workout, Chillhouse, ...) ueber eine einzige Aenderung in `shared/decades.js` (`renderDecadeImpressum()` leitet jetzt per `window.location.replace()` weiter statt den Text erneut zu rendern) -- eine Aenderung deckt alle 15 ab, da sie ihr Impressum bisher gemeinsam ueber eine JS-Funktion gerendert haben.
+
+**Bewusst ausgenommen:** `entruempelung/impressum.html` (gehoert zu einem eigenen Drittgeschaeft mit echter eigener Anschrift, kein Massimo-Projekt) und `snoxi/impressum.html` (mehrsprachig via i18n.js -- eine Umleitung aufs nur-deutsche Root-Impressum waere fuer nicht-deutschsprachige Nutzer eine Verschlechterung).
+
+Alte Pfade (z.B. `/kitchen-king/impressum.html`) bleiben als Redirects erreichbar, falls irgendwo verlinkt. Getestet: lokal per HTTP-Server + echtem Browser durchgeklickt (driftmail/Kitchen King/Orakel + ein Dekaden-Beispiel), Konsole ueberall ohne Fehler.
+
+**Kein Blocker.**
