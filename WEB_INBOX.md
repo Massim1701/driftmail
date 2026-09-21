@@ -818,16 +818,18 @@ Konkret: Compose-Screen bekommt ein "Von"-Feld/Dropdown mit allen verbundenen Ko
 Bitte beide Auftraege (fehlender Compose-Button + Mehrfach-Konten-Unterstuetzung) zusammen einplanen, nicht den Compose-Screen zuerst ohne Absender-Auswahl bauen und spaeter nochmal anfassen muessen.
 
 
-[2026-09-21] [offen] [DREI WEITERE GRUNDFUNKTIONEN - systematisch gegengeprueft] [contracts + Track A + Track C/F] [gleiche hohe Prioritaet wie Sync/Mehrfach-Konten/Compose von eben] — Nach den drei vorherigen Funden wurde die komplette Grundfunktions-Liste eines Mail-Clients gegen SYNC.md geprueft. Drei weitere echte Luecken bestaetigt (Volltextsuche, keine Fehltreffer):
+[2026-09-21] [teilweise erledigt: Punkt 2 (9c3a3ec) + Punkt 3 Backend (9c3a3ec), Punkt 1 + Punkt 2/3 UI noch offen] [DREI WEITERE GRUNDFUNKTIONEN - systematisch gegengeprueft] [contracts + Track A + Track C/F] [gleiche hohe Prioritaet wie Sync/Mehrfach-Konten/Compose von eben] — Nach den drei vorherigen Funden wurde die komplette Grundfunktions-Liste eines Mail-Clients gegen SYNC.md geprueft. Drei weitere echte Luecken bestaetigt (Volltextsuche, keine Fehltreffer):
 
 **1) Weiterleiten (Forward):**
 Bestehender Treffer fuer "Weiterleitung" war ein Fehltreffer (bezog sich auf OAuth-Redirect, nicht auf E-Mail-Weiterleiten). Es gibt aktuell KEINE Moeglichkeit, eine empfangene Mail an eine andere Adresse weiterzuleiten. Vorschlag: neuer Endpunkt oder Erweiterung von POST /messages/send um einen forwardOf-Bezug (analog zu inReplyToMessageId bei Antworten), Compose-Screen vorausgefuellt mit Betreff "Fwd: ..." und zitiertem Originaltext, inkl. Original-Anhaenge optional mit weiterleitbar.
 
-**2) Suche ueber Mails:**
+**2) Suche ueber Mails:** [Backend erledigt: 9c3a3ec]
 Kein einziger Treffer fuer eine Suchfunktion. User muss aktuell jede Mail einzeln durchklicken, keine Moeglichkeit nach Absender/Betreff/Inhalt zu suchen. Vorschlag: GET /messages/search?q=... (oder Query-Parameter am bestehenden Nachrichten-Listen-Endpunkt), mindestens Betreff+Absender durchsuchbar, Volltextsuche im Nachrichtentext als Ausbaustufe falls einfach machbar.
+GET /messages akzeptiert jetzt q (Substring-Suche ueber subject/from_address/from_display_name/body_text). UI-Suchfeld in Web/iOS noch zu bauen.
 
-**3) CC/BCC beim Verfassen:**
+**3) CC/BCC beim Verfassen:** [Backend erledigt: 9c3a3ec]
 Kein einziger Treffer fuer cc/bcc im gesamten Code/Contract. Aktuell vermutlich nur ein einzelnes "An"-Feld beim Senden moeglich. Vorschlag: POST /messages/send und der Compose-Screen (der ja laut Auftrag von eben ohnehin neu/erweitert gebaut wird) um cc- und bcc-Empfaengerlisten ergaenzen -- bietet sich an, direkt zusammen mit dem Compose-Screen und der Absender-Auswahl bei Mehrfach-Konten zu bauen, nicht als getrennter Schritt.
+POST /messages/send akzeptiert jetzt bcc (analog zu cc, bereits vorhanden). CC/BCC-Felder im Compose-Screen selbst (Web/iOS) noch zu bauen -- gehoert zusammen mit dem noch fehlenden Compose-Screen/Absender-Auswahl aus dem Auftrag von eben.
 
 **Kontext, ehrlich benannt:** diese sechs Luecken zusammen (automatischer Abruf, Mehrfach-Konten, Compose-Button, Weiterleiten, Suche, CC/BCC) haetten von Anfang an als explizite Grundfunktions-Checkliste behandelt werden muessen, nicht erst durch Massimos eigenes Live-Testen auffallen. Bitte alle sechs als zusammenhaengenden Block VOR den 5 Wettbewerbs-Features und dem Malware-Scan-Auftrag einordnen -- das sind keine "nice-to-haves", sondern fehlende Grundfunktionen eines Mail-Clients.
 
