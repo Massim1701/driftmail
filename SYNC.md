@@ -960,3 +960,25 @@ Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
 **Uebergabe an Track C/F:** UI fuer alle drei Punkte noch zu bauen, siehe WEB_INBOX.md-Originaltext fuer die genauen Vorschlaege.
 
 **Kein Blocker.**
+
+
+[2026-09-21] [terminal] [F] — WEB_INBOX.md 21.09. "BUG - Kachel auf driftware.online oeffnet nicht" + "INHALTS-PAKET fuer driftware.online-Kachel" + "ERGAENZUNG - Eigenverantwortung des Nutzers", alle drei erledigt (driftware-Repo Commit `7e09291`).
+
+**Wichtiger Fund zuerst:** `driftware.online` ist entgegen der urspruenglichen Annahme im "Einstellungsbereich + Info-Seite"-Auftrag ("Teil des driftmail-Repos, vermutlich im web/-Ordner") technisch ein KOMPLETT SEPARATES Repo (`github.com/Massim1701/driftware`, lokal unter `/Volumes/Daten2/driftware`, statische Seite via GitHub Pages) -- kein Teil dieses driftmail-Repos. Es ist Massimos persoenliches Portfolio mit mehreren unabhaengigen Apps (Snoxi, CollectView, Ultimate Music Master, Schriftgenerator, Kitchen King, ...), jede als eigener lokaler Unterordner mit eigener `index.html`. Die vom Bug-Report beschriebene Kachel mit `href: '#'` lag entsprechend dort, nicht in diesem Repo.
+
+**Umsetzung:** neuer Unterordner `driftmail/` im `driftware`-Repo, exakt nach dem etablierten Muster der anderen Apps (eigenstaendige statische HTML-Seiten, gleiches dunkles Design-System, eigener Akzentfarbton passend zur Kachel-Farbe):
+- `index.html` -- Produktvorstellung (Funktionsuebersicht als Karten-Grid) PLUS den "So schuetzt du dich zusaetzlich"-Abschnitt sichtbar direkt nach der Funktionsuebersicht platziert (Massimos ausdruecklicher Wunsch: nicht im Kleingedruckten).
+- `anleitung.html` -- Bedienungsanleitung (5 Schritte).
+- `haftungsausschluss.html` -- inkl. der Eigenverantwortungs-Ergaenzung ("driftmail bietet automatisierte Unterstuetzung... Angreifer entwickeln fortlaufend neue Methoden...").
+- `agb.html`, `privacy.html` -- Datenschutzerklaerung.
+- `impressum.html` -- gleiches "Massimo -- vollstaendiger Name/Anschrift auf Anfrage ueber das Kontaktformular" Muster wie bereits bei `kitchen-king/impressum.html`/`orakel/impressum.html` im selben Repo (ein echtes Impressum braucht einen echten Namen/Anschrift, die ich nicht erfinden darf/kann -- siehe WEB_INBOX.md-Originaltext "KANN NICHT VON MIR AUSGEFUELLT WERDEN"). Kontaktformular ueber denselben, im gesamten Repo bereits verwendeten `formsubmit.co`-Endpunkt.
+
+Haftungsausschluss/AGB/Datenschutzerklaerung tragen alle drei einen deutlich sichtbaren "Entwurf, in anwaltlicher Pruefung"-Hinweis (Massimo hat bestaetigt, dass diese Texte vor Live-Schaltung anwaltlich geprueft werden muessen).
+
+**Bug-Fix:** `driftware/index.html` (Root, die eigentliche Portfolio-Seite) -- Driftmail-Kachel `href` von `'#'` auf `'/driftmail/'`, Badge von "Bald verfuegbar" auf "On Air" geaendert. Vorher verhinderte zusaetzlich das `soon: true`-Flag jeden Klick (`e.preventDefault()` im Render-Script), unabhaengig vom Href -- das war der eigentliche technische Grund, warum die Kachel nicht aufging.
+
+**Tests:** alle 6 Seiten lokal per `python3 -m http.server` bedient, jede einzeln per `curl` auf 200 OK geprueft, dann per echter Browser-Automation durchgeklickt: Portfolio-Startseite zeigt die Kachel jetzt mit "On Air"-Badge und "Ansehen"-Link, Klick fuehrt zur Produktseite, von dort alle vier Unterseiten (Anleitung/Datenschutz/AGB/Haftungsausschluss) und Impressum ueber Footer-Links + Utility-Nav erreicht und inhaltlich gegengeprueft (`get_page_text`), Konsole ohne Fehler.
+
+**Berechtigung/Prozess-Hinweis:** da `driftware` ein anderes, bereits live deploytes Repo als das aktuelle Arbeitsverzeichnis ist, hat das Sandbox-Berechtigungssystem den finalen Kachel-Link-Fix zunaechst blockiert ("Out-of-Place Publication") -- Massimo per Rueckfrage explizit um Erlaubnis gebeten, bekommen, dann den Fix gemacht UND (nach einer zweiten expliziten Rueckfrage wegen des Live-Deploys via GitHub Pages) gepusht.
+
+**Kein Blocker.**

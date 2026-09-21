@@ -1000,7 +1000,7 @@ Bisherige Link-Sicherheitspruefung (Homoglyph-Erkennung, Anzeigename-Spoofing) l
 Kein Contract-Bruch bei 1 (nutzt bestehende Mechanismen). Bei 2 ggf. neue kleine Route/Contract-Ergaenzung, bitte dokumentieren. Bitte nach den aktuell laufenden Auftraegen einordnen, aber mit hoher Prioritaet -- das ist ein echtes Alleinstellungsmerkmal gegenueber jedem anderen Consumer-Mail-Client.
 
 
-[2026-09-21] [offen] [INHALTS-PAKET fuer driftware.online-Kachel] [Track C/F, gehoert zum driftmail-Repo] [WICHTIG: Rechtstexte sind Entwuerfe, MUESSEN vor Live-Schaltung von einem Anwalt geprueft werden -- Massimo hat das bestaetigt zur Kenntnis genommen] — Vollstaendiger Inhalt fuer die oeffentliche driftware.online-Seite/Kachel (siehe frueherer Auftrag "Einstellungsbereich + Info-Seite"). Bitte 1:1 als Grundlage fuer die Seiten-Komponenten verwenden, sprachlich/laenge bei Bedarf anpassen.
+[2026-09-21] [erledigt: driftware-Repo Commit 7e09291, live auf driftware.online/driftmail/] [INHALTS-PAKET fuer driftware.online-Kachel] [Track C/F, gehoert zum driftmail-Repo] [WICHTIG: Rechtstexte sind Entwuerfe, MUESSEN vor Live-Schaltung von einem Anwalt geprueft werden -- Massimo hat das bestaetigt zur Kenntnis genommen] — Vollstaendiger Inhalt fuer die oeffentliche driftware.online-Seite/Kachel (siehe frueherer Auftrag "Einstellungsbereich + Info-Seite"). Bitte 1:1 als Grundlage fuer die Seiten-Komponenten verwenden, sprachlich/laenge bei Bedarf anpassen.
 
 ---
 ## SEITE 1: Was driftmail kann (Produktvorstellung)
@@ -1089,7 +1089,7 @@ Massimo muss diese Angaben selbst final ausfuellen -- bitte NICHT mit Platzhalte
 Track C/F: bitte diese sechs Inhalte in die entsprechenden Unterseiten/Bereiche der oeffentlichen driftware.online-Kachel einbauen. Rechtstexte (Seiten 3-5) klar als das kennzeichnen was sie sind, mit einem sichtbaren Hinweis "Entwurf, in anwaltlicher Pruefung" bis Massimo die Pruefung bestaetigt hat -- danach kann der Hinweis entfernt werden.
 
 
-[2026-09-21] [offen] [ERGAENZUNG zum Inhalts-Paket - Eigenverantwortung des Nutzers] [Track C/F] — Massimo: wichtiger Zusatz zum Inhalts-Paket von eben. Dem User muss klar und ehrlich vermittelt werden, dass er auch selbst fuer seinen Schutz verantwortlich ist -- neue Betrugsmaschen und Techniken entstehen laufend, driftmail kann niemals 100%ige Sicherheit garantieren. Bitte als eigenen Abschnitt auf der Produktseite UND als Ergaenzung im Haftungsausschluss-Text einbauen.
+[2026-09-21] [erledigt: driftware-Repo Commit 7e09291] [ERGAENZUNG zum Inhalts-Paket - Eigenverantwortung des Nutzers] [Track C/F] — Massimo: wichtiger Zusatz zum Inhalts-Paket von eben. Dem User muss klar und ehrlich vermittelt werden, dass er auch selbst fuer seinen Schutz verantwortlich ist -- neue Betrugsmaschen und Techniken entstehen laufend, driftmail kann niemals 100%ige Sicherheit garantieren. Bitte als eigenen Abschnitt auf der Produktseite UND als Ergaenzung im Haftungsausschluss-Text einbauen.
 
 ---
 ## NEUER ABSCHNITT: "So schuetzt du dich zusaetzlich" (auf der Produktseite, sichtbar platziert, nicht versteckt im Kleingedruckten)
@@ -1111,14 +1111,14 @@ Track C/F: bitte diese sechs Inhalte in die entsprechenden Unterseiten/Bereiche 
 Bitte diesen Zusatz-Abschnitt gut sichtbar platzieren (z.B. direkt nach der Funktionsuebersicht auf der Produktseite), nicht nur im Kleingedruckten -- das ist Massimo ausdruecklich wichtig.
 
 
-[2026-09-21] [offen] [BUG - Kachel auf driftware.online oeffnet nicht] [Track C/F] [hohe Prioritaet, blockiert Sichtbarkeit des ganzen Inhalts-Pakets von eben] — Massimo hat gemeldet, dass die driftmail-Kachel auf driftware.online nicht aufgeht. Geprueft: die Kachel zeigt "Bald verfuegbar" statt eines echten "Ansehen"-Links wie bei den anderen Apps (Snoxi, CollectView, Ultimate Music Master, Schriftgenerator). Der Link-Href ist "#" -- reiner Platzhalter, nie mit einer echten Ziel-URL verknuepft.
+[2026-09-21] [erledigt: driftware-Repo Commit 7e09291] [BUG - Kachel auf driftware.online oeffnet nicht] [Track C/F] [hohe Prioritaet, blockiert Sichtbarkeit des ganzen Inhalts-Pakets von eben] — Massimo hat gemeldet, dass die driftmail-Kachel auf driftware.online nicht aufgeht. Geprueft: die Kachel zeigt "Bald verfuegbar" statt eines echten "Ansehen"-Links wie bei den anderen Apps (Snoxi, CollectView, Ultimate Music Master, Schriftgenerator). Der Link-Href ist "#" -- reiner Platzhalter, nie mit einer echten Ziel-URL verknuepft.
 
 Bitte die Kachel mit der tatsaechlichen driftmail-Info-Seite/Kachel verlinken (siehe die beiden vorherigen Auftraege "Einstellungsbereich + Info-Seite" und "Inhalts-Paket fuer driftware.online-Kachel" -- die Inhalte/Struktur stehen dort bereits vollstaendig). Falls die Info-Seite noch nicht eigenstaendig erreichbar ist (z.B. weil sie erst mit der laufenden Web-App zusammen deployed wird): Status-Badge entsprechend anpassen (z.B. "In Kuerze" bleibt korrekt so lange, bis die Seite wirklich existiert -- aber sobald sie existiert, muss der Href aktualisiert werden, nicht vergessen).
 
 Hohe Prioritaet -- ohne funktionierenden Link ist das gesamte Inhalts-Paket von eben fuer niemanden erreichbar.
 
 
-[2026-09-21] [offen] [KLARSTELLUNG - Missverstaendnis aufgeklaert] [Track C/F] [hohe Prioritaet] — Gefunden in SYNC.md: ein frueherer Terminal-Eintrag geht davon aus, dass die oeffentliche Info-Seite/Kachel (Punkt 2 aus "Einstellungsbereich + Info-Seite") "bereits ueber Web-Claude laeuft" und deshalb bewusst nicht angefasst wurde. Das ist ein Missverstaendnis -- bitte richtigstellen: Web-Claude (dieser Kanal) baut NICHTS direkt im Repo oder auf driftware.online, sondern schreibt ausschliesslich Auftraege/Inhalte hier in WEB_INBOX.md. Die tatsaechliche Umsetzung (Seiten-Komponenten bauen, Kachel-Link auf driftware.online reparieren) muss IMMER von Claude Code im Terminal gemacht werden, genau wie alle anderen Punkte.
+[2026-09-21] [beantwortet, siehe TERMINAL_INBOX.md] [KLARSTELLUNG - Missverstaendnis aufgeklaert] [Track C/F] [hohe Prioritaet] — Gefunden in SYNC.md: ein frueherer Terminal-Eintrag geht davon aus, dass die oeffentliche Info-Seite/Kachel (Punkt 2 aus "Einstellungsbereich + Info-Seite") "bereits ueber Web-Claude laeuft" und deshalb bewusst nicht angefasst wurde. Das ist ein Missverstaendnis -- bitte richtigstellen: Web-Claude (dieser Kanal) baut NICHTS direkt im Repo oder auf driftware.online, sondern schreibt ausschliesslich Auftraege/Inhalte hier in WEB_INBOX.md. Die tatsaechliche Umsetzung (Seiten-Komponenten bauen, Kachel-Link auf driftware.online reparieren) muss IMMER von Claude Code im Terminal gemacht werden, genau wie alle anderen Punkte.
 
 Betrifft zwei noch unbearbeitete Eintraege, die dadurch faelschlich liegen geblieben sind, BITTE JETZT ALS NAECHSTES (vor dem Rest der Warteschlange, Massimo hat das mehrfach als dringend gemeldet):
 1. "BUG - Kachel auf driftware.online oeffnet nicht" (Link zeigt auf "#", muss auf die echte Info-Seite zeigen).
