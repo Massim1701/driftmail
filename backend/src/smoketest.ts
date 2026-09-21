@@ -949,6 +949,7 @@ async function main() {
         replyToAddress: null,
         subject: "Alte Mail im wichtig-Ordner",
         bodyText: "Text",
+        bodyHtml: null,
         receivedAt: new Date().toISOString(),
         folderId: legacyWichtigFolder.id,
         rawHeaders: null,
@@ -1121,6 +1122,7 @@ async function main() {
       replyToAddress: null,
       subject: "Re: Projektupdate Q3",
       bodyText: "Kurze Rückfrage dazu.",
+      bodyHtml: null,
       receivedAt: new Date().toISOString(),
       folderId: fixture4!.folderId,
       rawHeaders: { From: "Anna Kollegin <kollegin@example.com>" },
@@ -1554,6 +1556,7 @@ async function main() {
       replyToAddress: null,
       subject: "Nudge-Test: unbeantwortet im Eingang",
       bodyText: "Bitte antworten.",
+      bodyHtml: null,
       receivedAt: NUDGE_OLD_RECEIVED_AT,
       folderId: eingangFolder!.id as string,
       rawHeaders: null,
@@ -1576,6 +1579,7 @@ async function main() {
       replyToAddress: null,
       subject: "Re: Nudge-Test: unbeantwortet im Eingang",
       bodyText: "Hier die Antwort.",
+      bodyHtml: null,
       receivedAt: new Date().toISOString(),
       folderId: gesendetFolder!.id as string,
       rawHeaders: null,
@@ -1597,6 +1601,7 @@ async function main() {
       replyToAddress: null,
       subject: "Nudge-Test: eigene Mail ohne Antwort",
       bodyText: "Bitte um Rückmeldung.",
+      bodyHtml: null,
       receivedAt: NUDGE_OLD_RECEIVED_AT,
       folderId: gesendetFolder!.id as string,
       rawHeaders: null,
@@ -1618,6 +1623,7 @@ async function main() {
       replyToAddress: null,
       subject: "Nudge-Test: Spam",
       bodyText: "Werbung.",
+      bodyHtml: null,
       receivedAt: NUDGE_OLD_RECEIVED_AT,
       folderId: eingangFolder!.id as string,
       rawHeaders: null,
@@ -1968,6 +1974,69 @@ async function main() {
     const missingUrlRes = await globalThis.fetch(`${base}/v1/link-check`);
     assert(missingUrlRes.status === 400, "GET /v1/link-check ohne url-Parameter sollte 400 liefern");
 
+    // ----- "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies" (WEB_INBOX.md
+    // 21.09.) -----
+
+    // Fixture 11: Anzeigetext einer echten Bank-URL, tatsaechliches
+    // href-Ziel zeigt auf eine voellig andere Domain, PLUS ein
+    // 1x1-Tracking-Pixel -- alles NUR im HTML-Koerper sichtbar (bodyText
+    // enthaelt bewusst keinen Link). Vorher (nur bodyText an analyzeMail()
+    // uebergeben) haette linkMismatchDetected hierfuer NIE ausloesen
+    // koennen. Bewusst NICHT Fixture 3 (siehe deren Kommentar in
+    // fixtureAdapter.ts): die wird im Papierkorb/Loeschen-Test weiter oben
+    // bereits permanent geloescht.
+    const fixture11 = await store.findMessageByHeader(account.id, "<fixture-11@sparkasse-sicherheit.example>");
+    assert(fixture11 !== undefined, "Fixture 11 sollte importiert worden sein");
+    const fixture11Detail = (await (await fetch(`${base}/v1/messages/${fixture11!.id}`)).json()) as Record<string, unknown>;
+    assert(typeof fixture11Detail.bodyHtml === "string", "Fixture 11 sollte einen sanitisierten bodyHtml-String liefern");
+    const fixture11Html = fixture11Detail.bodyHtml as string;
+    assert(!fixture11Html.includes("<script"), "sanitisiertes bodyHtml darf keine <script>-Tags enthalten");
+    assert(
+      !fixture11Html.includes("track.sparkasse-sicherheit.example"),
+      "Tracking-Pixel-Quelle sollte bei blockRemoteImages=true entfernt sein (Default-Einstellung)",
+    );
+    assert(
+      fixture11Html.includes("/v1/link-check?url=") &&
+        fixture11Html.includes(encodeURIComponent("http://sparkasse-tan-bestaetigen.example-fake.ru/login")),
+      "echter Mail-Link sollte auf /link-check umgeschrieben sein (Klick-Zeit-Link-Pruefung jetzt im echten Klick-Fluss erreichbar)",
+    );
+
+    const fixture11Security = fixture11Detail.security as Record<string, unknown>;
+    assert(
+      fixture11Security.linkMismatchDetected === true,
+      "echter Anzeigetext-vs-href-Mismatch im HTML-Koerper sollte linkMismatchDetected=true auslösen",
+    );
+    assert(
+      fixture11Detail.classification === "phishing",
+      `Fixture 11 sollte als 'phishing' klassifiziert werden, war '${fixture11Detail.classification}'`,
+    );
+    const fixture11Links = fixture11Detail.links as Array<Record<string, unknown>>;
+    assert(fixture11Links.length === 1, `Fixture 11 sollte genau einen extrahierten Link haben, waren ${fixture11Links.length}`);
+    assert(
+      fixture11Links[0]!.domainMatchesDisplay === false && fixture11Links[0]!.actualUrl === "http://sparkasse-tan-bestaetigen.example-fake.ru/login",
+      "Bank-Phishing-Link sollte als Mismatch erkannt werden (Anzeigetext behauptet sparkasse.de, Ziel ist eine andere Domain)",
+    );
+
+    // blockRemoteImages=false: dieselbe Fixture, Pixel-Quelle bleibt jetzt
+    // erhalten -- beweist, dass die Sanitisierung wirklich PRO REQUEST
+    // (privacySettings-abhaengig) passiert, nicht einmalig beim Sync/
+    // Speichern (siehe mail/htmlSanitize.ts-Kommentar).
+    await fetch(`${base}/v1/privacy-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blockRemoteImages: false }),
+    });
+    const fixture11DetailImagesAllowed = (await (await fetch(`${base}/v1/messages/${fixture11!.id}`)).json()) as Record<string, unknown>;
+    assert(
+      (fixture11DetailImagesAllowed.bodyHtml as string).includes("track.sparkasse-sicherheit.example"),
+      "bei blockRemoteImages=false sollte dieselbe Mail die Bildquelle wieder enthalten",
+    );
+    await fetch(`${base}/v1/privacy-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blockRemoteImages: true }),
+    });
+
     // ----- Autorisierung (echte Auth, [2026-09-10]): ein zweiter, echter
     // User darf NICHT auf die Nachrichten/Ordner des ersten zugreifen, nur
     // weil er selbst eingeloggt ist (Authentifizierung allein reicht nicht,
@@ -2191,7 +2260,7 @@ async function main() {
     // Massimo müsste den kompletten Weg einmal mit einem echten GMX-/
     // web.de-/iCloud-Konto gegentesten.
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent -> Nudge -> Vertraulicher Modus -> Echter Malware-Scan -> Tracking-Schutz-Einstellungen -> Snooze -> Schedule Send -> Darkweb-Ueberwachung -> Quishing-Schutz -> Klick-Zeit-Link-Pruefung) end-to-end grün.");
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent -> Nudge -> Vertraulicher Modus -> Echter Malware-Scan -> Tracking-Schutz-Einstellungen -> Snooze -> Schedule Send -> Darkweb-Ueberwachung -> Quishing-Schutz -> Klick-Zeit-Link-Pruefung -> HTML-Rendering des Mail-Bodies) end-to-end grün.");
   } finally {
     server.close();
     // Ohne das haelt der tesseract.js-Worker (worker_threads) den Prozess

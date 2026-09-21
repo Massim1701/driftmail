@@ -122,6 +122,17 @@ CREATE TABLE IF NOT EXISTS messages (
     reply_to_address TEXT,
     subject TEXT,
     body_text TEXT,
+    -- [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies":
+    -- roher, NICHT sanitized-er HTML-Koerper wie vom Provider geliefert.
+    -- Sanitizing (Scripts/Iframes/Forms entfernen, Remote-Bilder je nach
+    -- privacySettings.blockRemoteImages blocken, Links auf /link-check
+    -- umschreiben) passiert erst beim Ausliefern in routes/messages.ts
+    -- (siehe mail/htmlSanitize.ts), NICHT hier beim Speichern -- ein spaeter
+    -- geaenderter Privacy-Schalter soll auch fuer laengst synchronisierte
+    -- Mails rueckwirkend greifen, das geht nur wenn die Rohdaten erhalten
+    -- bleiben. NULL bei reinen Text-Mails oder wenn der Adapter kein HTML
+    -- liefert (Fixture-Nachrichten ohne explizites bodyHtml).
+    body_html TEXT,
     received_at TIMESTAMPTZ NOT NULL,
     folder_id UUID NOT NULL REFERENCES folders(id),
     raw_headers JSONB,

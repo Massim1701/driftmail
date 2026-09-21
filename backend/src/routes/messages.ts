@@ -9,8 +9,20 @@ import { adapterForAccount } from "../mail/sync";
 import { parseListUnsubscribeHeader, performUnsubscribe } from "../mail/listUnsubscribe";
 import { loadNudgeFolderContext, computeAwaitingReply } from "../mail/nudge";
 import { sendMessageForUser } from "../mail/sendMessage";
+import { sanitizeMailHtml } from "../mail/htmlSanitize";
+import { DEFAULTS as PRIVACY_SETTINGS_DEFAULTS } from "./privacySettings";
 import type { ApiDraftPhishingCheckLink } from "../types";
 import type { MailAccountRecord, MessageRecord } from "../types";
+
+// [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": Basis-URL,
+// auf die Links in HTML-Mails umgeschrieben werden (siehe
+// mail/htmlSanitize.ts) -- MUSS eine Adresse sein, die der Browser des
+// Users direkt erreichen kann (kein interner/Container-Hostname), da ein
+// Klick eine echte Browser-Navigation ist (GET /link-check ist bewusst
+// unauthentifiziert, siehe routes/linkCheck.ts, genau deshalb). Gleicher
+// Zero-Config-Default wie überall sonst (siehe src/index.ts), überschreibbar
+// für Deploys mit anderer öffentlicher Adresse/hinter einem Reverse-Proxy.
+const PUBLIC_API_BASE_URL = process.env.PUBLIC_API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 3000}/v1`;
 
 // [2026-09-10] echte Auth: Besitz-Prüfung an einer Stelle gebündelt, statt
 // in jedem einzelnen `/:messageId`-Handler zu duplizieren. Nachrichten
@@ -192,16 +204,29 @@ messagesRouter.get("/messages/:messageId", async (req, res) => {
   if (!owned) return;
   const { message } = owned;
 
-  const [security, quarantine, hasOtherMessage, nudgeFolders, user, attachments] = await Promise.all([
+  const [security, quarantine, hasOtherMessage, nudgeFolders, user, attachments, links, privacySettings] = await Promise.all([
     store.getMessageSecurity(message.id),
     store.getQuarantineForMessage(message.id),
     store.hasOtherMessageFromAddress(message.mailAccountId, message.fromAddress, message.id),
     loadNudgeFolderContext(message.mailAccountId),
     store.getUserById(req.userId),
     store.listAttachmentsForMessage(message.id),
+    store.listLinksForMessage(message.id),
+    store.getPrivacySettings(req.userId),
   ]);
   const awaitingReply = await computeAwaitingReply(message, security, user?.nudgeUnansweredEnabled ?? true, nudgeFolders);
-  res.json(toApiMessageDetail(message, security, quarantine, !hasOtherMessage, awaitingReply, attachments));
+  const detail = toApiMessageDetail(message, security, quarantine, !hasOtherMessage, awaitingReply, attachments, links);
+  // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": erst
+  // HIER sanitisiert (nicht schon in toApiMessageDetail/beim Speichern),
+  // siehe mail/htmlSanitize.ts-Kommentar fuer die Begruendung
+  // (privacySettings-abhaengig, rueckwirkend fuer Bestandsmails).
+  if (detail.bodyHtml !== null) {
+    detail.bodyHtml = sanitizeMailHtml(detail.bodyHtml, {
+      blockRemoteImages: (privacySettings ?? PRIVACY_SETTINGS_DEFAULTS).blockRemoteImages,
+      linkCheckBaseUrl: PUBLIC_API_BASE_URL,
+    });
+  }
+  res.json(detail);
 });
 
 // POST /messages/:messageId/quarantine — siehe api-spec.yaml

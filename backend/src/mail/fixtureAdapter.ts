@@ -44,6 +44,7 @@ const FIXTURES: FetchedMail[] = [
     bodyText:
       "Sehr geehrte Kundin, sehr geehrter Kunde,\n\nIhr Vertrag (Laufzeit 12 Monate) verlängert sich automatisch. " +
       "Die Kündigungsfrist beträgt 30 Tage vor Vertragsende. Bitte prüfen Sie Ihre Daten.\n\nMit freundlichen Grüßen",
+    bodyHtml: null,
     receivedAt: daysAgo(1),
     // "X-Originating-IP" hier nur als Beispiel für einen unauffälligen
     // Absender gesetzt (Grundlage für den IP-Reputations-Lookup, siehe
@@ -74,6 +75,7 @@ const FIXTURES: FetchedMail[] = [
       // unter die 0.5-Schwelle drückte (nur Auth-Fail + Dringlichkeit,
       // ohne den IBAN-Kombinationsbonus). Jetzt eine gültige Beispiel-IBAN.
       "sonst wird Ihr Konto endgültig gelöscht. Neue IBAN für Rückerstattung: DE68 2105 0170 0012 3456 78.",
+    bodyHtml: null,
     receivedAt: daysAgo(0),
     // "Received" enthält hier absichtlich eine IP aus der Beispiel-
     // "Botnetz"-Liste im IP-Reputations-Mock (siehe ipReputationMock.ts),
@@ -101,6 +103,18 @@ const FIXTURES: FetchedMail[] = [
     replyToAddress: null,
     subject: "Gewinnspiel: Jetzt gratis Preise sichern!",
     bodyText: "Nehmen Sie an unserem Gewinnspiel teil und sichern Sie sich 50% Rabatt — einmalige Chance, jetzt kaufen!",
+    // [NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies] echter HTML-Koerper
+    // mit einem klassischen 1x1-Tracking-Pixel (siehe backend/README.md
+    // "Tracking-Schutz") -- beweist, dass blockRemoteImages jetzt eine
+    // ECHTE Wirkung hat (Sanitizer entfernt das <img src>, siehe
+    // htmlSanitize.ts), waehrend der ganz normale Angebots-Link erhalten
+    // bleibt (Anzeigetext ist keine Domain, loest also keinen
+    // Link-Mismatch aus -- reiner Marketing-Link, kein Phishing-Signal).
+    bodyHtml:
+      '<html><body><p>Nehmen Sie an unserem Gewinnspiel teil und sichern Sie sich 50% Rabatt — einmalige Chance, jetzt kaufen!</p>' +
+      '<p><a href="https://newsletter-deals.example/angebot">Jetzt Angebot ansehen</a></p>' +
+      '<img src="https://track.newsletter-deals.example/pixel.gif?x=fixture3" width="1" height="1" alt="">' +
+      "</body></html>",
     receivedAt: daysAgo(2),
     // integration (09.09.): Track B's echte classify() (siehe
     // classification.ts) bewertet nur phishing-artige Signale
@@ -117,7 +131,7 @@ const FIXTURES: FetchedMail[] = [
     rawHeaders: {
       From: "Deals Newsletter <deals@newsletter-deals.example>",
       "List-Unsubscribe": "<mailto:unsubscribe@newsletter-deals.example>",
-      "Content-Type": "text/plain",
+      "Content-Type": "text/html",
       "Received-SPF": "fail",
     },
     attachments: [],
@@ -130,6 +144,7 @@ const FIXTURES: FetchedMail[] = [
     replyToAddress: null,
     subject: "Projektupdate Q3",
     bodyText: "Hi, anbei das Update zum Projekt. Bitte antworten bis Freitag mit deinem Feedback. Danke!",
+    bodyHtml: null,
     receivedAt: daysAgo(0),
     rawHeaders: { From: "Anna Kollegin <kollegin@example.com>", "Received-SPF": "pass", "Content-Type": "text/plain" },
     // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan":
@@ -172,6 +187,7 @@ const FIXTURES: FetchedMail[] = [
     bodyText:
       "Spielen Sie jetzt im Online-Casino und sichern Sie sich Ihren Jackpot-Bonus — " +
       "einmalige Chance, jetzt kaufen!",
+    bodyHtml: null,
     receivedAt: daysAgo(3),
     // "List-Unsubscribe" (WEB_INBOX.md 09.09. "Automatisches Abmelden bei
     // Spam", Punkt "Verhalten bei adult/gambling"): beweist im Smoketest,
@@ -203,6 +219,7 @@ const FIXTURES: FetchedMail[] = [
     bodyText:
       "Wir haben eine verdächtige Aktivität in Ihrem Konto festgestellt. Bitte bestätigen Sie sofort Ihre " +
       "Identität unter http://аpple.com/verify, sonst wird Ihr Konto gesperrt.",
+    bodyHtml: null,
     receivedAt: daysAgo(0),
     // "From" hier zusaetzlich bewusst mit einem Markennamen-Anzeigenamen
     // ueber einer fremden Domain (WEB_INBOX.md 15.09., "Anzeigename-
@@ -235,6 +252,7 @@ const FIXTURES: FetchedMail[] = [
       "Sehr geehrte Damen und Herren, ich bin der Anwalt eines verstorbenen Geschäftsmann, der Ihnen als " +
       "next of kin ein Vermögen von mehreren Millionen US-Dollar hinterlassen hat. Bitte antworten Sie unter " +
       "strengster Geheimhaltung, damit wir die Übertragung einleiten können.",
+    bodyHtml: null,
     receivedAt: daysAgo(4),
     rawHeaders: {
       From: "Rechtsanwaltskanzlei Dubois <kanzlei@erbschaft-mitteilung.example>",
@@ -260,6 +278,7 @@ const FIXTURES: FetchedMail[] = [
     bodyText:
       "Anbei unsere Rechnung für die letzte Lieferung. Bitte überweisen Sie den Betrag auf unser Konto: " +
       "DE89 3704 0044 0532 0130 00. Vielen Dank.",
+    bodyHtml: null,
     receivedAt: daysAgo(5),
     rawHeaders: {
       From: "Lieferant Beispiel GmbH <buchhaltung@lieferant-beispiel.de>",
@@ -285,6 +304,7 @@ const FIXTURES: FetchedMail[] = [
     bodyText:
       "Kurzes Update: bitte nutzen Sie ab sofort unser neues Konto für die Überweisung: " +
       "DE68 2105 0170 0012 3456 78. Vielen Dank für Ihr Verständnis.",
+    bodyHtml: null,
     receivedAt: daysAgo(4),
     rawHeaders: {
       From: "Lieferant Beispiel GmbH <buchhaltung@lieferant-beispiel.de>",
@@ -318,6 +338,7 @@ const FIXTURES: FetchedMail[] = [
     replyToAddress: null,
     subject: "Ihr Paket wartet -- QR-Code scannen zur Abholung",
     bodyText: "Bitte scannen Sie den beigefuegten QR-Code, um Ihre Sendung zur Abholung freizugeben.",
+    bodyHtml: null,
     receivedAt: daysAgo(0),
     rawHeaders: {
       From: "Paketdienst <versand@paket-lieferung.example>",
@@ -331,6 +352,47 @@ const FIXTURES: FetchedMail[] = [
         content: QR_CODE_PHISHING_PNG,
       },
     ],
+  },
+  {
+    // [NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies, WEB_INBOX.md 21.09.]
+    // Beweist gleich zwei vorher dokumentierte Luecken jetzt GESCHLOSSEN:
+    // (1) Anzeigetext eines echten <a href>-Links behauptet eine bekannte
+    // Bank-URL, das tatsaechliche Ziel zeigt auf eine voellig andere Domain
+    // -- klassischer Link-Mismatch, aber NUR im HTML-Koerper sichtbar
+    // (bodyText enthaelt absichtlich KEINEN Link, nur den Fliesstext).
+    // Vorher (nur bodyText an analyzeMail() uebergeben) haette das NIE
+    // ausloesen koennen (siehe Kommentar bei "Phishing-Check serverseitig
+    // vor dem Versand", WEB_INBOX.md/SYNC.md) -- jetzt wertet mail/sync.ts
+    // echte Links aus mail.bodyHtml aus (extractLinks + isLinkMismatch),
+    // siehe dort. (2) ein zusaetzlicher 1x1-Tracking-Pixel beweist, dass
+    // blockRemoteImages (siehe routes/privacySettings.ts) jetzt eine ECHTE
+    // Wirkung hat (Sanitizer entfernt das <img src>, siehe
+    // mail/htmlSanitize.ts) -- bewusst DIESE Fixture statt Fixture 3
+    // (Marketing-Newsletter), weil Fixture 3 im Papierkorb/Loeschen-Test
+    // weiter oben bereits permanent geloescht wird (siehe dortigen
+    // Kommentar) und fuer einen spaeteren Test nicht mehr existieren wuerde.
+    messageIdHeader: "<fixture-11@sparkasse-sicherheit.example>",
+    providerMessageId: null,
+    fromAddress: "service@sparkasse-sicherheit.example",
+    fromDisplayName: "Sparkasse Sicherheitscenter",
+    replyToAddress: null,
+    subject: "Ihre TAN-Freigabe laeuft ab -- bitte bestaetigen",
+    bodyText:
+      "Wir haben verdächtige Aktivität in Ihrem Konto festgestellt. Bitte bestätigen Sie sofort Ihre TAN, " +
+      "sonst wird Ihr Online-Banking gesperrt. Mehr Informationen im HTML-Teil dieser Mail.",
+    bodyHtml:
+      "<html><body><p>Wir haben verdächtige Aktivität in Ihrem Konto festgestellt. Bitte bestätigen Sie sofort " +
+      "Ihre TAN, sonst wird Ihr Online-Banking gesperrt.</p>" +
+      '<p><a href="http://sparkasse-tan-bestaetigen.example-fake.ru/login">https://www.sparkasse.de/tan-bestaetigen</a></p>' +
+      '<img src="https://track.sparkasse-sicherheit.example/pixel.gif?x=fixture11" width="1" height="1" alt="">' +
+      "</body></html>",
+    receivedAt: daysAgo(0),
+    rawHeaders: {
+      From: "Sparkasse Sicherheitscenter <service@sparkasse-sicherheit.example>",
+      "Received-SPF": "none",
+      "Content-Type": "text/html",
+    },
+    attachments: [],
   },
 ];
 

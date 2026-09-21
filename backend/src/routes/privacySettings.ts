@@ -3,23 +3,25 @@
 // Endpunkt statt in GET/PUT /settings gequetscht, gleiches Prinzip wie
 // /ai-settings.
 //
-// WICHTIGE EINORDNUNG: driftmail rendert nirgends HTML-Mail-Inhalte und
-// laedt nirgends automatisch entfernte Bilder -- Nachrichtentext ist
-// durchgaengig Klartext (siehe mail/imapAdapter.ts/gmailAdapter.ts, die nur
-// die "text/plain"-Variante extrahieren). Der klassische Tracking-Pixel-
-// Angriffsweg (ein unsichtbares <img>, das beim automatischen Laden der
-// HTML-Mail dem Absender IP/Oeffnungszeitpunkt meldet) kann in dieser
-// Architektur schon strukturell nicht greifen. `blockRemoteImages` hat
-// deshalb aktuell KEINE zusaetzliche technische Wirkung -- der Schalter
-// existiert trotzdem echt (nicht nur ein Mock-Wert), fuer Transparenz und
-// falls HTML-Rendering je nachgezogen wird, ohne dass die Einstellungen-UI
-// nochmal angefasst werden muss.
+// [2026-09-21 UPDATE, "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies"]:
+// die folgende Einordnung war bis hierhin korrekt, gilt jetzt NICHT mehr --
+// driftmail rendert HTML-Mail-Inhalte jetzt wirklich (siehe
+// mail/htmlSanitize.ts, angewendet in routes/messages.ts GET /messages/:id).
+// `blockRemoteImages` hat dadurch eine ECHTE Wirkung: bei `true` entfernt
+// der Sanitizer jedes `<img src="http(s)://...">` (u.a. der klassische
+// Tracking-Pixel), bevor die Mail den Client erreicht.
 //
-// `blockTrackingLinks` hat ebenfalls noch keine technische Wirkung: eine
-// echte Umsetzung braeuchte die Link-Extraktion aus message_links, die
-// selbst noch nicht implementiert ist (siehe backend/README.md "Annahmen"
-// -- separate, bereits vorher bekannte Luecke). Beide Grenzen sind in
-// backend/README.md "Tracking-Schutz" ausfuehrlich dokumentiert.
+// `blockTrackingLinks` bleibt weiterhin NUR gespeichert, ohne eigene
+// Wirkung -- zu unterscheiden von der UNABHAENGIGEN "Klick-Zeit-Link-
+// Pruefung" (GET /link-check, siehe routes/linkCheck.ts): die schreibt
+// JEDEN http(s)-Link in einer HTML-Mail um, unabhaengig von diesem Schalter
+// (Sicherheitsfeature, kein Marketing-Tracking-Filter). Eine echte
+// Umsetzung DIESES Schalters braeuchte eine eigene Erkennung "ist dieser
+// Link ein Marketing-/Analytics-Tracking-Redirect" (z.B. bekannte
+// Tracking-Domains/Redirect-Muster) -- message_links (jetzt befuellt,
+// siehe mail/sync.ts) liefert dafuer noch kein passendes Signal
+// (domainMatchesDisplay/isKnownMalicious sind Phishing-, keine
+// Tracking-Signale). Separate, weiterhin offene Luecke.
 
 import { Router } from "express";
 import { store } from "../db/store";
@@ -31,7 +33,11 @@ function toApiPrivacySettings(p: Pick<PrivacySettingsRecord, "blockRemoteImages"
   return { blockRemoteImages: p.blockRemoteImages, blockTrackingLinks: p.blockTrackingLinks };
 }
 
-const DEFAULTS: Pick<PrivacySettingsRecord, "blockRemoteImages" | "blockTrackingLinks"> = {
+// Exportiert (statt privat), damit routes/messages.ts denselben Default
+// verwenden kann, wenn ein User noch keine eigenen privacySettings
+// gespeichert hat -- ein Reader mit Standard-Default soll dieselbe
+// Bild-Blockierung sehen wie GET /privacy-settings ihm meldet.
+export const DEFAULTS: Pick<PrivacySettingsRecord, "blockRemoteImages" | "blockTrackingLinks"> = {
   blockRemoteImages: true,
   blockTrackingLinks: true,
 };

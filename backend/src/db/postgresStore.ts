@@ -33,6 +33,7 @@ import type {
   MailAccountRecord,
   MessageAiSummaryRecord,
   MessageAttachmentRecord,
+  MessageLinkRecord,
   MessageRecord,
   MessageSecurityRecord,
   OutgoingSendLogRecord,
@@ -151,6 +152,7 @@ function rowToMessage(r: any): MessageRecord {
     replyToAddress: r.reply_to_address,
     subject: r.subject,
     bodyText: r.body_text,
+    bodyHtml: r.body_html,
     receivedAt: r.received_at,
     folderId: r.folder_id,
     rawHeaders: r.raw_headers,
@@ -310,6 +312,17 @@ function rowToMessageAttachment(r: any): MessageAttachmentRecord {
     isDangerousType: r.is_dangerous_type,
     scannedAt: r.scanned_at,
     containsSensitiveDocument: r.contains_sensitive_document,
+  };
+}
+
+function rowToMessageLink(r: any): MessageLinkRecord {
+  return {
+    id: r.id,
+    messageId: r.message_id,
+    displayText: r.display_text,
+    actualUrl: r.actual_url,
+    domainMatchesDisplay: r.domain_matches_display,
+    isKnownMalicious: r.is_known_malicious,
   };
 }
 
@@ -474,6 +487,10 @@ export class PostgresStore implements Store {
     // eigenen Migrationsfunktion fuer eine einzelne Spalte an derselben
     // Tabelle.
     await this.pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS snoozed_until TIMESTAMPTZ`);
+    // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": gleiches
+    // additive Muster, NULL = keine echten HTML-Daten fuer bestehende Zeilen
+    // (korrekter Ausgangszustand, kein Backfill moeglich/noetig).
+    await this.pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS body_html TEXT`);
   }
 
   /** [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule Send"):
@@ -721,9 +738,9 @@ export class PostgresStore implements Store {
     const { rows } = await this.pool.query(
       `INSERT INTO messages
          (mail_account_id, message_id_header, provider_message_id, from_address, from_display_name,
-          reply_to_address, subject, body_text, received_at, folder_id, raw_headers, in_reply_to_message_id,
+          reply_to_address, subject, body_text, body_html, received_at, folder_id, raw_headers, in_reply_to_message_id,
           confidential_until, snoozed_until)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         input.mailAccountId,
@@ -734,6 +751,7 @@ export class PostgresStore implements Store {
         input.replyToAddress,
         input.subject,
         input.bodyText,
+        input.bodyHtml,
         input.receivedAt,
         input.folderId,
         input.rawHeaders,
@@ -745,13 +763,14 @@ export class PostgresStore implements Store {
     return rowToMessage(rows[0]);
   }
 
-  /** Vertraulicher Modus (siehe mail/confidential.ts): loescht bodyText
-   * EINMALIG per echtem UPDATE, wenn faellig -- kein Hintergrund-Job, wird
-   * lazy von listMessages()/getMessage() unten aufgerufen. */
+  /** Vertraulicher Modus (siehe mail/confidential.ts): loescht bodyText UND
+   * bodyHtml EINMALIG per echtem UPDATE, wenn faellig -- kein
+   * Hintergrund-Job, wird lazy von listMessages()/getMessage() unten
+   * aufgerufen. */
   private async expireConfidentialIfDue(m: MessageRecord): Promise<MessageRecord> {
     if (!isConfidentialExpired(m)) return m;
-    await this.pool.query("UPDATE messages SET body_text = NULL WHERE id = $1", [m.id]);
-    return { ...m, bodyText: null };
+    await this.pool.query("UPDATE messages SET body_text = NULL, body_html = NULL WHERE id = $1", [m.id]);
+    return { ...m, bodyText: null, bodyHtml: null };
   }
 
   async listMessages(filter: { folderId?: string; accountId?: string; q?: string }): Promise<MessageRecord[]> {
@@ -1213,6 +1232,23 @@ export class PostgresStore implements Store {
   async listAttachmentsForMessage(messageId: string): Promise<MessageAttachmentRecord[]> {
     const { rows } = await this.pool.query("SELECT * FROM message_attachments WHERE message_id = $1", [messageId]);
     return rows.map(rowToMessageAttachment);
+  }
+
+  // ----- Links -----
+
+  async insertMessageLink(input: Omit<MessageLinkRecord, "id">): Promise<MessageLinkRecord> {
+    const { rows } = await this.pool.query(
+      `INSERT INTO message_links (message_id, display_text, actual_url, domain_matches_display, is_known_malicious)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [input.messageId, input.displayText, input.actualUrl, input.domainMatchesDisplay, input.isKnownMalicious],
+    );
+    return rowToMessageLink(rows[0]);
+  }
+
+  async listLinksForMessage(messageId: string): Promise<MessageLinkRecord[]> {
+    const { rows } = await this.pool.query("SELECT * FROM message_links WHERE message_id = $1", [messageId]);
+    return rows.map(rowToMessageLink);
   }
 
   // ----- Entwürfe -----

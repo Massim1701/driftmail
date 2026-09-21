@@ -121,6 +121,7 @@ export async function sendMessageForUser(userId: string, body: SendMessageInput)
       replyToAddress: null,
       subject,
       bodyText,
+      bodyHtml: null,
       receivedAt: new Date().toISOString(),
       folderId: gesendet.id,
       rawHeaders: null,

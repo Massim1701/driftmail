@@ -2242,19 +2242,19 @@ Proofpoint URL Defense.
 
 **Realistische Aufwands-Einschaetzung (wie im Auftrag ausdruecklich
 verlangt, da dies laut Auftragstext "die aufwendigere der beiden
-Ergaenzungen" ist):** dieser Endpunkt ist die vollstaendige, eigenstaendig
-testbare BACKEND-Haelfte. Fuer die VOLLE Funktion im echten Klick-Fluss
-fehlt noch eine groessere, bewusst NICHT Teil dieses Schritts gewordene
-Client-Aenderung: driftmail zeigt Mail-Text aktuell durchgaengig als
-reinen Klartext an (siehe Abschnitt "5 Wettbewerbs-Luecken" Punkt 1
-weiter unten -- kein HTML-Rendering) -- URLs im Nachrichtentext sind
-dadurch aktuell gar nicht klickbar/verlinkt, weder in Web noch iOS. Damit
-dieser Endpunkt im echten Klick-Fluss ueberhaupt erreicht wird, muesste
-die Client-UI zusaetzlich (a) URLs im Klartext erkennen/verlinken
-(Auto-Linkify) und (b) deren `href` auf
-`${API_BASE}/link-check?url=<encodeURIComponent(url)>` statt direkt auf
-die Original-URL umschreiben -- ein eigener, groesserer, noch offener
-UI-Auftrag (siehe SYNC.md).
+Ergaenzungen" ist) -- [2026-09-21 UPDATE] jetzt GESCHLOSSEN:** dieser
+Endpunkt war urspruenglich nur die eigenstaendig testbare BACKEND-Haelfte,
+weil driftmail Mail-Text nur als reinen Klartext anzeigte (URLs also nirgends
+anklickbar waren). Seit "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies"
+(siehe dortiger Abschnitt) rendert driftmail echtes HTML, und jeder
+http(s)-Link in einem HTML-Mail-Koerper wird beim Ausliefern automatisch auf
+`${PUBLIC_API_BASE_URL}/link-check?url=<encodeURIComponent(url)>`
+umgeschrieben (`mail/htmlSanitize.ts`) -- dieser Endpunkt ist damit im
+echten Klick-Fluss erreichbar, kein separater UI-Auftrag mehr noetig.
+Bleibt weiterhin unerreicht: Links, die nur als BLOSSE URL im
+Klartext-Fallback (`bodyText`, ohne HTML-Gegenstueck) vorliegen -- fuer
+diesen (selteneren) Fall waere Klartext-Auto-Linkify weiterhin ein
+separater, noch offener Schritt.
 
 **Tests:** `smoketest.ts` ruft `GET /link-check` direkt per unauthentifiziertem
 `fetch` auf (kein Bearer-Token, wie ein echter Browser-Klick) -- eine
@@ -2269,28 +2269,23 @@ Tabelle/Spalte).
 (WEB_INBOX.md 21.09. "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken")
 
 **1) Tracking-Pixel-Blockierung:** `GET`/`PUT /privacy-settings`
-(`user_privacy_settings`, `routes/privacySettings.ts`) -- ein echter,
-gespeicherter Schalter, aber mit einer wichtigen Einordnung:
-**`blockRemoteImages` hat aktuell KEINE technische Wirkung.** driftmail
-parst/rendert nirgends HTML-Mail-Inhalte -- `mail/imapAdapter.ts`
-(`simpleParser().text`) und `mail/gmailAdapter.ts`
-(`extractPlainTextBody()`) extrahieren durchgaengig nur die
-"text/plain"-Variante. Der klassische Tracking-Pixel-Angriffsweg (ein
-unsichtbares `<img>`, das beim automatischen Laden der HTML-Mail dem
-Absender IP/Oeffnungszeitpunkt meldet) kann in dieser Architektur schon
-strukturell nicht greifen -- eine Mail, die NUR als HTML vorliegt, wird
-von `mailparser`/der Gmail-API bereits vor der Speicherung auf reinen Text
-reduziert, jedes `<img>` faellt dabei weg. Das ist ein echter,
-unbeabsichtigter Privatsphäre-Vorteil des bestehenden Designs, kein
-Feature, das extra gebaut werden musste -- der Schalter existiert trotzdem
-echt (nicht nur ein Mock-Wert), fuer Transparenz und falls HTML-Rendering
-je nachgezogen wird.
+(`user_privacy_settings`, `routes/privacySettings.ts`). **[2026-09-21
+UPDATE, "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies"]:** die folgende
+Einordnung stimmte bis hierhin, gilt jetzt NICHT mehr --
+`blockRemoteImages` hat eine ECHTE technische Wirkung, siehe Abschnitt
+"HTML-Rendering des Mail-Bodies" unten. driftmail rendert HTML-Mail-Inhalte
+jetzt wirklich (`mail/htmlSanitize.ts`), inklusive echter Entfernung von
+Tracking-Pixeln (`<img src="http(s)://...">`) bei aktiviertem Schalter.
 
-`blockTrackingLinks` hat ebenfalls noch keine technische Wirkung: eine
-echte Umsetzung braeuchte die Link-Extraktion aus `message_links` (Tabelle
-existiert seit Track 0 im Contract, hat aber -- unabhaengig von diesem
-Auftrag entdeckt -- bis heute keine Backend-Implementierung, siehe
-"Annahmen" unten). Separate, noch offene Luecke.
+`blockTrackingLinks` hat weiterhin KEINE eigene technische Wirkung -- zu
+unterscheiden von der UNABHAENGIGEN Klick-Zeit-Link-Pruefung (Punkt 2 im
+Abschnitt "Zwei Enterprise-Sicherheits-Features" unten), die JEDEN
+http(s)-Link umschreibt, unabhaengig von diesem Schalter. Eine echte
+Umsetzung braeuchte eine eigene Erkennung "ist dieser Link ein Marketing-/
+Analytics-Tracking-Redirect" -- `message_links` (jetzt befuellt, siehe
+"HTML-Rendering des Mail-Bodies" unten) liefert dafuer noch kein passendes
+Signal (`domainMatchesDisplay`/`isKnownMalicious` sind Phishing-, keine
+Tracking-Signale). Separate, weiterhin offene Luecke.
 
 **2) Undo Send:** bewusst OHNE Backend-Aenderung -- wie im Auftrag selbst
 vorgeschlagen ("Client zeigt sofort eine Rueckgaengig-Leiste, der
@@ -2481,6 +2476,114 @@ Gruen in-memory + gegen frisches Postgres (kein Migrations-Bedarf --
 `message_attachments` existierte als Tabelle bereits, nur ohne bisherigen
 Konsumenten fuer den Empfangen-Fall).
 
+## HTML-Rendering des Mail-Bodies -- [2026-09-21] Nachtrag
+(WEB_INBOX.md, "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies",
+hohe Prioritaet -- Grundlage fuer mehrere vorher dokumentierte Luecken)
+
+Bisher extrahierten alle drei Mail-Adapter (`mail/imapAdapter.ts`,
+`mail/gmailAdapter.ts`, `mail/fixtureAdapter.ts`) ausschliesslich die
+"text/plain"-Variante einer Mail -- HTML-Inhalte wurden komplett verworfen.
+Das war die Ursache fuer drei unabhaengig dokumentierte Luecken
+(Tracking-Pixel-Blockierung ohne Wirkung, Klick-Zeit-Link-Pruefung ohne
+erreichbaren Klick-Fluss, `message_links` nie befuellt) -- alle drei sind
+jetzt geschlossen.
+
+**Neues Feld `bodyHtml`** (`messages.body_html`, `FetchedMail.bodyHtml`,
+`MessageRecord.bodyHtml`): roher, NICHT sanitisierter HTML-Koerper, so wie
+vom Provider geliefert.
+- IMAP: `mailparser`s `parsed.html` (bereits fertig geparst).
+- Gmail: neuer `extractHtmlBody()`-Payload-Walk in `gmailAdapter.ts`,
+  identisches Muster zum bestehenden `extractPlainTextBody()`, nur fuer
+  den `text/html`-Geschwister-Part.
+- Fixtures: Fixture 3 (Newsletter, Tracking-Pixel) und die neue Fixture 11
+  (Bank-Phishing mit echtem Link-Mismatch + Tracking-Pixel) haben jetzt
+  echtes `bodyHtml`, alle anderen `null` (reine Text-Mails).
+
+**Sanitisierung erst beim AUSLIEFERN, nicht beim Speichern/Sync**
+(`mail/htmlSanitize.ts`, angewendet in `routes/messages.ts` `GET
+/messages/:messageId`) -- bewusste Architekturentscheidung, zwei Gruende:
+1. `blockRemoteImages` (`privacySettings`) ist ein PRO-USER-Schalter, der
+   sich nach dem Empfang der Mail aendern kann und dann auch fuer laengst
+   synchronisierte Mails rueckwirkend greifen soll (smoketest beweist das:
+   dieselbe Fixture liefert je nach aktuellem Schalterstand unterschiedlich
+   sanitisiertes HTML).
+2. Ein spaeter gefundener Sanitizer-Bug/eine strengere Policy laesst sich
+   so fuer den gesamten Bestand nachtraeglich fixen, ohne alle Mails neu
+   synchronisieren zu muessen.
+
+`sanitizeMailHtml()` ist ein expliziter ALLOWLIST-Ansatz (sanitize-html):
+nur eine feste Liste von Tags/Attributen/URL-Schemes (`http`/`https`/
+`mailto`) kommt durch, `<script>`/`<iframe>`/`<object>`/`<embed>`/`<form>`
+werden verworfen, kein `style`-Attribut/`<style>`-Block erlaubt (CSS
+`background: url(...)` waere derselbe Tracking-/Exfiltrations-Vektor wie
+ein `<img src>`, nur schwerer zu filtern). Zwei Transformationen:
+- **Bild-Blockierung** (`blockRemoteImages`): jedes `<img src="http(s)://
+  ...">` verliert bei `true` sein `src`-Attribut -- der klassische
+  Tracking-Pixel-Angriffsweg. `cid:`-Inline-Bilder gibt es in dieser
+  Architektur nicht (kein MIME-Multipart-Auflösen eingebetteter Bilder),
+  betrifft also ausschliesslich echte Remote-URLs.
+- **Link-Umschreibung** (immer aktiv, unabhaengig von `blockTrackingLinks`):
+  jeder `http(s)`-Link bekommt `target="_blank" rel="noopener noreferrer
+  nofollow"` und wird auf `${PUBLIC_API_BASE_URL}/link-check?url=...`
+  umgeschrieben -- macht die vorher nur backend-seitig fertige
+  Klick-Zeit-Link-Pruefung (siehe Abschnitt "Zwei Enterprise-Sicherheits-
+  Features" oben) endlich im echten Klick-Fluss erreichbar. Neue Env-Var
+  `PUBLIC_API_BASE_URL` (Default `http://localhost:$PORT/v1`, siehe
+  `.env.example`) -- MUSS eine Adresse sein, die der Browser des Users
+  direkt erreichen kann, da ein Klick eine echte Browser-Navigation ist.
+
+**`message_links` jetzt befuellt** (vorher seit Track 0 im Contract
+dokumentiert, nie gebaut, siehe "Annahmen" unten): `mail/sync.ts` extrahiert
+echte `<a href>`-Links aus `mail.bodyHtml` (`extractLinks()` aus
+`@driftmail/security-classification`, bereits vorhanden, bisher nur fuer
+Klartext-Markdown-Links genutzt) und persistiert sie nach dem Insert der
+Nachricht. `domainMatchesDisplay` = `!isLinkMismatch(link)` (bereits
+vorhandene Funktion), `isKnownMalicious` bleibt immer `false` (kein
+externer Blocklist-Abgleich, gleiches Grenzen-Muster wie
+`ipReputationFlag`/`domainReputationScore`). Neu in `ApiMessageDetail.links`
+ausgeliefert (`MessageLink`-Schema war im Contract dokumentiert, aber ohne
+Mapper-Implementierung).
+
+**Zwei vorher dokumentierte Erkennungs-Luecken automatisch mitgeschlossen**
+(reine Nachbearbeitungsschritte in `mail/sync.ts`, gleiches Muster wie die
+Quishing-Escalation -- kein neuer Code in `security-classification/`
+selbst, dieselbe `classify()`-Funktion wird nur mit einem zusaetzlichen,
+jetzt verfuegbaren Signal erneut aufgerufen):
+- `linkMismatchDetected` konnte fuer EMPFANGENE Mail praktisch nie
+  ausloesen, weil `analyzeMail()` nur `bodyText` bekommt (keine
+  `<a href>`-Tags in reinem Klartext). Jetzt wertet `mail/sync.ts`
+  zusaetzlich `extractLinks(mail.bodyHtml)` aus und escaliert bei einem
+  Treffer, exakt wie beim Quishing-Schutz.
+- `imageToTextRatio` war fuer empfangene Mail immer `null` ("echte
+  Berechnung aus HTML ... aber null ohne erkennbares HTML", siehe
+  `security-classification/src/index.ts`-Kommentar). Wird jetzt aus
+  `mail.bodyHtml` berechnet, wenn vorhanden.
+
+**Bewusst NICHT Teil dieses Schritts:** Compose/Versand bleibt reiner
+Klartext (kein HTML-Editor, `bodyText` unveraendert in `sendMessage.ts`) --
+war nicht Teil des Auftrags ("Rendering", nicht "Verfassen"). `blockTrackingLinks`
+bleibt ohne eigene Wirkung (siehe "5 Wettbewerbs-Luecken" Punkt 1 oben --
+eigene, noch offene Erkennung "ist das ein Marketing-Tracking-Redirect"
+noetig, `message_links` liefert dafuer aktuell kein passendes Signal). Ein
+Link, der nur als blosse URL im Klartext-Fallback (`bodyText`, ohne
+HTML-Gegenstueck) vorliegt, wird nicht umgeschrieben -- betrifft nur Mails
+ohne jeden HTML-Teil, fuer die es ohnehin nichts zu rendern gibt.
+
+**Tests:** Fixture 11 (`fixtureAdapter.ts`) deckt alles ab: sanitisiertes
+`bodyHtml` ohne `<script>`, Tracking-Pixel bei `blockRemoteImages=true`
+entfernt UND bei `false` wieder vorhanden (beweist Pro-Request-Sanitisierung,
+nicht einmalig beim Sync), Link auf `/link-check` umgeschrieben,
+`linkMismatchDetected=true` + `classification='phishing'` NUR ueber den
+echten HTML-Link (der Klartext-Fallback enthaelt bewusst keinen Link),
+`message_links` mit korrektem `domainMatchesDisplay=false`. Bewusst NICHT
+Fixture 3 fuer den spaeten Teil des Smoketests wiederverwendet -- die wird
+im Papierkorb/Loeschen-Test bereits permanent geloescht (siehe Kommentar in
+`fixtureAdapter.ts`). Migration (`body_html`-Spalte,
+`migrateMessagesConfidentialUntil()` erweitert) gegen eine echte,
+vorher bestehende Postgres-DB verifiziert (`ALTER TABLE ... ADD COLUMN IF
+NOT EXISTS`, kein Backfill noetig/moeglich). Gruen in-memory + gegen
+frisches UND migriertes Postgres.
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war
@@ -2515,10 +2618,13 @@ Konsumenten fuer den Empfangen-Fall).
   (Terminal 21.09.):** `signatures` — siehe Abschnitt "Signaturen &
   Abwesenheitsassistent" unten, `api-spec.yaml` hat jetzt echte
   `GET`/`POST`/`PATCH`/`DELETE /signatures`-Pfade und das Backend liefert
-  sie wirklich aus. `message_links`, `reminders` (Contract-Pfade existieren
-  zwar bereits, siehe `/reminders`, aber ohne Backend-Implementierung) und
-  `ai_provider_config` (ersetzt durch `user_ai_preference`, siehe
-  "BYOK-Cloud-KI" oben) bleiben offen.
+  sie wirklich aus. **Nachgezogen (Terminal 21.09., "NEUE GRUNDLAGE -
+  HTML-Rendering des Mail-Bodies"):** `message_links` ebenfalls — siehe
+  Abschnitt "HTML-Rendering des Mail-Bodies" unten, `MessageDetail.links`
+  liefert jetzt echte, beim Sync aus `bodyHtml` extrahierte Links.
+  `reminders` (Contract-Pfade existieren zwar bereits, siehe `/reminders`,
+  aber ohne Backend-Implementierung) und `ai_provider_config` (ersetzt durch
+  `user_ai_preference`, siehe "BYOK-Cloud-KI" oben) bleiben offen.
 - `security_audit_log` existiert seit dem Auto-Delete-Feature (siehe
   Abschnitt "Auto-Delete: adult/gambling-Spam" oben) teilweise: Write-Pfad
   über `store.logSecurityAudit()` ist da, aber weiterhin **kein**

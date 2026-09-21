@@ -78,6 +78,11 @@ export class ImapAdapter implements MailAdapter {
             replyToAddress: parsed.replyTo?.value?.[0]?.address ?? null,
             subject: parsed.subject ?? null,
             bodyText: parsed.text ?? null,
+            // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies":
+            // mailparser liefert `.html` bereits fertig geparst (string bei
+            // vorhandenem HTML-Teil, sonst `false`) -- keine eigene
+            // MIME-Auswertung noetig, anders als bei Gmail (siehe dort).
+            bodyHtml: parsed.html || null,
             receivedAt: (parsed.date ?? new Date()).toISOString(),
             rawHeaders,
             attachments,

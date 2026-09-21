@@ -113,6 +113,13 @@ export interface MessageRecord {
   replyToAddress: string | null;
   subject: string | null;
   bodyText: string | null;
+  // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": roher,
+  // NICHT sanitized-er HTML-Koerper (siehe mail/types.ts FetchedMail für
+  // Details) -- Sanitizing/Bild-Blockierung/Link-Umschreibung passiert erst
+  // in routes/messages.ts beim Ausliefern (mail/htmlSanitize.ts), damit ein
+  // spaeter geaenderter Privacy-Schalter auch fuer laengst synchronisierte
+  // Mails rueckwirkend greift. `null` bei reinen Text-Mails.
+  bodyHtml: string | null;
   receivedAt: string;
   folderId: string;
   rawHeaders: Record<string, string> | null;
@@ -123,9 +130,9 @@ export interface MessageRecord {
   // wurde. Siehe mail/inReplyTo.ts.
   inReplyToMessageId: string | null;
   // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
-  // ("Vertraulicher Modus"): Ablaufdatum, danach wird bodyText serverseitig
-  // geloescht (lazy beim naechsten Lesezugriff, siehe mail/confidential.ts).
-  // `null` = keine Ablaufzeit gesetzt (Normalfall).
+  // ("Vertraulicher Modus"): Ablaufdatum, danach werden bodyText UND
+  // bodyHtml serverseitig geloescht (lazy beim naechsten Lesezugriff, siehe
+  // mail/confidential.ts). `null` = keine Ablaufzeit gesetzt (Normalfall).
   confidentialUntil: string | null;
   // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"): `null` = nicht
   // snoozed. In der Zukunft = aus GET /messages ausgeblendet, siehe
@@ -407,8 +414,28 @@ export interface ApiMessageAttachment {
   containsSensitiveDocument: SensitiveDocumentKind;
 }
 
+// [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": `links`
+// schliesst eine seit Track 0 im Contract dokumentierte, nie gebaute
+// Luecke -- echte <a href>-Links werden jetzt beim Sync aus mail.bodyHtml
+// extrahiert (mail/sync.ts, security-classification extractLinks()) und
+// hier ausgeliefert, statt nur intern fuer linkMismatchDetected verwendet
+// zu werden.
+export interface ApiMessageLink {
+  id: string;
+  displayText: string | null;
+  actualUrl: string;
+  domainMatchesDisplay: boolean;
+  isKnownMalicious: boolean;
+}
+
 export interface ApiMessageDetail extends ApiMessage {
   bodyText: string | null;
+  // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": bereits
+  // SANITIZED (siehe mail/htmlSanitize.ts, in routes/messages.ts
+  // angewendet) -- nie der rohe MessageRecord.bodyHtml-Wert. `null` bei
+  // reinen Text-Mails, ODER wenn der Vertrauliche-Modus-Ablauf bodyHtml
+  // bereits geloescht hat (siehe MessageRecord-Kommentar).
+  bodyHtml: string | null;
   security: ApiSecurityResult | null;
   quarantine: ApiQuarantineInfo | null;
   canUnsubscribe: boolean;
@@ -418,6 +445,7 @@ export interface ApiMessageDetail extends ApiMessage {
   // dieser Nachricht, bereits gescannt (siehe mail/incomingAttachments.ts
   // fuer eingehende, routes/attachments.ts fuer beim Senden hochgeladene).
   attachments: ApiMessageAttachment[];
+  links: ApiMessageLink[];
 }
 
 export interface ApiMailSummary {

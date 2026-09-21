@@ -1288,13 +1288,10 @@ paths:
     get:
       summary: >
         [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 1
-        ("Tracking-Pixel-Blockierung"). Siehe backend/README.md
-        "Tracking-Schutz" fuer eine wichtige Einordnung: driftmail rendert
-        bereits heute nirgends HTML-Mail-Inhalte oder laedt automatisch
-        entfernte Bilder (Nachrichtentext ist durchgaengig Klartext) --
-        `blockRemoteImages` hat deshalb aktuell KEINE zusaetzliche
-        technische Wirkung, ist aber fuer Transparenz/Zukunftssicherheit
-        trotzdem als echter, gespeicherter Schalter vorhanden.
+        ("Tracking-Pixel-Blockierung"). Siehe `PrivacySettings.
+        blockRemoteImages`: hat seit "NEUE GRUNDLAGE - HTML-Rendering des
+        Mail-Bodies" eine echte technische Wirkung (siehe
+        backend/README.md "HTML-Rendering des Mail-Bodies").
       responses:
         "200":
           description: Aktuelle Privatsphäre-Einstellungen
@@ -1521,12 +1518,33 @@ components:
                 Kann `null` sein, wenn `confidentialUntil` in der
                 Vergangenheit liegt (Vertraulicher Modus, siehe oben) -- der
                 Text wurde dann serverseitig geloescht.
+            bodyHtml:
+              type: string
+              nullable: true
+              description: >
+                [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des
+                Mail-Bodies": bereits SANITISIERT (Script/Iframe/Form/Object
+                etc. entfernt, siehe backend/README.md "HTML-Rendering des
+                Mail-Bodies"). `null` bei reinen Text-Mails, ODER wenn der
+                Vertrauliche-Modus-Ablauf den Inhalt bereits geloescht hat
+                (gleiche Bedingung wie bei `bodyText` oben). Jeder
+                http(s)-Link im HTML ist auf `GET /link-check` umgeschrieben
+                (siehe dort). Enthaelt kein `<img src>` fuer Remote-Bilder,
+                wenn der User `blockRemoteImages` aktiviert hat (Default,
+                siehe `PrivacySettings`).
             security:
               $ref: "#/components/schemas/SecurityResult"
             links:
               type: array
               items:
                 $ref: "#/components/schemas/MessageLink"
+              description: >
+                [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des
+                Mail-Bodies": echte <a href>-Links, extrahiert aus dem
+                HTML-Koerper beim Sync (message_links-Tabelle) -- vorher seit
+                Track 0 im Contract dokumentiert, aber nie befuellt worden.
+                Leeres Array bei reinen Text-Mails (keine Links extrahierbar)
+                oder wenn der HTML-Koerper keine `<a href>`-Tags enthaelt.
             quarantine:
               $ref: "#/components/schemas/QuarantineInfo"
             canUnsubscribe:
@@ -1592,10 +1610,23 @@ components:
     MessageLink:
       type: object
       properties:
-        displayText: { type: string }
+        id: { type: string, format: uuid }
+        displayText: { type: string, nullable: true }
         actualUrl: { type: string }
-        domainMatchesDisplay: { type: boolean }
-        isKnownMalicious: { type: boolean }
+        domainMatchesDisplay:
+          type: boolean
+          description: >
+            false = klassischer Phishing-Indikator (Anzeigetext behauptet
+            eine Domain, das tatsaechliche href-Ziel zeigt auf eine andere).
+            Nur ausgewertet, wenn der Anzeigetext selbst wie eine
+            Domain/URL aussieht -- sonst immer `true` (kein Fehlalarm, aber
+            auch kein Signal), siehe security-classification/isLinkMismatch.
+        isKnownMalicious:
+          type: boolean
+          description: >
+            Immer `false` -- kein externer Blocklist-Abgleich angebunden
+            (gleiches, bereits an mehreren Stellen dokumentiertes
+            Grenzen-Muster wie `ipReputationFlag`/`domainReputationScore`).
 
     SecurityResult:
       type: object
@@ -1667,16 +1698,23 @@ components:
         blockRemoteImages:
           type: boolean
           description: >
-            Ohne aktuelle technische Wirkung (siehe GET /privacy-settings-
-            Beschreibung) -- driftmail rendert nirgends HTML/laedt
-            automatisch entfernte Bilder. Default true.
+            [2026-09-21 UPDATE, "NEUE GRUNDLAGE - HTML-Rendering des
+            Mail-Bodies"] hat jetzt eine ECHTE Wirkung: bei `true` entfernt
+            der Server jedes `<img src="http(s)://...">` aus MessageDetail.
+            bodyHtml (u.a. der klassische Tracking-Pixel), bevor die Mail
+            den Client erreicht. Default true.
         blockTrackingLinks:
           type: boolean
           description: >
-            [2026-09-21] Bewusst noch ohne technische Wirkung: braucht die
-            Link-Extraktion aus message_links, die selbst noch nicht
-            implementiert ist (Contract-Leiche, siehe backend/README.md
-            "Annahmen") -- separater, noch offener Schritt. Schalter
+            [2026-09-21] Weiterhin ohne eigene technische Wirkung -- zu
+            unterscheiden von der davon UNABHAENGIGEN Klick-Zeit-Link-
+            Pruefung (GET /link-check), die JEDEN http(s)-Link umschreibt,
+            unabhaengig von diesem Schalter. Eine echte Umsetzung braeuchte
+            eine eigene Erkennung "ist dieser Link ein Marketing-/Analytics-
+            Tracking-Redirect" -- message_links (jetzt befuellt, siehe
+            `MessageLink`) liefert dafuer noch kein passendes Signal
+            (domainMatchesDisplay/isKnownMalicious sind Phishing-, keine
+            Tracking-Signale). Separater, noch offener Schritt. Schalter
             existiert bereits, damit die UI/Einstellungen nicht nochmal
             angefasst werden muessen, sobald das nachgezogen wird. Default
             true.

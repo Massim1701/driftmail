@@ -30,7 +30,7 @@ import {
   ipReputationLookup,
 } from "../lookups";
 import { ocrAdapter, detectQuishingInImage } from "../attachments";
-import { classify } from "@driftmail/security-classification";
+import { classify, computeImageToTextRatio, extractLinks, isLinkMismatch } from "@driftmail/security-classification";
 
 /** Wählt den passenden Adapter für ein Konto.
  *
@@ -225,6 +225,40 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
       // lookups/ibanThreadCheck.ts.
       security.ibanChangedInThread = await ibanThreadCheck.checkChanged(inReplyToMessageId, ibanCandidates);
 
+      // "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies" (WEB_INBOX.md
+      // 21.09.): echte <a href>-Links + Bild/Text-Verhaeltnis aus dem
+      // TATSAECHLICHEN HTML-Koerper statt nur aus bodyText, das bei
+      // HTML-Mails i.d.R. keine Link-/Bild-Struktur mehr enthaelt (mailparser/
+      // Gmail-Adapter extrahieren dafuer nur die reine Text-Variante).
+      // Schliesst zwei vorher dokumentierte Luecken: linkMismatchDetected
+      // konnte fuer empfangene Mail praktisch nie ausloesen (siehe Kommentar
+      // bei "Phishing-Check serverseitig vor dem Versand", WEB_INBOX.md/
+      // SYNC.md), imageToTextRatio war fuer empfangene Mail immer `null`
+      // (siehe ai/index.ts "Deckt NICHT ab"-Kommentar). `htmlLinks` wird
+      // unten nach dem insertMessage() auch als message_links persistiert --
+      // schliesst die dritte vorher dokumentierte Luecke ("message_links
+      // Contract existiert seit Track 0, Backend nie gebaut", SYNC.md).
+      const htmlLinks = mail.bodyHtml ? extractLinks(mail.bodyHtml) : [];
+      if (mail.bodyHtml) {
+        security.imageToTextRatio = computeImageToTextRatio(mail.bodyHtml);
+      }
+      if (!security.linkMismatchDetected && htmlLinks.some(isLinkMismatch)) {
+        security.linkMismatchDetected = true;
+        const escalated = classify({
+          spfStatus: security.spfStatus,
+          dkimStatus: security.dkimStatus,
+          dmarcStatus: security.dmarcStatus,
+          homoglyphDetected: security.homoglyphDetected,
+          linkMismatchDetected: true,
+          displayNameSpoofingDetected: security.displayNameSpoofingDetected,
+          replyToMismatchDetected: security.replyToMismatchDetected,
+          urgencyLanguageScore: security.urgencyLanguageScore ?? 0,
+          containsNewIban: security.containsNewIban,
+        });
+        security.classification = escalated.classification;
+        security.confidenceScore = escalated.confidenceScore;
+      }
+
       // "Quishing"-Schutz (WEB_INBOX.md 21.09. "ZWEI ENTERPRISE-SICHERHEITS-
       // FEATURES", Punkt 1): Bild-Anhaenge auf boesartige Links pruefen, BEVOR
       // die Klassifikations-Entscheidung (Quarantaene/Auto-Delete) unten
@@ -313,6 +347,7 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         replyToAddress: mail.replyToAddress,
         subject: mail.subject,
         bodyText: mail.bodyText,
+        bodyHtml: mail.bodyHtml,
         receivedAt: mail.receivedAt,
         folderId,
         rawHeaders: mail.rawHeaders,
@@ -328,6 +363,23 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         ...security,
         analyzedAt: new Date().toISOString(),
       });
+
+      // "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": message_links
+      // erst JETZT persistierbar, message.id war vorher (bei der
+      // Link-Mismatch-Auswertung oben) noch nicht bekannt.
+      // isKnownMalicious bleibt immer false -- kein externer
+      // Blocklist-Abgleich verfuegbar (gleiches, bereits an mehreren
+      // Stellen dokumentiertes Grenzen-Muster wie ipReputationFlag/
+      // domainReputationScore).
+      for (const link of htmlLinks) {
+        await store.insertMessageLink({
+          messageId: message.id,
+          displayText: link.displayText,
+          actualUrl: link.actualUrl,
+          domainMatchesDisplay: !isLinkMismatch(link),
+          isKnownMalicious: false,
+        });
+      }
 
       // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan":
       // Anhaenge dieser Mail scannen, BEVOR sie im Client sicht-/oeffenbar

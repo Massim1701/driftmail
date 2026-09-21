@@ -28,6 +28,7 @@ import type {
   MailAccountRecord,
   MessageAiSummaryRecord,
   MessageAttachmentRecord,
+  MessageLinkRecord,
   MessageRecord,
   MessageSecurityRecord,
   OutgoingSendLogRecord,
@@ -201,6 +202,12 @@ export interface Store {
   /** [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan". */
   listAttachmentsForMessage(messageId: string): Promise<MessageAttachmentRecord[]>;
 
+  // ----- Links (message_links, "NEUE GRUNDLAGE - HTML-Rendering des
+  // Mail-Bodies", WEB_INBOX.md 21.09.): echte <a href>-Links aus dem
+  // HTML-Koerper einer Nachricht, siehe mail/sync.ts. -----
+  insertMessageLink(input: Omit<MessageLinkRecord, "id">): Promise<MessageLinkRecord>;
+  listLinksForMessage(messageId: string): Promise<MessageLinkRecord[]>;
+
   // ----- Entwürfe (POST/GET /drafts, PATCH/DELETE /drafts/{id}, WEB_INBOX.md
   // 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags") -----
   createDraft(input: Omit<DraftRecord, "id" | "updatedAt">): Promise<DraftRecord>;
@@ -343,6 +350,9 @@ export class InMemoryStore implements Store {
   // `message_attachments` (db-schema.sql) -- siehe MessageAttachmentRecord-
   // Kommentar in types.ts.
   messageAttachments: MessageAttachmentRecord[] = [];
+  // `message_links` (db-schema.sql) -- siehe ApiMessageLink-Kommentar in
+  // types.ts.
+  messageLinks: MessageLinkRecord[] = [];
 
   // ----- Users / Accounts -----
 
@@ -531,7 +541,10 @@ export class InMemoryStore implements Store {
    * dieselbe Nachricht false (bodyText bereits null), kein wiederholtes
    * Ueberschreiben. */
   private expireConfidentialIfDue(m: MessageRecord): MessageRecord {
-    if (isConfidentialExpired(m)) m.bodyText = null;
+    if (isConfidentialExpired(m)) {
+      m.bodyText = null;
+      m.bodyHtml = null;
+    }
     return m;
   }
 
@@ -812,6 +825,18 @@ export class InMemoryStore implements Store {
    * einer Nachricht fuer GET /messages/:id (siehe mappers.ts). */
   async listAttachmentsForMessage(messageId: string): Promise<MessageAttachmentRecord[]> {
     return this.messageAttachments.filter((a) => a.messageId === messageId);
+  }
+
+  // ----- Links -----
+
+  async insertMessageLink(input: Omit<MessageLinkRecord, "id">): Promise<MessageLinkRecord> {
+    const record: MessageLinkRecord = { id: randomUUID(), ...input };
+    this.messageLinks.push(record);
+    return record;
+  }
+
+  async listLinksForMessage(messageId: string): Promise<MessageLinkRecord[]> {
+    return this.messageLinks.filter((l) => l.messageId === messageId);
   }
 
   // ----- Entwürfe -----

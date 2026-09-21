@@ -13,6 +13,7 @@ import type {
   ApiMessage,
   ApiMessageAttachment,
   ApiMessageDetail,
+  ApiMessageLink,
   ApiQuarantineInfo,
   ApiSecurityResult,
   ApiSignature,
@@ -23,6 +24,7 @@ import type {
   MailAccountRecord,
   MessageAiSummaryRecord,
   MessageAttachmentRecord,
+  MessageLinkRecord,
   MessageRecord,
   MessageSecurityRecord,
   QuarantineRecord,
@@ -56,6 +58,17 @@ export function toApiMessageAttachment(a: MessageAttachmentRecord): ApiMessageAt
     scanStatus: a.scanStatus,
     isDangerousType: a.isDangerousType,
     containsSensitiveDocument: a.containsSensitiveDocument,
+  };
+}
+
+// [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies".
+export function toApiMessageLink(l: MessageLinkRecord): ApiMessageLink {
+  return {
+    id: l.id,
+    displayText: l.displayText,
+    actualUrl: l.actualUrl,
+    domainMatchesDisplay: l.domainMatchesDisplay,
+    isKnownMalicious: l.isKnownMalicious,
   };
 }
 
@@ -140,15 +153,23 @@ export function toApiMessageDetail(
   isNewSender: boolean,
   awaitingReply: boolean,
   attachments: MessageAttachmentRecord[],
+  links: MessageLinkRecord[],
 ): ApiMessageDetail {
   return {
     ...toApiMessage(m, security, awaitingReply),
     bodyText: m.bodyText,
+    // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": hier
+    // noch der ROHE Wert -- der Aufrufer (routes/messages.ts) ersetzt ihn
+    // NACH diesem Aufruf durch die sanitized Fassung (mail/htmlSanitize.ts),
+    // die privacySettings des Users braucht, die dieser reinen Mapper-
+    // Funktion bewusst nicht bekannt sind (siehe dortiger Kommentar).
+    bodyHtml: m.bodyHtml,
     security: security ? toApiSecurityResult(security) : null,
     quarantine: quarantine ? toApiQuarantineInfo(quarantine) : null,
     canUnsubscribe: parseListUnsubscribeHeader(m.rawHeaders) !== null,
     isNewSender,
     attachments: attachments.map(toApiMessageAttachment),
+    links: links.map(toApiMessageLink),
   };
 }
 

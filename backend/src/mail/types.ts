@@ -30,6 +30,13 @@ export interface FetchedMail {
   replyToAddress: string | null;
   subject: string | null;
   bodyText: string | null;
+  // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": roher
+  // HTML-Koerper, so wie vom Provider geliefert (NICHT sanitized -- das
+  // passiert erst serverseitig beim Ausliefern, siehe mail/htmlSanitize.ts,
+  // damit ein spaeter geaenderter blockRemoteImages-Schalter auch fuer
+  // laengst synchronisierte Mails rueckwirkend greift). `null` bei reinen
+  // Text-Mails oder wenn der Adapter kein HTML liefert.
+  bodyHtml: string | null;
   receivedAt: string; // ISO datetime
   rawHeaders: Record<string, string>;
   // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": leeres

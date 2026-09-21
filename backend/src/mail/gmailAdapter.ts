@@ -32,6 +32,24 @@ function extractPlainTextBody(payload: any): string | null {
   return null;
 }
 
+// [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": exakt
+// derselbe rekursive Payload-Walk wie extractPlainTextBody oben, nur für
+// den "text/html"-Teil eines multipart/alternative-Payloads (Gmail liefert
+// beide Varianten nebeneinander als Geschwister-Parts, siehe API-Doku).
+function extractHtmlBody(payload: any): string | null {
+  if (!payload) return null;
+  if (payload.mimeType === "text/html" && payload.body?.data) {
+    return decodeBase64Url(payload.body.data);
+  }
+  if (Array.isArray(payload.parts)) {
+    for (const part of payload.parts) {
+      const found = extractHtmlBody(part);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 function headerValue(headers: Array<{ name: string; value: string }>, name: string): string | null {
   const h = headers.find((x) => x.name.toLowerCase() === name.toLowerCase());
   return h ? h.value : null;
@@ -118,6 +136,8 @@ export class GmailAdapter implements MailAdapter {
         replyToAddress: headerValue(headers, "Reply-To"),
         subject: headerValue(headers, "Subject"),
         bodyText: extractPlainTextBody(payload) ?? full.data.snippet ?? null,
+        // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies"
+        bodyHtml: extractHtmlBody(payload),
         receivedAt: full.data.internalDate
           ? new Date(Number(full.data.internalDate)).toISOString()
           : new Date().toISOString(),
