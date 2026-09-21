@@ -36,6 +36,7 @@ export function MessageDetailPane({
   papierkorbFolderId,
   spamFolderId,
   trustedSenderAddresses,
+  onTrustSender,
   onQuarantined,
   onMoved,
   onDeleted,
@@ -69,6 +70,12 @@ export function MessageDetailPane({
    * nicht nur bei neuen Mails. */
   onReply: (message: MessageDetail) => void;
   onForward: (message: MessageDetail) => void;
+  /** [2026-09-21] WEB_INBOX.md 21.09. "KLEINE VERKNUEPFUNG - Neuer-
+   * Absender-Badge mit Whitelist verbinden": App.tsx besitzt
+   * trustedSenderAddresses zentral (auch für andere Nachrichten relevant),
+   * deshalb ruft diese Komponente nur den Callback auf statt selbst
+   * api.addTrustedSender() aufzurufen. */
+  onTrustSender: (address: string) => void;
 }) {
   const [summary, setSummary] = useState<MailSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -190,6 +197,7 @@ export function MessageDetailPane({
           <SecuritySignalBadges
             security={message.security}
             isNewSender={message.isNewSender && !trustedSenderAddresses.has(message.fromAddress)}
+            onTrustSender={() => onTrustSender(message.fromAddress)}
           />
         </div>
         <div className="detail-meta">
@@ -242,10 +250,12 @@ export function MessageDetailPane({
             {permanentlyDeleting ? "Lösche…" : "Endgültig löschen"}
           </button>
         )}
-        {/* Label-Umbenennung (WEB_INBOX.md 09.09. "Ordner-Umbau-Eintrags", Punkt 2):
-            reine UI-Textänderung, das Feld heißt technisch weiterhin summaryText. */}
+        {/* Label-Umbenennung (zuletzt WEB_INBOX.md 21.09. "KLEINE LABEL-
+            AENDERUNG", davor WEB_INBOX.md 09.09. "Ordner-Umbau-Eintrags",
+            Punkt 2): reine UI-Textänderung, das Feld heißt technisch
+            weiterhin summaryText. */}
         <button type="button" className="btn btn-secondary" onClick={loadSummary} disabled={summaryLoading}>
-          {summaryLoading ? "Fasse zusammen…" : "Inhalt"}
+          {summaryLoading ? "Fasse zusammen…" : "Check Mail"}
         </button>
         {/* Antworten/Weiterleiten öffnen den gemeinsamen ComposeModal in
             App.tsx (siehe onReply/onForward-Kommentar oben). WEB_INBOX.md

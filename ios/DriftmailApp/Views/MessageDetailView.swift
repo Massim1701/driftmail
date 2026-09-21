@@ -51,7 +51,10 @@ struct MessageDetailView: View {
                     if let security = detail.security {
                         SecurityBadgesView(
                             security: security,
-                            isNewSender: detail.isNewSender && !environment.trustedSenderAddresses.contains(detail.fromAddress)
+                            isNewSender: detail.isNewSender && !environment.trustedSenderAddresses.contains(detail.fromAddress),
+                            onTrustSender: {
+                                Task { await environment.trustSender(detail.fromAddress) }
+                            }
                         )
                     }
 
@@ -135,10 +138,11 @@ struct MessageDetailView: View {
                 Button {
                     Task { await loadSummary() }
                 } label: {
-                    // Label-Umbenennung (WEB_INBOX.md 09.09. "Ordner-Umbau-
-                    // Eintrags", Punkt 2): reine UI-Textänderung, das Feld
-                    // heißt technisch weiterhin summaryText.
-                    Label("Inhalt", systemImage: "text.bubble")
+                    // Label-Umbenennung (zuletzt WEB_INBOX.md 21.09. "KLEINE
+                    // LABEL-AENDERUNG", davor WEB_INBOX.md 09.09. "Ordner-
+                    // Umbau-Eintrags", Punkt 2): reine UI-Textänderung, das
+                    // Feld heißt technisch weiterhin summaryText.
+                    Label("Check Mail", systemImage: "text.bubble")
                         .font(.system(size: DesignTokens.Typography.Size.body))
                 }
                 .buttonStyle(.bordered)
@@ -450,6 +454,11 @@ private struct SecurityBadgesView: View {
     /// abgeglichen übergeben (siehe `MessageDetailView` -- Whitelist-Check
     /// gehört nicht in diese rein darstellende View).
     let isNewSender: Bool
+    /// [2026-09-21] WEB_INBOX.md 21.09. "KLEINE VERKNUEPFUNG - Neuer-
+    /// Absender-Badge mit Whitelist verbinden": direkt am Badge zur
+    /// Whitelist hinzufügen können, mirrors web's `SecuritySignalBadges`
+    /// `onTrustSender` prop.
+    let onTrustSender: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
@@ -478,7 +487,11 @@ private struct SecurityBadgesView: View {
                     flag("IBAN im Verlauf geändert")
                 }
                 if isNewSender {
-                    flag("Neuer Absender", tone: .warning)
+                    HStack(spacing: DesignTokens.Spacing.xs) {
+                        flag("Neuer Absender", tone: .warning)
+                        Button("Absender vertrauen", action: onTrustSender)
+                            .font(.system(size: DesignTokens.Typography.Size.caption, weight: .medium))
+                    }
                 }
             }
             Text("Konfidenz: \(Int(security.confidenceScore * 100))%")

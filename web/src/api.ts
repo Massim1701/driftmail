@@ -171,6 +171,12 @@ export const api = {
   // Absender"-Badge wird nur gezeigt, wenn die Adresse hier NICHT auftaucht.
   listTrustedSenders: () => request<TrustedSender[]>("/trusted-senders"),
 
+  // POST /trusted-senders (WEB_INBOX.md 21.09. "KLEINE VERKNUEPFUNG -
+  // Neuer-Absender-Badge mit Whitelist verbinden") -- Idempotent laut
+  // Contract, liefert 201 auch wenn die Adresse schon vorhanden war.
+  addTrustedSender: (senderAddress: string) =>
+    request<TrustedSender>("/trusted-senders", { method: "POST", body: JSON.stringify({ senderAddress }) }),
+
   // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): mit
   // accountId nur die Ordner dieses Kontos ("getrennte Ansichten pro
   // Konto"), ohne accountId alle Ordner aller eigenen Konten zusammen.

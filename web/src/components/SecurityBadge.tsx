@@ -43,10 +43,19 @@ export function SecuritySignalBadges({
   security,
   isNewSender = false,
   compact = false,
+  onTrustSender,
 }: {
   security: Pick<SecurityResult, "displayNameSpoofingDetected" | "replyToMismatchDetected" | "ibanChangedInThread">;
   isNewSender?: boolean;
   compact?: boolean;
+  /** [2026-09-21] WEB_INBOX.md 21.09. "KLEINE VERKNUEPFUNG - Neuer-
+   * Absender-Badge mit Whitelist verbinden": direkt am "Neuer Absender"-
+   * Badge zur Whitelist hinzufügen können, statt erst über die
+   * Einstellungen suchen zu müssen. Nur sichtbar/relevant, wenn dieses
+   * Badge auch tatsächlich gerendert wird (isNewSender=true) -- sonst kein
+   * totes UI-Element. Nicht in `compact`-Ansichten (Listenzeilen), nur in
+   * der Detailansicht, wo genug Platz für die Aktion ist. */
+  onTrustSender?: () => void;
 }) {
   const signals = securitySignalsFor(security, { isNewSender });
   if (signals.length === 0) return null;
@@ -56,6 +65,11 @@ export function SecuritySignalBadges({
         <span key={s.key} className={`security-badge tone-${s.tone}${compact ? " compact" : ""}`}>
           <ShieldExclamationIcon width={compact ? 12 : 14} height={compact ? 12 : 14} />
           {s.label}
+          {s.key === "new-sender" && !compact && onTrustSender && (
+            <button type="button" className="security-badge-action" onClick={onTrustSender}>
+              Absender vertrauen
+            </button>
+          )}
         </span>
       ))}
     </>

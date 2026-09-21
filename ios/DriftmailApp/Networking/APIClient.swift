@@ -22,6 +22,11 @@ protocol APIClient {
     /// vertrauenswürdiger Absender") -- kombiniert sich mit
     /// `MessageDetail.isNewSender` (siehe dortigen Kommentar).
     func fetchTrustedSenders() async throws -> [TrustedSender]
+    /// `POST /trusted-senders` (WEB_INBOX.md 21.09. "KLEINE VERKNUEPFUNG -
+    /// Neuer-Absender-Badge mit Whitelist verbinden") -- idempotent laut
+    /// Contract, liefert den bestehenden Eintrag auch wenn die Adresse
+    /// schon vorhanden war.
+    func addTrustedSender(senderAddress: String) async throws -> TrustedSender
 
     func fetchAccounts() async throws -> [MailAccount]
     /// `POST /accounts/{accountId}/sync` (WEB_INBOX.md 21.09. "SEHR

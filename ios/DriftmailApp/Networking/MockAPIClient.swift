@@ -99,6 +99,16 @@ actor MockAPIClient: APIClient {
         return trustedSenders
     }
 
+    func addTrustedSender(senderAddress: String) async throws -> TrustedSender {
+        await delay()
+        if let existing = trustedSenders.first(where: { $0.senderAddress == senderAddress }) {
+            return existing
+        }
+        let created = TrustedSender(id: UUID().uuidString, senderAddress: senderAddress, addedAt: Date())
+        trustedSenders.append(created)
+        return created
+    }
+
     func fetchAccounts() async throws -> [MailAccount] {
         await delay()
         return db.accounts

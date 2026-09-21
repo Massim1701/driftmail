@@ -92,6 +92,11 @@ struct RemoteAPIClient: APIClient {
         try await get("/trusted-senders")
     }
 
+    func addTrustedSender(senderAddress: String) async throws -> TrustedSender {
+        struct Body: Encodable { let senderAddress: String }
+        return try await post("/trusted-senders", body: Body(senderAddress: senderAddress))
+    }
+
     func fetchAccounts() async throws -> [MailAccount] {
         try await get("/accounts")
     }

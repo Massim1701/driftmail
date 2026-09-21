@@ -904,6 +904,30 @@ echter Test-Mailbox oder einem XCTest-UI-Test-Target live durchklicken
 (Toggle → Provider wählen → Key eingeben → Speichern → Fehlerfall mit
 ungültigem Provider prüfen).
 
+## [2026-09-21] Nachtrag: kleine Ergänzungen (Label-Umbenennung, Absender-vertrauen-Button)
+
+- **Label-Umbenennung** (WEB_INBOX.md 21.09. "KLEINE LABEL-AENDERUNG"): der
+  Button "Inhalt" (KI-Zusammenfassung, `MessageDetailView.swift`) heißt
+  jetzt "Check Mail" -- ausdrücklich von Massimo so entschieden. Reine
+  Text-Änderung.
+- **"Absender vertrauen" direkt am Badge** (WEB_INBOX.md 21.09. "KLEINE
+  VERKNUEPFUNG"): `SecurityBadgesView` bekommt einen `onTrustSender`-
+  Closure, sichtbar direkt neben dem "Neuer Absender"-Flag. Ruft
+  `AppEnvironment.trustSender(_:)` (neu) auf, das `POST /trusted-senders`
+  aufruft und `trustedSenderAddresses` optimistisch aktualisiert -- das
+  Badge verschwindet sofort für alle Nachrichten dieses Absenders. Dafür
+  neu: `APIClient.addTrustedSender(senderAddress:)` in Protokoll +
+  `MockAPIClient` + `RemoteAPIClient` -- `POST /trusted-senders` existierte
+  im Contract bereits seit dem Whitelist-Auftrag (15.09.), iOS hatte bisher
+  nur `GET /trusted-senders` (lesend) angebunden.
+
+**Tests:** `xcodebuild` BUILD SUCCEEDED, sauberer Uninstall/Install/
+Launch ohne Crash/Decode-Fehler (Onboarding-Screen unverändert korrekt
+gerendert). Die neuen UI-Elemente selbst (Button-Tap) ließen sich in
+dieser Umgebung NICHT interaktiv verifizieren -- gleiche Ursache wie bei
+den vorherigen Nachträgen (kein Weg an das Onboarding-Gate vorbei ohne
+echte Test-Mailbox).
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

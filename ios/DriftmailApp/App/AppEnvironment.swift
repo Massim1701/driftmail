@@ -227,4 +227,15 @@ final class AppEnvironment: ObservableObject {
         let senders = (try? await apiClient.fetchTrustedSenders()) ?? []
         trustedSenderAddresses = Set(senders.map(\.senderAddress))
     }
+
+    /// `POST /trusted-senders` (WEB_INBOX.md 21.09. "KLEINE VERKNUEPFUNG -
+    /// Neuer-Absender-Badge mit Whitelist verbinden"): adds directly from
+    /// the "Neuer Absender" badge instead of requiring a trip through
+    /// Settings. Optimistic local update (mirrors web's `handleTrustSender`)
+    /// -- the badge disappears for every message from this sender, not just
+    /// the one currently open, without a full re-fetch.
+    func trustSender(_ address: String) async {
+        guard (try? await apiClient.addTrustedSender(senderAddress: address)) != nil else { return }
+        trustedSenderAddresses.insert(address)
+    }
 }

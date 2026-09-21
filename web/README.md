@@ -581,6 +581,23 @@ Nachricht zeigt danach korrekt "Zusammenfassung (Regelbasiert)" -- der
 On-Device-Versuch lief durch (kein Fehler in der Konsole), fiel mangels
 geladenem Modell sauber auf den Backend-Weg zurück.
 
+## Kleine Ergänzungen — [2026-09-21] Nachtrag
+
+- **Label-Umbenennung** (WEB_INBOX.md 21.09. "KLEINE LABEL-AENDERUNG"): der
+  Button "Inhalt" (KI-Zusammenfassung) heißt jetzt "Check Mail" --
+  ausdrücklich von Massimo so entschieden, Alternative "Zusammenfassung"
+  bewusst abgelehnt. Reine Text-Änderung, `summaryText` intern unverändert.
+- **"Absender vertrauen" direkt am Badge** (WEB_INBOX.md 21.09. "KLEINE
+  VERKNUEPFUNG"): `SecuritySignalBadges` bekommt einen optionalen
+  `onTrustSender`-Callback -- nur beim "Neuer Absender"-Badge in der
+  Detailansicht sichtbar (nicht in `compact`-Listenzeilen, dort ist kein
+  Platz für eine Aktion), ruft `POST /trusted-senders` auf. `App.tsx`
+  aktualisiert `trustedSenderAddresses` optimistisch, damit das Badge sofort
+  für ALLE Nachrichten dieses Absenders verschwindet, nicht nur die gerade
+  geöffnete. `api.ts` bekam dafür `addTrustedSender()` -- `POST
+  /trusted-senders` existierte im Contract bereits seit dem
+  Whitelist-Auftrag (15.09.), wurde aber nie von Web aufgerufen.
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge

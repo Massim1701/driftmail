@@ -30,6 +30,19 @@
   color: var(--color-danger-text);
 }
 
+.security-badge-action {
+  margin-left: var(--space-xs);
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-family);
+  font-size: inherit;
+  font-weight: var(--font-weight-medium);
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .security-details {
   display: grid;
   grid-template-columns: 1fr;

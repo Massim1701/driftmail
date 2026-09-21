@@ -236,6 +236,17 @@ export default function App() {
     loadAccounts().then(() => setActiveAccountId(newAccount.id));
   }
 
+  // "Absender vertrauen" direkt am "Neuer Absender"-Badge (WEB_INBOX.md
+  // 21.09. "KLEINE VERKNUEPFUNG"): optimistisches Update (Badge verschwindet
+  // sofort für alle Nachrichten dieses Absenders, nicht nur die aktuell
+  // geöffnete), kein Neuladen der ganzen Liste nötig.
+  function handleTrustSender(address: string) {
+    api
+      .addTrustedSender(address)
+      .then(() => setTrustedSenderAddresses((prev) => new Set(prev).add(address)))
+      .catch(() => setError("Absender konnte nicht zur Whitelist hinzugefügt werden."));
+  }
+
   useEffect(() => {
     if (!token) return;
     api
@@ -542,6 +553,7 @@ export default function App() {
           papierkorbFolderId={papierkorbFolder?.id ?? null}
           spamFolderId={spamFolder?.id ?? null}
           trustedSenderAddresses={trustedSenderAddresses}
+          onTrustSender={handleTrustSender}
           onQuarantined={handleQuarantined}
           onMoved={handleMoved}
           onDeleted={handleDeleted}
