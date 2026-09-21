@@ -8,6 +8,7 @@ import { recipientReputationLookup } from "../lookups";
 import { adapterForAccount } from "../mail/sync";
 import { parseListUnsubscribeHeader, performUnsubscribe } from "../mail/listUnsubscribe";
 import { loadNudgeFolderContext, computeAwaitingReply } from "../mail/nudge";
+import { sendMessageForUser } from "../mail/sendMessage";
 import type { ApiDraftPhishingCheckLink } from "../types";
 import type { MailAccountRecord, MessageRecord } from "../types";
 
@@ -109,173 +110,16 @@ messagesRouter.post("/messages/draft/phishing-check", async (req, res) => {
 // Senden-Endpunkt"). Bisher fehlte trotz vorhandener Infrastruktur drumherum
 // (Phishing-Check oben, outgoing_send_log/recordOutgoingSend in db/store.ts)
 // der eigentliche Endpunkt, der einen Versand auslöst.
-const SEND_BODY_URL_REGEX = /https?:\/\/[^\s<>"]+/g;
-
+//
+// [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule Send"): der
+// eigentliche Versand-Kern ist jetzt in mail/sendMessage.ts ausgelagert,
+// damit der Scheduler beim automatischen Versand eines faelligen Entwurfs
+// exakt denselben Weg nimmt (Phishing-Check, Anhang-Gate, outgoing_send_log,
+// gesendet-Ordner) -- diese Route ist nur noch ein duenner HTTP-Wrapper.
 messagesRouter.post("/messages/send", async (req, res) => {
-  const body = req.body ?? {};
-  const to: string[] = Array.isArray(body.to)
-    ? body.to.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0)
-    : [];
-  const bodyText = typeof body.bodyText === "string" ? body.bodyText : "";
-  if (to.length === 0 || !bodyText.trim()) {
-    return res.status(400).json({ error: "to (mindestens 1 Empfänger) und bodyText sind erforderlich" });
-  }
-  const cc: string[] = Array.isArray(body.cc)
-    ? body.cc.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0)
-    : [];
-  // [2026-09-21] WEB_INBOX.md 21.09. "3) CC/BCC beim Verfassen".
-  const bcc: string[] = Array.isArray(body.bcc)
-    ? body.bcc.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0)
-    : [];
-  const subject = typeof body.subject === "string" ? body.subject : "";
-  const inReplyToMessageId = typeof body.inReplyToMessageId === "string" ? body.inReplyToMessageId : null;
-
-  // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
-  // ("Vertraulicher Modus"): muss, falls gesetzt, ein gueltiger, in der
-  // Zukunft liegender Zeitpunkt sein -- ein bereits abgelaufener Wert waere
-  // fuer den Absender sinnlos (die eigene "gesendet"-Kopie wuerde sofort
-  // nach dem Senden schon geloescht).
-  let confidentialUntil: string | null = null;
-  if (body.confidentialUntil !== undefined && body.confidentialUntil !== null) {
-    if (typeof body.confidentialUntil !== "string") {
-      return res.status(400).json({ error: "confidentialUntil muss ein ISO-Zeitstempel-String sein" });
-    }
-    const parsed = new Date(body.confidentialUntil);
-    if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
-      return res.status(400).json({ error: "confidentialUntil muss ein gueltiger, in der Zukunft liegender Zeitpunkt sein" });
-    }
-    confidentialUntil = parsed.toISOString();
-  }
-
-  // Konto ermitteln: bei einer Antwort das Konto der Ursprungsnachricht
-  // (der User antwortet aus demselben Postfach, in dem die Mail ankam),
-  // sonst das explizit angegebene accountId.
-  let inReplyToHeader: string | null = null;
-  let accountId: string | null = typeof body.accountId === "string" ? body.accountId : null;
-  if (inReplyToMessageId) {
-    const original = await store.getMessage(inReplyToMessageId);
-    if (!original) return res.status(404).json({ error: "inReplyToMessageId: Nachricht nicht gefunden" });
-    inReplyToHeader = original.messageIdHeader;
-    accountId = original.mailAccountId;
-  }
-  if (!accountId) {
-    return res.status(400).json({ error: "accountId ist erforderlich, wenn keine inReplyToMessageId angegeben ist" });
-  }
-  const account = await store.getMailAccount(accountId);
-  if (!account) return res.status(400).json({ error: `Mail-Konto nicht gefunden: ${accountId}` });
-  // [2026-09-10] echte Auth: verhindert, dass ein angemeldeter User über
-  // eine fremde (aber existierende) accountId bzw. eine fremde
-  // inReplyToMessageId aus einem anderen Postfach als seinem eigenen
-  // versendet -- accountId wird oben ggf. genau daraus abgeleitet.
-  if (account.userId !== req.userId) {
-    return res.status(403).json({ error: "Mail-Konto gehört nicht zum angemeldeten User" });
-  }
-
-  // Phishing-Check serverseitig als letzte Instanz VOR dem eigentlichen
-  // Versand (siehe api-spec.yaml), unabhängig davon, ob der Composer vorher
-  // schon POST /messages/draft/phishing-check aufgerufen hat. Der
-  // Request-Body dieses Endpunkts hat kein eigenes `links`-Feld (nur
-  // bodyText) -- Links werden deshalb direkt aus dem Klartext extrahiert
-  // (displayText === actualUrl, da bodyText reiner Text ohne separaten
-  // Anzeigetext ist).
-  const urls: string[] = Array.from(new Set(bodyText.match(SEND_BODY_URL_REGEX) ?? []));
-  const links = urls.map((url) => ({ displayText: url, actualUrl: url }));
-  const phishingCheck = checkDraftForPhishing(bodyText, links);
-  if (phishingCheck.blocked) {
-    return res.status(422).json({
-      blocked: true,
-      reason: phishingCheck.reason ?? "Sicherheitsprüfung hat den Versand blockiert",
-    });
-  }
-
-  // Anhänge (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-Eintrags von
-  // eben"): jede mitgegebene attachmentId muss existieren UND
-  // scan_status='clean' haben, sonst 422 -- gleiche Fehlerform wie der
-  // Phishing-Block oben (siehe api-spec.yaml). Keine Ausnahme, auch nicht
-  // für 'pending' (Scan noch nicht fertig, siehe attachmentScanMock.ts --
-  // dieser Mock läuft synchron, 'pending' kann hier praktisch nie
-  // vorkommen, die Prüfung bleibt trotzdem für eine spätere asynchrone
-  // Scan-Anbindung korrekt).
-  const attachmentIds: string[] = Array.isArray(body.attachmentIds)
-    ? body.attachmentIds.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0)
-    : [];
-  for (const attachmentId of attachmentIds) {
-    const attachment = await store.getAttachment(attachmentId);
-    if (!attachment) {
-      return res.status(400).json({ error: `unbekannte attachmentId: ${attachmentId}` });
-    }
-    if (attachment.scanStatus !== "clean") {
-      return res.status(422).json({
-        blocked: true,
-        reason: `Anhang "${attachment.filename}" ist nicht freigegeben (Status: ${attachment.scanStatus})`,
-      });
-    }
-  }
-
-  const adapter = adapterForAccount(account);
-  let sentMessageId: string;
-  try {
-    const result = await adapter.sendMail({ to, cc, bcc, subject, bodyText, inReplyToMessageIdHeader: inReplyToHeader });
-    sentMessageId = result.providerMessageId;
-  } catch (err) {
-    console.error("Versand beim Mail-Provider fehlgeschlagen:", err);
-    return res.status(502).json({ error: "Versand beim Mail-Provider fehlgeschlagen" });
-  }
-
-  // Lokale messages-Zeile im "gesendet"-Systemordner (WEB_INBOX.md 09.09.
-  // "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags") -- fuer sofortige
-  // UI-Sichtbarkeit, zusaetzlich zum eigentlichen Versand ueber die
-  // Provider-API oben. messageIdHeader ist synthetisch (kein echter
-  // RFC822-Header eines empfangenen Providers vorhanden), providerMessageId
-  // ist die tatsaechliche sentMessageId. Keine message_security-Zeile --
-  // eigene ausgehende Mail wird nicht klassifiziert, GET .../id liefert
-  // dafuer korrekt classification="unclear"/security=null (siehe mappers.ts).
-  const gesendet = await store.getSystemFolder(account.id, "gesendet");
-  if (gesendet) {
-    const sentMessage = await store.insertMessage({
-      mailAccountId: account.id,
-      messageIdHeader: `sent-${sentMessageId}`,
-      providerMessageId: sentMessageId,
-      fromAddress: account.emailAddress,
-      fromDisplayName: null,
-      replyToAddress: null,
-      subject,
-      bodyText,
-      receivedAt: new Date().toISOString(),
-      folderId: gesendet.id,
-      rawHeaders: null,
-      // Thread-Verknuepfung (WEB_INBOX.md 15.09.): bereits oben aus dem
-      // Request aufgeloest (inReplyToMessageId ist hier schon die interne
-      // UUID der Ursprungsnachricht, falls diese Mail eine Antwort ist).
-      inReplyToMessageId,
-      confidentialUntil,
-    });
-    // TODO (bewusst offen, siehe backend/README.md "Anhänge"): die Bytes der
-    // geprüften Anhänge werden NICHT tatsächlich in die ausgehende Mail
-    // eingebettet (kein Objektspeicher vorhanden, aus dem sie beim Versand
-    // gelesen werden könnten, siehe routes/attachments.ts) -- nur die
-    // Verknüpfung mit der jetzt existierenden gesendet-Nachricht läuft echt.
-    if (attachmentIds.length > 0) await store.linkAttachmentsToMessage(attachmentIds, sentMessage.id);
-  }
-
-  // Entwurf verwerfen, falls diese Mail aus einem stammte (WEB_INBOX.md
-  // 09.09.) -- best effort, kein Fehler, falls der Entwurf schon nicht mehr
-  // existiert (z.B. doppelter Klick).
-  const draftId = typeof body.draftId === "string" ? body.draftId : null;
-  if (draftId) await store.deleteDraft(draftId);
-
-  // outgoing_send_log-Eintrag je Empfänger (to + cc + bcc) -- Grundlage für
-  // recipientReputation (store.hasSentTo) und eine künftige Bot/Human-
-  // Missbrauchserkennung (send_abuse_flags-Tabelle existiert bereits im
-  // Schema, Logik dafür ist noch nicht umgesetzt, siehe WEB_INBOX.md). bcc
-  // zählt hier bewusst mit -- ein echter Empfänger für die Missbrauchs-
-  // erkennung, nur eben nicht sichtbar für die anderen Empfänger.
-  const recipients = Array.from(new Set([...to, ...cc, ...bcc].map((a) => a.toLowerCase())));
-  for (const recipientAddress of recipients) {
-    await store.recordOutgoingSend({ userId: account.userId, recipientAddress });
-  }
-
-  res.status(200).json({ sentMessageId });
+  const result = await sendMessageForUser(req.userId, req.body ?? {});
+  if (!result.ok) return res.status(result.status).json(result.body);
+  res.status(200).json({ sentMessageId: result.sentMessageId });
 });
 
 // GET /messages?folderId=&accountId= — siehe api-spec.yaml
@@ -368,6 +212,39 @@ messagesRouter.post("/messages/:messageId/quarantine", async (req, res) => {
 
   const record = await store.quarantineMessage(message.id, "manuell durch User");
   res.json(record);
+});
+
+// POST /messages/:messageId/snooze — siehe api-spec.yaml (WEB_INBOX.md
+// 21.09. "5 Wettbewerbs-Luecken" Punkt 5, "Snooze"). `until: null` hebt ein
+// bestehendes Snooze sofort wieder auf.
+messagesRouter.post("/messages/:messageId/snooze", async (req, res) => {
+  const owned = await requireOwnMessage(req, res, req.params.messageId);
+  if (!owned) return;
+  const { message } = owned;
+
+  const body = req.body as { until?: string | null };
+  let until: string | null = null;
+  if (body.until !== undefined && body.until !== null) {
+    if (typeof body.until !== "string") {
+      return res.status(400).json({ error: "until muss ein ISO-Zeitstempel-String oder null sein" });
+    }
+    const parsed = new Date(body.until);
+    if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+      return res.status(400).json({ error: "until muss ein gueltiger, in der Zukunft liegender Zeitpunkt sein" });
+    }
+    until = parsed.toISOString();
+  }
+
+  const updated = (await store.snoozeMessage(message.id, until))!;
+  const snoozeSecurity = await store.getMessageSecurity(updated.id);
+  const snoozeUser = await store.getUserById(req.userId);
+  const snoozeAwaitingReply = await computeAwaitingReply(
+    updated,
+    snoozeSecurity,
+    snoozeUser?.nudgeUnansweredEnabled ?? true,
+    await loadNudgeFolderContext(updated.mailAccountId),
+  );
+  res.json(toApiMessage(updated, snoozeSecurity, snoozeAwaitingReply));
 });
 
 // POST /messages/:messageId/unsubscribe — siehe api-spec.yaml. War im

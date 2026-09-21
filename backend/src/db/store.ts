@@ -22,6 +22,7 @@ import type {
   AbsenceResponderRecord,
   AiPreferenceRecord,
   ContractRecord,
+  DataBreachFindingRecord,
   DraftRecord,
   FolderRecord,
   MailAccountRecord,
@@ -30,6 +31,7 @@ import type {
   MessageRecord,
   MessageSecurityRecord,
   OutgoingSendLogRecord,
+  PrivacySettingsRecord,
   QuarantineRecord,
   SecurityAuditLogRecord,
   SessionRecord,
@@ -119,6 +121,9 @@ export interface Store {
   getMessage(id: string): Promise<MessageRecord | undefined>;
   moveMessage(id: string, folderId: string): Promise<MessageRecord | undefined>;
   deleteMessage(id: string): Promise<boolean>;
+  /** [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"): `until: null`
+   * hebt ein bestehendes Snooze sofort wieder auf. */
+  snoozeMessage(id: string, until: string | null): Promise<MessageRecord | undefined>;
 
   // ----- Security -----
   setMessageSecurity(record: MessageSecurityRecord): Promise<void>;
@@ -203,9 +208,13 @@ export interface Store {
   getDraft(id: string): Promise<DraftRecord | undefined>;
   updateDraft(
     id: string,
-    patch: Partial<Pick<DraftRecord, "toAddresses" | "ccAddresses" | "subject" | "bodyText">>,
+    patch: Partial<Pick<DraftRecord, "toAddresses" | "ccAddresses" | "bccAddresses" | "subject" | "bodyText" | "scheduledFor">>,
   ): Promise<DraftRecord | undefined>;
   deleteDraft(id: string): Promise<boolean>;
+  /** [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule Send"): alle
+   * Entwuerfe, deren scheduledFor erreicht/ueberschritten ist -- vom
+   * Scheduler (mail/scheduler.ts) periodisch abgefragt. */
+  listDraftsDueForSending(): Promise<DraftRecord[]>;
 
   // ----- Unsubscribe (POST /messages/{id}/unsubscribe + automatische
   // Abmeldung bei Spam, WEB_INBOX.md 09.09. "Automatisches Abmelden bei
@@ -260,6 +269,28 @@ export interface Store {
   /** Pro-Absender-Rate-Begrenzung ("max. eine Antwort alle X Tage"). */
   getAbsenceResponderLastSent(userId: string, senderAddress: string): Promise<string | null>;
   recordAbsenceResponderSent(userId: string, senderAddress: string, sentAt: string): Promise<void>;
+
+  // ----- Privatsphäre-Einstellungen (WEB_INBOX.md 21.09. "5 Wettbewerbs-
+  // Luecken" Punkt 1, "Tracking-Pixel-Blockierung") -----
+  getPrivacySettings(userId: string): Promise<PrivacySettingsRecord | undefined>;
+  setPrivacySettings(
+    userId: string,
+    patch: Partial<Pick<PrivacySettingsRecord, "blockRemoteImages" | "blockTrackingLinks">>,
+  ): Promise<PrivacySettingsRecord>;
+
+  // ----- Darkweb-/Datenleck-Ueberwachung (WEB_INBOX.md 21.09. "5
+  // Wettbewerbs-Luecken" Punkt 3) -----
+  /** Upsert nach (mailAccountId, breachName) -- idempotent, ein bereits
+   * bekannter Treffer wird nicht dupliziert (siehe UNIQUE-Constraint). */
+  upsertDataBreachFinding(input: Omit<DataBreachFindingRecord, "id" | "discoveredAt" | "acknowledged">): Promise<DataBreachFindingRecord>;
+  listDataBreachFindingsForUser(userId: string): Promise<DataBreachFindingRecord[]>;
+  getDataBreachFinding(id: string): Promise<DataBreachFindingRecord | undefined>;
+  setDataBreachFindingAcknowledged(id: string, acknowledged: boolean): Promise<DataBreachFindingRecord | undefined>;
+  /** Letzter Pruefzeitpunkt -- der Scheduler prueft ein Konto nur einmal
+   * pro Tag neu (siehe mail/scheduler.ts), keine echte Bedrohungsdaten-
+   * Aenderung passiert minuetlich. */
+  getLastDataBreachCheck(mailAccountId: string): Promise<string | null>;
+  recordDataBreachCheck(mailAccountId: string, checkedAt: string): Promise<void>;
 }
 
 /** In-Memory-Implementierung (Standard, wenn DATABASE_URL nicht gesetzt ist).
@@ -295,6 +326,9 @@ export class InMemoryStore implements Store {
   signatures: SignatureRecord[] = [];
   absenceResponder: Map<string, AbsenceResponderRecord> = new Map(); // key: userId
   absenceResponderLog: Map<string, string> = new Map(); // key: `${userId}:${senderAddress}`, value: lastSentAt
+  privacySettings: Map<string, PrivacySettingsRecord> = new Map(); // key: userId
+  dataBreachFindings: DataBreachFindingRecord[] = [];
+  dataBreachCheckLog: Map<string, string> = new Map(); // key: mailAccountId, value: lastCheckedAt
 
   // ----- Externe Lookup-Adapter (SYNC.md 08.09., Web-Antwort "vier externe
   // Lookups") -----
@@ -503,9 +537,14 @@ export class InMemoryStore implements Store {
 
   async listMessages(filter: { folderId?: string; accountId?: string; q?: string }): Promise<MessageRecord[]> {
     const q = filter.q?.trim().toLowerCase();
+    const now = new Date().toISOString();
     return this.messages
       .filter((m) => (filter.folderId ? m.folderId === filter.folderId : true))
       .filter((m) => (filter.accountId ? m.mailAccountId === filter.accountId : true))
+      // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"): ausgeblendet,
+      // solange snoozedUntil in der Zukunft liegt -- GET /messages/:id
+      // direkt bleibt davon unberuehrt (siehe api-spec.yaml).
+      .filter((m) => m.snoozedUntil === null || m.snoozedUntil <= now)
       .map((m) => this.expireConfidentialIfDue(m))
       .filter((m) =>
         !q
@@ -525,6 +564,14 @@ export class InMemoryStore implements Store {
 
   async hasReplyInFolder(folderId: string, messageId: string): Promise<boolean> {
     return this.messages.some((m) => m.folderId === folderId && m.inReplyToMessageId === messageId);
+  }
+
+  /** [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"). */
+  async snoozeMessage(id: string, until: string | null): Promise<MessageRecord | undefined> {
+    const m = await this.getMessage(id);
+    if (!m) return undefined;
+    m.snoozedUntil = until;
+    return m;
   }
 
   /** Verschiebt eine Nachricht in einen anderen Ordner (POST /messages/:id/move). */
@@ -785,14 +832,16 @@ export class InMemoryStore implements Store {
 
   async updateDraft(
     id: string,
-    patch: Partial<Pick<DraftRecord, "toAddresses" | "ccAddresses" | "subject" | "bodyText">>,
+    patch: Partial<Pick<DraftRecord, "toAddresses" | "ccAddresses" | "bccAddresses" | "subject" | "bodyText" | "scheduledFor">>,
   ): Promise<DraftRecord | undefined> {
     const draft = await this.getDraft(id);
     if (!draft) return undefined;
     if (patch.toAddresses !== undefined) draft.toAddresses = patch.toAddresses;
     if (patch.ccAddresses !== undefined) draft.ccAddresses = patch.ccAddresses;
+    if (patch.bccAddresses !== undefined) draft.bccAddresses = patch.bccAddresses;
     if (patch.subject !== undefined) draft.subject = patch.subject;
     if (patch.bodyText !== undefined) draft.bodyText = patch.bodyText;
+    if (patch.scheduledFor !== undefined) draft.scheduledFor = patch.scheduledFor;
     draft.updatedAt = new Date().toISOString();
     return draft;
   }
@@ -802,6 +851,12 @@ export class InMemoryStore implements Store {
     if (idx === -1) return false;
     this.drafts.splice(idx, 1);
     return true;
+  }
+
+  /** [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule Send"). */
+  async listDraftsDueForSending(): Promise<DraftRecord[]> {
+    const now = new Date().toISOString();
+    return this.drafts.filter((d) => d.scheduledFor !== null && d.scheduledFor <= now);
   }
 
   // ----- Unsubscribe -----
@@ -937,6 +992,73 @@ export class InMemoryStore implements Store {
 
   async recordAbsenceResponderSent(userId: string, senderAddress: string, sentAt: string): Promise<void> {
     this.absenceResponderLog.set(`${userId}:${senderAddress.toLowerCase()}`, sentAt);
+  }
+
+  // ----- Privatsphäre-Einstellungen -----
+
+  async getPrivacySettings(userId: string): Promise<PrivacySettingsRecord | undefined> {
+    return this.privacySettings.get(userId);
+  }
+
+  async setPrivacySettings(
+    userId: string,
+    patch: Partial<Pick<PrivacySettingsRecord, "blockRemoteImages" | "blockTrackingLinks">>,
+  ): Promise<PrivacySettingsRecord> {
+    const existing = this.privacySettings.get(userId);
+    const updated: PrivacySettingsRecord = {
+      userId,
+      blockRemoteImages: patch.blockRemoteImages ?? existing?.blockRemoteImages ?? true,
+      blockTrackingLinks: patch.blockTrackingLinks ?? existing?.blockTrackingLinks ?? true,
+      updatedAt: new Date().toISOString(),
+    };
+    this.privacySettings.set(userId, updated);
+    return updated;
+  }
+
+  // ----- Darkweb-/Datenleck-Ueberwachung -----
+
+  async upsertDataBreachFinding(
+    input: Omit<DataBreachFindingRecord, "id" | "discoveredAt" | "acknowledged">,
+  ): Promise<DataBreachFindingRecord> {
+    const existing = this.dataBreachFindings.find(
+      (f) => f.mailAccountId === input.mailAccountId && f.breachName === input.breachName,
+    );
+    if (existing) return existing;
+    const record: DataBreachFindingRecord = {
+      id: randomUUID(),
+      discoveredAt: new Date().toISOString(),
+      acknowledged: false,
+      ...input,
+    };
+    this.dataBreachFindings.push(record);
+    return record;
+  }
+
+  async listDataBreachFindingsForUser(userId: string): Promise<DataBreachFindingRecord[]> {
+    const accounts = await this.listMailAccountsByUserId(userId);
+    const accountIds = new Set(accounts.map((a) => a.id));
+    return this.dataBreachFindings
+      .filter((f) => accountIds.has(f.mailAccountId))
+      .sort((a, b) => (a.discoveredAt < b.discoveredAt ? 1 : -1));
+  }
+
+  async getDataBreachFinding(id: string): Promise<DataBreachFindingRecord | undefined> {
+    return this.dataBreachFindings.find((f) => f.id === id);
+  }
+
+  async setDataBreachFindingAcknowledged(id: string, acknowledged: boolean): Promise<DataBreachFindingRecord | undefined> {
+    const finding = await this.getDataBreachFinding(id);
+    if (!finding) return undefined;
+    finding.acknowledged = acknowledged;
+    return finding;
+  }
+
+  async getLastDataBreachCheck(mailAccountId: string): Promise<string | null> {
+    return this.dataBreachCheckLog.get(mailAccountId) ?? null;
+  }
+
+  async recordDataBreachCheck(mailAccountId: string, checkedAt: string): Promise<void> {
+    this.dataBreachCheckLog.set(mailAccountId, checkedAt);
   }
 }
 

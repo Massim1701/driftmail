@@ -124,6 +124,8 @@ export function toApiMessage(m: MessageRecord, security: MessageSecurityRecord |
     // vom Store abgelaufen-geloescht, falls faellig (siehe
     // mail/confidential.ts) -- hier nur reines Durchreichen.
     confidentialUntil: m.confidentialUntil,
+    // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze").
+    snoozedUntil: m.snoozedUntil,
   };
 }
 
@@ -169,8 +171,10 @@ export function toApiDraft(d: DraftRecord): ApiDraft {
     inReplyToMessageId: d.inReplyToMessageId,
     to: d.toAddresses,
     cc: d.ccAddresses,
+    bcc: d.bccAddresses,
     subject: d.subject,
     bodyText: d.bodyText,
+    scheduledFor: d.scheduledFor,
     updatedAt: d.updatedAt,
   };
 }

@@ -7,7 +7,7 @@ import { ensureDemoUser, initStore, store } from "./db/store";
 import { PostgresStore } from "./db/postgresStore";
 import { syncAccount, adapterForAccount } from "./mail/sync";
 import { maybeSendAbsenceResponse } from "./mail/absenceResponder";
-import { runSyncForAllAccounts } from "./mail/scheduler";
+import { runSyncForAllAccounts, runDataBreachChecks, runDueScheduledSends } from "./mail/scheduler";
 import { aiAdapter } from "./ai";
 import { domainReputationLookup, extractIbanCandidates, ibanHistoryCheck } from "./lookups";
 import { ocrAdapter } from "./attachments";
@@ -954,6 +954,7 @@ async function main() {
         rawHeaders: null,
         inReplyToMessageId: null,
         confidentialUntil: null,
+        snoozedUntil: null,
       });
       await ensureDemoUser(); // triggert migrateLegacySystemFolders() (Store hat bereits Ordner -> else-Zweig)
       const migratedMessage = await store.getMessage(legacyMessage.id);
@@ -1127,6 +1128,7 @@ async function main() {
       // nebenbei Grundlage für den IBAN-Wechsel-im-Thread-Test unten.
       inReplyToMessageId: fixture4!.id,
       confidentialUntil: null,
+      snoozedUntil: null,
     });
     const fixture4DetailAfterSecond = (await (await fetch(`${base}/v1/messages/${fixture4!.id}`)).json()) as Record<string, unknown>;
     assert(
@@ -1557,6 +1559,7 @@ async function main() {
       rawHeaders: null,
       inReplyToMessageId: null,
       confidentialUntil: null,
+      snoozedUntil: null,
     });
     const nudgeInboxListRes = await fetch(`${base}/v1/messages?folderId=${eingangFolder!.id}`);
     const nudgeInboxList = (await nudgeInboxListRes.json()) as Array<Record<string, unknown>>;
@@ -1578,6 +1581,7 @@ async function main() {
       rawHeaders: null,
       inReplyToMessageId: nudgeInboxMessage.id,
       confidentialUntil: null,
+      snoozedUntil: null,
     });
     const nudgeInboxAfterReplyRes = await fetch(`${base}/v1/messages/${nudgeInboxMessage.id}`);
     const nudgeInboxAfterReply = (await nudgeInboxAfterReplyRes.json()) as Record<string, unknown>;
@@ -1598,6 +1602,7 @@ async function main() {
       rawHeaders: null,
       inReplyToMessageId: null,
       confidentialUntil: null,
+      snoozedUntil: null,
     });
     const nudgeSentDetailRes = await fetch(`${base}/v1/messages/${nudgeSentMessage.id}`);
     const nudgeSentDetail = (await nudgeSentDetailRes.json()) as Record<string, unknown>;
@@ -1618,6 +1623,7 @@ async function main() {
       rawHeaders: null,
       inReplyToMessageId: null,
       confidentialUntil: null,
+      snoozedUntil: null,
     });
     await store.setMessageSecurity({
       messageId: nudgeSpamMessage.id,
@@ -1724,6 +1730,195 @@ async function main() {
       confidentialPersisted?.bodyText === null,
       "bodyText sollte auch bei direktem Store-Zugriff geloescht sein (echte Persistenz, keine Pro-Response-Maskierung)",
     );
+
+    // ----- "5 Wettbewerbs-Luecken" (WEB_INBOX.md 21.09. "NEUE AUFTRAEGE") -----
+
+    // Punkt 1 ("Tracking-Pixel-Blockierung"): reiner Einstellungs-Schalter,
+    // siehe backend/README.md "Tracking-Schutz" fuer die Einordnung, warum
+    // er aktuell ohne technische Wirkung ist.
+    const privacyDefaultRes = await fetch(`${base}/v1/privacy-settings`);
+    assert(privacyDefaultRes.status === 200, "GET /v1/privacy-settings sollte 200 liefern");
+    const privacyDefault = (await privacyDefaultRes.json()) as Record<string, unknown>;
+    assert(
+      privacyDefault.blockRemoteImages === true && privacyDefault.blockTrackingLinks === true,
+      "Privatsphäre-Einstellungen sollten im Default beide true sein",
+    );
+    const privacyUpdateRes = await fetch(`${base}/v1/privacy-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ blockTrackingLinks: false }),
+    });
+    const privacyUpdated = (await privacyUpdateRes.json()) as Record<string, unknown>;
+    assert(
+      privacyUpdated.blockTrackingLinks === false && privacyUpdated.blockRemoteImages === true,
+      "PUT /v1/privacy-settings sollte nur das angegebene Feld ändern, den Rest unverändert lassen",
+    );
+
+    // Punkt 5 ("Snooze"): Fixture 4 voruebergehend ausblenden, dann wieder
+    // einblenden.
+    const snoozeUntil = new Date(Date.now() + 60_000).toISOString();
+    const snoozeRes = await fetch(`${base}/v1/messages/${fixture4!.id}/snooze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ until: snoozeUntil }),
+    });
+    assert(snoozeRes.status === 200, "POST /v1/messages/:id/snooze sollte 200 liefern");
+    const eingangAfterSnoozeRes = await fetch(`${base}/v1/messages?folderId=${eingangFolder!.id}`);
+    const eingangAfterSnooze = (await eingangAfterSnoozeRes.json()) as Array<Record<string, unknown>>;
+    assert(
+      !eingangAfterSnooze.some((m) => m.id === fixture4!.id),
+      "gesnoozte Nachricht sollte NICHT in GET /messages (Ordner-Liste) auftauchen",
+    );
+    const fixture4WhileSnoozedRes = await fetch(`${base}/v1/messages/${fixture4!.id}`);
+    const fixture4WhileSnoozed = (await fixture4WhileSnoozedRes.json()) as Record<string, unknown>;
+    assert(
+      fixture4WhileSnoozed.snoozedUntil === snoozeUntil,
+      "GET /messages/:id direkt sollte die gesnoozte Nachricht weiterhin liefern, inkl. snoozedUntil",
+    );
+    const unsnoozeRes = await fetch(`${base}/v1/messages/${fixture4!.id}/snooze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ until: null }),
+    });
+    assert(unsnoozeRes.status === 200, "POST /v1/messages/:id/snooze mit until=null sollte 200 liefern");
+    const eingangAfterUnsnoozeRes = await fetch(`${base}/v1/messages?folderId=${eingangFolder!.id}`);
+    const eingangAfterUnsnooze = (await eingangAfterUnsnoozeRes.json()) as Array<Record<string, unknown>>;
+    assert(
+      eingangAfterUnsnooze.some((m) => m.id === fixture4!.id),
+      "nach until=null sollte die Nachricht wieder in der Ordner-Liste auftauchen",
+    );
+
+    // Punkt 4 ("Schedule Send"): Entwurf mit scheduledFor in der
+    // Vergangenheit -> 400. Gueltiger Entwurf -> Scheduler verschickt ihn
+    // automatisch, sobald faellig (hier direkt aufgerufen statt den echten
+    // Timer abzuwarten, gleiches Prinzip wie runSyncForAllAccounts() oben).
+    const scheduleInPastRes = await fetch(`${base}/v1/drafts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: ["kollegin@example.com"],
+        bodyText: "Sollte abgelehnt werden.",
+        scheduledFor: new Date(Date.now() - 1000).toISOString(),
+      }),
+    });
+    assert(scheduleInPastRes.status === 400, "POST /v1/drafts mit scheduledFor in der Vergangenheit sollte 400 liefern");
+
+    const scheduleWithoutRecipientRes = await fetch(`${base}/v1/drafts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bodyText: "Kein Empfaenger.", scheduledFor: new Date(Date.now() + 60_000).toISOString() }),
+    });
+    assert(
+      scheduleWithoutRecipientRes.status === 400,
+      "POST /v1/drafts mit scheduledFor aber ohne Empfaenger sollte 400 liefern",
+    );
+
+    const scheduledDraftRes = await fetch(`${base}/v1/drafts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: ["kollegin@example.com"],
+        subject: "Geplante Mail",
+        bodyText: "Wird automatisch verschickt.",
+        scheduledFor: new Date(Date.now() + 1500).toISOString(),
+      }),
+    });
+    assert(scheduledDraftRes.status === 200, "POST /v1/drafts mit gueltigem scheduledFor sollte 200 liefern");
+    const scheduledDraft = (await scheduledDraftRes.json()) as Record<string, unknown>;
+    assert(typeof scheduledDraft.scheduledFor === "string", "angelegter Entwurf sollte scheduledFor zurückliefern");
+
+    // PATCH: Planung wieder aufheben, dann erneut setzen (deckt beide
+    // "undefined = unveraendert" vs. "null = aufheben"-Pfade ab).
+    const clearScheduleRes = await fetch(`${base}/v1/drafts/${scheduledDraft.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduledFor: null }),
+    });
+    const clearedDraft = (await clearScheduleRes.json()) as Record<string, unknown>;
+    assert(clearedDraft.scheduledFor === null, "PATCH mit scheduledFor:null sollte die Planung aufheben");
+    const rescheduleRes = await fetch(`${base}/v1/drafts/${scheduledDraft.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scheduledFor: new Date(Date.now() + 1500).toISOString() }),
+    });
+    assert(rescheduleRes.status === 200, "PATCH mit gueltigem scheduledFor sollte 200 liefern");
+
+    // Noch nicht faellig -> Scheduler-Lauf darf noch nichts verschicken.
+    await runDueScheduledSends();
+    const notYetDueRes = await fetch(`${base}/v1/drafts`);
+    const notYetDue = (await notYetDueRes.json()) as Array<Record<string, unknown>>;
+    assert(
+      notYetDue.some((d) => d.id === scheduledDraft.id),
+      "vor Ablauf der geplanten Zeit sollte der Entwurf noch existieren (nicht verfrueht verschickt)",
+    );
+
+    // Kurz warten, bis die Zeit wirklich erreicht ist, dann erneut aufrufen.
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await runDueScheduledSends();
+    const draftsAfterScheduleRes = await fetch(`${base}/v1/drafts`);
+    const draftsAfterSchedule = (await draftsAfterScheduleRes.json()) as Array<Record<string, unknown>>;
+    assert(
+      !draftsAfterSchedule.some((d) => d.id === scheduledDraft.id),
+      "nach Faelligkeit sollte der Entwurf automatisch verschickt UND geloescht worden sein",
+    );
+    const gesendetAfterScheduleRes = await fetch(`${base}/v1/messages?folderId=${gesendetFolder.id}&q=${encodeURIComponent("Geplante Mail")}`);
+    const gesendetAfterSchedule = (await gesendetAfterScheduleRes.json()) as Array<Record<string, unknown>>;
+    assert(
+      gesendetAfterSchedule.some((m) => m.subject === "Geplante Mail"),
+      "automatisch verschickte Mail sollte im 'gesendet'-Ordner auftauchen",
+    );
+
+    // Punkt 3 ("Darkweb-/Datenleck-Ueberwachung"): drittes Konto mit einer
+    // Adresse, die den deterministischen Mock-Trigger auslöst (siehe
+    // lookups/dataBreachMock.ts), damit der Fund NICHT vom bereits real
+    // genutzten Demo-Konto abhängt.
+    const breachAccountEmail = "leaktest@example.com";
+    const addBreachAccountRes = await fetch(`${base}/v1/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "gmail", emailAddress: breachAccountEmail }),
+    });
+    assert(addBreachAccountRes.status === 200, "POST /v1/accounts (drittes Konto fuer Datenleck-Test) sollte 200 liefern");
+    const addBreachAccountBody = (await addBreachAccountRes.json()) as { account: { id: string } };
+
+    await runDataBreachChecks();
+    const breachesRes = await fetch(`${base}/v1/security/breaches`);
+    assert(breachesRes.status === 200, "GET /v1/security/breaches sollte 200 liefern");
+    const breaches = (await breachesRes.json()) as Array<Record<string, unknown>>;
+    const breachesForNewAccount = breaches.filter((b) => b.accountId === addBreachAccountBody.account.id);
+    assert(
+      breachesForNewAccount.length === 2,
+      `Mock-Trigger-Adresse sollte genau 2 Datenleck-Treffer liefern, waren ${breachesForNewAccount.length}`,
+    );
+    assert(
+      breachesForNewAccount.every((b) => b.acknowledged === false),
+      "neue Datenleck-Treffer sollten zunaechst unbestätigt (acknowledged=false) sein",
+    );
+    assert(
+      !breaches.some((b) => b.accountId === account.id),
+      "das unauffällige Demo-Konto sollte KEINE Datenleck-Treffer haben",
+    );
+
+    // Erneuter Scheduler-Lauf direkt danach -> keine Duplikate (Upsert nach
+    // (mailAccountId, breachName)) UND der taegliche Cooldown verhindert
+    // ohnehin einen erneuten echten Check.
+    await runDataBreachChecks();
+    const breachesAfterSecondRunRes = await fetch(`${base}/v1/security/breaches`);
+    const breachesAfterSecondRun = (await breachesAfterSecondRunRes.json()) as Array<Record<string, unknown>>;
+    assert(
+      breachesAfterSecondRun.filter((b) => b.accountId === addBreachAccountBody.account.id).length === 2,
+      "wiederholter Scheduler-Lauf sollte keine doppelten Datenleck-Treffer anlegen",
+    );
+
+    const firstBreachId = breachesForNewAccount[0]!.id as string;
+    const acknowledgeRes = await fetch(`${base}/v1/security/breaches/${firstBreachId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acknowledged: true }),
+    });
+    assert(acknowledgeRes.status === 200, "PATCH /v1/security/breaches/:id sollte 200 liefern");
+    const acknowledged = (await acknowledgeRes.json()) as Record<string, unknown>;
+    assert(acknowledged.acknowledged === true, "PATCH sollte acknowledged=true setzen");
 
     // ----- Autorisierung (echte Auth, [2026-09-10]): ein zweiter, echter
     // User darf NICHT auf die Nachrichten/Ordner des ersten zugreifen, nur
@@ -1948,7 +2143,7 @@ async function main() {
     // Massimo müsste den kompletten Weg einmal mit einem echten GMX-/
     // web.de-/iCloud-Konto gegentesten.
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent -> Nudge -> Vertraulicher Modus -> Echter Malware-Scan) end-to-end grün.");
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent -> Nudge -> Vertraulicher Modus -> Echter Malware-Scan -> Tracking-Schutz-Einstellungen -> Snooze -> Schedule Send -> Darkweb-Ueberwachung) end-to-end grün.");
   } finally {
     server.close();
     // Ohne das haelt der tesseract.js-Worker (worker_threads) den Prozess

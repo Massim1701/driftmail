@@ -15,6 +15,8 @@ import { settingsRouter } from "./routes/settings";
 import { contactsRouter } from "./routes/contacts";
 import { signaturesRouter } from "./routes/signatures";
 import { absenceResponderRouter } from "./routes/absenceResponder";
+import { privacySettingsRouter } from "./routes/privacySettings";
+import { breachesRouter } from "./routes/breaches";
 import { internalRouter } from "./routes/internal";
 import { requireAuth } from "./middleware/auth";
 
@@ -52,6 +54,8 @@ export function createApp() {
   v1.use(contactsRouter);
   v1.use(signaturesRouter);
   v1.use(absenceResponderRouter);
+  v1.use(privacySettingsRouter);
+  v1.use(breachesRouter);
   app.use("/v1", v1);
 
   // Betriebs-/Test-Hilfsmittel, kein Contract-Bestandteil.

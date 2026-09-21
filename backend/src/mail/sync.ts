@@ -283,6 +283,7 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         // Vertraulicher Modus (siehe types.ts MessageRecord-Kommentar) ist
         // nur beim eigenen Versand setzbar, nie bei empfangener Mail.
         confidentialUntil: null,
+        snoozedUntil: null,
       });
 
       await store.setMessageSecurity({

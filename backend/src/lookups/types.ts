@@ -85,3 +85,17 @@ export interface AttachmentScanResult {
 export interface AttachmentScanner {
   scan(input: { filename: string; mimeType: string | null; sizeBytes: number; buffer: Buffer }): Promise<AttachmentScanResult>;
 }
+
+export interface DataBreachHit {
+  breachName: string;
+  breachDate: string | null;
+}
+
+/** [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 3
+ * ("Darkweb-/Datenleck-Ueberwachung"). Reale Implementierung: ein Dienst
+ * wie haveibeenpwned (verlangt einen kostenpflichtigen API-Key, siehe
+ * backend/README.md -- bewusst gemockt statt driftmail-finanziert). Mock:
+ * dataBreachMock.ts. */
+export interface DataBreachLookup {
+  check(emailAddress: string): Promise<DataBreachHit[]>;
+}

@@ -6,6 +6,7 @@
 
 import { store } from "../db/store";
 import { ClamAvAttachmentScanner } from "./attachmentScanClamAv";
+import { MockDataBreachLookup } from "./dataBreachMock";
 import { MockDomainReputationLookup } from "./domainReputationMock";
 import { StoreIbanHistoryCheck } from "./ibanHistoryCheck";
 import { StoreIbanThreadCheck } from "./ibanThreadCheck";
@@ -13,6 +14,7 @@ import { MockIpReputationLookup } from "./ipReputationMock";
 import { MockRecipientReputationLookup } from "./recipientReputationMock";
 import type {
   AttachmentScanner,
+  DataBreachLookup,
   DomainReputationLookup,
   IbanHistoryCheck,
   IbanThreadCheck,
@@ -29,6 +31,10 @@ export const recipientReputationLookup: RecipientReputationLookup = new MockReci
 // ClamAV-Scan statt der fruehen Dateiendungs-Attrappe, siehe
 // attachmentScanClamAv.ts.
 export const attachmentScanner: AttachmentScanner = new ClamAvAttachmentScanner();
+// [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 3 ("Darkweb-/Datenleck-
+// Ueberwachung") -- siehe dataBreachMock.ts fuer die Begruendung, warum
+// (noch) gemockt statt real angebunden.
+export const dataBreachLookup: DataBreachLookup = new MockDataBreachLookup();
 
 export { extractSendingIp } from "./ipReputationMock";
 export { extractIbanCandidates } from "./ibanHistoryCheck";

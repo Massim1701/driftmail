@@ -127,6 +127,10 @@ export interface MessageRecord {
   // geloescht (lazy beim naechsten Lesezugriff, siehe mail/confidential.ts).
   // `null` = keine Ablaufzeit gesetzt (Normalfall).
   confidentialUntil: string | null;
+  // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"): `null` = nicht
+  // snoozed. In der Zukunft = aus GET /messages ausgeblendet, siehe
+  // store.listMessages().
+  snoozedUntil: string | null;
 }
 
 // `message_attachments` (db-schema.sql, WEB_INBOX.md 09.09. "Erweiterung
@@ -165,8 +169,13 @@ export interface DraftRecord {
   inReplyToMessageId: string | null;
   toAddresses: string[];
   ccAddresses: string[];
+  // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule Send").
+  bccAddresses: string[];
   subject: string | null;
   bodyText: string | null;
+  // NULL = normaler Entwurf, gesetzt = wird vom Scheduler automatisch
+  // verschickt sobald erreicht (siehe mail/scheduler.ts).
+  scheduledFor: string | null;
   updatedAt: string;
 }
 
@@ -344,6 +353,9 @@ export interface ApiMessage {
   // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
   // ("Vertraulicher Modus") -- siehe MessageRecord-Kommentar.
   confidentialUntil: string | null;
+  // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze") -- siehe
+  // MessageRecord-Kommentar.
+  snoozedUntil: string | null;
 }
 
 export interface ApiDraft {
@@ -351,8 +363,10 @@ export interface ApiDraft {
   inReplyToMessageId: string | null;
   to: string[];
   cc: string[];
+  bcc: string[];
   subject: string | null;
   bodyText: string | null;
+  scheduledFor: string | null;
   updatedAt: string;
 }
 
@@ -520,4 +534,41 @@ export interface AbsenceResponderLogRecord {
   userId: string;
   senderAddress: string;
   lastSentAt: string;
+}
+
+// [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 1
+// ("Tracking-Pixel-Blockierung") -- siehe backend/README.md fuer die
+// wichtige Einordnung, dass blockRemoteImages aktuell ohne technische
+// Wirkung ist (driftmail rendert nirgends HTML).
+export interface PrivacySettingsRecord {
+  userId: string;
+  blockRemoteImages: boolean;
+  blockTrackingLinks: boolean;
+  updatedAt: string;
+}
+
+export interface ApiPrivacySettings {
+  blockRemoteImages: boolean;
+  blockTrackingLinks: boolean;
+}
+
+// [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 3
+// ("Darkweb-/Datenleck-Ueberwachung") -- Mock-Anbindung, siehe
+// lookups/dataBreachMock.ts + backend/README.md.
+export interface DataBreachFindingRecord {
+  id: string;
+  mailAccountId: string;
+  breachName: string;
+  breachDate: string | null;
+  discoveredAt: string;
+  acknowledged: boolean;
+}
+
+export interface ApiDataBreachFinding {
+  id: string;
+  accountId: string;
+  breachName: string;
+  breachDate: string | null;
+  discoveredAt: string;
+  acknowledged: boolean;
 }

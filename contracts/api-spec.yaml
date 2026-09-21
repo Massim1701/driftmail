@@ -411,7 +411,10 @@ paths:
         Absender-Anzeigename/Nachrichtentext. Kombinierbar mit folderId
         (nur in diesem Ordner suchen) -- ueblicher Client-Weg ist `q` +
         `accountId` OHNE `folderId`, um ueber alle Ordner des Kontos zu
-        suchen.
+        suchen. [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"):
+        Nachrichten mit `snoozedUntil` in der Zukunft werden hier
+        NICHT geliefert (siehe POST /messages/{messageId}/snooze), tauchen
+        aber ueber GET /messages/{messageId} direkt weiterhin auf.
       parameters:
         - name: folderId
           in: query
@@ -494,6 +497,39 @@ paths:
       responses:
         "200":
           description: Quarantäne-Eintrag erstellt
+
+  /messages/{messageId}/snooze:
+    post:
+      summary: >
+        [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 5
+        ("Snooze"): Nachricht voruebergehend aus der Ordner-Ansicht
+        ausblenden, taucht automatisch wieder auf, sobald `until` erreicht
+        ist. `until: null` hebt ein bestehendes Snooze sofort wieder auf
+        ("Jetzt wieder anzeigen").
+      parameters:
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [until]
+              properties:
+                until: { type: string, format: date-time, nullable: true }
+      responses:
+        "200":
+          description: Aktualisierte Nachricht
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          description: "until liegt nicht in der Zukunft"
 
   /messages/{messageId}/move:
     post:
@@ -847,8 +883,25 @@ paths:
                 cc:
                   type: array
                   items: { type: string }
+                bcc:
+                  type: array
+                  items: { type: string }
+                  description: >
+                    [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken"
+                    Punkt 4 ("Schedule Send") -- analog zu bcc bei
+                    POST /messages/send.
                 subject: { type: string }
                 bodyText: { type: string }
+                scheduledFor:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  description: >
+                    [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken"
+                    Punkt 4 ("Schedule Send"): gesetzt = dieser Entwurf wird
+                    automatisch verschickt, sobald der Zeitpunkt erreicht
+                    ist (muss in der Zukunft liegen, sonst 400). NULL/nicht
+                    gesetzt = normaler Entwurf ohne automatischen Versand.
       responses:
         "200":
           description: Angelegter Entwurf
@@ -879,8 +932,15 @@ paths:
                 cc:
                   type: array
                   items: { type: string }
+                bcc:
+                  type: array
+                  items: { type: string }
                 subject: { type: string }
                 bodyText: { type: string }
+                scheduledFor:
+                  type: string
+                  format: date-time
+                  nullable: true
       responses:
         "200":
           description: Aktualisierter Entwurf
@@ -1176,6 +1236,11 @@ paths:
               properties:
                 accentTheme: { type: string, enum: [teal, ocean_blue, violett, koralle, ocean_verlauf] }
                 strictUnknownSenders: { type: boolean }
+                nudgeUnansweredEnabled:
+                  type: boolean
+                  description: >
+                    [2026-09-21] Nachtrag -- war in UserSettings bereits
+                    dokumentiert, hier im PUT-Request-Body noch vergessen.
       responses:
         "200":
           description: Gespeicherte Einstellungen
@@ -1185,6 +1250,87 @@ paths:
                 $ref: "#/components/schemas/UserSettings"
         "400":
           description: Ungültiger accentTheme-Wert
+
+  /privacy-settings:
+    get:
+      summary: >
+        [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 1
+        ("Tracking-Pixel-Blockierung"). Siehe backend/README.md
+        "Tracking-Schutz" fuer eine wichtige Einordnung: driftmail rendert
+        bereits heute nirgends HTML-Mail-Inhalte oder laedt automatisch
+        entfernte Bilder (Nachrichtentext ist durchgaengig Klartext) --
+        `blockRemoteImages` hat deshalb aktuell KEINE zusaetzliche
+        technische Wirkung, ist aber fuer Transparenz/Zukunftssicherheit
+        trotzdem als echter, gespeicherter Schalter vorhanden.
+      responses:
+        "200":
+          description: Aktuelle Privatsphäre-Einstellungen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacySettings"
+    put:
+      summary: Einstellung setzen.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                blockRemoteImages: { type: boolean }
+                blockTrackingLinks: { type: boolean }
+      responses:
+        "200":
+          description: Gespeicherte Einstellungen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrivacySettings"
+
+  /security/breaches:
+    get:
+      summary: >
+        [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 3
+        ("Darkweb-/Datenleck-Ueberwachung"): bekannte Datenleck-Treffer
+        fuer alle verbundenen Konten des Users. Mock-Anbindung, siehe
+        backend/README.md.
+      responses:
+        "200":
+          description: Liste der Datenleck-Treffer
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DataBreachFinding"
+
+  /security/breaches/{breachId}:
+    parameters:
+      - name: breachId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      summary: Datenleck-Treffer als gesehen/bestaetigt markieren (blendet den Warnhinweis aus)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [acknowledged]
+              properties:
+                acknowledged: { type: boolean }
+      responses:
+        "200":
+          description: Aktualisierter Treffer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DataBreachFinding"
+        "404":
+          description: Treffer nicht gefunden
 
 components:
   securitySchemes:
@@ -1258,8 +1404,12 @@ components:
         cc:
           type: array
           items: { type: string }
+        bcc:
+          type: array
+          items: { type: string }
         subject: { type: string, nullable: true }
         bodyText: { type: string, nullable: true }
+        scheduledFor: { type: string, format: date-time, nullable: true }
         updatedAt: { type: string, format: date-time }
 
     MailAccount:
@@ -1314,6 +1464,17 @@ components:
             Ablauf wird bodyText serverseitig geloescht (siehe MessageDetail
             unten) -- dieses Feld selbst bleibt erhalten, damit der Client
             "war vertraulich, seit X abgelaufen" anzeigen kann.
+        snoozedUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 5
+            ("Snooze"), siehe POST /messages/{messageId}/snooze. Solange
+            dieser Zeitpunkt in der Zukunft liegt, taucht die Nachricht in
+            GET /messages nicht auf (siehe dortige Beschreibung) -- dieses
+            Feld ist deshalb nur ueber GET /messages/{messageId} direkt
+            sichtbar, z.B. fuer eine spaetere "Snoozed"-Uebersicht.
 
     MessageDetail:
       allOf:
@@ -1463,6 +1624,42 @@ components:
         byokProvider: { type: string, enum: [anthropic, openai, google, other], nullable: true }
         hasApiKey: { type: boolean }
         cloudConsentGiven: { type: boolean }
+
+    PrivacySettings:
+      type: object
+      description: >
+        [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 1,
+        siehe GET/PUT /privacy-settings.
+      properties:
+        blockRemoteImages:
+          type: boolean
+          description: >
+            Ohne aktuelle technische Wirkung (siehe GET /privacy-settings-
+            Beschreibung) -- driftmail rendert nirgends HTML/laedt
+            automatisch entfernte Bilder. Default true.
+        blockTrackingLinks:
+          type: boolean
+          description: >
+            [2026-09-21] Bewusst noch ohne technische Wirkung: braucht die
+            Link-Extraktion aus message_links, die selbst noch nicht
+            implementiert ist (Contract-Leiche, siehe backend/README.md
+            "Annahmen") -- separater, noch offener Schritt. Schalter
+            existiert bereits, damit die UI/Einstellungen nicht nochmal
+            angefasst werden muessen, sobald das nachgezogen wird. Default
+            true.
+
+    DataBreachFinding:
+      type: object
+      description: >
+        [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 3,
+        siehe GET /security/breaches.
+      properties:
+        id: { type: string, format: uuid }
+        accountId: { type: string, format: uuid }
+        breachName: { type: string }
+        breachDate: { type: string, format: date, nullable: true }
+        discoveredAt: { type: string, format: date-time }
+        acknowledged: { type: boolean }
 
     UserSettings:
       type: object

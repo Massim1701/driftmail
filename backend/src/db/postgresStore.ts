@@ -27,6 +27,7 @@ import type {
   AbsenceResponderRecord,
   AiPreferenceRecord,
   ContractRecord,
+  DataBreachFindingRecord,
   DraftRecord,
   FolderRecord,
   MailAccountRecord,
@@ -35,6 +36,7 @@ import type {
   MessageRecord,
   MessageSecurityRecord,
   OutgoingSendLogRecord,
+  PrivacySettingsRecord,
   QuarantineRecord,
   SecurityAuditLogRecord,
   SessionRecord,
@@ -154,6 +156,7 @@ function rowToMessage(r: any): MessageRecord {
     rawHeaders: r.raw_headers,
     inReplyToMessageId: r.in_reply_to_message_id,
     confidentialUntil: r.confidential_until,
+    snoozedUntil: r.snoozed_until,
   };
 }
 
@@ -254,9 +257,31 @@ function rowToDraft(r: any): DraftRecord {
     inReplyToMessageId: r.in_reply_to_message_id,
     toAddresses: r.to_addresses ?? [],
     ccAddresses: r.cc_addresses ?? [],
+    bccAddresses: r.bcc_addresses ?? [],
     subject: r.subject,
     bodyText: r.body_text,
+    scheduledFor: r.scheduled_for,
     updatedAt: r.updated_at,
+  };
+}
+
+function rowToPrivacySettings(r: any): PrivacySettingsRecord {
+  return {
+    userId: r.user_id,
+    blockRemoteImages: r.block_remote_images,
+    blockTrackingLinks: r.block_tracking_links,
+    updatedAt: r.updated_at,
+  };
+}
+
+function rowToDataBreachFinding(r: any): DataBreachFindingRecord {
+  return {
+    id: r.id,
+    mailAccountId: r.mail_account_id,
+    breachName: r.breach_name,
+    breachDate: r.breach_date,
+    discoveredAt: r.discovered_at,
+    acknowledged: r.acknowledged,
   };
 }
 
@@ -312,6 +337,7 @@ export class PostgresStore implements Store {
     await this.migrateUnsubscribeActionsStatusCheck();
     await this.migrateUsersAccentTheme();
     await this.migrateMessagesConfidentialUntil();
+    await this.migrateDraftsScheduleSend();
     const sql = readFileSync(SCHEMA_PATH, "utf-8");
     await this.pool.query(sql);
   }
@@ -443,6 +469,22 @@ export class PostgresStore implements Store {
     if (!exists[0]?.reg) return;
 
     await this.pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS confidential_until TIMESTAMPTZ`);
+    // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"): gleiches
+    // additive ADD-COLUMN-Muster, hier direkt mit ergaenzt statt einer
+    // eigenen Migrationsfunktion fuer eine einzelne Spalte an derselben
+    // Tabelle.
+    await this.pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS snoozed_until TIMESTAMPTZ`);
+  }
+
+  /** [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule Send"):
+   * `drafts.bcc_addresses`/`drafts.scheduled_for` neu, additive
+   * ADD-COLUMN-Ergaenzungen -- gleiches Muster wie oben. */
+  private async migrateDraftsScheduleSend(): Promise<void> {
+    const { rows: exists } = await this.pool.query(`SELECT to_regclass('drafts') AS reg`);
+    if (!exists[0]?.reg) return;
+
+    await this.pool.query(`ALTER TABLE drafts ADD COLUMN IF NOT EXISTS bcc_addresses TEXT[] NOT NULL DEFAULT '{}'`);
+    await this.pool.query(`ALTER TABLE drafts ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ`);
   }
 
   // ----- Users / Accounts -----
@@ -680,8 +722,8 @@ export class PostgresStore implements Store {
       `INSERT INTO messages
          (mail_account_id, message_id_header, provider_message_id, from_address, from_display_name,
           reply_to_address, subject, body_text, received_at, folder_id, raw_headers, in_reply_to_message_id,
-          confidential_until)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          confidential_until, snoozed_until)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
       [
         input.mailAccountId,
@@ -697,6 +739,7 @@ export class PostgresStore implements Store {
         input.rawHeaders,
         input.inReplyToMessageId,
         input.confidentialUntil,
+        input.snoozedUntil,
       ],
     );
     return rowToMessage(rows[0]);
@@ -722,6 +765,10 @@ export class PostgresStore implements Store {
       params.push(filter.accountId);
       conditions.push(`mail_account_id = $${params.length}`);
     }
+    // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"): ausgeblendet,
+    // solange snoozed_until in der Zukunft liegt -- GET /messages/:id direkt
+    // bleibt davon unberuehrt (eigene Query unten, kein Filter dort).
+    conditions.push(`(snoozed_until IS NULL OR snoozed_until <= now())`);
     // [2026-09-21] WEB_INBOX.md 21.09. "2) Suche ueber Mails" -- einfache
     // ILIKE-Substring-Suche ueber Betreff/Absender(-Adresse+Anzeigename)/
     // Volltext, kein eigener Such-Index (tsvector/GIN) fuer diesen ersten
@@ -756,6 +803,12 @@ export class PostgresStore implements Store {
 
   async moveMessage(id: string, folderId: string): Promise<MessageRecord | undefined> {
     const { rows } = await this.pool.query("UPDATE messages SET folder_id = $2 WHERE id = $1 RETURNING *", [id, folderId]);
+    return rows[0] ? rowToMessage(rows[0]) : undefined;
+  }
+
+  /** [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"). */
+  async snoozeMessage(id: string, until: string | null): Promise<MessageRecord | undefined> {
+    const { rows } = await this.pool.query("UPDATE messages SET snoozed_until = $2 WHERE id = $1 RETURNING *", [id, until]);
     return rows[0] ? rowToMessage(rows[0]) : undefined;
   }
 
@@ -1166,10 +1219,20 @@ export class PostgresStore implements Store {
 
   async createDraft(input: Omit<DraftRecord, "id" | "updatedAt">): Promise<DraftRecord> {
     const { rows } = await this.pool.query(
-      `INSERT INTO drafts (user_id, mail_account_id, in_reply_to_message_id, to_addresses, cc_addresses, subject, body_text)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO drafts (user_id, mail_account_id, in_reply_to_message_id, to_addresses, cc_addresses, bcc_addresses, subject, body_text, scheduled_for)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [input.userId, input.mailAccountId, input.inReplyToMessageId, input.toAddresses, input.ccAddresses, input.subject, input.bodyText],
+      [
+        input.userId,
+        input.mailAccountId,
+        input.inReplyToMessageId,
+        input.toAddresses,
+        input.ccAddresses,
+        input.bccAddresses,
+        input.subject,
+        input.bodyText,
+        input.scheduledFor,
+      ],
     );
     return rowToDraft(rows[0]);
   }
@@ -1186,20 +1249,42 @@ export class PostgresStore implements Store {
 
   async updateDraft(
     id: string,
-    patch: Partial<Pick<DraftRecord, "toAddresses" | "ccAddresses" | "subject" | "bodyText">>,
+    patch: Partial<Pick<DraftRecord, "toAddresses" | "ccAddresses" | "bccAddresses" | "subject" | "bodyText" | "scheduledFor">>,
   ): Promise<DraftRecord | undefined> {
+    // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule Send"): anders
+    // als vorher (COALESCE-Muster, siehe README.md "Annahmen" -- gleiche
+    // bekannte Grenze wie bei updateContract()) muss scheduledFor ECHT auf
+    // null gesetzt werden koennen ("Planung aufheben"), COALESCE wuerde das
+    // mit "unveraendert lassen" verwechseln. Deshalb hier stattdessen:
+    // bestehenden Entwurf lesen, in Anwendungscode mergen (undefined im
+    // Patch = unveraendert, jeder andere Wert inkl. null = echt setzen),
+    // dann alle Felder komplett neu schreiben.
+    const existing = await this.getDraft(id);
+    if (!existing) return undefined;
+    const merged: DraftRecord = {
+      ...existing,
+      toAddresses: patch.toAddresses !== undefined ? patch.toAddresses : existing.toAddresses,
+      ccAddresses: patch.ccAddresses !== undefined ? patch.ccAddresses : existing.ccAddresses,
+      bccAddresses: patch.bccAddresses !== undefined ? patch.bccAddresses : existing.bccAddresses,
+      subject: patch.subject !== undefined ? patch.subject : existing.subject,
+      bodyText: patch.bodyText !== undefined ? patch.bodyText : existing.bodyText,
+      scheduledFor: patch.scheduledFor !== undefined ? patch.scheduledFor : existing.scheduledFor,
+    };
     const { rows } = await this.pool.query(
       `UPDATE drafts SET
-         to_addresses = COALESCE($2, to_addresses),
-         cc_addresses = COALESCE($3, cc_addresses),
-         subject = COALESCE($4, subject),
-         body_text = COALESCE($5, body_text),
-         updated_at = now()
+         to_addresses = $2, cc_addresses = $3, bcc_addresses = $4,
+         subject = $5, body_text = $6, scheduled_for = $7, updated_at = now()
        WHERE id = $1
        RETURNING *`,
-      [id, patch.toAddresses ?? null, patch.ccAddresses ?? null, patch.subject ?? null, patch.bodyText ?? null],
+      [id, merged.toAddresses, merged.ccAddresses, merged.bccAddresses, merged.subject, merged.bodyText, merged.scheduledFor],
     );
     return rows[0] ? rowToDraft(rows[0]) : undefined;
+  }
+
+  /** [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule Send"). */
+  async listDraftsDueForSending(): Promise<DraftRecord[]> {
+    const { rows } = await this.pool.query("SELECT * FROM drafts WHERE scheduled_for IS NOT NULL AND scheduled_for <= now()");
+    return rows.map(rowToDraft);
   }
 
   async deleteDraft(id: string): Promise<boolean> {
@@ -1402,6 +1487,90 @@ export class PostgresStore implements Store {
        VALUES ($1, LOWER($2), $3)
        ON CONFLICT (user_id, sender_address) DO UPDATE SET last_sent_at = EXCLUDED.last_sent_at`,
       [userId, senderAddress, sentAt],
+    );
+  }
+
+  // ----- Privatsphäre-Einstellungen -----
+
+  async getPrivacySettings(userId: string): Promise<PrivacySettingsRecord | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM user_privacy_settings WHERE user_id = $1", [userId]);
+    return rows[0] ? rowToPrivacySettings(rows[0]) : undefined;
+  }
+
+  async setPrivacySettings(
+    userId: string,
+    patch: Partial<Pick<PrivacySettingsRecord, "blockRemoteImages" | "blockTrackingLinks">>,
+  ): Promise<PrivacySettingsRecord> {
+    const existing = await this.getPrivacySettings(userId);
+    const merged = {
+      blockRemoteImages: patch.blockRemoteImages ?? existing?.blockRemoteImages ?? true,
+      blockTrackingLinks: patch.blockTrackingLinks ?? existing?.blockTrackingLinks ?? true,
+    };
+    const { rows } = await this.pool.query(
+      `INSERT INTO user_privacy_settings (user_id, block_remote_images, block_tracking_links, updated_at)
+       VALUES ($1, $2, $3, now())
+       ON CONFLICT (user_id) DO UPDATE SET
+         block_remote_images = EXCLUDED.block_remote_images,
+         block_tracking_links = EXCLUDED.block_tracking_links,
+         updated_at = EXCLUDED.updated_at
+       RETURNING *`,
+      [userId, merged.blockRemoteImages, merged.blockTrackingLinks],
+    );
+    return rowToPrivacySettings(rows[0]);
+  }
+
+  // ----- Darkweb-/Datenleck-Ueberwachung -----
+
+  async upsertDataBreachFinding(
+    input: Omit<DataBreachFindingRecord, "id" | "discoveredAt" | "acknowledged">,
+  ): Promise<DataBreachFindingRecord> {
+    const { rows } = await this.pool.query(
+      `INSERT INTO data_breach_findings (mail_account_id, breach_name, breach_date)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (mail_account_id, breach_name) DO UPDATE SET breach_name = EXCLUDED.breach_name
+       RETURNING *`,
+      [input.mailAccountId, input.breachName, input.breachDate],
+    );
+    return rowToDataBreachFinding(rows[0]);
+  }
+
+  async listDataBreachFindingsForUser(userId: string): Promise<DataBreachFindingRecord[]> {
+    const { rows } = await this.pool.query(
+      `SELECT f.* FROM data_breach_findings f
+       JOIN mail_accounts ma ON ma.id = f.mail_account_id
+       WHERE ma.user_id = $1
+       ORDER BY f.discovered_at DESC`,
+      [userId],
+    );
+    return rows.map(rowToDataBreachFinding);
+  }
+
+  async getDataBreachFinding(id: string): Promise<DataBreachFindingRecord | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM data_breach_findings WHERE id = $1", [id]);
+    return rows[0] ? rowToDataBreachFinding(rows[0]) : undefined;
+  }
+
+  async setDataBreachFindingAcknowledged(id: string, acknowledged: boolean): Promise<DataBreachFindingRecord | undefined> {
+    const { rows } = await this.pool.query(
+      "UPDATE data_breach_findings SET acknowledged = $2 WHERE id = $1 RETURNING *",
+      [id, acknowledged],
+    );
+    return rows[0] ? rowToDataBreachFinding(rows[0]) : undefined;
+  }
+
+  async getLastDataBreachCheck(mailAccountId: string): Promise<string | null> {
+    const { rows } = await this.pool.query("SELECT last_checked_at FROM data_breach_check_log WHERE mail_account_id = $1", [
+      mailAccountId,
+    ]);
+    return rows[0]?.last_checked_at ?? null;
+  }
+
+  async recordDataBreachCheck(mailAccountId: string, checkedAt: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO data_breach_check_log (mail_account_id, last_checked_at)
+       VALUES ($1, $2)
+       ON CONFLICT (mail_account_id) DO UPDATE SET last_checked_at = EXCLUDED.last_checked_at`,
+      [mailAccountId, checkedAt],
     );
   }
 }

@@ -2185,6 +2185,116 @@ komplett client-seitig, Punkt 2 dezenter Listen-Hinweis + Einstellungs-
 Schalter, Punkt 3 Compose-Option + automatischer Vorschlag bei erkannten
 sensiblen Daten + Anzeige des Ablaufzustands in der Detailansicht).
 
+## 5 Wettbewerbs-Luecken (Proton/Hey/Superhuman-Vergleich) -- [2026-09-21] Nachtrag
+(WEB_INBOX.md 21.09. "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken")
+
+**1) Tracking-Pixel-Blockierung:** `GET`/`PUT /privacy-settings`
+(`user_privacy_settings`, `routes/privacySettings.ts`) -- ein echter,
+gespeicherter Schalter, aber mit einer wichtigen Einordnung:
+**`blockRemoteImages` hat aktuell KEINE technische Wirkung.** driftmail
+parst/rendert nirgends HTML-Mail-Inhalte -- `mail/imapAdapter.ts`
+(`simpleParser().text`) und `mail/gmailAdapter.ts`
+(`extractPlainTextBody()`) extrahieren durchgaengig nur die
+"text/plain"-Variante. Der klassische Tracking-Pixel-Angriffsweg (ein
+unsichtbares `<img>`, das beim automatischen Laden der HTML-Mail dem
+Absender IP/Oeffnungszeitpunkt meldet) kann in dieser Architektur schon
+strukturell nicht greifen -- eine Mail, die NUR als HTML vorliegt, wird
+von `mailparser`/der Gmail-API bereits vor der Speicherung auf reinen Text
+reduziert, jedes `<img>` faellt dabei weg. Das ist ein echter,
+unbeabsichtigter Privatsphäre-Vorteil des bestehenden Designs, kein
+Feature, das extra gebaut werden musste -- der Schalter existiert trotzdem
+echt (nicht nur ein Mock-Wert), fuer Transparenz und falls HTML-Rendering
+je nachgezogen wird.
+
+`blockTrackingLinks` hat ebenfalls noch keine technische Wirkung: eine
+echte Umsetzung braeuchte die Link-Extraktion aus `message_links` (Tabelle
+existiert seit Track 0 im Contract, hat aber -- unabhaengig von diesem
+Auftrag entdeckt -- bis heute keine Backend-Implementierung, siehe
+"Annahmen" unten). Separate, noch offene Luecke.
+
+**2) Undo Send:** bewusst OHNE Backend-Aenderung -- wie im Auftrag selbst
+vorgeschlagen ("Client zeigt sofort eine Rueckgaengig-Leiste, der
+tatsaechliche Provider-Send-Call wird verzoegert ausgefuehrt") ist das eine
+reine Client-Verzoegerung vor dem `POST /messages/send`-Aufruf. Kein
+serverseitiger Zustand noetig.
+
+**3) Darkweb-/Datenleck-Ueberwachung:** `GET /security/breaches` +
+`PATCH /security/breaches/{id}` (`data_breach_findings`,
+`data_breach_check_log`, `routes/breaches.ts`). Anbieter bewusst gemockt
+(`lookups/dataBreachMock.ts`) -- ein echter Dienst wie haveibeenpwned
+verlangt inzwischen einen kostenpflichtigen API-Key, den driftmail nicht
+ungefragt fuer alle User vorfinanzieren will (gleiche Ueberlegung wie bei
+der KI-Anbindungs-Korrektur, TERMINAL_INBOX.md 21.09.) -- ein BYOK-Modell
+passt hier aber auch nicht (geteilter Bedrohungsdaten-Dienst, kein
+persoenlicher KI-Zugang mit eigenen Nutzungskosten). Deterministischer
+Test-Ausloeser (Adresse enthaelt "leaktest"/"pwned"), analog zu anderen
+Mocks in `lookups/`. Laeuft periodisch im bestehenden Scheduler-Tick
+(`mail/scheduler.ts runDataBreachChecks()`), aber mit eigenem
+24-Stunden-Cooldown pro Konto (`data_breach_check_log`) -- Datenlecks
+aendern sich nicht minuetlich. Upsert nach `(mail_account_id,
+breach_name)` verhindert Duplikate bei wiederholten Läufen.
+
+**4) Schedule Send:** `drafts` um `bccAddresses`/`scheduledFor` erweitert
+(`POST`/`PATCH /drafts`). Der eigentliche Versand-Kern von
+`POST /messages/send` wurde nach `mail/sendMessage.ts` ausgelagert
+(`sendMessageForUser()`) -- sowohl die Route als auch der Scheduler
+(`mail/scheduler.ts runDueScheduledSends()`) rufen jetzt exakt dieselbe
+Funktion auf, damit ein automatisch verschickter geplanter Entwurf
+GENAU denselben Weg nimmt (Phishing-Check, Anhang-Gate,
+`outgoing_send_log`, "gesendet"-Ordner) wie ein direkter Versand -- gleiches
+Prinzip wie `syncAccount()`, das ebenfalls sowohl vom manuellen
+Sync-Endpunkt als auch vom Scheduler aufgerufen wird. Schlaegt der
+automatische Versand fehl (Phishing-Check greift, Provider-Fehler): die
+Planung wird aufgehoben (`scheduledFor` -> `null`), der Entwurf selbst
+bleibt als normaler Entwurf erhalten (kein Datenverlust, kein endloser
+Wiederholungsversuch).
+
+**Bewusste Grenze:** Anhaenge werden bei Schedule Send (noch) nicht
+unterstuetzt -- `DraftRecord` hat kein `attachmentIds`-Feld, waere ein
+separater, groesserer Schritt (Anhaenge muessten bis zum faelligen
+Versandzeitpunkt irgendwo vorgehalten werden, siehe die bestehende Grenze
+bei "Anhänge" weiter unten -- Bytes werden aktuell generell nicht
+dauerhaft gespeichert).
+
+**5) Snooze:** `messages.snoozed_until` (additive Spalte, echte
+ALTER-TABLE-Migration siehe unten). `POST /messages/{id}/snooze`
+(`until: null` hebt ein bestehendes Snooze sofort auf). Bewusst OHNE
+periodischen Scheduler-Job -- `store.listMessages()` filtert
+`snoozed_until IS NULL OR snoozed_until <= now()` bei jedem Lesezugriff,
+eine gesnoozte Nachricht taucht dadurch automatisch wieder auf, sobald die
+Zeit erreicht ist, ohne dass sie irgendwo aktiv "entsnoozed" werden muss.
+`GET /messages/{id}` direkt bleibt davon unberuehrt (zeigt eine gesnoozte
+Nachricht weiterhin, inkl. `snoozedUntil`). Geprueft, ob die bestehende
+`reminders`-Tabelle wiederverwendbar ist (wie im Auftrag vorgeschlagen) --
+bewusst NICHT wiederverwendet: `reminders.contract_id` ist `NOT NULL`,
+fest an die Vertragserkennung gebunden, nicht an einzelne Nachrichten --
+gleiche Abwaegung wie schon beim "Nudge"-Feature.
+
+**Tests:** `smoketest.ts` deckt alle vier Backend-relevanten Punkte ab
+(Punkt 2 ist reine Client-Logik, nichts zu testen): Privatsphäre-
+Einstellungen (Default + partielles Update), Snooze (ausgeblendet in der
+Ordner-Liste, weiterhin sichtbar per direktem GET, Wiedereinblenden per
+`until: null`), Schedule Send (Ablehnung bei Zeitpunkt in der
+Vergangenheit/fehlendem Empfaenger, PATCH mit `scheduledFor: null` zum
+Aufheben vs. undefined = unveraendert, ein noch-nicht-faelliger
+Scheduler-Lauf tut nichts, ein faelliger verschickt echt + loescht den
+Entwurf), Darkweb-Ueberwachung (drittes Test-Konto mit Trigger-Adresse,
+zwei erwartete Treffer, kein Duplikat bei wiederholtem Lauf, das
+unauffaellige Demo-Konto bleibt treffer-frei, Bestaetigen per PATCH).
+Gruen in-memory + gegen frisches Postgres + gegen eine simulierte
+Alt-Schema-DB (`drafts.bcc_addresses`/`scheduled_for` und
+`messages.snoozed_until` fehlten vorher, `migrate()` legt sie korrekt
+nach).
+
+**Dabei behoben:** `PUT /settings`-Requestbody in `api-spec.yaml` hatte
+`nudgeUnansweredEnabled` nicht dokumentiert, obwohl das Backend es schon
+laenger akzeptiert (Uebersehen beim urspruenglichen Nudge-Auftrag) --
+nachgetragen. Ausserdem `PostgresStore.updateDraft()` von einem
+COALESCE-Muster (kann "Feld fehlt" nicht von "Feld = null" unterscheiden,
+gleiche bekannte Grenze wie `updateContract()`) auf ein echtes
+Lesen-Mergen-Schreiben umgestellt, weil Schedule Send eine echte
+"Planung auf null setzen"-Semantik braucht, die COALESCE nicht kann.
+
 ## Malware-Scan (echt, ClamAV) -- [2026-09-21] Nachtrag
 (WEB_INBOX.md 21.09. "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan")
 

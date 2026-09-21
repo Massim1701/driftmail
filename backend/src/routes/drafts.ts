@@ -33,6 +33,25 @@ draftsRouter.post("/drafts", async (req, res) => {
   const ccAddresses: string[] = Array.isArray(body.cc)
     ? body.cc.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0)
     : [];
+  const bccAddresses: string[] = Array.isArray(body.bcc)
+    ? body.bcc.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0)
+    : [];
+  const subject = typeof body.subject === "string" ? body.subject : null;
+  const bodyText = typeof body.bodyText === "string" ? body.bodyText : null;
+
+  // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule Send"): hier bei
+  // POST (Neuanlage) ist "Feld fehlt" und "Feld ist null" gleichbedeutend
+  // (kein Scheduling) -- anders als bei PATCH unten, wo "fehlt" "unveraendert
+  // lassen" bedeutet, siehe dortigen Kommentar.
+  let scheduledFor: string | null = null;
+  if (body.scheduledFor !== undefined && body.scheduledFor !== null) {
+    const parsed = parseFutureTimestamp(body.scheduledFor);
+    if (!parsed) return res.status(400).json({ error: "scheduledFor muss ein gueltiger, in der Zukunft liegender Zeitpunkt sein" });
+    scheduledFor = parsed;
+  }
+  if (scheduledFor && (toAddresses.length === 0 || !bodyText?.trim())) {
+    return res.status(400).json({ error: "scheduledFor verlangt mindestens einen Empfaenger und bodyText" });
+  }
 
   const draft = await store.createDraft({
     userId: req.userId,
@@ -40,11 +59,22 @@ draftsRouter.post("/drafts", async (req, res) => {
     inReplyToMessageId,
     toAddresses,
     ccAddresses,
-    subject: typeof body.subject === "string" ? body.subject : null,
-    bodyText: typeof body.bodyText === "string" ? body.bodyText : null,
+    bccAddresses,
+    subject,
+    bodyText,
+    scheduledFor,
   });
   res.status(200).json(toApiDraft(draft));
 });
+
+/** `undefined`/ungueltiges Format -> null (kein gueltiger Zeitpunkt), sonst
+ * der ISO-String, aber nur wenn er wirklich in der Zukunft liegt. */
+function parseFutureTimestamp(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) return null;
+  return parsed.toISOString();
+}
 
 // PATCH /drafts/{draftId} — laufendes Speichern während des Tippens.
 draftsRouter.patch("/drafts/:draftId", async (req, res) => {
@@ -60,8 +90,25 @@ draftsRouter.patch("/drafts/:draftId", async (req, res) => {
   if (Array.isArray(body.cc)) {
     patch.ccAddresses = body.cc.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0);
   }
+  if (Array.isArray(body.bcc)) {
+    patch.bccAddresses = body.bcc.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0);
+  }
   if (typeof body.subject === "string") patch.subject = body.subject;
   if (typeof body.bodyText === "string") patch.bodyText = body.bodyText;
+
+  // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule Send"): das Feld
+  // FEHLT im Body -> unveraendert lassen (normaler Autosave-PATCH ohne
+  // Bezug zur Planung). `scheduledFor: null` im Body -> Planung explizit
+  // aufheben. Ein String-Wert muss gueltig+zukuenftig sein, sonst 400.
+  if ("scheduledFor" in body) {
+    if (body.scheduledFor === null) {
+      patch.scheduledFor = null;
+    } else {
+      const parsed = parseFutureTimestamp(body.scheduledFor);
+      if (!parsed) return res.status(400).json({ error: "scheduledFor muss ein gueltiger, in der Zukunft liegender Zeitpunkt sein" });
+      patch.scheduledFor = parsed;
+    }
+  }
 
   const updated = (await store.updateDraft(existing.id, patch))!;
   res.json(toApiDraft(updated));

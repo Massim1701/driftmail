@@ -141,6 +141,16 @@ CREATE TABLE IF NOT EXISTS messages (
     -- naechsten Lesezugriff (GET /messages, GET /messages/:id) geprueft und
     -- dann EINMALIG wirklich geloescht, nicht nur pro Response maskiert.
     confidential_until TIMESTAMPTZ,
+    -- [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 5
+    -- ("Snooze"): eigenes, einfaches Feld statt der bestehenden
+    -- `reminders`-Tabelle (deren `contract_id NOT NULL` sie fest an die
+    -- Vertragserkennung bindet, nicht an einzelne Nachrichten -- gleiche
+    -- Abwaegung wie beim "Nudge"-Feature, siehe backend/README.md). NULL =
+    -- nicht snoozed. Gesetzt UND in der Zukunft = aus der Ordner-Ansicht
+    -- ausgeblendet (siehe store.listMessages()), taucht automatisch wieder
+    -- auf, sobald der Zeitpunkt erreicht ist -- kein periodischer Job
+    -- noetig, reiner Zeitvergleich bei jedem Lesezugriff.
+    snoozed_until TIMESTAMPTZ,
     UNIQUE (mail_account_id, message_id_header)
   );
 
@@ -164,8 +174,19 @@ CREATE TABLE IF NOT EXISTS drafts (
     in_reply_to_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
     to_addresses TEXT[] NOT NULL DEFAULT '{}',
     cc_addresses TEXT[] NOT NULL DEFAULT '{}',
+    -- [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 4
+    -- ("Schedule Send"): bcc fehlte hier bisher komplett (nur beim
+    -- direkten POST /messages/send vorhanden, siehe dortigen bcc-Kommentar)
+    -- -- fuer den geplanten Versand ueber einen Entwurf gebraucht, damit
+    -- derselbe Sende-Pfad (mail/scheduler.ts) exakt dieselben Empfaenger-
+    -- Felder wie ein direkter Versand unterstuetzt.
+    bcc_addresses TEXT[] NOT NULL DEFAULT '{}',
     subject TEXT,
     body_text TEXT,
+    -- NULL = normaler Entwurf. Gesetzt = "Spaeter senden"-Auftrag, wird vom
+    -- periodischen Scheduler (mail/scheduler.ts) automatisch verschickt,
+    -- sobald die Zeit erreicht ist (siehe dortigen Kommentar).
+    scheduled_for TIMESTAMPTZ,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
@@ -453,6 +474,36 @@ CREATE TABLE IF NOT EXISTS user_privacy_settings (
     block_remote_images BOOLEAN NOT NULL DEFAULT true,
     block_tracking_links BOOLEAN NOT NULL DEFAULT true,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+-- ===== Sicherheit: Darkweb-/Datenleck-Ueberwachung =====
+-- [2026-09-21] "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 3. Warnt den
+-- User, falls eine verbundene Mail-Adresse in einem bekannten oeffentlichen
+-- Datenleck auftaucht. Gleiche Architektur-Entscheidung wie die vier
+-- bestehenden externen Lookups (WHOIS/Spamhaus/IBAN-Historie/fraud_alerts):
+-- Nachbearbeitungsschritt, nicht Teil von security-classification/ selbst.
+-- Anbieter bewusst gemockt (siehe backend/README.md "Darkweb-/Datenleck-
+-- Ueberwachung") -- ein echter Dienst (z.B. haveibeenpwned) verlangt einen
+-- kostenpflichtigen API-Key, den driftmail nicht ungefragt finanzieren will
+-- (gleiches Prinzip wie die KI-Anbindung), und ein BYOK-Modell passt hier
+-- nicht (Datenleck-Pruefung ist ein geteilter Bedrohungsdaten-Dienst, kein
+-- persoenlicher KI-Zugang).
+CREATE TABLE IF NOT EXISTS data_breach_findings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    mail_account_id UUID NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
+    breach_name TEXT NOT NULL,
+    breach_date DATE,
+    discovered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    acknowledged BOOLEAN NOT NULL DEFAULT false,
+    UNIQUE (mail_account_id, breach_name)
+  );
+
+-- Letzter Pruefzeitpunkt pro Konto, damit der periodische Sync (siehe
+-- mail/scheduler.ts) nicht bei JEDEM Tick erneut prueft -- Datenlecks
+-- aendern sich nicht minuetlich, taeglich reicht (siehe dortigen Kommentar).
+CREATE TABLE IF NOT EXISTS data_breach_check_log (
+    mail_account_id UUID PRIMARY KEY REFERENCES mail_accounts(id) ON DELETE CASCADE,
+    last_checked_at TIMESTAMPTZ NOT NULL
   );
 
 -- ===== Sicherheit: Account-Schutz (driftmail selbst) =====
