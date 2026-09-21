@@ -960,3 +960,16 @@ KEINE automatische Antwort an Absender, die als spam/phishing/advance_fee_scam k
 - Einstellungsbildschirm (Track C/F, gehoert in den neuen Einstellungsbereich-Auftrag von eben): Ein/Aus-Schalter, Datumsfelder, Betreff/Text-Eingabe.
 
 Kein Contract-Bruch (additive neue Tabelle/Erweiterung). Bitte nach dem aktuellen Testen und den bereits laufenden Auftraegen (Einstellungsbereich, 5 Komfort-Features) einordnen, kein Blocker.
+
+
+[2026-09-21] [offen] [LUECKE SCHLIESSEN - echter Abmelde-Aufruf] [backend/src/mail/listUnsubscribe.ts + Track A] [hohe Prioritaet, echte Funktionslücke] — Massimo hat nachgefragt, ob die automatische Spam-Abmeldung wirklich funktioniert. Geprueft: NEIN, nicht vollstaendig -- bisher wird der List-Unsubscribe-Header nur SYNTAKTISCH geparst und status='confirmed' gesetzt, es findet aber KEIN echter Netzwerk-Aufruf/Mail-Versand an die im Header angegebene Adresse statt (bewusst dokumentierte Grenze, jetzt nachzuziehen).
+
+**Bitte den echten Aufruf ergaenzen:**
+- Bei mailto:-URI im Header: eine leere (oder mit "unsubscribe" als Betreff) Mail an die angegebene Adresse ueber den bestehenden Sende-Mechanismus (POST /messages/send-Pfad intern nutzen, nicht ueber die UI) verschicken.
+- Bei https:-URI im Header: falls der zusaetzliche List-Unsubscribe-Post-Header vorhanden ist (RFC 8058, "One-Click"), einen echten HTTP-POST an die URL schicken (List-Unsubscribe=One-Click als Body, wie im RFC vorgesehen). Falls kein Post-Header vorhanden: einfacher HTTP-GET-Aufruf als Fallback.
+- status in unsubscribe_actions erst NACH tatsaechlicher Bestaetigung/erfolgreicher Anfrage auf 'confirmed' setzen, bei Fehler (Netzwerk-Timeout, 4xx/5xx-Antwort) auf einen Fehlerstatus (z.B. 'failed'), nicht blind auf 'confirmed' wie bisher.
+- Fehler beim Abmelde-Aufruf duerfen den restlichen Mail-Sync NICHT blockieren/abbrechen (try/catch, weiterlaufen).
+
+**Sicherheitsueberlegung, bitte kurz mitdenken:** der Aufruf geht an eine vom Absender selbst vorgegebene Adresse/URL -- das ist beim Unsubscribe-Mechanismus grundsaetzlich so gewollt (RFC-Standard), aber bitte trotzdem: kein Folgen von Redirects auf komplett andere Domains ohne Pruefung, sinnvolles Timeout (z.B. 5-10 Sekunden) damit ein hängender Server nicht den Sync blockiert.
+
+Kein Contract-Bruch (unsubscribe_actions-Struktur bleibt, nur echte Ausfuehrung statt Attrappe). Bitte zeitnah einordnen, da das eine bereits als "fertig" kommunizierte Funktion tatsaechlich lueckenhaft macht.
