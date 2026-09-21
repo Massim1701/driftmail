@@ -973,3 +973,17 @@ Kein Contract-Bruch (additive neue Tabelle/Erweiterung). Bitte nach dem aktuelle
 **Sicherheitsueberlegung, bitte kurz mitdenken:** der Aufruf geht an eine vom Absender selbst vorgegebene Adresse/URL -- das ist beim Unsubscribe-Mechanismus grundsaetzlich so gewollt (RFC-Standard), aber bitte trotzdem: kein Folgen von Redirects auf komplett andere Domains ohne Pruefung, sinnvolles Timeout (z.B. 5-10 Sekunden) damit ein hängender Server nicht den Sync blockiert.
 
 Kein Contract-Bruch (unsubscribe_actions-Struktur bleibt, nur echte Ausfuehrung statt Attrappe). Bitte zeitnah einordnen, da das eine bereits als "fertig" kommunizierte Funktion tatsaechlich lueckenhaft macht.
+
+
+[2026-09-21] [offen] [DREI WEITERE FEATURES - Gmail-Recherche] [contracts + Track A + Track C/F] — Massimo hat nach Recherche zu Gmail-spezifischen Funktionen drei Uebernahmen bestaetigt.
+
+**1) Vergessener-Anhang-Erkennung (Track A + C/F):**
+Beim Klick auf "Senden": Compose-Text nach typischen Phrasen durchsuchen ("im Anhang", "siehe Anhang", "anbei", "attached", "see attachment" -- deutsch+englisch, einfache Keyword-Liste reicht, kein ML noetig). Falls ein Treffer vorliegt UND kein Anhang tatsaechlich beigefuegt wurde: kurzer Warnhinweis vor dem eigentlichen Versand ("Du hast 'im Anhang' geschrieben, aber keinen Anhang hinzugefuegt -- trotzdem senden?"), User kann bestaetigen und trotzdem senden. Reine Client-seitige Pruefung im Compose-Screen, kein Contract-Aenderung noetig.
+
+**2) Nudge -- Erinnerung an unbeantwortete Mails (Track A + C/F):**
+Erkennt Mails, die seit einigen Tagen (Default 3, wie Gmail) unbeantwortet im Eingang liegen (keine Antwort des Users im selben Thread), UND eigene gesendete Mails, auf die seit einigen Tagen keine Antwort kam. Zeigt dezenten Hinweis in der Liste ("Vor 3 Tagen erhalten, antworten?"). Aufbauend auf der bestehenden reminders-Infrastruktur (contracts-logic/src/scheduler.ts) -- pruefen ob direkt wiederverwendbar oder eigene kleine Ableitung noetig (aehnlich wie beim Abwesenheitsassistenten-Auftrag von eben, Scheduler als Vorbild). Ein/Aus-Schalter in den Einstellungen (Gmail macht das genauso, manche Nutzer empfinden es als aufdringlich).
+
+**3) Vertraulicher Modus (Track A + B + C/F) -- besonders wichtig, passt zur Sicherheits-Identitaet von driftmail:**
+Beim Verfassen: Option "Vertraulich senden" -- Ablaufdatum fuer die Nachricht setzbar, nach Ablauf nicht mehr lesbar/kein Inhalt mehr abrufbar. Zusaetzlich, ueber Gmail hinausgehend (Massimos Idee direkt aufgegriffen): AUTOMATISCHER VORSCHLAG "Vertraulich senden?" wenn beim Verfassen sensible Daten erkannt werden (bestehende IBAN-/Kreditkarten-Erkennung im Text, spaeter auch die OCR-Ausweis-Erkennung aus dem fruehen Auftrag) -- driftmail schlaegt den vertraulichen Modus proaktiv vor, statt dass der User selbst dran denken muss. Technisch: neue Spalte an messages (z.B. confidential_until TIMESTAMPTZ NULL), Nachrichtentext wird nach Ablauf serverseitig geloescht/durch Platzhalter ersetzt, kein Kopieren/Weiterleiten/Drucken-Schutz clientseitig erzwingbar (das ist bei JEDEM Anbieter, auch Gmail, nur eine Einschraenkung im eigenen Client, kein technischer Schutz gegen Screenshots o.ae. -- bitte das im Onboarding/Hinweistext ehrlich so kommunizieren, keine falschen Sicherheitsversprechen).
+
+Bei 1/2 kein Contract-Bruch. Bei 3 kleine additive Spalten-Ergaenzung. Bitte nach den aktuell laufenden Auftraegen (Einstellungsbereich, Abwesenheitsassistent, echter Unsubscribe-Aufruf) einordnen.
