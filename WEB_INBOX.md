@@ -1109,3 +1109,10 @@ Track C/F: bitte diese sechs Inhalte in die entsprechenden Unterseiten/Bereiche 
 "driftmail bietet automatisierte Unterstuetzung bei der Erkennung von Spam, Phishing und Betrugsversuchen, kann jedoch keine vollstaendige oder dauerhafte Sicherheit gewaehrleisten. Angreifer entwickeln fortlaufend neue Methoden, die zum Zeitpunkt der Nutzung moeglicherweise noch nicht erkennbar sind. Der Nutzer bleibt selbst dafuer verantwortlich, bei verdaechtigen Nachrichten -- unabhaengig von einer angezeigten oder nicht angezeigten Warnung -- eigene Vorsicht walten zu lassen, insbesondere bei Zahlungsaufforderungen, Preisgabe persoenlicher Daten und Aenderungen von Bankverbindungen."
 
 Bitte diesen Zusatz-Abschnitt gut sichtbar platzieren (z.B. direkt nach der Funktionsuebersicht auf der Produktseite), nicht nur im Kleingedruckten -- das ist Massimo ausdruecklich wichtig.
+
+
+[2026-09-21] [offen] [BUG - Kachel auf driftware.online oeffnet nicht] [Track C/F] [hohe Prioritaet, blockiert Sichtbarkeit des ganzen Inhalts-Pakets von eben] — Massimo hat gemeldet, dass die driftmail-Kachel auf driftware.online nicht aufgeht. Geprueft: die Kachel zeigt "Bald verfuegbar" statt eines echten "Ansehen"-Links wie bei den anderen Apps (Snoxi, CollectView, Ultimate Music Master, Schriftgenerator). Der Link-Href ist "#" -- reiner Platzhalter, nie mit einer echten Ziel-URL verknuepft.
+
+Bitte die Kachel mit der tatsaechlichen driftmail-Info-Seite/Kachel verlinken (siehe die beiden vorherigen Auftraege "Einstellungsbereich + Info-Seite" und "Inhalts-Paket fuer driftware.online-Kachel" -- die Inhalte/Struktur stehen dort bereits vollstaendig). Falls die Info-Seite noch nicht eigenstaendig erreichbar ist (z.B. weil sie erst mit der laufenden Web-App zusammen deployed wird): Status-Badge entsprechend anpassen (z.B. "In Kuerze" bleibt korrekt so lange, bis die Seite wirklich existiert -- aber sobald sie existiert, muss der Href aktualisiert werden, nicht vergessen).
+
+Hohe Prioritaet -- ohne funktionierenden Link ist das gesamte Inhalts-Paket von eben fuer niemanden erreichbar.
