@@ -140,6 +140,12 @@ export function FolderSidebar({
         </div>
       )}
 
+      <div className="cmdk-hint" aria-hidden="true">
+        <kbd>⌘</kbd>
+        <kbd>K</kbd>
+        Suche
+      </div>
+
       <ul className="folder-list">
         {folders.map((f) => {
           const meta = metaFor(f);

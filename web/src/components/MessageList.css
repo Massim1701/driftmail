@@ -1,10 +1,9 @@
 .message-list {
   list-style: none;
   margin: 0;
-  padding: var(--space-sm);
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
   overflow-y: auto;
   flex: 1;
 }
@@ -16,15 +15,23 @@
   text-align: center;
 }
 
+/* [2026-09-21] WEB_INBOX.md "DESIGN-RICHTUNG" Punkt 2: kompakte
+   Listenzeilen statt Karten -- kein Rahmen/Schatten pro Zeile mehr, nur
+   eine duenne Trennlinie zur naechsten Zeile. Die Akzentfarbe bleibt fuer
+   die ausgewaehlte Zeile reserviert (ausdruecklich erlaubt, siehe
+   "ERGAENZUNG zur Design-Richtung"), aber als schlanker linker Balken
+   statt Vollrahmen+Schatten -- die einzige verbleibende Farbe pro Zeile
+   bleiben damit die Sicherheits-Badges. */
 .message-row {
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-xs);
-  padding: var(--space-md);
-  border-radius: var(--radius-card);
-  border: 1px solid transparent;
+  gap: 2px;
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  border-left: 2px solid transparent;
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -33,13 +40,11 @@
 
 .message-row:hover {
   background: var(--color-surface-card);
-  border-color: var(--color-border);
 }
 
 .message-row.active {
   background: var(--color-surface-card);
-  border-color: var(--color-accent);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border-left-color: var(--color-accent);
 }
 
 .message-row-top {

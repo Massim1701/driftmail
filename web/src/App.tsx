@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, getStoredToken, setStoredToken } from "./api";
 import type { AbsenceResponder, Draft, Folder, MailAccount, Message, MessageDetail } from "./types";
 import { FolderSidebar } from "./components/FolderSidebar";
@@ -115,6 +115,23 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // [2026-09-21] WEB_INBOX.md "DESIGN-RICHTUNG" Punkt 5: Cmd/Ctrl+K
+  // fokussiert das bestehende Suchfeld (Ergaenzung zum Sidebar-Hinweis,
+  // siehe FolderSidebar.tsx .cmdk-hint) -- kein eigenes
+  // Befehlspaletten-Overlay, ausdruecklich "kein Muss fuer den ersten
+  // Entwurf".
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // Konten laden -- erst NACH erfolgreichem Login (token gesetzt), siehe
   // OnboardingScreen unten. Beim ersten Laden automatisch das erste Konto
@@ -601,6 +618,7 @@ export default function App() {
                 Ordner-/Entwürfe-Ansicht darunter (siehe searchQuery-Kommentar
                 oben). */}
             <input
+              ref={searchInputRef}
               type="search"
               className="message-search-input"
               value={searchQuery}

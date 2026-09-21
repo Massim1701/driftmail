@@ -840,6 +840,79 @@ erhalten blieben; erneutes Öffnen des Einstellungsbereichs zeigt das
 Formular korrekt mit den zuvor gespeicherten (jetzt inaktiven) Werten
 vorausgefüllt. Konsole ohne Fehler während des gesamten Durchlaufs.
 
+## [2026-09-21] Nachtrag: Design-Richtung (Superhuman-Stil)
+
+WEB_INBOX.md 21.09. "DESIGN-RICHTUNG - von Massimo bestaetigt" -- visuelle
+Ueberarbeitung nach Massimos Recherche zu den bestbewerteten Mail-Clients
+(Superhuman als Testsieger), von ihm per Mockup freigegeben. Reine
+Layout-/CSS-Anpassung, kein Contract-Change, keine neue Logik ausser dem
+Cmd/Ctrl+K-Kurzbefehl (siehe unten).
+
+**1) Schmalere Sidebar** (`FolderSidebar.css`): 220px -> 188px, engere
+Innenabstaende, das Brand-Label eine Stufe kleiner (`--font-size-heading`
+-> `--font-size-body`), der dezente Schatten auf dem aktiven
+Theme-Umschalter entfernt -- weniger visuelles Gewicht, wie im Auftrag
+verlangt.
+
+**2) Kompakte Listenzeilen** (`MessageList.css`): `.message-row` hatte
+vorher Karten-Optik (Rahmen, `border-radius`, `box-shadow` im aktiven
+Zustand, groszuegiges Padding). Jetzt: kein Rahmen/Schatten mehr, nur eine
+duenne `border-bottom` als Trennlinie zur naechsten Zeile, engeres
+vertikales Padding. Die ausgewaehlte Zeile bekommt statt Vollrahmen+Schatten
+nur noch einen schlanken linken Akzent-Balken (2px) -- die Akzentfarbe
+bleibt fuer die Auswahl-Markierung ausdruecklich erlaubt (siehe
+"ERGAENZUNG zur Design-Richtung"), aber dezent genug, um nicht mit den
+Sicherheits-Badges zu konkurrieren.
+
+**3) Genau EIN Akzent pro Ansicht:** Repo-weite Pruefung (`grep` ueber alle
+`components/*.css` nach Hex-Farben/`rgba(...)` ausserhalb von
+`color-mix(...)`) ergab **keinen Fund** -- das bestehende Design-System
+nutzt bereits durchgaengig nur die drei erlaubten Rollen
+(`--color-accent`/`--color-danger`/`--color-warning`/`--color-success`),
+keine zusaetzliche, hart codierte Farbe schlich sich irgendwo ein. Die
+einzige noetige Aenderung war deshalb, die card-artigen Schatten/Raender
+(Punkt 2) zu entfernen, die selbst zwar farbneutral waren, aber optisch
+mit den Sicherheits-Badges um Aufmerksamkeit konkurrierten. Per Browser-
+Test bestaetigt (siehe unten): `SecurityBadge` (Phishing-Verdacht,
+Anzeigename gefaelscht, Antwort-Adresse weicht ab, IBAN im Verlauf
+geaendert) bleibt das einzige farbig hervorstechende Element in Liste UND
+Detailansicht.
+
+**4) "Neue Nachricht"-Button:** bereits vorhanden (frueherer Compose-
+Button-Fund), unveraendert -- passt bereits zur kompakteren Optik, kein
+Umbau noetig.
+
+**5) Cmd/Ctrl+K-Hinweis:** ausdruecklich "kein Muss fuer den ersten
+Entwurf" -- bewusst NICHT als volles Befehlspaletten-Overlay gebaut,
+sondern als kleine, funktionale Ergaenzung: ein dezenter `⌘K`-Hinweis in
+der Sidebar (`.cmdk-hint`, `FolderSidebar.tsx`) plus ein echter globaler
+`keydown`-Listener in `App.tsx`, der bei Cmd/Ctrl+K das bestehende
+Suchfeld fokussiert (`searchInputRef`) -- kein neues UI-Konzept, nur ein
+Shortcut auf eine bereits vorhandene Funktion.
+
+**Bewusste Grenze:** der Auftrag nennt einen "dezenten Ungelesen-Punkt
+links" als Teil der kompakten Listenzeile. Dafuer gibt es aktuell **keine
+Grundlage im Contract** -- weder `Message` noch `MessageDetail` haben ein
+Gelesen/Ungelesen-Feld (`api-spec.yaml`/`backend/src/types.ts` durchsucht,
+kein Treffer), driftmail hat bisher ueberhaupt kein Lese-Tracking-Feature.
+Ein rein client-seitiger Fake (z.B. `localStorage`-basiertes "gesehen"-
+Set) waere irrefuehrend und wuerde bei mehreren Geraeten/Clients sofort
+auseinanderlaufen -- deshalb bewusst weggelassen statt etwas Falsches
+vorzutaeuschen. Ein echtes Gelesen/Ungelesen-Feature (neue Spalte +
+Contract-Ergaenzung) waere ein eigener, separater Auftrag.
+
+**Tests:** `tsc -b`/`vite build`/`oxlint` gruen, exakt die bestehende
+6-Warnungen-Baseline (keine neuen). Per Browser-Automation gegen den
+Mock-Server verifiziert: Sidebar sichtbar schmaler, Listenzeilen im
+Eingang kompakt mit Trennlinien statt Karten, Quarantaene-Ordner zeigt
+drei Mails mit klar farbig hervorgehobenem "Phishing-Verdacht"-Badge als
+einzigem farbigen Element in der Zeile, ausgewaehlte Zeile zeigt den
+schlanken Akzent-Balken statt Vollrahmen, Cmd+K fokussiert das Suchfeld
+und liefert ein echtes Suchergebnis, Detailansicht einer Quarantaene-Mail
+zeigt vier Sicherheits-Badges klar farbig neben durchgehend neutralen
+Aktions-Buttons (Loeschen/Check Mail/Antworten/Weiterleiten). Konsole in
+allen Schritten ohne Fehler.
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge
