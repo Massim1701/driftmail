@@ -45,6 +45,18 @@
   color: var(--color-text-muted);
 }
 
+.account-switcher {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
 .sync-now-button {
   flex-shrink: 0;
   display: flex;

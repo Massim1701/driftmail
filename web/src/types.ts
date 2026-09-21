@@ -17,6 +17,9 @@ export type AttachmentScanStatus = "pending" | "clean" | "malicious" | "blocked_
 
 export interface Folder {
   id: string;
+  // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): Ordner
+  // gehören jetzt zu genau einem Konto ("getrennte Ansichten pro Konto").
+  accountId: string;
   name: string;
   icon: string;
   isSystem: boolean;

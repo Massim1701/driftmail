@@ -375,6 +375,42 @@ serverseitig (siehe `backend/README.md` "Automatischer + manueller
 Mail-Abruf"), dieser Button ist nur der explizite "jetzt sofort"-Weg. Per
 `curl`/Netzwerk-Log gegen den Mock-Server verifiziert (200 OK).
 
+## Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2, "getrennte Ansichten pro Konto")
+
+`App.tsx`: `account: MailAccount | null` → `accounts: MailAccount[]` +
+`activeAccountId`. Sidebar zeigt bei genau einem Konto weiterhin nur die
+E-Mail-Adresse, ab zwei Konten einen `<select>`-Umschalter (kein
+aufwendigeres Dropdown-Design -- native Selects sind barrierefrei und
+brauchen keine eigene Fokus-/Tastatur-Logik). Beim Kontowechsel werden
+Ordner/Nachrichten/Entwürfe/Auswahl komplett neu geladen (`activeAccountId`
+in den Effekt-Dependencies) -- alte Ordner-IDs gehören zum vorherigen
+Konto und wären für das neue irreführend.
+
+"Konto hinzufügen" (`+`-Button neben dem Sync-Button) öffnet denselben
+`OnboardingScreen` als Overlay über der bereits eingeloggten App (neuer
+`mode="addAccount"`-Prop), nicht als Vollbild-Gate wie beim Erst-Login --
+`api.ts` hängt den bereits gespeicherten Token automatisch an jeden
+Request, das Backend erkennt daran "weiteres Konto zu bestehendem Login"
+(siehe `backend/README.md`). Gmail ist im `addAccount`-Modus bewusst
+deaktiviert (eigene Erklärung statt eines kaputten Flows) -- der echte
+OAuth-Redirect kann den bestehenden Login-Zustand nicht durchreichen,
+siehe SYNC.md "Offene Frage" an Track A.
+
+`GET /folders`/`POST /folders` nehmen jetzt ein optionales `accountId`.
+
+**Mock-Server-Grenze, bewusst nicht behoben:** `mock-server/data.mjs`
+bildet nur EIN Konto ab (`accounts[0]`), `POST /accounts` gibt dieses immer
+zurück statt ein zweites anzulegen -- der komplette "Konto hinzufügen"-
+Flow läuft fehlerfrei durch (per Browser-Test verifiziert, keine Konsolen-
+Fehler), zeigt aber am Ende weiterhin nur ein Konto, weil der Mock keine
+echte Mehrfach-Konten-Datenstruktur hat. Für eine echte Verifikation des
+Kontowechsels selbst: gegen `backend/` testen (dort per Smoketest
+abgedeckt, siehe `backend/README.md`), nicht gegen den Mock. Ein
+vollständiger Mock-Umbau (mehrere Konten, pro Konto eigene Ordner/
+Nachrichten) wäre ein eigener, größerer Schritt gewesen -- die
+UI-Logik selbst hängt nicht am Mock, deshalb hier bewusst nicht
+mitgemacht.
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge

@@ -23,7 +23,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, googleLoginUrl, setStoredToken } from "../api";
-import type { MailProvider } from "../types";
+import type { MailAccount, MailProvider } from "../types";
 import "./OnboardingScreen.css";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -55,11 +55,23 @@ const FALLBACK_PROVIDERS: MailProvider[] = [
 export function OnboardingScreen({
   error,
   onConnected,
+  mode = "login",
+  onCancel,
+  onAccountAdded,
 }: {
   error: string | null;
   /** IMAP-Weg: kein Redirect, daher muss App.tsx den neuen Token selbst
    * übernehmen (Gmail-Weg braucht das nicht -- echter Redirect + Reload). */
   onConnected: (token: string) => void;
+  /** [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): "login" ist
+   * der bisherige Vollbild-Einstieg ohne Token, "addAccount" hängt (der
+   * bereits gespeicherte Token wird von api.ts automatisch mitgeschickt)
+   * ein weiteres Konto an den bereits eingeloggten User -- gleicher
+   * Bildschirm, aber mit Abbrechen-Möglichkeit statt Vollbild-Gate, und
+   * ohne Gmail (siehe dortiger Kommentar). */
+  mode?: "login" | "addAccount";
+  onCancel?: () => void;
+  onAccountAdded?: (account: MailAccount) => void;
 }) {
   const [providers, setProviders] = useState<MailProvider[]>(FALLBACK_PROVIDERS);
   const [providersError, setProvidersError] = useState(false);
@@ -78,33 +90,64 @@ export function OnboardingScreen({
   }
 
   if (selected) {
-    return <ImapConnectForm provider={selected} onBack={() => setSelected(null)} onConnected={onConnected} />;
+    return (
+      <ImapConnectForm
+        provider={selected}
+        onBack={() => setSelected(null)}
+        onConnected={onConnected}
+        onAccountAdded={onAccountAdded}
+      />
+    );
   }
 
   return (
     <div className="onboarding-shell">
       <div className="onboarding-card">
+        {mode === "addAccount" && onCancel && (
+          <button type="button" className="onboarding-back" onClick={onCancel}>
+            ← Abbrechen
+          </button>
+        )}
         <h1 className="onboarding-title">driftmail</h1>
-        <p className="onboarding-subtitle">Wähle dein E-Mail-Konto, um loszulegen.</p>
+        <p className="onboarding-subtitle">
+          {mode === "addAccount" ? "Welches weitere Konto möchtest du verbinden?" : "Wähle dein E-Mail-Konto, um loszulegen."}
+        </p>
         {error && <div className="onboarding-error">{ERROR_MESSAGES[error] ?? "Anmeldung fehlgeschlagen. Bitte erneut versuchen."}</div>}
         {providersError && (
           <div className="onboarding-hint">Anbieterliste konnte nicht geladen werden — Gmail ist trotzdem nutzbar.</div>
         )}
         <div className="provider-grid">
           {providers.map((p) => {
+            // [2026-09-21] Mehrfach-Konten: Gmail-OAuth unterstützt das
+            // Anhängen an einen bereits eingeloggten User noch nicht --
+            // GET /auth/google/callback redirected immer zu einem einzigen
+            // FRONTEND_URL, ohne den bestehenden Login-Zustand durch den
+            // Redirect durchzureichen (siehe backend/README.md "Mehrfach-
+            // Konten-Unterstützung", Offene Frage an Track A). Deshalb hier
+            // bewusst deaktiviert statt einen kaputten/verwirrenden Flow zu
+            // starten, der den aktuellen Login stillschweigend ersetzen
+            // könnte.
+            const gmailUnavailableForAddAccount = mode === "addAccount" && p.authType === "oauth" && !p.comingSoon;
+            const disabled = p.comingSoon || gmailUnavailableForAddAccount;
             const cardContent = (
               <>
                 <span className="provider-label">{p.label}</span>
                 <span className="provider-meta">
-                  {p.comingSoon ? "demnächst" : p.authType === "oauth" ? "Anmelden" : "IMAP verbinden"}
+                  {p.comingSoon
+                    ? "demnächst"
+                    : gmailUnavailableForAddAccount
+                      ? "noch nicht für weitere Konten"
+                      : p.authType === "oauth"
+                        ? "Anmelden"
+                        : "IMAP verbinden"}
                 </span>
               </>
             );
-            // Gmail (authType=oauth, nicht comingSoon): echter Browser-
-            // Redirect per <a href>, kein programmatischer window.location-
-            // Sprung -- gleiches Muster wie zuvor LoginScreen.tsx (kein
-            // `fetch`, das wäre für einen Redirect zu Google falsch).
-            if (!p.comingSoon && p.authType === "oauth") {
+            // Gmail (authType=oauth, nicht comingSoon, nicht addAccount-Modus):
+            // echter Browser-Redirect per <a href>, kein programmatischer
+            // window.location-Sprung -- kein `fetch`, das wäre für einen
+            // Redirect zu Google falsch.
+            if (!p.comingSoon && p.authType === "oauth" && !gmailUnavailableForAddAccount) {
               return (
                 <a key={p.id} className="provider-card" href={googleLoginUrl()}>
                   {cardContent}
@@ -115,9 +158,9 @@ export function OnboardingScreen({
               <button
                 key={p.id}
                 type="button"
-                className={`provider-card${p.comingSoon ? " coming-soon" : ""}`}
+                className={`provider-card${disabled ? " coming-soon" : ""}`}
                 onClick={() => selectProvider(p)}
-                disabled={p.comingSoon}
+                disabled={disabled}
               >
                 {cardContent}
               </button>
@@ -133,10 +176,12 @@ function ImapConnectForm({
   provider,
   onBack,
   onConnected,
+  onAccountAdded,
 }: {
   provider: MailProvider;
   onBack: () => void;
   onConnected: (token: string) => void;
+  onAccountAdded?: (account: MailAccount) => void;
 }) {
   const [emailAddress, setEmailAddress] = useState("");
   const [imapHost, setImapHost] = useState(provider.imapHost ?? "");
@@ -168,7 +213,11 @@ function ImapConnectForm({
         smtpSecure,
       });
       setStoredToken(res.token);
-      onConnected(res.token);
+      if (onAccountAdded) {
+        onAccountAdded(res.account);
+      } else {
+        onConnected(res.token);
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
         setSubmitError("Verbindung fehlgeschlagen. Bitte E-Mail-Adresse, App-Passwort und Servereinstellungen prüfen.");

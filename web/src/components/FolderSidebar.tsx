@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import type { Folder } from "../types";
+import type { Folder, MailAccount } from "../types";
 import { FOLDER_ICONS, FolderIcon, LockIcon, MoonIcon, PencilIcon, PlusIcon, RefreshIcon, SunIcon, SystemIcon, TrashIcon, UnlockIcon } from "../icons";
 import { SYSTEM_FOLDER_META } from "../folderMeta";
 import type { ThemeChoice } from "../useTheme";
@@ -26,7 +26,10 @@ export function FolderSidebar({
   active,
   onSelect,
   counts,
-  accountEmail,
+  accounts,
+  activeAccountId,
+  onSwitchAccount,
+  onAddAccount,
   onSyncNow,
   isSyncing,
   theme,
@@ -42,7 +45,13 @@ export function FolderSidebar({
   active: string | null;
   onSelect: (folderId: string) => void;
   counts: Partial<Record<string, number>>;
-  accountEmail?: string;
+  /** [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): mehrere
+   * Konten statt einer einzelnen accountEmail -- "getrennte Ansichten pro
+   * Konto", Umschalten passiert komplett hier in der Sidebar. */
+  accounts: MailAccount[];
+  activeAccountId: string | null;
+  onSwitchAccount: (accountId: string) => void;
+  onAddAccount: () => void;
   /** "Jetzt aktualisieren" (WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE -
    * HOECHSTE PRIORITAET", Punkt 1): löst POST /accounts/{accountId}/sync
    * aus, statt auf das automatische Backend-Intervall zu warten. */
@@ -102,9 +111,24 @@ export function FolderSidebar({
         <span className="brand-dot" aria-hidden="true" />
         driftmail
       </div>
-      {accountEmail && (
+      {accounts.length > 0 && (
         <div className="folder-sidebar-account-row">
-          <div className="folder-sidebar-account">{accountEmail}</div>
+          {accounts.length > 1 ? (
+            <select
+              className="account-switcher"
+              value={activeAccountId ?? ""}
+              onChange={(e) => onSwitchAccount(e.target.value)}
+              aria-label="Konto wechseln"
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.emailAddress}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="folder-sidebar-account">{accounts[0].emailAddress}</div>
+          )}
           <button
             type="button"
             className="sync-now-button"
@@ -114,6 +138,9 @@ export function FolderSidebar({
             aria-label="Jetzt aktualisieren"
           >
             <RefreshIcon className={isSyncing ? "spinning" : undefined} />
+          </button>
+          <button type="button" className="sync-now-button" onClick={onAddAccount} title="Konto hinzufügen" aria-label="Konto hinzufügen">
+            <PlusIcon />
           </button>
         </div>
       )}

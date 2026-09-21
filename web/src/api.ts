@@ -164,9 +164,15 @@ export const api = {
   // Absender"-Badge wird nur gezeigt, wenn die Adresse hier NICHT auftaucht.
   listTrustedSenders: () => request<TrustedSender[]>("/trusted-senders"),
 
-  listFolders: () => request<Folder[]>("/folders"),
+  // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): mit
+  // accountId nur die Ordner dieses Kontos ("getrennte Ansichten pro
+  // Konto"), ohne accountId alle Ordner aller eigenen Konten zusammen.
+  listFolders: (accountId?: string) => request<Folder[]>(`/folders${accountId ? `?accountId=${accountId}` : ""}`),
 
-  createFolder: (data: { name: string; icon?: string }) =>
+  // accountId erforderlich, sobald mehr als ein Konto verbunden ist (siehe
+  // backend/README.md) -- bei genau einem Konto optional (Server leitet es
+  // selbst ab).
+  createFolder: (data: { name: string; icon?: string; accountId?: string }) =>
     request<Folder>("/folders", { method: "POST", body: JSON.stringify(data) }),
 
   updateFolder: (folderId: string, data: { name?: string; icon?: string; sortOrder?: number }) =>

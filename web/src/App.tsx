@@ -35,7 +35,12 @@ const authCallbackResult = consumeAuthCallback();
 export default function App() {
   const [theme, setTheme] = useTheme();
   const appLock = useAppLock();
-  const [account, setAccount] = useState<MailAccount | null>(null);
+  // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): mehrere
+  // Konten statt eines einzelnen, "getrennte Ansichten pro Konto" --
+  // activeAccountId bestimmt, welches Konto gerade angezeigt wird.
+  const [accounts, setAccounts] = useState<MailAccount[]>([]);
+  const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
+  const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [token, setToken] = useState<string | null>(() => getStoredToken());
   // Nur der EINE Fehler aus dem gerade konsumierten Callback (falls einer da
@@ -65,24 +70,36 @@ export default function App() {
 
   const [error, setError] = useState<string | null>(null);
 
-  // Konto laden (nur für Anzeige der E-Mail-Adresse im Sidebar-Header) --
-  // erst NACH erfolgreichem Login (token gesetzt), siehe LoginScreen unten.
-  useEffect(() => {
-    if (!token) return;
-    api
+  // Konten laden -- erst NACH erfolgreichem Login (token gesetzt), siehe
+  // OnboardingScreen unten. Beim ersten Laden automatisch das erste Konto
+  // aktivieren; ein späteres Neuladen (nach "Konto hinzufügen") rührt eine
+  // bereits aktive Auswahl nicht an.
+  const loadAccounts = useCallback(() => {
+    return api
       .listAccounts()
-      .then((accs) => setAccount(accs[0] ?? null))
+      .then((accs) => {
+        setAccounts(accs);
+        setActiveAccountId((prev) => (prev && accs.some((a) => a.id === prev) ? prev : (accs[0]?.id ?? null)));
+        setError(null);
+        return accs;
+      })
       .catch((err) => {
         // 401: gespeicherter Token war ungültig/abgelaufen (api.ts hat ihn
         // bereits aus localStorage entfernt) -- zurück zum LoginScreen,
         // statt in einer Fehlermeldung hängen zu bleiben.
         if (err instanceof ApiError && err.status === 401) {
           setToken(null);
-          return;
+          return [];
         }
         setError("Server nicht erreichbar. Läuft Backend/Mock-Server?");
+        return [];
       });
-  }, [token]);
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    loadAccounts();
+  }, [token, loadAccounts]);
 
   const loadFolder = useCallback((folderId: string) => {
     setListLoading(true);
@@ -96,19 +113,29 @@ export default function App() {
       .finally(() => setListLoading(false));
   }, []);
 
-  // Ordner laden (System- und eigene) und initial den ersten sinnvollen Ordner aktivieren
-  // -- erst NACH erfolgreichem Login, siehe listAccounts-Effekt oben.
+  // Ordner laden (System- und eigene) und initial den ersten sinnvollen Ordner
+  // aktivieren -- erst NACH erfolgreichem Login UND sobald ein aktives Konto
+  // feststeht. [2026-09-21] Mehrfach-Konten: scoped auf activeAccountId
+  // ("getrennte Ansichten pro Konto") -- bei jedem Kontowechsel kompletter
+  // Neustart des lokalen Nachrichten-/Auswahl-Zustands, alte Ordner-IDs
+  // gehören zum vorherigen Konto und sind für das neue irrelevant.
   useEffect(() => {
-    if (!token) return;
+    if (!token || !activeAccountId) return;
+    setFoldersLoading(true);
+    setMessagesByFolder({});
+    setActiveFolder(null);
+    setSelectedId(null);
+    setSelectedDetail(null);
+    setDrafts([]);
     api
-      .listFolders()
+      .listFolders(activeAccountId)
       .then((fs) => {
         const sorted = fs.slice().sort((a, b) => a.sortOrder - b.sortOrder);
         setFolders(sorted);
         setError(null);
         // [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09.): "eingang" ersetzt
         // "wichtig" als automatische Landezone/Standard-Startordner.
-        setActiveFolder((prev) => prev ?? sorted.find((f) => f.systemKey === "eingang")?.id ?? sorted[0]?.id ?? null);
+        setActiveFolder(sorted.find((f) => f.systemKey === "eingang")?.id ?? sorted[0]?.id ?? null);
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
@@ -118,7 +145,7 @@ export default function App() {
         setError("Server nicht erreichbar. Läuft Backend/Mock-Server?");
       })
       .finally(() => setFoldersLoading(false));
-  }, [token]);
+  }, [token, activeAccountId]);
 
   // Alle Ordner initial laden, damit die Sidebar-Zähler stimmen
   useEffect(() => {
@@ -131,10 +158,10 @@ export default function App() {
   // Intervall zu warten) und lädt danach alle Ordner neu, damit neu
   // eingetroffene Mail sofort sichtbar wird.
   async function handleSyncNow() {
-    if (!account || isSyncing) return;
+    if (!activeAccountId || isSyncing) return;
     setIsSyncing(true);
     try {
-      await api.syncAccount(account.id);
+      await api.syncAccount(activeAccountId);
       folders.forEach((f) => loadFolder(f.id));
       setError(null);
     } catch {
@@ -142,6 +169,28 @@ export default function App() {
     } finally {
       setIsSyncing(false);
     }
+  }
+
+  // [2026-09-21] Mehrfach-Konten: Kontowechsel selbst ist nur der State-
+  // Wechsel -- der Ordner-Lade-Effekt oben reagiert auf activeAccountId und
+  // übernimmt Laden/Reset.
+  function handleSwitchAccount(accountId: string) {
+    setActiveAccountId(accountId);
+  }
+
+  // "Konto hinzufügen" (WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE", Punkt
+  // 2, Übergabe an Track F): öffnet denselben Onboarding-Bildschirm wie
+  // beim Erst-Login, aber als Overlay über der bereits eingeloggten App
+  // statt als Vollbild-Gate -- api.ts hängt den bereits gespeicherten
+  // Token automatisch an, das Backend erkennt daran "weiteres Konto zu
+  // bestehendem Login", siehe backend/README.md.
+  function handleAddAccount() {
+    setIsAddingAccount(true);
+  }
+
+  function handleAccountAdded(newAccount: MailAccount) {
+    setIsAddingAccount(false);
+    loadAccounts().then(() => setActiveAccountId(newAccount.id));
   }
 
   useEffect(() => {
@@ -266,8 +315,9 @@ export default function App() {
   }
 
   function handleCreateFolder(name: string) {
+    if (!activeAccountId) return;
     api
-      .createFolder({ name })
+      .createFolder({ name, accountId: activeAccountId })
       .then((folder) => {
         setFolders((prev) => [...prev, folder].sort((a, b) => a.sortOrder - b.sortOrder));
         setMessagesByFolder((prev) => ({ ...prev, [folder.id]: [] }));
@@ -337,6 +387,23 @@ export default function App() {
     return <div className="app-shell app-loading">Lade…</div>;
   }
 
+  // [2026-09-21] Mehrfach-Konten: "Konto hinzufügen" öffnet denselben
+  // Onboarding-Bildschirm als Overlay über der bereits eingeloggten App
+  // (nicht als Vollbild-Gate wie beim Erst-Login) -- api.ts hängt den
+  // bestehenden Token automatisch an jeden Request, das Backend erkennt
+  // daran "weiteres Konto zu bestehendem Login" statt eines neuen Users.
+  if (isAddingAccount) {
+    return (
+      <OnboardingScreen
+        error={null}
+        mode="addAccount"
+        onCancel={() => setIsAddingAccount(false)}
+        onConnected={() => {}}
+        onAccountAdded={handleAccountAdded}
+      />
+    );
+  }
+
   return (
     <AppLockGate locked={appLock.locked} unlocking={appLock.unlocking} unlockError={appLock.unlockError} onUnlock={appLock.unlock}>
       <div className="app-shell">
@@ -348,7 +415,10 @@ export default function App() {
           appLockSupported={appLock.supported}
           appLockEnabled={appLock.enabled}
           onAppLockChange={appLock.setEnabled}
-          accountEmail={account?.emailAddress}
+          accounts={accounts}
+          activeAccountId={activeAccountId}
+          onSwitchAccount={handleSwitchAccount}
+          onAddAccount={handleAddAccount}
           onSyncNow={handleSyncNow}
           isSyncing={isSyncing}
           theme={theme}

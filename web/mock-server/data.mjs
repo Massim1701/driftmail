@@ -109,6 +109,13 @@ export const folders = [
 export function folderSummary(f) {
   return {
     id: f.id,
+    // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): der
+    // Mock-Server bildet weiterhin nur EIN Konto ab (siehe accounts oben),
+    // deshalb hier fest verdrahtet statt eines echten Felds -- reicht für
+    // die Onboarding-/Badge-/Sync-UI-Entwicklung gegen den Mock, bildet
+    // "getrennte Ansichten pro Konto" aber nicht nach (dafür bitte gegen
+    // das echte Backend testen, siehe backend/README.md).
+    accountId: accounts[0].id,
     name: f.name,
     icon: f.icon,
     isSystem: f.is_system,
