@@ -895,3 +895,6 @@ Keine weitere Design- oder Prioritaets-Rueckfrage mehr noetig -- alle offenen En
 3. draftReply: KI-Entwurf fuer Antworten, bleibt bewusst NUR Vorschlag (bestehendes Prinzip: Compose-Text vollstaendig editierbar, kein Auto-Send).
 
 Kein Contract-Bruch (ai-adapter-interface.ts sieht genau diese Funktionen bereits vor, nur die Implementierung dahinter wird jetzt real statt Mock). Bitte nach den aktuell laufenden Grundfunktionen (Sync/Mehrfach-Konten/iOS-Nachzug) einordnen, Details/Grenzen wie gewohnt in SYNC.md dokumentieren.
+
+
+[2026-09-21] [offen] [KLEINE LABEL-AENDERUNG] [Track C/F] — Massimo: das Label "Inhalt" (KI-generierte Zusammenfassung des Mail-Inhalts, siehe fruehere Umbenennung von "Was wollen die von mir?" -> "Inhalt", WEB_INBOX.md 09.09.) soll umbenannt werden zu "Check Mail". Ausdruecklich von Massimo so entschieden (Alternative "Zusammenfassung" wurde vorgeschlagen und von ihm bewusst abgelehnt). Bitte ueberall dort aendern, wo "Inhalt" fuer dieses Feature in der UI angezeigt wird (Web + iOS, beide hatten die frueher Umbenennung uebernommen). Reine Text-Aenderung, kein Contract-Bruch, kein Blocker.
