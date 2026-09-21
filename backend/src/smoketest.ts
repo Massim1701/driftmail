@@ -6,6 +6,7 @@ import { createApp } from "./app";
 import { ensureDemoUser, initStore, store } from "./db/store";
 import { PostgresStore } from "./db/postgresStore";
 import { syncAccount } from "./mail/sync";
+import { runSyncForAllAccounts } from "./mail/scheduler";
 import { aiAdapter } from "./ai";
 import { domainReputationLookup, extractIbanCandidates, ibanHistoryCheck } from "./lookups";
 import { ocrAdapter } from "./attachments";
@@ -187,6 +188,45 @@ async function main() {
     assert(accountsRes.status === 200, "GET /v1/accounts sollte 200 liefern");
     const accounts = await accountsRes.json();
     assert(Array.isArray(accounts) && accounts.length > 0, "mind. 1 Konto erwartet");
+
+    // Periodischer + manueller Mail-Abruf (WEB_INBOX.md 21.09. "SEHR
+    // WICHTIGE LUECKE - HOECHSTE PRIORITAET", Punkt 1, siehe
+    // mail/scheduler.ts). Bewusst HIER, ganz am Anfang, VOR jedem Test, der
+    // eine Fixture-Nachricht verschiebt/endgültig löscht: der
+    // FixtureMailAdapter liefert bei jedem Aufruf dieselben statischen
+    // Test-Mails zurück (kein echtes Postfach dahinter, aus dem eine
+    // gelöschte Mail auch wirklich verschwindet, anders als bei einem
+    // echten Gmail-/IMAP-Konto -- dort spiegelt `mirrorToProvider()` ein
+    // permanentes Löschen tatsächlich zum Provider, siehe
+    // routes/messages.ts). Ein späterer Sync-Aufruf NACH einem
+    // Fixture-Permanent-Delete-Test würde die Nachricht fälschlich als
+    // "neu" re-importieren -- ein Artefakt des statischen Test-Fixtures,
+    // kein Bug im echten Dedupe (`findMessageByHeader`), deshalb hier vor
+    // jeder Mutation getestet statt die Reihenfolge dieses Smoketests
+    // umzubauen.
+    const manualSyncRes = await fetch(`${base}/v1/accounts/${account.id}/sync`, { method: "POST" });
+    assert(manualSyncRes.status === 200, "POST /v1/accounts/{accountId}/sync sollte 200 liefern");
+    const manualSyncBody = (await manualSyncRes.json()) as { imported: number; autoDeleted: number; syncStatus: string };
+    assert(
+      manualSyncBody.imported === 0,
+      "erneuter manueller Sync desselben Kontos sollte dank Dedupe (findMessageByHeader/wasAutoDeleted) 0 neu importierte Nachrichten liefern",
+    );
+    assert(manualSyncBody.syncStatus === "ok", "syncStatus sollte nach erfolgreichem Sync 'ok' sein");
+
+    const foreignAccountSyncRes = await fetch(`${base}/v1/accounts/00000000-0000-0000-0000-000000000000/sync`, { method: "POST" });
+    assert(
+      foreignAccountSyncRes.status === 404,
+      "POST /v1/accounts/{accountId}/sync mit unbekannter/fremder accountId sollte 404 liefern, nicht z.B. 500",
+    );
+
+    const unauthSyncRes = await globalThis.fetch(`${base}/v1/accounts/${account.id}/sync`, { method: "POST" });
+    assert(unauthSyncRes.status === 401, "POST /v1/accounts/{accountId}/sync ohne Bearer-Token sollte 401 liefern");
+
+    // Der periodische Scheduler ruft exakt dieselbe syncAccount()-Funktion
+    // wie oben auf, nur für ALLE Konten statt eines einzelnen -- hier direkt
+    // aufgerufen (statt den echten Timer abzuwarten) und geprüft, dass er
+    // nicht wirft.
+    await runSyncForAllAccounts();
 
     // Ordner: 7 System-Ordner müssen für den Demo-User existieren
     // (Contract-Änderung "benutzerdefinierte Ordner", SYNC.md Commit 734781e;
@@ -1225,7 +1265,7 @@ async function main() {
     // Massimo müsste den kompletten Weg einmal mit einem echten GMX-/
     // web.de-/iCloud-Konto gegentesten.
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support) end-to-end grün.");
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf) end-to-end grün.");
   } finally {
     server.close();
     // Ohne das haelt der tesseract.js-Worker (worker_threads) den Prozess

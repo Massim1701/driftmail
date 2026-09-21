@@ -1432,6 +1432,71 @@ App-Passwort-Erklärung mit Link) bewusst **nicht** Teil dieses Schritts,
 siehe `SYNC.md`. Outlook/Yahoo-OAuth ebenfalls offen (wartet laut Auftrag
 auf jeweils ein eigenes Provider-Projekt bei Microsoft/Yahoo).
 
+## Automatischer + manueller Mail-Abruf
+
+WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE - HOECHSTE PRIORITAET": bis
+hierhin gab es NUR den einmaligen Sync beim ersten Verbinden eines Kontos
+(`index.ts` beim Serverstart) — danach passierte nie wieder etwas
+automatisch, egal wie viele neue Mails eintrafen. Massimo hat das im
+echten web.de-Live-Test entdeckt (Testmail kam nie an, ohne manuellen
+`POST /internal/sync`-Aufruf).
+
+**Automatisch (`src/mail/scheduler.ts`):** klassisches Polling per
+`setInterval`, Default alle 3 Minuten, konfigurierbar über
+`MAIL_SYNC_INTERVAL_MINUTES` (Dezimalwerte erlaubt, z.B. `0.5` für
+30 Sekunden im Dev-Betrieb). Iteriert **alle** `mail_accounts` über **alle**
+User hinweg, jedes Konto unabhängig über `Promise.allSettled` — ein
+langsames/fehlerhaftes Konto blockiert die anderen nicht (Vorgabe aus dem
+Auftrag). Ruft dieselbe `syncAccount()`-Funktion auf wie der initiale Sync
+und der manuelle Endpunkt unten — keine eigene, zweite Sync-Logik.
+
+**Manuell (`POST /accounts/{accountId}/sync`):** für einen "Jetzt
+aktualisieren"-Button/Pull-to-Refresh in der Client-UI, löst denselben
+Sync sofort für genau ein (eigenes) Konto aus. Ownership-Check wie bei
+jedem anderen Endpunkt (404 bei fremder/unbekannter accountId).
+
+**Dedupe kommt kostenlos mit:** `syncAccount()` prüft bereits vor jedem
+Import `store.findMessageByHeader()`/`wasAutoDeleted()` — wiederholtes
+Aufrufen (Intervall-Timer UND manueller Button gleichzeitig für dasselbe
+Konto) ist von Haus aus sicher, kein neuer State im Scheduler nötig.
+
+**IMAP-IDLE-Vormerkung** (im Auftrag als spätere Ausbaustufe erwähnt):
+der Scheduler ruft nur `syncAccount()` in Intervallen auf — ein späterer
+IDLE-Adapter müsste nur den Trigger ersetzen (Server-Push statt Timer),
+nicht `syncAccount()` selbst.
+
+**Bekannte, ehrlich benannte Grenze:** `ImapAdapter.fetchRecentMessages()`
+holt bei jedem Aufruf die letzten `limit` (Default 20) Nachrichten der
+Mailbox nach Sequenznummer, kein "seit Zeitpunkt X"/UID-basierter Cursor.
+Treffen zwischen zwei Polling-Durchläufen mehr als `limit` neue Mails ein,
+werden die ältesten davon nie importiert (fallen aus dem Fenster). Bei
+einem 2-5-Minuten-Intervall für private/kleine Business-Postfächer ein
+sehr seltener Randfall, aber nicht stillschweigend hingenommen — ein
+UID-/cursor-basierter Abruf wäre die nächste Ausbaustufe, falls das in der
+Praxis relevant wird.
+
+**Tests:** `smoketest.ts` prüft `POST /accounts/{accountId}/sync` (Erfolg
+inkl. Dedupe-Check, 404 bei fremder accountId, 401 ohne Token) und ruft
+`runSyncForAllAccounts()` (dieselbe Funktion, die der Timer aufruft)
+direkt auf. **Bewusst ganz am Anfang von `main()` platziert, vor jedem
+Test, der eine Fixture-Nachricht verschiebt/endgültig löscht** — der
+`FixtureMailAdapter` liefert bei jedem Aufruf dieselben statischen
+Test-Mails zurück (kein echtes Postfach, aus dem eine gelöschte Mail auch
+wirklich verschwindet, anders als bei einem echten Gmail-/IMAP-Konto, wo
+`mirrorToProvider()` ein permanentes Löschen tatsächlich zum Provider
+spiegelt). Ein Sync-Aufruf NACH einem Fixture-Permanent-Delete-Test würde
+die Nachricht fälschlich als "neu" re-importieren — ein Artefakt des
+statischen Test-Fixtures, kein Bug im echten Dedupe. `npm run
+typecheck`/`npm test` grün, ohne UND mit `DATABASE_URL` gegen eine frisch
+aufgesetzte lokale Postgres-Instanz (bestehende Nicht-Wiederholbarkeit des
+Gesamt-Smoketests gegen einen bereits befüllten Postgres-Stand ist
+vorbestehend, nicht durch diesen Schritt verursacht — Ursache liegt an
+früheren, unabhängigen Assertions, nicht an den neuen Sync-Tests).
+
+**Übergabe:** Track C/F müssen einen "Jetzt aktualisieren"-Button/Pull-to-
+Refresh verdrahten, der `POST /accounts/{accountId}/sync` aufruft und
+danach die Nachrichtenliste neu lädt.
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war

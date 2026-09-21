@@ -181,6 +181,37 @@ paths:
         "422":
           description: provider=imap -- die angegebenen IMAP-Zugangsdaten konnten nicht verifiziert werden (echter Verbindungsversuch fehlgeschlagen)
 
+  /accounts/{accountId}/sync:
+    post:
+      summary: >
+        Manueller Mail-Abruf fuer EIN Konto (WEB_INBOX.md 21.09. "SEHR
+        WICHTIGE LUECKE - HOECHSTE PRIORITAET", Punkt 1). Stoesst denselben
+        Sync-Vorgang an, der sonst periodisch im Hintergrund laeuft (Default
+        alle 3 Minuten, `MAIL_SYNC_INTERVAL_MINUTES`), sofort statt beim
+        naechsten Intervall -- fuer einen "Jetzt aktualisieren"-Button bzw.
+        Pull-to-Refresh in der Client-UI. Nur fuer das eigene Konto
+        (Ownership-Check gegen den Bearer-Token).
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Sync abgeschlossen
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported: { type: integer }
+                  autoDeleted: { type: integer }
+                  syncStatus: { type: string, enum: [pending, syncing, ok, error] }
+        "404":
+          description: Konto nicht gefunden oder gehoert nicht dem angemeldeten User
+        "502":
+          description: Sync fehlgeschlagen (z.B. Mail-Server nicht erreichbar)
+
   /folders:
     get:
       summary: Ordner des Users auflisten (System- und eigene Ordner)

@@ -1,6 +1,7 @@
 import { createApp } from "./app";
 import { ensureDemoUser, initStore, store } from "./db/store";
 import { syncAccount } from "./mail/sync";
+import { startPeriodicSync } from "./mail/scheduler";
 import { aiAdapter } from "./ai";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -32,6 +33,11 @@ async function main() {
   } catch (err) {
     console.error("[startup] Initialer Sync fehlgeschlagen:", err);
   }
+
+  // Periodischer Mail-Abruf (WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE"):
+  // läuft für ALLE Konten über alle User hinweg, nicht nur den Demo-Account
+  // oben -- siehe mail/scheduler.ts für die Architektur-Entscheidung.
+  startPeriodicSync();
 
   const app = createApp();
   app.listen(PORT, () => {
