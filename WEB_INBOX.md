@@ -881,7 +881,7 @@ Kein Contract-Bruch (additive Erweiterung von design-tokens.json + ein neues Use
 Keine weitere Design- oder Prioritaets-Rueckfrage mehr noetig -- alle offenen Entscheidungen sind getroffen. Bitte durcharbeiten und wie gewohnt in SYNC.md/TERMINAL_INBOX.md dokumentieren.
 
 
-[2026-09-21] [offen] [ECHTE KI-ANBINDUNG - letzter Punkt der urspruenglichen Prioritaetenliste] [contracts/ai-adapter-interface.ts + Track A/D/E] [nach den aktuell laufenden Grundfunktionen] — Massimo: jetzt einreihen. Aktuell laufen extractContract/summarize/draftReply nur regelbasiert (Mustererkennung, Konfidenz bis max. 0.95, Code markiert mit "AI EXTRACTION HOOK"-Kommentaren) -- keine echte KI-Anbindung, kein API-Key konfiguriert.
+[2026-09-21] [UEBERHOLT - siehe TERMINAL_INBOX.md 21.09. "KORREKTUR", Massimo hat direkt an Claude Code korrigiert: kein driftmail-finanzierter Cloud-Key, Geraete-eigene KI ist primaer] [ECHTE KI-ANBINDUNG - letzter Punkt der urspruenglichen Prioritaetenliste] [contracts/ai-adapter-interface.ts + Track A/D/E] [nach den aktuell laufenden Grundfunktionen] — Massimo: jetzt einreihen. Aktuell laufen extractContract/summarize/draftReply nur regelbasiert (Mustererkennung, Konfidenz bis max. 0.95, Code markiert mit "AI EXTRACTION HOOK"-Kommentaren) -- keine echte KI-Anbindung, kein API-Key konfiguriert.
 
 **Anbieter-Entscheidung:** Anthropic-API (Claude) als Cloud-Fallback -- passt organisch, da driftmail ueber Claude entwickelt wird, keine weitere Anbieter-Recherche noetig. API-Key server-seitig per Umgebungsvariable (ANTHROPIC_API_KEY, .env.example ergaenzen), NICHT pro User -- User bringt keinen eigenen Key mit, driftmail traegt die Kosten.
 
