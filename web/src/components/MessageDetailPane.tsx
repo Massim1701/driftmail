@@ -160,6 +160,13 @@ export function MessageDetailPane({
   const isQuarantined = quarantaeneFolderId !== null && message.folderId === quarantaeneFolderId;
   const isInTrash = papierkorbFolderId !== null && message.folderId === papierkorbFolderId;
   const isInSpam = spamFolderId !== null && message.folderId === spamFolderId;
+  // [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
+  // Punkt 3 ("Vertraulicher Modus"): der Server setzt bodyText bereits auf
+  // null, sobald confidentialUntil erreicht ist (siehe backend/README.md
+  // "Vertraulicher Modus") -- das ist die massgebliche, serverseitige
+  // Quelle der Wahrheit, kein eigener Date.now()-Vergleich in der Render-
+  // Funktion noetig (waere zudem von der lokalen Client-Uhr abhaengig).
+  const confidentialExpired = message.confidentialUntil !== null && message.bodyText === null;
   const isUnknownSender = message.isNewSender && !trustedSenderAddresses.has(message.fromAddress);
 
   async function loadSummary() {
@@ -293,9 +300,9 @@ export function MessageDetailPane({
           Recherche" Punkt 3 ("Vertraulicher Modus"). */}
       {message.confidentialUntil && (
         <div className="quarantine-notice">
-          {new Date(message.confidentialUntil).getTime() > Date.now()
-            ? `Vertraulich bis ${formatDateTime(message.confidentialUntil)} — danach wird der Text automatisch gelöscht.`
-            : "Diese Nachricht war vertraulich und ist inzwischen abgelaufen — der Text wurde serverseitig gelöscht."}
+          {confidentialExpired
+            ? "Diese Nachricht war vertraulich und ist inzwischen abgelaufen — der Text wurde serverseitig gelöscht."
+            : `Vertraulich bis ${formatDateTime(message.confidentialUntil)} — danach wird der Text automatisch gelöscht.`}
         </div>
       )}
 
