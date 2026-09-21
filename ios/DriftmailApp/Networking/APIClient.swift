@@ -99,6 +99,19 @@ protocol APIClient {
     /// bei einem serverseitig noch nicht implementierten `byokProvider`
     /// (400 -- Web-Client zeigt ohnehin nur `AiProvider.implemented` an).
     func updateAiSettings(mode: AiPreferenceMode, byokProvider: AiProvider?, apiKey: String?, cloudConsent: Bool?) async throws -> AiSettings
+
+    /// `DELETE /accounts/{accountId}` (WEB_INBOX.md 21.09.
+    /// "Einstellungsbereich", Konten-Verwaltung) -- entfernt ein Konto
+    /// inkl. aller daran haengenden Daten. Wirft `APIError.badRequest`
+    /// (400), wenn es das letzte Konto des Users waere.
+    func deleteAccount(id: String) async throws
+    /// `GET /settings` (WEB_INBOX.md 21.09. "Einstellungsbereich", Ansicht:
+    /// Akzentfarben-Auswahl) -- allgemeine UI-Praeferenzen des Users,
+    /// aktuell nur `accentTheme`.
+    func fetchSettings() async throws -> UserSettings
+    /// `PUT /settings`.
+    func updateSettings(accentTheme: AccentTheme) async throws -> UserSettings
+
     /// `POST /messages/send` — sendet eine Antwort auf `inReplyToMessageId`
     /// (das Konto wird backend-seitig aus der Ursprungsnachricht
     /// abgeleitet, siehe backend/README.md "Versand"). Gibt die

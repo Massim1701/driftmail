@@ -215,6 +215,46 @@ struct RemoteAPIClient: APIClient {
         }
     }
 
+    /// `DELETE /accounts/{accountId}` — eigener Request statt des
+    /// generischen `delete()`-Helpers (der prüft gar keinen Statuscode,
+    /// siehe dortigen Kommentar), weil 400 (letztes verbleibendes Konto)
+    /// ein erwarteter, vom generischen Netzwerkfehler verschiedener
+    /// Ausgang ist -- analog `updateAiSettings` oben.
+    func deleteAccount(id: String) async throws {
+        struct ErrorResponse: Decodable { let error: String? }
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("/accounts/\(id)"))
+        request.httpMethod = "DELETE"
+        authorize(&request)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.network(error)
+        }
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 204
+        if statusCode == 400 {
+            let decoded = try? decoder.decode(ErrorResponse.self, from: data)
+            throw APIError.badRequest(message: decoded?.error)
+        }
+        if statusCode == 404 {
+            throw APIError.notFound
+        }
+    }
+
+    /// `GET /settings` (WEB_INBOX.md 21.09. "Einstellungsbereich").
+    func fetchSettings() async throws -> UserSettings {
+        try await get("/settings")
+    }
+
+    /// `PUT /settings`.
+    func updateSettings(accentTheme: AccentTheme) async throws -> UserSettings {
+        struct Body: Encodable { let accentTheme: AccentTheme }
+        return try await put("/settings", body: Body(accentTheme: accentTheme))
+    }
+
     /// `POST /messages/send` — anders als die übrigen `post()`-Aufrufe
     /// hier muss der HTTP-Status geprüft werden, weil 422 (`blocked:
     /// true`) ein erwarteter, vom Erfolgsfall inhaltlich verschiedener
@@ -348,6 +388,22 @@ struct RemoteAPIClient: APIClient {
         if let body {
             request.httpBody = try JSONEncoder().encode(body)
         }
+        do {
+            let (data, _) = try await session.data(for: request)
+            return try decoder.decode(T.self, from: data)
+        } catch let error as DecodingError {
+            throw APIError.decodingFailed(error)
+        } catch {
+            throw APIError.network(error)
+        }
+    }
+
+    private func put<Body: Encodable, T: Decodable>(_ path: String, body: Body) async throws -> T {
+        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        authorize(&request)
+        request.httpBody = try JSONEncoder().encode(body)
         do {
             let (data, _) = try await session.data(for: request)
             return try decoder.decode(T.self, from: data)

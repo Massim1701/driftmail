@@ -42,6 +42,7 @@
 		B7F7E4294BE911E327E403DC /* OnboardingAccountConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */; };
 		7149640EA5C046CDF2D0DDF1 /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6A0A6DD232DDE1F2F93EBE /* ComposeView.swift */; };
 		56AC218751824B9F83E4422F /* AiSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2037AFF4FE348ACBC8DDF99 /* AiSettings.swift */; };
+		BAE621DDA45815CE8CBDBF7B /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF1ECAD23A8D8A74E0F0A6A /* UserSettings.swift */; };
 		FA08E2D0BE28462C9F2CF1A1 /* AiSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53514C334BC04B918574560A /* AiSettingsView.swift */; };
 /* End PBXBuildFile section */
 
@@ -82,6 +83,7 @@
 		B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingAccountConnectView.swift; sourceTree = "<group>"; };
 		2F6A0A6DD232DDE1F2F93EBE /* ComposeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
 		F2037AFF4FE348ACBC8DDF99 /* AiSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AiSettings.swift; sourceTree = "<group>"; };
+		2FF1ECAD23A8D8A74E0F0A6A /* UserSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UserSettings.swift; sourceTree = "<group>"; };
 		53514C334BC04B918574560A /* AiSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AiSettingsView.swift; sourceTree = "<group>"; };
 		D3A1F4C6E0904A2F8C7B1E5A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -140,6 +142,7 @@
 				485DBFDAC04173358373894B /* MailProvider.swift */,
 				C9FCDE9892BAE90D849D0DD8 /* TrustedSender.swift */,
 				F2037AFF4FE348ACBC8DDF99 /* AiSettings.swift */,
+				2FF1ECAD23A8D8A74E0F0A6A /* UserSettings.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -348,6 +351,7 @@
 				B7F7E4294BE911E327E403DC /* OnboardingAccountConnectView.swift in Sources */,
 				7149640EA5C046CDF2D0DDF1 /* ComposeView.swift in Sources */,
 				56AC218751824B9F83E4422F /* AiSettings.swift in Sources */,
+				BAE621DDA45815CE8CBDBF7B /* UserSettings.swift in Sources */,
 				FA08E2D0BE28462C9F2CF1A1 /* AiSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

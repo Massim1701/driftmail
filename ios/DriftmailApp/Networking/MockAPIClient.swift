@@ -46,6 +46,11 @@ actor MockAPIClient: APIClient {
     /// Zustand ("aus", kein driftmail-finanzierter Cloud-Zugang).
     private var aiSettings = AiSettings(mode: .off, byokProvider: nil, hasApiKey: false, cloudConsentGiven: false)
 
+    /// `GET`/`PUT /settings` (WEB_INBOX.md 21.09. "Einstellungsbereich") --
+    /// rein In-Memory, kein Contract-Pendant in MockDatabase.json noetig,
+    /// analog zu `aiSettings` oben.
+    private var userSettings = UserSettings(accentTheme: .teal)
+
     private var drafts: [Draft] = [
         Draft(
             id: "draft-001",
@@ -340,6 +345,31 @@ actor MockAPIClient: APIClient {
             cloudConsentGiven: cloudConsent ?? aiSettings.cloudConsentGiven
         )
         return aiSettings
+    }
+
+    /// `DELETE /accounts/{accountId}`, Mock: dieselbe letztes-Konto-
+    /// Validierung wie das echte Backend (`routes/accounts.ts`).
+    func deleteAccount(id: String) async throws {
+        await delay()
+        guard db.accounts.contains(where: { $0.id == id }) else { throw APIError.notFound }
+        guard db.accounts.count > 1 else {
+            throw APIError.badRequest(message: "Das letzte verbundene Konto kann nicht entfernt werden.")
+        }
+        db.accounts.removeAll { $0.id == id }
+        db.folders.removeAll { $0.accountId == id }
+    }
+
+    /// `GET /settings`, Mock: liefert den In-Memory-Zustand.
+    func fetchSettings() async throws -> UserSettings {
+        await delay()
+        return userSettings
+    }
+
+    /// `PUT /settings`.
+    func updateSettings(accentTheme: AccentTheme) async throws -> UserSettings {
+        await delay()
+        userSettings = UserSettings(accentTheme: accentTheme)
+        return userSettings
     }
 
     /// `POST /messages/send`, Mock: kein echter Provider-Versand, kein

@@ -928,6 +928,84 @@ dieser Umgebung NICHT interaktiv verifizieren -- gleiche Ursache wie bei
 den vorherigen Nachträgen (kein Weg an das Onboarding-Gate vorbei ohne
 echte Test-Mailbox).
 
+## [2026-09-21] Nachtrag: Einstellungsbereich
+(WEB_INBOX.md 21.09. "NEUER AUFTRAG - Einstellungsbereich + Info-Seite",
+Punkt 1 -- Punkt 2, die öffentliche driftware.online-Info-Seite, wird laut
+Massimo in einer separaten Claude-Session gebaut, bewusst nicht angefasst)
+
+`SettingsView` (private struct in `FolderListView.swift`) existierte
+bereits mit App-Sperre-Toggle, Konten-Liste (nur Anzeigen + Hinzufügen)
+und KI-Anbindung-Link -- dieser Nachtrag erweitert die bestehende Fläche,
+baut keine neue.
+
+**1) Konto entfernen:** `.swipeActions` auf jeder Konto-Zeile, ruft
+`AppEnvironment.removeAccount(_:)` (neu) → `DELETE /accounts/{id}` auf.
+Das letzte verbleibende Konto wird client-seitig gar nicht erst als
+entfernbar angeboten (`environment.accounts.count > 1`-Check), der Server
+prüft denselben Fall trotzdem nochmal (`APIError.badRequest`
+abgefangen und als Fehlertext angezeigt, falls die Wischgeste doch mal
+vor einer veralteten Kontenliste ausgelöst würde). Nach erfolgreichem
+Entfernen lädt `removeAccount(_:)` `accounts` neu -- war das entfernte
+Konto das aktive, wählt `loadAccounts()` automatisch ein verbleibendes
+(bestehende Logik, unverändert), `folders`/`trustedSenderAddresses` werden
+dabei zurückgesetzt wie bei einem normalen Kontowechsel. Neu in
+`APIClient`/`MockAPIClient`/`RemoteAPIClient`: `deleteAccount(id:)` --
+eigene Implementierung in `RemoteAPIClient` (nicht der generische
+`delete()`-Helper, der prüft gar keinen Statuscode) für den erwarteten
+400-Fall, analog zu `updateAiSettings`.
+
+**2) Neue "Ansicht"-Sektion -- Akzentfarben-Auswahl:** fünf Farb-Swatches
+aus dem neuen `AccentTheme`-Enum (`Models/UserSettings.swift`, Werte 1:1
+aus `contracts/design-tokens.json` `color.accentThemes` übernommen,
+`ocean_verlauf` als echter `LinearGradient`-Swatch statt einer flachen
+Farbe, damit er auf einen Blick als Verlauf erkennbar ist). Tippen ruft
+`AppEnvironment.updateAccentTheme(_:)` → `PUT /settings` auf.
+
+**Live-Umfärben ohne App-Neustart -- die eigentliche Design-Entscheidung
+dieses Nachtrags:** `DesignTokens.Color.accent` war bisher ein `static
+let`, also unveränderlich zur Laufzeit. Elegante Lösung mit minimalem
+Diff statt eines großen Refactors: die Property wurde zu `static var`,
+UND `AppEnvironment` bekam ein neues `@Published private(set) var
+accentTheme`. `applyAccentTheme(_:)` (privat) setzt BEIDE bei jeder
+Änderung zusammen -- die vier Views, die `DesignTokens.Color.accent`
+schon heute direkt lesen UND bereits `environment` als
+`@EnvironmentObject` beobachten (`FolderListView`, `MessageDetailView`,
+`OnboardingCapabilityCheckView`, `RootView`), zeichnen dadurch automatisch
+neu und lesen dabei den frisch gesetzten Wert -- ohne dass einer der
+bestehenden 14 `DesignTokens.Color.accent`-Aufrufe in diesen Dateien
+angefasst werden musste. **Bewusst NICHT umgestellt:**
+`AppLockGateView`/`OnboardingAccountConnectView` -- beide laufen VOR dem
+Laden irgendeiner Einstellung (Sperrbildschirm/Onboarding), es gibt dort
+noch keine personalisierte Farbe, die anzuzeigen wäre; der statische
+Default (`teal`) ist dort das korrekte Verhalten, kein Kompromiss.
+`loadSettings()` (neu) lädt die gespeicherte Farbe einmal beim App-Start
+(`FolderListView.task`, analog zu `loadAccounts()`/`loadFolders()`), nicht
+erst beim ersten Öffnen der Einstellungen.
+
+**3) Sicherheits-Übersicht:** einfacher, nicht-technischer Text-Block
+(exakter Wortlaut von Massimo vorgegeben) in einer eigenen Section
+zwischen App-Sperre und KI-Anbindung. Nennt Malware-Scan bewusst als "in
+Vorbereitung" -- der ist tatsächlich noch ein Mock
+(`backend/src/lookups/attachmentScanMock.ts`), keine Übertreibung.
+
+**4) "Hilfe"-Sektion:** ein `Link` auf `https://driftware.online` als
+Platzhalter, bis die andere Claude-Session die eigentliche Info-Seite
+fertig hat -- Kommentar im Code verweist darauf, die Route bei
+Gelegenheit zu verschärfen.
+
+**Tests:** `xcodebuild` BUILD SUCCEEDED (der komplette SwiftUI-View-Baum
+inkl. aller neuen Bindings/Closures/`ForEach`s über `AccentTheme.allCases`
+ist strukturell korrekt, sonst BUILD FAILED). Sauberer Uninstall/Install/
+Launch ohne Crash/Decode-Fehler, Onboarding-Screen unverändert korrekt
+gerendert (Screenshot verifiziert). Die neuen Settings-Sektionen selbst
+ließen sich NICHT interaktiv durchklicken -- gleiche Ursache wie bei allen
+vorherigen Nachträgen dieser Session (kein Weg an das Onboarding-Gate
+vorbei ohne echte Test-Mailbox, kein Auth-Bypass versucht). **Offener
+Punkt für eine spätere Session:** einmal mit echter Test-Mailbox live
+durchklicken (Konto entfernen inkl. Fehlerfall bei nur einem Konto,
+Akzentfarbe wechseln und live sehen, dass sich z.B. `FolderListView`s
+aktives Konto/die Buttons tatsächlich umfärben).
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

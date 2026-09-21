@@ -10,7 +10,20 @@ import SwiftUI
 enum DesignTokens {
 
     enum Color {
-        static let accent = SwiftUI.Color(hex: "#1D9E75")
+        /// [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09.):
+        /// mutable now (was `let`) -- `AppEnvironment.applyAccentTheme()`
+        /// overwrites this at runtime when the user picks a different theme
+        /// in Settings. Views that already observe `environment` as an
+        /// `@EnvironmentObject` (`FolderListView`, `MessageDetailView`,
+        /// `OnboardingCapabilityCheckView`, `RootView`) pick up the new
+        /// value on their next body re-evaluation, triggered by
+        /// `AppEnvironment`'s own `@Published accentTheme` bump -- no need
+        /// to touch every individual `DesignTokens.Color.accent` call site.
+        /// `AppLockGateView`/`OnboardingAccountConnectView` intentionally
+        /// keep reading the static default: both run before any settings
+        /// have loaded (lock screen / onboarding), so there is no
+        /// personalized theme to reflect there yet.
+        static var accent = SwiftUI.Color(hex: "#1D9E75")
         static let danger = SwiftUI.Color(hex: "#D85A30")
         static let dangerText = SwiftUI.Color(hex: "#993C1D")
         static let warning = SwiftUI.Color(hex: "#EF9F27")

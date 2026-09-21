@@ -157,6 +157,20 @@ struct FolderListView: View {
             .task {
                 await environment.loadAccounts()
                 await loadFoldersAndCounts()
+                // [2026-09-21] "Einstellungsbereich"-Auftrag: Akzentfarbe
+                // einmal beim App-Start laden, analog zu loadAccounts()/
+                // loadFolders() oben -- damit die gewählte Farbe von Anfang
+                // an sichtbar ist, nicht erst nach dem ersten Öffnen der
+                // Einstellungen.
+                await environment.loadSettings()
+            }
+            .onChange(of: isShowingSettings) { _, isShowing in
+                // Nach dem Schließen der Einstellungen neu laden -- ein
+                // Konto könnte entfernt worden sein (Ordner/Zähler dieses
+                // Kontos wären sonst bis zum nächsten Pull-to-Refresh
+                // veraltet).
+                guard !isShowing else { return }
+                Task { await loadFoldersAndCounts(forceRefresh: true) }
             }
             .refreshable {
                 // Pull-to-Refresh (WEB_INBOX.md 21.09. "SEHR WICHTIGE
@@ -295,9 +309,12 @@ private struct FolderRow: View {
     }
 }
 
-/// Minimale Settings-Fläche (WEB_INBOX.md 15.09., "App-Sperre ... in den
-/// Einstellungen aktivierbar") -- bewusst nur der eine Toggle, kein
-/// Platzhalter für zukünftige Einstellungen, die es noch nicht gibt.
+/// Gebündelter Einstellungsbereich (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+/// Einstellungsbereich + Info-Seite", Punkt 1) -- war ursprünglich nur der
+/// eine App-Sperre-Toggle (WEB_INBOX.md 15.09.), seither um KI-Anbindung
+/// und Mehrfach-Konten gewachsen. Dieser Nachtrag ergänzt: Konto-Entfernen,
+/// Akzentfarben-Auswahl ("Ansicht"), eine einfache Sicherheits-Übersicht
+/// und einen Anleitung-Link.
 private struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var environment: AppEnvironment
@@ -308,26 +325,99 @@ private struct SettingsView: View {
     // Onboarding-Provider-Auswahlbildschirm wie beim Erst-Login, hier als
     // Sheet statt als Vollbild-Gate.
     @State private var isAddingAccount = false
+    @State private var removingAccountId: String?
+    @State private var accountError: String?
+
+    /// Plain-language overview of what driftmail actively protects
+    /// against -- non-technical on purpose (WEB_INBOX.md 21.09.
+    /// "Einstellungsbereich", Sicherheit-Sektion). Malware scan is
+    /// honestly marked "in Vorbereitung": it's still a mock
+    /// (`backend/src/lookups/attachmentScanMock.ts`), not real yet.
+    private static let securityOverviewText = """
+    driftmail schützt dich automatisch im Hintergrund:
+    – Erkennt Spam, Phishing und klassischen Vorschussbetrug automatisch
+    – Warnt bei gefälschten Anzeigenamen, abweichenden Antwort-Adressen und plötzlichen IBAN-Wechseln in laufenden Gesprächen
+    – Kennzeichnet neue, unbekannte Absender
+    – Whitelist: du entscheidest, wem du vertraust
+    – Warnt vor dem Versand sensibler Daten (IBAN, Kreditkartennummern)
+    – Malware-Scan für Anhänge: in Vorbereitung
+    – KI-Funktionen laufen wo möglich direkt auf deinem Gerät – keine Kosten, keine Cloud-Übertragung, außer du richtest ausdrücklich einen eigenen KI-Zugang ein
+    """
 
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    AppLockToggleView(kind: biometricKind)
-                } footer: {
-                    Text("Schützt deinen lokalen Mail-Cache zusätzlich zum Mail-Konto-Login, falls dein Gerät verloren geht oder gestohlen wird.")
-                }
-
-                Section {
                     ForEach(environment.accounts) { acc in
-                        Text(acc.emailAddress)
-                            .foregroundStyle(acc.id == environment.activeAccountId ? DesignTokens.Color.accent : DesignTokens.Color.textPrimary)
+                        HStack {
+                            Text(acc.emailAddress)
+                                .foregroundStyle(acc.id == environment.activeAccountId ? DesignTokens.Color.accent : DesignTokens.Color.textPrimary)
+                            Spacer()
+                            if removingAccountId == acc.id {
+                                ProgressView()
+                            }
+                        }
+                        .swipeActions(edge: .trailing) {
+                            // Letztes verbleibendes Konto client-seitig gar
+                            // nicht erst anbieten, statt den User eine
+                            // Wischgeste machen zu lassen, die dann eh nur
+                            // mit einem 400 zurückkommt (Server prüft das
+                            // ohnehin nochmal, siehe AppEnvironment.
+                            // removeAccount(_:)).
+                            if environment.accounts.count > 1 {
+                                Button(role: .destructive) {
+                                    Task { await removeAccount(acc) }
+                                } label: {
+                                    Label("Entfernen", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
                     Button("Konto hinzufügen") {
                         isAddingAccount = true
                     }
+                    if let accountError {
+                        Text(accountError)
+                            .font(.system(size: DesignTokens.Typography.Size.small))
+                            .foregroundStyle(DesignTokens.Color.dangerText)
+                    }
                 } header: {
                     Text("Verbundene Konten")
+                } footer: {
+                    Text(environment.accounts.count > 1
+                        ? "Nach links wischen, um ein Konto zu entfernen."
+                        : "Das letzte verbundene Konto kann nicht entfernt werden.")
+                }
+
+                // [2026-09-21] "Einstellungsbereich"-Auftrag: Akzentfarben-
+                // Auswahl, siehe UserSettings.swift/design-tokens.json
+                // color.accentThemes. Nur die neutrale Akzentfarbe ist
+                // wählbar -- danger/warning/success bleiben fest.
+                Section {
+                    HStack(spacing: DesignTokens.Spacing.md) {
+                        ForEach(AccentTheme.allCases) { theme in
+                            Button {
+                                Task { await applyAccentTheme(theme) }
+                            } label: {
+                                accentSwatch(for: theme)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(theme.label)
+                        }
+                    }
+                    .padding(.vertical, DesignTokens.Spacing.xs)
+                } header: {
+                    Text("Ansicht")
+                } footer: {
+                    Text("Akzentfarbe für Buttons, Links und aktive Elemente.")
+                }
+
+                Section {
+                    AppLockToggleView(kind: biometricKind)
+                } header: {
+                    Text("Sicherheit")
+                } footer: {
+                    Text("Schützt deinen lokalen Mail-Cache zusätzlich zum Mail-Konto-Login, falls dein Gerät verloren geht oder gestohlen wird.")
                 }
 
                 // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): BYOK-
@@ -339,6 +429,27 @@ private struct SettingsView: View {
                     }
                 } footer: {
                     Text("Geräte-eigene KI läuft immer zuerst. Hier optional einen eigenen Cloud-Zugang hinterlegen.")
+                }
+
+                // Einfache, nicht-technische Übersicht der aktiven
+                // Sicherheits-Features (WEB_INBOX.md 21.09.
+                // "Einstellungsbereich") -- keine technischen Details,
+                // sondern in einfachen Worten, was driftmail im
+                // Hintergrund tut.
+                Section {
+                    Text(Self.securityOverviewText)
+                        .font(.system(size: DesignTokens.Typography.Size.small))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                }
+
+                // Platzhalter-URL: die eigentliche Info-Seite auf
+                // driftware.online wird in einer separaten Claude-Session
+                // gebaut (WEB_INBOX.md 21.09.) -- Route ggf. anpassen,
+                // sobald diese Seite fertig ist.
+                Section {
+                    Link("Installationsanleitung", destination: URL(string: "https://driftware.online")!)
+                } header: {
+                    Text("Hilfe")
                 }
 
                 // [2026-09-21] WEB_INBOX.md 19.09. "Onboarding: Provider-
@@ -380,6 +491,46 @@ private struct SettingsView: View {
                     Task { await environment.handleAccountAdded(account) }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func accentSwatch(for theme: AccentTheme) -> some View {
+        ZStack {
+            if let gradientHexes = theme.gradientHexes {
+                Circle().fill(
+                    LinearGradient(
+                        colors: gradientHexes.map { SwiftUI.Color(hex: $0) },
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            } else {
+                Circle().fill(SwiftUI.Color(hex: theme.accentHex))
+            }
+            if environment.accentTheme == theme {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(width: 32, height: 32)
+    }
+
+    private func applyAccentTheme(_ theme: AccentTheme) async {
+        try? await environment.updateAccentTheme(theme)
+    }
+
+    private func removeAccount(_ account: MailAccount) async {
+        removingAccountId = account.id
+        accountError = nil
+        defer { removingAccountId = nil }
+        do {
+            try await environment.removeAccount(account.id)
+        } catch APIError.badRequest(let message) {
+            accountError = message ?? "Konto konnte nicht entfernt werden."
+        } catch {
+            accountError = "Konto konnte nicht entfernt werden. Bitte später erneut versuchen."
         }
     }
 }

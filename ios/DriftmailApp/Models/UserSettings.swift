@@ -1,0 +1,51 @@
+import Foundation
+
+/// [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09. "NEUER
+/// AUFTRAG - Einstellungsbereich + Info-Seite"): mirrors
+/// `components/schemas/UserSettings` in contracts/api-spec.yaml and
+/// db-schema.sql `users.accent_theme`. Five selectable accent themes, see
+/// contracts/design-tokens.json `color.accentThemes` -- hand-copied here
+/// like the rest of DesignTokens.swift, update both if the contract
+/// changes. `danger`/`warning`/`success` are intentionally NOT part of
+/// this enum -- an earlier Massimo decision keeps those fixed for every
+/// user so the existing security-warning system never loses its clarity.
+enum AccentTheme: String, Codable, CaseIterable, Identifiable {
+    case teal
+    case oceanBlue = "ocean_blue"
+    case violett
+    case koralle
+    case oceanVerlauf = "ocean_verlauf"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .teal: return "Teal"
+        case .oceanBlue: return "Ocean Blue"
+        case .violett: return "Violett"
+        case .koralle: return "Koralle"
+        case .oceanVerlauf: return "Ocean-Verlauf"
+        }
+    }
+
+    var accentHex: String {
+        switch self {
+        case .teal: return "#1D9E75"
+        case .oceanBlue: return "#378ADD"
+        case .violett: return "#7F77DD"
+        case .koralle: return "#D85A30"
+        case .oceanVerlauf: return "#378ADD"
+        }
+    }
+
+    /// Only `.oceanVerlauf` is a two-stop gradient (matches
+    /// design-tokens.json `color.accentThemes[].gradient`); every other
+    /// theme is a flat color, so this is `nil` for those.
+    var gradientHexes: [String]? {
+        self == .oceanVerlauf ? ["#378ADD", "#1D9E75"] : nil
+    }
+}
+
+struct UserSettings: Codable, Hashable {
+    var accentTheme: AccentTheme
+}

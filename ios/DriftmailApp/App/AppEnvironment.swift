@@ -62,6 +62,14 @@ final class AppEnvironment: ObservableObject {
     /// Lookup, hier reicht Mitgliedschaft.
     @Published var trustedSenderAddresses: Set<String> = []
 
+    /// [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09.):
+    /// gespiegelt von `GET /settings`, Default `teal` bis zum ersten
+    /// `loadSettings()`-Aufruf. `@Published`, damit Views, die `environment`
+    /// bereits als `@EnvironmentObject` beobachten, bei jeder
+    /// `applyAccentTheme()`-Aenderung automatisch neu zeichnen -- siehe
+    /// `DesignTokens.Color.accent`-Kommentar.
+    @Published private(set) var accentTheme: AccentTheme = .teal
+
     /// [2026-09-21] Session-Bootstrap: `RemoteAPIClient` nur, wenn bereits
     /// ein Token in der Keychain liegt (vorherige Verbindung), sonst wie
     /// bisher `MockAPIClient` -- siehe Typ-Kommentar oben.
@@ -237,5 +245,51 @@ final class AppEnvironment: ObservableObject {
     func trustSender(_ address: String) async {
         guard (try? await apiClient.addTrustedSender(senderAddress: address)) != nil else { return }
         trustedSenderAddresses.insert(address)
+    }
+
+    /// Overwrites the live `DesignTokens.Color.accent` AND bumps
+    /// `accentTheme` (`@Published`) in one place -- every caller (load and
+    /// save alike) goes through this, so the two never drift apart.
+    private func applyAccentTheme(_ theme: AccentTheme) {
+        DesignTokens.Color.accent = SwiftUI.Color(hex: theme.accentHex)
+        accentTheme = theme
+    }
+
+    /// `GET /settings` (WEB_INBOX.md 21.09. "Einstellungsbereich", Ansicht:
+    /// Akzentfarben-Auswahl) -- lädt einmal beim App-Start (siehe
+    /// `FolderListView.task`), analog zu `loadTrustedSenders()`. Stiller
+    /// Fehlschlag lässt den Default (`teal`) stehen.
+    func loadSettings() async {
+        guard let settings = try? await apiClient.fetchSettings() else { return }
+        applyAccentTheme(settings.accentTheme)
+    }
+
+    /// `PUT /settings`. Aktualisiert `accentTheme`/die Live-Farbe erst NACH
+    /// erfolgreicher Server-Antwort (Quelle der Wahrheit), kein
+    /// optimistisches Umfärben.
+    @discardableResult
+    func updateAccentTheme(_ theme: AccentTheme) async throws -> UserSettings {
+        let updated = try await apiClient.updateSettings(accentTheme: theme)
+        applyAccentTheme(updated.accentTheme)
+        return updated
+    }
+
+    /// `DELETE /accounts/{accountId}` (WEB_INBOX.md 21.09.
+    /// "Einstellungsbereich", Konten-Verwaltung). Wirft `APIError.badRequest`
+    /// weiter, wenn es das letzte Konto des Users wäre (Server-Check bleibt
+    /// die Wahrheit, auch wenn `SettingsView` denselben Fall schon
+    /// client-seitig ausblendet). Lädt `accounts` danach neu -- war das
+    /// entfernte Konto das aktive, setzt `loadAccounts()` automatisch ein
+    /// verbleibendes als neues aktives Konto (siehe dortige Logik); Ordner/
+    /// Trusted-Senders gehörten zum alten Konto und werden dann verworfen,
+    /// analog zu `switchAccount(to:)`.
+    func removeAccount(_ accountId: String) async throws {
+        let wasActive = accountId == activeAccountId
+        try await apiClient.deleteAccount(id: accountId)
+        await loadAccounts(forceRefresh: true)
+        if wasActive {
+            folders = []
+            trustedSenderAddresses = []
+        }
     }
 }
