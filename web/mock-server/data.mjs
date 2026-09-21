@@ -143,8 +143,11 @@ function securityOk() {
     domainReputationScore: 0.94,
     homoglyphDetected: false,
     linkMismatchDetected: false,
+    displayNameSpoofingDetected: false,
+    replyToMismatchDetected: false,
     urgencyLanguageScore: 0.05,
     containsNewIban: false,
+    ibanChangedInThread: false,
     classification: "safe",
     confidenceScore: 0.97,
   };
@@ -159,8 +162,11 @@ function securityUnclear() {
     domainReputationScore: 0.58,
     homoglyphDetected: false,
     linkMismatchDetected: false,
+    displayNameSpoofingDetected: false,
+    replyToMismatchDetected: false,
     urgencyLanguageScore: 0.31,
     containsNewIban: false,
+    ibanChangedInThread: false,
     classification: "unclear",
     confidenceScore: 0.52,
   };
@@ -175,8 +181,11 @@ function securitySpam() {
     domainReputationScore: 0.12,
     homoglyphDetected: false,
     linkMismatchDetected: true,
+    displayNameSpoofingDetected: false,
+    replyToMismatchDetected: false,
     urgencyLanguageScore: 0.72,
     containsNewIban: false,
+    ibanChangedInThread: false,
     classification: "spam",
     confidenceScore: 0.88,
   };
@@ -191,8 +200,15 @@ function securityPhishing() {
     domainReputationScore: 0.03,
     homoglyphDetected: true,
     linkMismatchDetected: true,
+    // [2026-09-21] WEB_INBOX.md 19.09. "Sichtbare Kennzeichen/Badges fuer
+    // die neuen Sicherheitssignale": Demo-Phishing-Mail zeigt jetzt auch
+    // Anzeigename-Spoofing + Reply-To-Mismatch + IBAN-Wechsel im Thread,
+    // damit die neuen Badges in der Mock-UI ueberhaupt sichtbar sind.
+    displayNameSpoofingDetected: true,
+    replyToMismatchDetected: true,
     urgencyLanguageScore: 0.93,
     containsNewIban: true,
+    ibanChangedInThread: true,
     classification: "phishing",
     confidenceScore: 0.96,
   };
@@ -241,6 +257,10 @@ export const messages = [
     receivedAt: "2026-09-05T09:03:00Z",
     folderId: EINGANG,
     security: securityOk(),
+    // [2026-09-21] WEB_INBOX.md 19.09. "Neuer Absender"-Badge: einziger
+    // Absender in den Fixtures ohne vorherige Nachricht -- realistisches
+    // Beispiel fuer isNewSender=true trotz classification="safe".
+    isNewSender: true,
     bodyText:
       "Sehr geehrter Herr Manca,\n\ndie besprochenen Unterlagen liegen zur Unterschrift bereit. Bitte vereinbaren Sie einen Termin in unserer Kanzlei.\n\nMit freundlichen Grüßen\nNotariat Weber",
   },
@@ -444,8 +464,16 @@ export function messageDetail(msg) {
     bodyText: msg.bodyText,
     security: msg.security,
     canUnsubscribe: msg.hasListUnsubscribe === true,
+    isNewSender: msg.isNewSender === true,
   };
 }
+
+// /trusted-senders (WEB_INBOX.md 15.09. "Whitelist vertrauenswuerdiger
+// Absender") -- absichtlich leer: soll im Mock-Server zeigen, wie eine
+// "Neuer Absender"-Badge OHNE Whitelist-Eintrag aussieht (siehe
+// b1000000-0000-0000-0000-000000000003 oben); POST/DELETE in server.mjs
+// befuellen/leeren das Array zur Laufzeit.
+export const trustedSenders = [];
 
 // Liefert den system_key des Ordners, in dem eine Nachricht aktuell liegt
 // (null bei eigenen Ordnern oder falls der Ordner inzwischen gelöscht wurde).

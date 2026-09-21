@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { Folder } from "../types";
-import { FOLDER_ICONS, FolderIcon, MoonIcon, PencilIcon, PlusIcon, SunIcon, SystemIcon, TrashIcon } from "../icons";
+import { FOLDER_ICONS, FolderIcon, LockIcon, MoonIcon, PencilIcon, PlusIcon, SunIcon, SystemIcon, TrashIcon, UnlockIcon } from "../icons";
 import { SYSTEM_FOLDER_META } from "../folderMeta";
 import type { ThemeChoice } from "../useTheme";
 import "./FolderSidebar.css";
@@ -29,6 +29,9 @@ export function FolderSidebar({
   accountEmail,
   theme,
   onThemeChange,
+  appLockSupported,
+  appLockEnabled,
+  onAppLockChange,
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
@@ -40,6 +43,12 @@ export function FolderSidebar({
   accountEmail?: string;
   theme: ThemeChoice;
   onThemeChange: (t: ThemeChoice) => void;
+  /** Web-Äquivalent zur iOS-App-Sperre (WEB_INBOX.md 19.09. Punkt 3, siehe
+   * useAppLock.ts): `appLockSupported` blendet den Schalter komplett aus,
+   * wenn der Browser keinen Plattform-Authenticator hat -- kein totes UI. */
+  appLockSupported: boolean;
+  appLockEnabled: boolean;
+  onAppLockChange: (enabled: boolean) => Promise<boolean>;
   onCreateFolder: (name: string) => void;
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteFolder: (folderId: string) => void;
@@ -47,6 +56,19 @@ export function FolderSidebar({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
+  const [appLockPending, setAppLockPending] = useState(false);
+  const [appLockError, setAppLockError] = useState(false);
+
+  async function toggleAppLock() {
+    setAppLockPending(true);
+    setAppLockError(false);
+    try {
+      const ok = await onAppLockChange(!appLockEnabled);
+      if (!ok) setAppLockError(true);
+    } finally {
+      setAppLockPending(false);
+    }
+  }
 
   function startEdit(f: Folder) {
     setEditingId(f.id);
@@ -208,6 +230,22 @@ export function FolderSidebar({
           <SystemIcon />
         </button>
       </div>
+
+      {appLockSupported && (
+        <div className="app-lock-toggle">
+          <button
+            type="button"
+            className={`app-lock-toggle-button${appLockEnabled ? " active" : ""}`}
+            onClick={toggleAppLock}
+            disabled={appLockPending}
+            title={appLockEnabled ? "App-Sperre deaktivieren" : "App-Sperre aktivieren (Face ID/Touch ID/Gerätepasscode)"}
+          >
+            {appLockEnabled ? <LockIcon /> : <UnlockIcon />}
+            <span>{appLockPending ? "…" : appLockEnabled ? "App-Sperre an" : "App-Sperre aus"}</span>
+          </button>
+          {appLockError && <span className="app-lock-toggle-error">Einrichtung fehlgeschlagen.</span>}
+        </div>
+      )}
     </nav>
   );
 }

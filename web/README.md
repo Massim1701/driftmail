@@ -294,6 +294,76 @@ Eingabe deaktiviert, "Verwerfen" schließt das Feld wieder, "KI-Entwurf
 vorschlagen" füllt es mit einem KI-Text (Mock-Server liefert einen
 Platzhaltertext).
 
+## Onboarding, Sicherheits-Badges, App-Sperre (WEB_INBOX.md 19.09., "PRIORITAET - naechster Schritt")
+
+Drei UI-Nachträge zu bereits fertigem Backend/Contract:
+
+1. **Onboarding-Provider-Auswahl** (`OnboardingScreen.tsx`, ersetzt das
+   bisherige `LoginScreen.tsx`, das nur Gmail kannte): Karten-Grid aus
+   `GET /mail-providers` (`contracts/mail-providers.json`, EINE Quelle statt
+   Presets pro Plattform hart zu codieren — Track C/iOS folgt demselben
+   Contract). Gmail (`authType=oauth`, nicht `comingSoon`) ist ein echter
+   `<a href>`-Redirect zu `GET /auth/google/start` (kein `fetch`, siehe
+   vorheriger LoginScreen-Kommentar); Outlook/Yahoo sind `comingSoon` und
+   nicht klickbar; iCloud/GMX/web.de/generisches IMAP öffnen ein
+   IMAP-Formular, vorbefüllt aus dem Provider-Preset (Host/Port/TLS), mit
+   App-Passwort-Hinweis + Link (`appPasswordHelpUrl`), falls
+   `requiresAppPassword=true`. Submit ruft `POST /accounts`
+   (`provider=imap`) — das echte Backend verifiziert die Zugangsdaten per
+   echtem IMAP-Login (`422` bei Fehlschlag), der Mock-Server (siehe unten)
+   nimmt jede Eingabe unverändert an.
+2. **Sicherheits-Badges** (`SecurityBadge.tsx`: neue `SecuritySignalBadges`-
+   Komponente + drei neue Zeilen in `SecurityDetails`): zeigt
+   `displayNameSpoofingDetected`/`replyToMismatchDetected`/
+   `ibanChangedInThread` (aus `SecurityResult`, seit den Sicherheits-
+   Ergänzungen vom 15.09. im Contract/Backend vorhanden, im Web-Client
+   bisher nur nicht gespiegelt) sowie `isNewSender` (Feld auf
+   `MessageDetail`, kombiniert mit `GET /trusted-senders` — Badge nur bei
+   `isNewSender=true` UND Absender nicht auf der Whitelist, exakt wie in
+   `api-spec.yaml` beschrieben). Nutzt durchgehend die bestehende
+   `tone-{success|warning|danger}`-Konvention (`SecurityBadge.css`), keine
+   neue visuelle Sprache. Nur in der Detailansicht (Header-Zeile) gezeigt,
+   nicht in `MessageList`-Zeilen — die dort verwendete `Message`-Summary
+   (`GET /messages`) enthält diese Felder nicht, nur `MessageDetail`
+   (`GET /messages/{id}`); alle Zeilen zusätzlich pro Nachricht laden wäre
+   ein eigener Contract-/Performance-Schritt, nicht Teil dieses Auftrags.
+3. **Web-Äquivalent zur iOS-App-Sperre** (`useAppLock.ts` + `AppLockGate.tsx`,
+   Toggle in `FolderSidebar.tsx`): geprüft und UMGESETZT, kein reiner
+   Dokumentations-Verzicht wie bei anderen "prüfen ob sinnvoll"-Aufträgen.
+   Nutzt die WebAuthn-Plattform-Authenticator-API (Touch ID/Windows
+   Hello/Android-Biometrie) rein lokal — kein Server-Roundtrip, kein neues
+   Backend-Konzept, direkt analog zu iOS' `LocalAuthentication`
+   (`ios/DriftmailApp/Security/BiometricLock.swift`). Sperrt nach 5 Minuten
+   Inaktivität oder wenn der Tab länger als 15 Sekunden im Hintergrund war
+   (Annäherung an iOS' "sperrt bei JEDEM Verlassen von `.active`" — im
+   Browser wäre das bei normalem Tab-Wechsel störend gewesen). **Wichtige,
+   bewusst dokumentierte Grenze** (ausführlich im Kopfkommentar von
+   `useAppLock.ts`): anders als bei iOS (Keychain/Secure Enclave) kann diese
+   Geste den Session-Token in `localStorage` nicht kryptografisch schützen
+   (siehe `api.ts`-Kommentar zu `TOKEN_STORAGE_KEY`) — es ist eine
+   Blickschutz-/Shoulder-Surfing-Maßnahme, keine echte Zugriffskontrolle.
+   Deshalb: (a) der Schalter erscheint nur, wenn der Browser überhaupt einen
+   Plattform-Authenticator hat (`isUserVerifyingPlatformAuthenticatorAvailable()`),
+   sonst kein totes UI; (b) der Sperrbildschirm hat einen "Stattdessen
+   abmelden"-Fallback, damit ein Sensor-/Browser-Problem den User nicht
+   dauerhaft aussperrt. Verifiziert per Browser-Automation gegen den
+   Mock-Server: Provider-Grid, IMAP-Formular inkl. Preset-Vorbefüllung, alle
+   vier neuen Badges (Header + Detail-Zeilen) an den passenden
+   Demo-Nachrichten, App-Sperre-Toggle inkl. sauber abgefangenem
+   Fehlerpfad (kein echter Plattform-Authenticator in der Testumgebung
+   verfügbar — der Erfolgspfad ist Standard-WebAuthn-API, auf echter
+   Hardware (Touch ID o.ä.) nicht separat verifizierbar in dieser Umgebung).
+
+Mock-Server-Ergänzungen (`mock-server/server.mjs`/`data.mjs`): `GET
+/mail-providers` liefert `contracts/mail-providers.json` unverändert aus
+(gleiches Muster wie `backend/src/routes/mailProviders.ts`); `GET/POST/DELETE
+/trusted-senders` sind ein einfacher In-Memory-Array (kein Whitelist-
+Matching-Logik nötig, das übernimmt die echte Backend-Klassifikation); die
+Phishing-Demo-Mail hat jetzt `displayNameSpoofingDetected`/
+`replyToMismatchDetected`/`ibanChangedInThread=true`, eine Eingang-Mail
+(Notariat Weber) hat `isNewSender=true`, damit die neuen Badges in der
+Mock-UI überhaupt sichtbar sind.
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge
@@ -339,8 +409,11 @@ web/
                       gespiegelt aus design-tokens.json "systemFolders.defaults"
     tokens.css       Design-Tokens als CSS Custom Properties (hell/dunkel/system)
     useTheme.ts       Theme-Auswahl + Persistenz in localStorage
+    useAppLock.ts     Web-Äquivalent zur iOS-App-Sperre (WebAuthn, rein lokal)
     icons.tsx         Kleines abhängigkeitsfreies Icon-Set (Ordner-Icons u.a.)
     components/
+      OnboardingScreen.tsx/.css   Provider-Auswahl + IMAP-Formular (ersetzt LoginScreen)
+      AppLockGate.tsx/.css        Sperrbildschirm-Wrapper für useAppLock
       FolderSidebar.tsx/.css   Ordner-Nav: laden/anlegen/umbenennen/löschen
       MessageList.tsx/.css
       DraftList.tsx/.css       "entwuerfe"-Ordner: Liste + Löschen (GET/DELETE /drafts)

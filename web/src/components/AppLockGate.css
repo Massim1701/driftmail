@@ -1,4 +1,4 @@
-.login-shell {
+.app-lock-shell {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8,7 +8,7 @@
   color: var(--color-text-primary);
 }
 
-.login-card {
+.app-lock-card {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -19,21 +19,23 @@
   background: var(--color-surface-card);
   text-align: center;
   min-width: 280px;
+  color: var(--color-text-secondary);
 }
 
-.login-title {
+.app-lock-title {
   margin: 0;
   font-size: var(--font-size-heading);
   font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
 }
 
-.login-subtitle {
+.app-lock-subtitle {
   margin: 0;
   font-size: var(--font-size-body);
   color: var(--color-text-secondary);
 }
 
-.login-error {
+.app-lock-error {
   font-size: var(--font-size-small);
   color: var(--color-danger-text);
   background: color-mix(in srgb, var(--color-danger) 10%, transparent);
@@ -41,7 +43,7 @@
   padding: var(--space-sm) var(--space-md);
 }
 
-.login-button {
+.app-lock-button {
   font-family: var(--font-family);
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-medium);
@@ -50,10 +52,25 @@
   border: 1px solid transparent;
   background: var(--color-accent);
   color: white;
-  text-decoration: none;
   cursor: pointer;
 }
 
-.login-button:hover {
+.app-lock-button:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-accent) 85%, black);
+}
+
+.app-lock-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.app-lock-logout {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+  font-family: var(--font-family);
+  text-decoration: underline;
 }

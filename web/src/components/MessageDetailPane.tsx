@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { AttachmentScanStatus, Folder, MailSummary, MessageDetail } from "../types";
 import { api, ApiError } from "../api";
-import { SecurityBadge, SecurityDetails } from "./SecurityBadge";
+import { SecurityBadge, SecurityDetails, SecuritySignalBadges } from "./SecurityBadge";
 import "./MessageDetailPane.css";
 
 // POST /attachments läuft synchron (siehe backend/README.md "Anhänge"),
@@ -52,6 +52,7 @@ export function MessageDetailPane({
   quarantaeneFolderId,
   papierkorbFolderId,
   spamFolderId,
+  trustedSenderAddresses,
   onQuarantined,
   onMoved,
   onDeleted,
@@ -69,6 +70,10 @@ export function MessageDetailPane({
    * classification='spam' war -- verschiebt der User die Mail manuell
    * raus, ist der Button sofort wieder da. */
   spamFolderId: string | null;
+  /** GET /trusted-senders (WEB_INBOX.md 15.09.): "Neuer Absender"-Badge wird
+   * unterdrückt, wenn die Adresse hier drin ist -- siehe api-spec.yaml
+   * isNewSender-Beschreibung. */
+  trustedSenderAddresses: Set<string>;
   onQuarantined: (id: string) => void;
   onMoved: (id: string, folderId: string) => void;
   onDeleted: (id: string) => void;
@@ -295,6 +300,10 @@ export function MessageDetailPane({
         <div className="detail-subject-row">
           <h1>{message.subject}</h1>
           <SecurityBadge classification={message.classification} />
+          <SecuritySignalBadges
+            security={message.security}
+            isNewSender={message.isNewSender && !trustedSenderAddresses.has(message.fromAddress)}
+          />
         </div>
         <div className="detail-meta">
           <span>

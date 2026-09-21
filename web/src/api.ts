@@ -4,7 +4,18 @@
 // daher ist AiAdapterResult.source hier stets "cloud_fallback" — der
 // Mock-Server liefert diesen Wert bereits in MailSummary.source mit.
 
-import type { AttachmentScanStatus, Contract, Draft, Folder, MailAccount, MailSummary, Message, MessageDetail } from "./types";
+import type {
+  AttachmentScanStatus,
+  Contract,
+  Draft,
+  Folder,
+  MailAccount,
+  MailProvider,
+  MailSummary,
+  Message,
+  MessageDetail,
+  TrustedSender,
+} from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
 
@@ -111,7 +122,37 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // GET /mail-providers (WEB_INBOX.md 15.09./19.09. "Onboarding: Provider-
+  // Auswahlbildschirm") -- oeffentlich (kein Token noetig, security: [] im
+  // Contract), treibt die Provider-Karten + IMAP-Preset-Vorbefuellung.
+  listMailProviders: () => request<MailProvider[]>("/mail-providers"),
+
+  // POST /accounts mit provider="imap" (api-spec.yaml): Login/Registrierungs-
+  // Weg fuer Anbieter ohne OAuth (iCloud/GMX/web.de/generisches IMAP).
+  // Ebenfalls oeffentlich -- liefert bei Erfolg einen neuen Session-Token,
+  // der Aufrufer (OnboardingScreen) speichert ihn wie beim Google-Callback.
+  connectImapAccount: (data: {
+    emailAddress: string;
+    imapHost: string;
+    imapPort?: number;
+    imapSecure?: boolean;
+    imapUser?: string;
+    imapPassword: string;
+    smtpHost?: string;
+    smtpPort?: number;
+    smtpSecure?: boolean;
+  }) =>
+    request<{ account: MailAccount; token: string }>("/accounts", {
+      method: "POST",
+      body: JSON.stringify({ provider: "imap", ...data }),
+    }),
+
   listAccounts: () => request<MailAccount[]>("/accounts"),
+
+  // GET /trusted-senders (WEB_INBOX.md 15.09. "Whitelist vertrauenswuerdiger
+  // Absender") -- kombiniert sich mit MessageDetail.isNewSender: die "Neuer
+  // Absender"-Badge wird nur gezeigt, wenn die Adresse hier NICHT auftaucht.
+  listTrustedSenders: () => request<TrustedSender[]>("/trusted-senders"),
 
   listFolders: () => request<Folder[]>("/folders"),
 

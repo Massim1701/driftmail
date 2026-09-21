@@ -5,8 +5,10 @@ import { FolderSidebar } from "./components/FolderSidebar";
 import { MessageList } from "./components/MessageList";
 import { DraftList } from "./components/DraftList";
 import { MessageDetailPane } from "./components/MessageDetailPane";
-import { LoginScreen } from "./components/LoginScreen";
+import { OnboardingScreen } from "./components/OnboardingScreen";
+import { AppLockGate } from "./components/AppLockGate";
 import { useTheme } from "./useTheme";
+import { useAppLock } from "./useAppLock";
 import "./App.css";
 
 // [2026-09-10] echter Google-Login (backend/README.md "Echter
@@ -32,6 +34,7 @@ const authCallbackResult = consumeAuthCallback();
 
 export default function App() {
   const [theme, setTheme] = useTheme();
+  const appLock = useAppLock();
   const [account, setAccount] = useState<MailAccount | null>(null);
   const [token, setToken] = useState<string | null>(() => getStoredToken());
   // Nur der EINE Fehler aus dem gerade konsumierten Callback (falls einer da
@@ -53,6 +56,11 @@ export default function App() {
   // Ordner-Umbau-Eintrags"): kommt aus GET /drafts, nicht aus listMessages().
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(false);
+
+  // GET /trusted-senders (WEB_INBOX.md 15.09./19.09.): kombiniert sich mit
+  // MessageDetail.isNewSender fuer die "Neuer Absender"-Badge (siehe
+  // MessageDetailPane/SecuritySignalBadges) -- als Set fuer O(1)-Lookup.
+  const [trustedSenderAddresses, setTrustedSenderAddresses] = useState<Set<string>>(new Set());
 
   const [error, setError] = useState<string | null>(null);
 
@@ -115,6 +123,18 @@ export default function App() {
   useEffect(() => {
     folders.forEach((f) => loadFolder(f.id));
   }, [folders, loadFolder]);
+
+  useEffect(() => {
+    if (!token) return;
+    api
+      .listTrustedSenders()
+      .then((list) => setTrustedSenderAddresses(new Set(list.map((s) => s.senderAddress))))
+      .catch(() => {
+        // Kein harter Fehler: ohne die Liste zeigt die "Neuer Absender"-Badge
+        // im Zweifel einfach für alle isNewSender=true-Nachrichten an, statt
+        // die ganze Detailansicht zu blockieren.
+      });
+  }, [token]);
 
   const loadDrafts = useCallback(() => {
     setDraftsLoading(true);
@@ -285,11 +305,12 @@ export default function App() {
 
   // [2026-09-10] echter Google-Login: ohne Token keine Anfragen an die API
   // (die würden ohnehin alle mit 401 scheitern) -- stattdessen der
-  // LoginScreen. onLogin gibt es bewusst nicht als Prop: der Button dort
-  // navigiert per echtem Redirect zu GET /auth/google/start, kein
-  // clientseitiger State-Übergang.
+  // OnboardingScreen (Provider-Auswahl + IMAP-Formular, WEB_INBOX.md 19.09.).
+  // Der Gmail-Zweig dort navigiert per echtem Redirect zu
+  // GET /auth/google/start, kein clientseitiger State-Übergang; der IMAP-
+  // Zweig ruft onConnected() mit dem neuen Token auf.
   if (!token) {
-    return <LoginScreen error={loginError} />;
+    return <OnboardingScreen error={loginError} onConnected={setToken} />;
   }
 
   if (foldersLoading) {
@@ -297,58 +318,64 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
-      <FolderSidebar
-        folders={folders}
-        active={activeFolder}
-        onSelect={handleSelectFolder}
-        counts={counts}
-        accountEmail={account?.emailAddress}
-        theme={theme}
-        onThemeChange={setTheme}
-        onCreateFolder={handleCreateFolder}
-        onRenameFolder={handleRenameFolder}
-        onDeleteFolder={handleDeleteFolder}
-      />
+    <AppLockGate locked={appLock.locked} unlocking={appLock.unlocking} unlockError={appLock.unlockError} onUnlock={appLock.unlock}>
+      <div className="app-shell">
+        <FolderSidebar
+          folders={folders}
+          active={activeFolder}
+          onSelect={handleSelectFolder}
+          counts={counts}
+          appLockSupported={appLock.supported}
+          appLockEnabled={appLock.enabled}
+          onAppLockChange={appLock.setEnabled}
+          accountEmail={account?.emailAddress}
+          theme={theme}
+          onThemeChange={setTheme}
+          onCreateFolder={handleCreateFolder}
+          onRenameFolder={handleRenameFolder}
+          onDeleteFolder={handleDeleteFolder}
+        />
 
-      <div className="message-column">
-        <div className="message-column-header">
-          <h2>{activeFolderDef?.name ?? "—"}</h2>
-          <span className="message-column-count">{isEntwuerfeFolder ? drafts.length : currentMessages.length}</span>
+        <div className="message-column">
+          <div className="message-column-header">
+            <h2>{activeFolderDef?.name ?? "—"}</h2>
+            <span className="message-column-count">{isEntwuerfeFolder ? drafts.length : currentMessages.length}</span>
+          </div>
+          {error && <div className="app-error">{error}</div>}
+          {isEntwuerfeFolder ? (
+            <DraftList drafts={drafts} loading={draftsLoading && drafts.length === 0} onDelete={handleDeleteDraft} />
+          ) : (
+            <MessageList
+              messages={currentMessages}
+              selectedId={selectedId}
+              onSelect={handleSelectMessage}
+              loading={listLoading && currentMessages.length === 0}
+              emptyLabel={
+                isQuarantineFolder
+                  ? "Keine Nachrichten in Quarantäne."
+                  : isPapierkorbFolder
+                    ? "Papierkorb ist leer."
+                    : "Keine Nachrichten in diesem Ordner."
+              }
+            />
+          )}
         </div>
-        {error && <div className="app-error">{error}</div>}
-        {isEntwuerfeFolder ? (
-          <DraftList drafts={drafts} loading={draftsLoading && drafts.length === 0} onDelete={handleDeleteDraft} />
-        ) : (
-          <MessageList
-            messages={currentMessages}
-            selectedId={selectedId}
-            onSelect={handleSelectMessage}
-            loading={listLoading && currentMessages.length === 0}
-            emptyLabel={
-              isQuarantineFolder
-                ? "Keine Nachrichten in Quarantäne."
-                : isPapierkorbFolder
-                  ? "Papierkorb ist leer."
-                  : "Keine Nachrichten in diesem Ordner."
-            }
-          />
-        )}
-      </div>
 
-      <MessageDetailPane
-        message={selectedDetail}
-        loading={detailLoading}
-        folders={folders}
-        quarantaeneFolderId={quarantaeneFolder?.id ?? null}
-        papierkorbFolderId={papierkorbFolder?.id ?? null}
-        spamFolderId={spamFolder?.id ?? null}
-        onQuarantined={handleQuarantined}
-        onMoved={handleMoved}
-        onDeleted={handleDeleted}
-        onPermanentlyDeleted={handlePermanentlyDeleted}
-        onSent={handleSent}
-      />
-    </div>
+        <MessageDetailPane
+          message={selectedDetail}
+          loading={detailLoading}
+          folders={folders}
+          quarantaeneFolderId={quarantaeneFolder?.id ?? null}
+          papierkorbFolderId={papierkorbFolder?.id ?? null}
+          spamFolderId={spamFolder?.id ?? null}
+          trustedSenderAddresses={trustedSenderAddresses}
+          onQuarantined={handleQuarantined}
+          onMoved={handleMoved}
+          onDeleted={handleDeleted}
+          onPermanentlyDeleted={handlePermanentlyDeleted}
+          onSent={handleSent}
+        />
+      </div>
+    </AppLockGate>
   );
 }

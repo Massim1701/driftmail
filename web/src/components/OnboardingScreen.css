@@ -1,0 +1,195 @@
+.onboarding-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  width: 100vw;
+  background: var(--color-surface-page);
+  color: var(--color-text-primary);
+  padding: var(--space-lg);
+  box-sizing: border-box;
+}
+
+.onboarding-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-card);
+  text-align: center;
+  width: 100%;
+  max-width: 420px;
+}
+
+.onboarding-title {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-medium);
+}
+
+.onboarding-subtitle {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+}
+
+.onboarding-error {
+  font-size: var(--font-size-small);
+  color: var(--color-danger-text);
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  border-radius: var(--radius-control);
+  padding: var(--space-sm) var(--space-md);
+  text-align: left;
+}
+
+.onboarding-hint {
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-page);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: var(--space-sm) var(--space-md);
+  text-align: left;
+}
+
+.provider-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm);
+}
+
+.provider-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-page);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.provider-card:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.provider-card:disabled,
+.provider-card.coming-soon {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.provider-label {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+}
+
+.provider-meta {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.onboarding-back {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-accent);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  font-family: var(--font-family);
+}
+
+.app-password-hint {
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  border-radius: var(--radius-control);
+  padding: var(--space-sm) var(--space-md);
+  text-align: left;
+}
+
+.app-password-hint a {
+  color: var(--color-accent);
+}
+
+.imap-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  text-align: left;
+}
+
+.imap-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.imap-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+}
+
+.imap-field input[type="text"],
+.imap-field input[type="email"],
+.imap-field input[type="password"],
+.imap-field input[type="number"] {
+  padding: var(--space-sm);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-page);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+}
+
+.imap-field-row {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-end;
+}
+
+.imap-field-row .imap-field:first-child {
+  flex: 1;
+}
+
+.imap-field-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-xs);
+  padding-bottom: var(--space-sm);
+}
+
+.onboarding-button {
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  background: var(--color-accent);
+  color: white;
+  cursor: pointer;
+}
+
+.onboarding-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 85%, black);
+}
+
+.onboarding-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

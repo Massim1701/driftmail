@@ -8,6 +8,9 @@
 
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import {
   accounts,
   folders,
@@ -21,7 +24,16 @@ import {
   messageDetail,
   contractSummary,
   summaryFor,
+  trustedSenders,
 } from "./data.mjs";
+
+// GET /mail-providers (WEB_INBOX.md 15.09./19.09. "Onboarding: Provider-
+// Auswahlbildschirm") -- gleiches Muster wie backend/src/routes/
+// mailProviders.ts: contracts/mail-providers.json unveraendert ausliefern,
+// EINE Quelle statt Presets pro Plattform hart zu codieren.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const MAIL_PROVIDERS_PATH = join(__dirname, "../../contracts/mail-providers.json");
+const mailProviders = JSON.parse(readFileSync(MAIL_PROVIDERS_PATH, "utf-8")).providers;
 
 const PORT = process.env.MOCK_PORT ? Number(process.env.MOCK_PORT) : 4000;
 // [2026-09-10] echter Google-Login im echten Backend (siehe
@@ -172,6 +184,13 @@ const server = createServer(async (req, res) => {
     return send(res, 204, null);
   }
 
+  // GET /mail-providers -- oeffentlich (kein Token-Check im Mock-Server
+  // ohnehin, siehe POST /accounts-Kommentar unten), treibt den
+  // OnboardingScreen (WEB_INBOX.md 19.09. "Onboarding: Provider-Auswahl").
+  if (req.method === "GET" && parts.length === 1 && parts[0] === "mail-providers") {
+    return send(res, 200, mailProviders);
+  }
+
   // GET /accounts
   if (req.method === "GET" && parts.length === 1 && parts[0] === "accounts") {
     return send(res, 200, accounts);
@@ -205,6 +224,29 @@ const server = createServer(async (req, res) => {
     // sporadischen 503 bei den direkt folgenden GET /accounts, GET /folders).
     await readJsonBody(req);
     return send(res, 200, { account: accounts[0], token: "mock-server-token" });
+  }
+
+  // /trusted-senders (WEB_INBOX.md 15.09. "Whitelist vertrauenswuerdiger
+  // Absender") -- kombiniert sich client-seitig mit MessageDetail.isNewSender
+  // (siehe MessageDetailPane/SecuritySignalBadges).
+  if (req.method === "GET" && parts.length === 1 && parts[0] === "trusted-senders") {
+    return send(res, 200, trustedSenders);
+  }
+  if (req.method === "POST" && parts.length === 1 && parts[0] === "trusted-senders") {
+    const body = await readJsonBody(req);
+    const senderAddress = body?.senderAddress;
+    if (!senderAddress) return send(res, 400, { error: "senderAddress fehlt" });
+    const existing = trustedSenders.find((s) => s.senderAddress === senderAddress);
+    if (existing) return send(res, 201, existing);
+    const created = { id: randomUUID(), senderAddress, addedAt: new Date().toISOString() };
+    trustedSenders.push(created);
+    return send(res, 201, created);
+  }
+  if (req.method === "DELETE" && parts.length === 2 && parts[0] === "trusted-senders") {
+    const idx = trustedSenders.findIndex((s) => s.id === parts[1]);
+    if (idx === -1) return send(res, 404, { error: "nicht gefunden" });
+    trustedSenders.splice(idx, 1);
+    return sendNoContent(res);
   }
 
   // GET /folders

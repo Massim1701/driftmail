@@ -2,6 +2,66 @@ import type { Classification, SecurityResult } from "../types";
 import { CheckShieldIcon, ShieldExclamationIcon } from "../icons";
 import "./SecurityBadge.css";
 
+// [2026-09-21] WEB_INBOX.md 19.09. "Sichtbare Kennzeichen/Badges fuer die
+// neuen Sicherheitssignale": eigene, kompakte Pill-Badges fuer die vier
+// Signale, die es bisher nur in den aufklappbaren Sicherheits-Details gab
+// (SecurityDetails unten) -- sollen im Header der Nachricht sofort sichtbar
+// sein, nicht erst nach einem Klick auf "Details anzeigen". Nutzt dieselbe
+// tone-{role}-Konvention wie SecurityBadge/-Details (siehe SecurityBadge.css),
+// keine neue visuelle Sprache.
+export interface SecuritySignal {
+  key: string;
+  label: string;
+  tone: "warning" | "danger";
+}
+
+export function securitySignalsFor(
+  security: Pick<SecurityResult, "displayNameSpoofingDetected" | "replyToMismatchDetected" | "ibanChangedInThread">,
+  options: { isNewSender: boolean } = { isNewSender: false },
+): SecuritySignal[] {
+  const signals: SecuritySignal[] = [];
+  if (security.displayNameSpoofingDetected) {
+    signals.push({ key: "display-name-spoofing", label: "Anzeigename gefälscht", tone: "danger" });
+  }
+  if (security.replyToMismatchDetected) {
+    signals.push({ key: "reply-to-mismatch", label: "Antwort-Adresse weicht ab", tone: "danger" });
+  }
+  if (security.ibanChangedInThread) {
+    signals.push({ key: "iban-changed-in-thread", label: "IBAN im Verlauf geändert", tone: "danger" });
+  }
+  // isNewSender wird bewusst vom Aufrufer schon mit GET /trusted-senders
+  // abgeglichen übergeben (api-spec.yaml-Vorgabe: Badge nur bei
+  // isNewSender=true UND Absender nicht auf der Whitelist) -- diese
+  // Funktion selbst kennt die Trusted-Sender-Liste nicht.
+  if (options.isNewSender) {
+    signals.push({ key: "new-sender", label: "Neuer Absender", tone: "warning" });
+  }
+  return signals;
+}
+
+export function SecuritySignalBadges({
+  security,
+  isNewSender = false,
+  compact = false,
+}: {
+  security: Pick<SecurityResult, "displayNameSpoofingDetected" | "replyToMismatchDetected" | "ibanChangedInThread">;
+  isNewSender?: boolean;
+  compact?: boolean;
+}) {
+  const signals = securitySignalsFor(security, { isNewSender });
+  if (signals.length === 0) return null;
+  return (
+    <>
+      {signals.map((s) => (
+        <span key={s.key} className={`security-badge tone-${s.tone}${compact ? " compact" : ""}`}>
+          <ShieldExclamationIcon width={compact ? 12 : 14} height={compact ? 12 : 14} />
+          {s.label}
+        </span>
+      ))}
+    </>
+  );
+}
+
 const LABEL: Record<Classification, string> = {
   safe: "Sicher",
   unclear: "Unklar",
@@ -56,6 +116,16 @@ export function SecurityDetails({ security }: { security: SecurityResult }) {
       tone: security.linkMismatchDetected ? "danger" : undefined,
     },
     {
+      label: "Anzeigename-Spoofing",
+      value: security.displayNameSpoofingDetected ? "erkannt" : "nicht erkannt",
+      tone: security.displayNameSpoofingDetected ? "danger" : undefined,
+    },
+    {
+      label: "Antwort-Adresse (Reply-To) weicht ab",
+      value: security.replyToMismatchDetected ? "ja" : "nein",
+      tone: security.replyToMismatchDetected ? "danger" : undefined,
+    },
+    {
       label: "Dringlichkeits-Sprache",
       value: security.urgencyLanguageScore == null ? "unbekannt" : `${Math.round(security.urgencyLanguageScore * 100)} / 100`,
       tone: (security.urgencyLanguageScore ?? 0) > 0.5 ? "danger" : undefined,
@@ -64,6 +134,11 @@ export function SecurityDetails({ security }: { security: SecurityResult }) {
       label: "Neue IBAN im Text",
       value: security.containsNewIban ? "ja" : "nein",
       tone: security.containsNewIban ? "danger" : undefined,
+    },
+    {
+      label: "IBAN im Thread geändert",
+      value: security.ibanChangedInThread ? "ja" : "nein",
+      tone: security.ibanChangedInThread ? "danger" : undefined,
     },
     { label: "Konfidenz der Analyse", value: `${Math.round(security.confidenceScore * 100)} %` },
   ];

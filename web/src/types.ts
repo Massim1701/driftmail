@@ -53,8 +53,15 @@ export interface SecurityResult {
   domainReputationScore: number | null;
   homoglyphDetected: boolean;
   linkMismatchDetected: boolean;
+  // [2026-09-21] WEB_INBOX.md 19.09. "Sichtbare Kennzeichen/Badges fuer die
+  // neuen Sicherheitssignale" -- Felder existieren im Contract/Backend
+  // bereits seit den Sicherheits-Ergaenzungen vom 15.09., waren im Web-
+  // Client bisher nicht gespiegelt (nur ausgewertet, nicht angezeigt).
+  displayNameSpoofingDetected: boolean;
+  replyToMismatchDetected: boolean;
   urgencyLanguageScore: number | null;
   containsNewIban: boolean;
+  ibanChangedInThread: boolean;
   classification: Classification;
   confidenceScore: number;
 }
@@ -66,6 +73,36 @@ export interface MessageDetail extends Message {
   // "Abmelden"-Button für POST /messages/{id}/unsubscribe angezeigt wird --
   // unabhängig von classification (siehe backend/README.md).
   canUnsubscribe: boolean;
+  // "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09./19.09.): true, wenn
+  // es fuer dieses Konto keine andere Nachricht von derselben fromAddress
+  // gibt. Kombiniert sich mit GET /trusted-senders -- Badge nur zeigen, wenn
+  // isNewSender=true UND Absender nicht auf der Whitelist (siehe api-spec.yaml).
+  isNewSender: boolean;
+}
+
+// GET/POST/DELETE /trusted-senders (WEB_INBOX.md 15.09. "Whitelist
+// vertrauenswuerdiger Absender").
+export interface TrustedSender {
+  id: string;
+  senderAddress: string;
+  addedAt: string;
+}
+
+// GET /mail-providers (WEB_INBOX.md 15.09. "ECHTE LUECKE ENTDECKT" --
+// Provider-Support). Treibt den Onboarding-Provider-Auswahlbildschirm.
+export interface MailProvider {
+  id: string;
+  label: string;
+  authType: "oauth" | "imap";
+  comingSoon: boolean;
+  imapHost: string | null;
+  imapPort: number | null;
+  imapSecure: boolean | null;
+  smtpHost: string | null;
+  smtpPort: number | null;
+  smtpSecure: boolean | null;
+  requiresAppPassword: boolean;
+  appPasswordHelpUrl: string | null;
 }
 
 // GET/POST /drafts, PATCH/DELETE /drafts/{id} (WEB_INBOX.md 09.09.
