@@ -842,3 +842,22 @@ Kein einziger Treffer fuer cc/bcc im gesamten Code/Contract. Aktuell vermutlich 
 5. Tastenkuerzel/Befehlspalette (z.B. Cmd/Ctrl+K) als Ergaenzung zu Buttons, nicht als Ersatz -- Hinweis dezent in der Sidebar, kein Muss fuer den ersten Entwurf, aber als Zielrichtung im Hinterkopf behalten.
 
 **Kein Contract-Change**, reine visuelle/Layout-Richtlinie fuer design-tokens.json-Anwendung und Komponenten-Struktur in Web/iOS. Bitte NACH den aktuell hoechst-priorisierten Grundfunktions-Luecken (Sync/Mehrfach-Konten/Compose/Weiterleiten/Suche/CC-BCC) und vor den 5 Wettbewerbs-Features einordnen -- das ist die "wenn wir eh am UI arbeiten, gleich in dieser Optik" Ebene, kein eigener grosser Sprint noetig.
+
+
+[2026-09-21] [offen] [ERGAENZUNG zur Design-Richtung - User waehlt Akzentfarbe] [contracts/design-tokens.json + Track A + Track C/F] — Massimo will sich nicht um Farben kuemmern, hat mich gebeten, kreativ fuenf Optionen selbst festzulegen, die der Endnutzer dann auswaehlen kann. Funktionen/Bedienbarkeit/Sicherheit bleiben wichtiger als Optik -- das ist eine kleine Ergaenzung, kein neuer grosser Auftrag.
+
+**WICHTIGE EINSCHRAENKUNG, nicht verhandelbar:** Die Sicherheits-Farbrollen (danger/warning fuer Quarantaene, Phishing-Warnungen, die neuen Sicherheits-Badges etc.) bleiben FEST und sind NICHT Teil der Nutzer-Auswahl -- nur die neutrale Akzentfarbe (Buttons, Links, ausgewaehlte Zeile, aktiver Ordner) ist waehlbar. Sonst verliert das bestehende Warnsystem seine Eindeutigkeit.
+
+**Fuenf vordefinierte Akzent-Themes (von Web/Massimo festgelegt, keine weitere Rueckfrage noetig):**
+1. "Teal" -- #1D9E75 (bereits im bestehenden Design-System als c-teal 400 vorhanden, siehe fruehere Logo-Arbeit)
+2. "Ocean Blue" -- #378ADD (c-blue 400)
+3. "Violett" -- #7F77DD (c-purple 400)
+4. "Koralle" -- #D85A30 (c-coral 400) -- bewusst gewaehlt, klar unterscheidbar von den Warnfarben Rot/Gelb/Orange, um Verwechslung mit Sicherheitshinweisen zu vermeiden
+5. "Ocean-Verlauf" -- sanfter Gradient von Teal (#1D9E75) zu Blau (#378ADD), 135 Grad, fuer Nutzer die einen Farbverlauf statt Vollton wollen
+
+**Umsetzung:**
+- Neues Feld user_theme_preference (oder aehnlich) pro User, Auswahl aus den obigen 5 Werten, Default "Teal".
+- Einstellungsbildschirm (Web + iOS): einfache Farbkachel-Auswahl (5 Kacheln, aktuelle Auswahl markiert), kein Farbwaehler/Custom-Hex-Eingabe -- bewusst nur die 5 Optionen, keine unbegrenzte Auswahl.
+- design-tokens.json um die 5 Presets ergaenzen, CSS-Variable fuer Akzentfarbe (z.B. --accent-user) wird je nach Auswahl gesetzt, alle bestehenden Akzent-Verwendungen (Buttons, aktiver Ordner, Links) darauf umstellen statt fest verdrahteter Farbe.
+
+Kein Contract-Bruch (additive Erweiterung von design-tokens.json + ein neues User-Praeferenz-Feld). Bitte zusammen mit der Design-Richtung von eben einordnen (nach den Grundfunktions-Luecken, vor den 5 Wettbewerbs-Features) -- kleine Ergaenzung, kein Blocker.
