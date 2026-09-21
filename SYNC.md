@@ -1068,3 +1068,30 @@ Cmd/Ctrl+K: echter globaler `keydown`-Listener in `App.tsx` fokussiert das beste
 **Uebergabe an Track C/F:** UI fuer Punkt 1 ist rein informativ (Quishing-Treffer zeigen sich einfach als ein staerker klassifiziertes Sicherheits-Signal in der bestehenden Detailansicht, kein neues UI-Element noetig). Punkt 2 braucht den oben beschriebenen separaten Auto-Linkify-Auftrag, bevor er im Client ueberhaupt sichtbar wird.
 
 **Kein Blocker.**
+
+
+[2026-09-21] [terminal] [C] — iOS-UI fuer die 9 Features aus WEB_INBOX.md 21.09. "DREI WEITERE FEATURES - Gmail-Recherche" + "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" (Backend fertig, Commits `1a82351`/`f189450`), Commit `a8ff66f` (Code) + dieser Eintrag (Docs).
+
+**1) Nudge:** dezentes Uhr-Symbol in `MessageRowView`, Einstellungs-Toggle in `SettingsView`.
+
+**2) Vertraulicher Modus:** Toggle + Ablauf-`DatePicker` in `ComposeView`, bewusst rein manuell (kein automatischer Vorschlag -- `POST /messages/draft/phishing-check` wird im Compose-Screen bisher nirgends aufgerufen, per Grep bestaetigt). Ablauf-Anzeige/"Inhalt geloescht"-Hinweis in `MessageDetailView`.
+
+**3) Vergessener-Anhang-Erkennung:** reine Client-Heuristik (Substring-Match gegen eine Schluesselwortliste), `confirmationDialog` vor dem Senden.
+
+**4) Malware-Scan-Anzeige:** `MessageDetailView` zeigt den echten ClamAV-`scanStatus` jedes Anhangs, kein Datei-Oeffnen-Weg.
+
+**5) Tracking-Schutz-Einstellung:** zwei Toggles in `SettingsView`, Footer erklaert ehrlich, dass "Externe Bilder blockieren" aktuell keine technische Wirkung hat (driftmail rendert nirgends HTML).
+
+**6) Undo Send:** rein Client-seitig, 6-Sekunden-Countdown vor dem tatsaechlichen `sendMessage`-Aufruf, abbrechbar ueber eine Banner-Leiste im Compose-Screen. Kein Server-Pendant.
+
+**7) Darkweb-/Datenleck-Ueberwachung:** neuer `DataBreachListView`-Screen, verlinkt aus `SettingsView` mit Zaehler-Badge.
+
+**8) Schedule Send:** Toggle + `DatePicker` in `ComposeView` (Senden-Button wird zu "Planen"), `DraftListView` zeigt geplante Entwuerfe mit Zeitpunkt + "Planung aufheben"-Swipe.
+
+**9) Snooze:** Swipe-Aktion in `InboxListView` (3 feste Zeitpunkte) + gleichwertiges Menü in `MessageDetailView`, inkl. Sofort-Aufhebung ueber einen Banner.
+
+**Nebenbei behoben:** `RemoteAPIClient.swift` hatte bisher NIRGENDS eine `JSONEncoder.dateEncodingStrategy` gesetzt (7 bestehende Call-Sites geprueft) -- fuer die drei neuen `Date`-Request-Felder (`confidentialUntil`/`scheduledFor`/`until`) waere das eine echte Luecke geworden (Swifts Default codiert `Date` als Zahl, nicht als ISO-8601-String). Jetzt pro Call-Site explizit als ISO-8601-`String` konvertiert.
+
+**Tests:** `xcodebuild -scheme DriftmailApp -destination 'platform=iOS Simulator,name=iPhone 17' build` → BUILD SUCCEEDED. Uninstall/Install/Launch, `log show` auf Crash/Fatal geprueft -- keine Treffer. Einmalig temporaer `AppEnvironment.init()` auf immer-Mock+authenticated umgestellt (Onboarding-Gate umgangen), um zu bestaetigen, dass die App darueber hinaus startet -- danach sofort zurueckgesetzt (siehe `git diff` vor dem Commit). Kein XCUITest-Target, daher keine automatisierten Taps durch die neuen Screens -- Details siehe ios/README.md.
+
+**Kein Blocker.**
