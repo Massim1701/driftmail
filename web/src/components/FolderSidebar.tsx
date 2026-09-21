@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { Folder, MailAccount } from "../types";
-import { FOLDER_ICONS, FolderIcon, LockIcon, MoonIcon, PencilIcon, PlusIcon, RefreshIcon, SendIcon, SunIcon, SystemIcon, TrashIcon, UnlockIcon } from "../icons";
+import { FOLDER_ICONS, FolderIcon, MoonIcon, PencilIcon, PlusIcon, RefreshIcon, SendIcon, SettingsIcon, SunIcon, SystemIcon, TrashIcon } from "../icons";
 import { SYSTEM_FOLDER_META } from "../folderMeta";
 import type { ThemeChoice } from "../useTheme";
 import "./FolderSidebar.css";
@@ -35,13 +35,10 @@ export function FolderSidebar({
   onNewMessage,
   theme,
   onThemeChange,
-  appLockSupported,
-  appLockEnabled,
-  onAppLockChange,
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
-  onOpenAiSettings,
+  onOpenSettings,
 }: {
   folders: Folder[];
   active: string | null;
@@ -65,35 +62,18 @@ export function FolderSidebar({
   onNewMessage: () => void;
   theme: ThemeChoice;
   onThemeChange: (t: ThemeChoice) => void;
-  /** Web-Äquivalent zur iOS-App-Sperre (WEB_INBOX.md 19.09. Punkt 3, siehe
-   * useAppLock.ts): `appLockSupported` blendet den Schalter komplett aus,
-   * wenn der Browser keinen Plattform-Authenticator hat -- kein totes UI. */
-  appLockSupported: boolean;
-  appLockEnabled: boolean;
-  onAppLockChange: (enabled: boolean) => Promise<boolean>;
   onCreateFolder: (name: string) => void;
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteFolder: (folderId: string) => void;
-  /** KI-Einstellungen (TERMINAL_INBOX.md 21.09. KORREKTUR): öffnet
-   * AiSettingsModal in App.tsx. */
-  onOpenAiSettings: () => void;
+  /** [2026-09-21] WEB_INBOX.md 21.09. "Einstellungsbereich": öffnet den
+   * neuen gebündelten SettingsModal in App.tsx -- App-Sperre und
+   * KI-Einstellungen leben jetzt dort, nicht mehr hier direkt in der
+   * Sidebar (siehe SettingsModal.tsx). */
+  onOpenSettings: () => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
-  const [appLockPending, setAppLockPending] = useState(false);
-  const [appLockError, setAppLockError] = useState(false);
-
-  async function toggleAppLock() {
-    setAppLockPending(true);
-    setAppLockError(false);
-    try {
-      const ok = await onAppLockChange(!appLockEnabled);
-      if (!ok) setAppLockError(true);
-    } finally {
-      setAppLockPending(false);
-    }
-  }
 
   function startEdit(f: Folder) {
     setEditingId(f.id);
@@ -294,26 +274,9 @@ export function FolderSidebar({
         </button>
       </div>
 
-      {appLockSupported && (
-        <div className="app-lock-toggle">
-          <button
-            type="button"
-            className={`app-lock-toggle-button${appLockEnabled ? " active" : ""}`}
-            onClick={toggleAppLock}
-            disabled={appLockPending}
-            title={appLockEnabled ? "App-Sperre deaktivieren" : "App-Sperre aktivieren (Face ID/Touch ID/Gerätepasscode)"}
-          >
-            {appLockEnabled ? <LockIcon /> : <UnlockIcon />}
-            <span>{appLockPending ? "…" : appLockEnabled ? "App-Sperre an" : "App-Sperre aus"}</span>
-          </button>
-          {appLockError && <span className="app-lock-toggle-error">Einrichtung fehlgeschlagen.</span>}
-        </div>
-      )}
-
-      {/* [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): eigene
-          Cloud-KI-Zugangsdaten (BYOK) -- siehe AiSettingsModal.tsx. */}
-      <button type="button" className="ai-settings-link" onClick={onOpenAiSettings}>
-        KI-Einstellungen
+      <button type="button" className="settings-entry-button" onClick={onOpenSettings}>
+        <SettingsIcon />
+        Einstellungen
       </button>
     </nav>
   );

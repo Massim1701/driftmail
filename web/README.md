@@ -598,6 +598,84 @@ geladenem Modell sauber auf den Backend-Weg zurück.
   /trusted-senders` existierte im Contract bereits seit dem
   Whitelist-Auftrag (15.09.), wurde aber nie von Web aufgerufen.
 
+## Einstellungsbereich — [2026-09-21] Nachtrag
+(WEB_INBOX.md 21.09. "NEUER AUFTRAG - Einstellungsbereich + Info-Seite",
+Punkt 1 -- Punkt 2, die öffentliche Info-Seite auf driftware.online, läuft
+laut Massimo bereits über eine andere Claude-Session, hier bewusst nicht
+angefasst)
+
+**Neuer `SettingsModal.tsx`**, geöffnet über ein Zahnrad-Icon
+("Einstellungen") unten in `FolderSidebar.tsx` -- bündelt, was bisher über
+die Sidebar verstreut war (App-Sperre-Toggle, KI-Einstellungen-Link),
+PLUS neu:
+
+- **Konten:** Liste der verbundenen Konten + "Konto hinzufügen" (nutzt den
+  bereits bestehenden Onboarding-Overlay-Flow aus `App.tsx`, kein zweiter
+  Flow) + pro Konto ein "Entfernen"-Button (`DELETE /accounts/{id}`, neue
+  `api.ts`-Methode `deleteAccount()`). Der Button ist clientseitig
+  deaktiviert, solange nur ein Konto existiert (die 400-Antwort des
+  Backends dafür wird also nie im Normalfall provoziert, nur als
+  Doppel-Absicherung im Catch-Block behandelt).
+- **Ansicht:** die 5 Akzentfarben-Swatches aus `contracts/design-tokens.json`
+  `color.accentThemes` (neue lokale Kopie in `web/src/accentThemes.ts`,
+  gleiches Nicht-Build-Time-Import-Prinzip wie `tokens.css`). Auswahl setzt
+  `--color-accent` sofort inline auf `<html>` (optimistisches Update, siehe
+  `applyAccentTheme()`) UND speichert über `PUT /settings`
+  (`api.ts` `updateSettings()`), nach Login einmalig via `GET /settings`
+  geladen und angewendet. **Bewusste Grenze bei "Ocean-Verlauf":**
+  `--color-accent` selbst bekommt nur die erste Gradient-Farbe (ein echter
+  CSS-Gradient-String würde bei mehreren bestehenden Verwendungen wie
+  `color-mix(..., var(--color-accent), ...)` für Hover-Zustände oder
+  Textfarben schlicht verworfen/ungültig) -- der echte Gradient ist nur in
+  der Swatch-Vorschau selbst sichtbar, eine echte Gradient-Anwendung im UI
+  wäre ein eigener, größerer Schritt.
+- **Sicherheit:** App-Sperre-Toggle und KI-Einstellungen-Link sind
+  hierher umgezogen (nicht dupliziert), PLUS eine neue, bewusst nicht-
+  technische Text-Übersicht der aktiven Sicherheits-Features -- **ehrlich
+  formuliert:** der Malware-Scan wird explizit als "in Vorbereitung"
+  gekennzeichnet, weil er das tatsächlich noch ist (weiterhin nur
+  `backend/src/lookups/attachmentScanMock.ts`, kein echter ClamAV-Scan).
+- **Anleitung:** ein Link "Installationsanleitung" -- zeigt aktuell nur
+  auf `https://driftware.online` als Platzhalter, bis die andere
+  Claude-Session die eigentliche Info-Seite mit einer konkreten
+  Unterseiten-Route fertig hat (Code-Kommentar an der Stelle verweist
+  darauf, für eine spätere Verschärfung).
+
+**Echter Fund beim Testen:** `AiSettingsModal` und `SettingsModal` sind
+beide `.compose-overlay`-Overlays mit demselben `z-index`. Ursprünglich
+war geplant, KI-Einstellungen einfach zusätzlich zu Settings zu öffnen
+("stapeln") -- das rendert aber lautlos falsch: der später im DOM
+gemountete `SettingsModal` verdeckt `AiSettingsModal` komplett, kein
+Fehler, einfach nichts sichtbar. Behoben, indem `SettingsModal` sich
+schließt, bevor KI-Einstellungen öffnet (gleiches Prinzip wie beim
+bereits bestehenden "Konto hinzufügen"-Übergang). Nur durch echtes Klicken
+im Browser gefunden, nicht durch `tsc`/`vite build` -- Erinnerung, warum
+dieses Projekt "gebaut" nie mit "getestet" gleichsetzt.
+
+**Mock-Server:** `GET`/`PUT /settings` und `DELETE /accounts/:id` ergänzt
+(gleiches Validierungsverhalten wie das echte Backend). **Bewusste
+Mock-Grenze, nicht neu:** `data.mjs` bildet weiterhin nur EIN Konto ab
+(bereits als bekannte Grenze in der "Mehrfach-Konten"-Sektion oben
+dokumentiert) -- ein zweites Konto lässt sich über den Mock-Server nicht
+wirklich verbinden, der "letztes Konto kann nicht entfernt
+werden"-400-Pfad UND die clientseitige Disabled-Logik dafür sind aber
+echt verifiziert.
+
+**Tests:** `tsc -b`/`vite build`/`oxlint` grün (keine neuen Warnungen).
+Kompletter Flow per Browser-Automation gegen den Mock-Server
+durchgeklickt: Settings öffnen, Akzentfarbe wechseln (sichtbare Live-
+Umfärbung per Vorher/Nachher-Screenshot bestätigt, u.a. "Neue
+Nachricht"-Button + aktive Ordnerzeile), Reload bestätigt Persistenz
+(erneuter `GET /settings`-Aufruf beim Login), App-Sperre-Toggle von der
+neuen Stelle aus ausgelöst (bekannte WebAuthn-Grenze in dieser Umgebung,
+keine echte Plattform-Authenticator-Hardware verfügbar -- vorbestehende
+Einschränkung, keine Regression), KI-Einstellungen von der neuen Stelle
+aus geöffnet (nach dem oben beschriebenen Fix korrekt sichtbar),
+"Entfernen" bei genau einem Konto nachweislich wirkungslos (deaktiviert),
+"Konto hinzufügen" schließt Settings korrekt und öffnet den bestehenden
+Onboarding-Overlay, "Abbrechen" dort kehrt sauber zurück ohne dass
+Settings sich unerwartet wieder öffnet. Konsole ohne Fehler.
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge

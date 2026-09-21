@@ -196,3 +196,14 @@ export function UnlockIcon(props: SVGProps<SVGSVGElement>) {
     </Svg>
   );
 }
+
+// [2026-09-21] WEB_INBOX.md 21.09. "Einstellungsbereich": Zahnrad-Icon für
+// den neuen gebündelten Settings-Einstiegspunkt in FolderSidebar.tsx.
+export function SettingsIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 13a7.97 7.97 0 0 0 0-2l2.1-1.6-2-3.4-2.5 1a8 8 0 0 0-1.7-1L14.9 3h-3.8l-.4 2.6a8 8 0 0 0-1.7 1l-2.5-1-2 3.4L6.6 11a7.97 7.97 0 0 0 0 2l-2.1 1.6 2 3.4 2.5-1a8 8 0 0 0 1.7 1l.4 2.6h3.8l.4-2.6a8 8 0 0 0 1.7-1l2.5 1 2-3.4z" />
+    </Svg>
+  );
+}

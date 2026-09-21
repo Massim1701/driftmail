@@ -1,0 +1,112 @@
+.settings-modal {
+  max-width: 520px;
+}
+
+.settings-body {
+  gap: var(--space-lg);
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.settings-section-title {
+  margin: 0;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.settings-account-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.settings-account-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+}
+
+.settings-account-remove:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.accent-swatch-grid {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.accent-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.accent-swatch.active {
+  border-color: var(--color-text-primary);
+  box-shadow: 0 0 0 2px var(--color-surface-page);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.app-lock-toggle-error {
+  font-size: var(--font-size-caption);
+  color: var(--color-danger-text);
+}
+
+.settings-row .btn-secondary.active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.settings-security-intro {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.settings-security-list {
+  margin: 0;
+  padding-left: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.settings-guide-link {
+  font-size: var(--font-size-body);
+  color: var(--color-accent);
+  font-weight: var(--font-weight-medium);
+}

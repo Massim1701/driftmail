@@ -9,6 +9,8 @@ import { OnboardingScreen } from "./components/OnboardingScreen";
 import { AppLockGate } from "./components/AppLockGate";
 import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
 import { AiSettingsModal } from "./components/AiSettingsModal";
+import { SettingsModal } from "./components/SettingsModal";
+import { applyAccentTheme } from "./accentThemes";
 import { useTheme } from "./useTheme";
 import { useAppLock } from "./useAppLock";
 import "./App.css";
@@ -78,8 +80,15 @@ export default function App() {
   const [compose, setCompose] = useState<{ mode: ComposeMode; original: MessageDetail | null } | null>(null);
 
   // KI-Einstellungen (TERMINAL_INBOX.md 21.09. KORREKTUR): eigener Dialog,
-  // siehe AiSettingsModal.tsx.
+  // siehe AiSettingsModal.tsx. Wird seit dem Einstellungsbereich (WEB_INBOX.md
+  // 21.09.) aus SettingsModal heraus geöffnet, nicht mehr direkt aus der
+  // Sidebar -- deshalb kann er zusätzlich zu settingsOpen offen sein
+  // (stapelt sich einfach über den SettingsModal-Overlay, gleiches Prinzip
+  // wie jeder andere Modal-über-Modal-Fall hier).
   const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
+  // [2026-09-21] WEB_INBOX.md 21.09. "Einstellungsbereich": gebündelter
+  // Einstellungsbereich, siehe SettingsModal.tsx.
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Suche (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN", Punkt 2):
   // solange searchQuery gesetzt ist, ersetzt die Ergebnisliste die normale
@@ -246,6 +255,19 @@ export default function App() {
       .then(() => setTrustedSenderAddresses((prev) => new Set(prev).add(address)))
       .catch(() => setError("Absender konnte nicht zur Whitelist hinzugefügt werden."));
   }
+
+  // [2026-09-21] WEB_INBOX.md 21.09. "Einstellungsbereich": gespeicherte
+  // Akzentfarbe einmal nach Login laden und anwenden (applyAccentTheme
+  // setzt --color-accent inline auf <html>, siehe accentThemes.ts). Kein
+  // harter Fehler bei 401/Netzwerkfehler -- Default-Teal aus tokens.css
+  // bleibt einfach stehen.
+  useEffect(() => {
+    if (!token) return;
+    api
+      .getSettings()
+      .then((s) => applyAccentTheme(s.accentTheme))
+      .catch(() => {});
+  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -480,9 +502,6 @@ export default function App() {
           active={activeFolder}
           onSelect={handleSelectFolder}
           counts={counts}
-          appLockSupported={appLock.supported}
-          appLockEnabled={appLock.enabled}
-          onAppLockChange={appLock.setEnabled}
           accounts={accounts}
           activeAccountId={activeAccountId}
           onSwitchAccount={handleSwitchAccount}
@@ -495,7 +514,7 @@ export default function App() {
           onCreateFolder={handleCreateFolder}
           onRenameFolder={handleRenameFolder}
           onDeleteFolder={handleDeleteFolder}
-          onOpenAiSettings={() => setAiSettingsOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
 
         <div className="message-column">
@@ -575,6 +594,19 @@ export default function App() {
       )}
 
       {aiSettingsOpen && <AiSettingsModal onClose={() => setAiSettingsOpen(false)} />}
+
+      {settingsOpen && (
+        <SettingsModal
+          accounts={accounts}
+          onAccountRemoved={() => loadAccounts()}
+          onAddAccount={handleAddAccount}
+          appLockSupported={appLock.supported}
+          appLockEnabled={appLock.enabled}
+          onAppLockChange={appLock.setEnabled}
+          onOpenAiSettings={() => setAiSettingsOpen(true)}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </AppLockGate>
   );
 }

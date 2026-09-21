@@ -51,6 +51,11 @@ const capabilityLog = [];
 // im echten Backend zurückgegeben -- nur ob einer gesetzt ist.
 let aiSettings = { mode: "off", byokProvider: null, apiKey: null, cloudConsentGiven: false };
 const AI_IMPLEMENTED_PROVIDERS = ["anthropic", "openai"];
+// GET/PUT /settings (WEB_INBOX.md 21.09. "Einstellungsbereich", Ansicht:
+// Akzentfarben-Auswahl) -- spiegelt users.accent_theme (siehe
+// backend/README.md "Einstellungsbereich").
+let userSettings = { accentTheme: "teal" };
+const ACCENT_THEME_VALUES = ["teal", "ocean_blue", "violett", "koralle", "ocean_verlauf"];
 // POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
 // Eintrags von eben") -- nur Metadaten, kein Dateiinhalt (siehe
 // backend/README.md "Anhänge", gleiche Grenze wie im echten Backend).
@@ -216,6 +221,23 @@ const server = createServer(async (req, res) => {
   // "Jetzt aktualisieren"-Button gegen den Mock-Server nicht bricht.
   if (req.method === "POST" && parts.length === 3 && parts[0] === "accounts" && parts[2] === "sync") {
     return send(res, 200, { imported: 0, autoDeleted: 0, syncStatus: "ok" });
+  }
+
+  // DELETE /accounts/{accountId} (WEB_INBOX.md 21.09. "Einstellungsbereich",
+  // Konten-Verwaltung) -- 400 wenn es das letzte Konto waere (siehe
+  // backend/README.md "Einstellungsbereich"), sonst aus dem Mock-Array
+  // entfernt. **Bewusste Mock-Grenze:** dieser Mock-Server bildet ohnehin
+  // nur EIN Konto ab (siehe data.mjs-Kommentar, gleiche Einschränkung wie
+  // beim Mehrfach-Konten-Nachtrag) -- ein zweites Konto lässt sich über
+  // diesen Mock-Server nicht wirklich verbinden (POST /accounts liefert
+  // immer accounts[0] zurück), das Entfernen selbst funktioniert aber
+  // korrekt für den Ein-Konto-Fall (400-Pfad).
+  if (req.method === "DELETE" && parts.length === 2 && parts[0] === "accounts") {
+    const idx = accounts.findIndex((a) => a.id === parts[1]);
+    if (idx === -1) return notFound(res);
+    if (accounts.length <= 1) return badRequest(res, "Das letzte verbundene Konto kann nicht entfernt werden.");
+    accounts.splice(idx, 1);
+    return sendNoContent(res);
   }
 
   // GET /auth/google/start ([2026-09-10] echter Google-Login im echten
@@ -665,6 +687,23 @@ const server = createServer(async (req, res) => {
         hasApiKey: !!aiSettings.apiKey,
         cloudConsentGiven: aiSettings.cloudConsentGiven,
       });
+    }
+  }
+
+  // GET/PUT /settings (WEB_INBOX.md 21.09. "Einstellungsbereich", Ansicht:
+  // Akzentfarben-Auswahl) -- gleiche Validierung wie
+  // backend/src/routes/settings.ts.
+  if (parts.length === 1 && parts[0] === "settings") {
+    if (req.method === "GET") {
+      return send(res, 200, userSettings);
+    }
+    if (req.method === "PUT") {
+      const body = (await readJsonBody(req)) ?? {};
+      if (body.accentTheme !== undefined && !ACCENT_THEME_VALUES.includes(body.accentTheme)) {
+        return badRequest(res, `accentTheme muss eines von ${ACCENT_THEME_VALUES.join(", ")} sein`);
+      }
+      if (body.accentTheme !== undefined) userSettings = { accentTheme: body.accentTheme };
+      return send(res, 200, userSettings);
     }
   }
 

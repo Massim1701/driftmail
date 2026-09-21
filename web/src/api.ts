@@ -10,6 +10,7 @@
 // getAiSettings/setAiSettings unten).
 
 import type {
+  AccentTheme,
   AiSettings,
   AiSource,
   AttachmentScanStatus,
@@ -22,6 +23,7 @@ import type {
   Message,
   MessageDetail,
   TrustedSender,
+  UserSettings,
 } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000";
@@ -155,6 +157,12 @@ export const api = {
     }),
 
   listAccounts: () => request<MailAccount[]>("/accounts"),
+
+  // DELETE /accounts/{accountId} (WEB_INBOX.md 21.09. "Einstellungsbereich",
+  // Konten-Verwaltung) -- 400 wenn es das letzte Konto des Users wäre, 404
+  // wenn unbekannt/fremd. Cascade (Ordner/Nachrichten/Entwürfe) läuft
+  // serverseitig, siehe backend/README.md "Einstellungsbereich".
+  deleteAccount: (accountId: string) => request<void>(`/accounts/${accountId}`, { method: "DELETE" }),
 
   // POST /accounts/{accountId}/sync (WEB_INBOX.md 21.09. "SEHR WICHTIGE
   // LUECKE - HOECHSTE PRIORITAET", Punkt 1) -- fuer den "Jetzt
@@ -299,4 +307,13 @@ export const api = {
   deleteDraft: (id: string) => request<unknown>(`/drafts/${id}`, { method: "DELETE" }),
 
   listContracts: () => request<Contract[]>("/contracts"),
+
+  // GET/PUT /settings (WEB_INBOX.md 21.09. "Einstellungsbereich", Ansicht:
+  // Akzentfarben-Auswahl) -- allgemeine UI-Präferenzen, aktuell nur
+  // accentTheme. Eigener Endpunkt analog /ai-settings, siehe
+  // backend/README.md "Einstellungsbereich".
+  getSettings: () => request<UserSettings>("/settings"),
+
+  updateSettings: (data: { accentTheme: AccentTheme }) =>
+    request<UserSettings>("/settings", { method: "PUT", body: JSON.stringify(data) }),
 };

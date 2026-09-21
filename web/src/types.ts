@@ -51,6 +51,17 @@ export interface AiSettings {
   cloudConsentGiven: boolean;
 }
 
+// GET/PUT /settings (WEB_INBOX.md 21.09. "Einstellungsbereich", Ansicht:
+// Akzentfarben-Auswahl) -- allgemeine UI-Präferenzen, aktuell nur
+// accentTheme. Nur die neutrale Akzentfarbe ist wählbar, siehe
+// contracts/design-tokens.json color.accentThemes -- danger/warning/success
+// bleiben für alle User fest.
+export type AccentTheme = "teal" | "ocean_blue" | "violett" | "koralle" | "ocean_verlauf";
+
+export interface UserSettings {
+  accentTheme: AccentTheme;
+}
+
 export interface MailAccount {
   id: string;
   provider: "gmail" | "imap";
