@@ -18,6 +18,7 @@
 import { randomUUID } from "node:crypto";
 import { PostgresStore } from "./postgresStore";
 import type {
+  AccentTheme,
   AiPreferenceRecord,
   ContractRecord,
   DraftRecord,
@@ -53,6 +54,10 @@ export interface Store {
   /** Für POST /accounts (Login/Registrierung, siehe routes/auth.ts) --
    * find-or-create nach E-Mail-Adresse. */
   getUserByEmail(email: string): Promise<User | undefined>;
+  /** Für GET/PUT /settings (routes/settings.ts) -- Auth liefert nur
+   * req.userId, kein volles User-Objekt. */
+  getUserById(id: string): Promise<User | undefined>;
+  updateUserAccentTheme(id: string, accentTheme: AccentTheme): Promise<User | undefined>;
   createMailAccount(input: Omit<MailAccountRecord, "id">): Promise<MailAccountRecord>;
   listMailAccounts(): Promise<MailAccountRecord[]>;
   getMailAccount(id: string): Promise<MailAccountRecord | undefined>;
@@ -70,6 +75,12 @@ export interface Store {
     id: string,
     patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt" | "encryptedOauthToken">>,
   ): Promise<MailAccountRecord | undefined>;
+  /** [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09.,
+   * Konten-Verwaltung): entfernt ein Konto UND alles, was daran hängt
+   * (Ordner, Nachrichten, Entwürfe, ...) -- bei Postgres über die bereits
+   * bestehenden `ON DELETE CASCADE`-Foreign-Keys, bei InMemoryStore manuell
+   * nachgebildet. `false`, wenn die accountId unbekannt ist. */
+  deleteMailAccount(id: string): Promise<boolean>;
 
   // ----- Sessions ([2026-09-10] echte Auth, siehe middleware/auth.ts + routes/auth.ts) -----
   createSession(userId: string): Promise<SessionRecord>;
@@ -248,13 +259,24 @@ export class InMemoryStore implements Store {
   // ----- Users / Accounts -----
 
   async createUser(email: string): Promise<User> {
-    const user: User = { id: randomUUID(), email, createdAt: new Date().toISOString() };
+    const user: User = { id: randomUUID(), email, accentTheme: "teal", createdAt: new Date().toISOString() };
     this.users.push(user);
     return user;
   }
 
   async getFirstUser(): Promise<User | undefined> {
     return this.users[0];
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    return this.users.find((u) => u.id === id);
+  }
+
+  async updateUserAccentTheme(id: string, accentTheme: AccentTheme): Promise<User | undefined> {
+    const user = await this.getUserById(id);
+    if (!user) return undefined;
+    user.accentTheme = accentTheme;
+    return user;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
@@ -293,6 +315,26 @@ export class InMemoryStore implements Store {
     if (patch.lastSyncedAt !== undefined) account.lastSyncedAt = patch.lastSyncedAt;
     if (patch.encryptedOauthToken !== undefined) account.encryptedOauthToken = patch.encryptedOauthToken;
     return account;
+  }
+
+  async deleteMailAccount(id: string): Promise<boolean> {
+    const idx = this.mailAccounts.findIndex((a) => a.id === id);
+    if (idx === -1) return false;
+
+    const removedMessageIds = new Set(this.messages.filter((m) => m.mailAccountId === id).map((m) => m.id));
+
+    this.mailAccounts.splice(idx, 1);
+    this.folders = this.folders.filter((f) => f.mailAccountId !== id);
+    this.messages = this.messages.filter((m) => m.mailAccountId !== id);
+    this.drafts = this.drafts.filter((d) => d.mailAccountId !== id);
+    this.quarantine = this.quarantine.filter((q) => !removedMessageIds.has(q.messageId));
+    this.contracts = this.contracts.filter((c) => !removedMessageIds.has(c.messageId));
+    this.messageAttachments = this.messageAttachments.filter((a) => !a.messageId || !removedMessageIds.has(a.messageId));
+    for (const messageId of removedMessageIds) {
+      this.messageSecurity.delete(messageId);
+      this.messageAiSummary.delete(messageId);
+    }
+    return true;
   }
 
   // ----- Sessions -----

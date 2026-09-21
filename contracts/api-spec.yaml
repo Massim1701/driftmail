@@ -225,6 +225,27 @@ paths:
           description: Konto nicht gefunden oder gehoert nicht dem angemeldeten User
         "502":
           description: Sync fehlgeschlagen (z.B. Mail-Server nicht erreichbar)
+    delete:
+      summary: >
+        [2026-09-21] WEB_INBOX.md "NEUER AUFTRAG - Einstellungsbereich +
+        Info-Seite", Punkt 1 "Konten-Verwaltung": verbundenes Konto
+        entfernen. Loescht auch alle daran haengenden Ordner/Nachrichten/
+        Entwuerfe (Cascade). 400, wenn es das letzte Konto des Users waere
+        (Auth laeuft implizit ueber Mail-Konto-Verbindung, siehe
+        backend/README.md "Auth" -- ohne jedes Konto gaebe es keinen Weg
+        mehr, sich erneut anzumelden).
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204":
+          description: Entfernt
+        "400":
+          description: Letztes verbleibendes Konto kann nicht entfernt werden
+        "404":
+          description: Konto nicht gefunden oder gehoert nicht dem angemeldeten User
 
   /folders:
     get:
@@ -1046,6 +1067,40 @@ paths:
         "400":
           description: Ungültige Kombination (z.B. mode=byok ohne Provider/Key, oder nicht angebundener Provider)
 
+  /settings:
+    get:
+      summary: >
+        [2026-09-21] WEB_INBOX.md "NEUER AUFTRAG - Einstellungsbereich +
+        Info-Seite", Punkt 1 "Ansicht": allgemeine UI-Präferenzen des Users
+        (aktuell nur accentTheme, bewusst als eigener, erweiterbarer
+        Endpunkt statt in ein bestehendes Objekt gequetscht -- BYOK hat
+        schon seinen eigenen /ai-settings-Endpunkt aus demselben Grund).
+      responses:
+        "200":
+          description: Aktuelle Einstellungen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+    put:
+      summary: Einstellung setzen.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                accentTheme: { type: string, enum: [teal, ocean_blue, violett, koralle, ocean_verlauf] }
+      responses:
+        "200":
+          description: Gespeicherte Einstellungen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSettings"
+        "400":
+          description: Ungültiger accentTheme-Wert
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1256,6 +1311,21 @@ components:
         byokProvider: { type: string, enum: [anthropic, openai, google, other], nullable: true }
         hasApiKey: { type: boolean }
         cloudConsentGiven: { type: boolean }
+
+    UserSettings:
+      type: object
+      description: >
+        [2026-09-21] WEB_INBOX.md "NEUER AUFTRAG - Einstellungsbereich",
+        siehe GET/PUT /settings.
+      properties:
+        accentTheme:
+          type: string
+          enum: [teal, ocean_blue, violett, koralle, ocean_verlauf]
+          description: >
+            Nur die neutrale Akzentfarbe (Buttons, Links, ausgewählte
+            Zeile, aktiver Ordner) -- siehe design-tokens.json
+            color.accentThemes. danger/warning/success bleiben fest für
+            alle User.
 
     Contract:
       type: object

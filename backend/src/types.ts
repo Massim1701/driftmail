@@ -49,9 +49,15 @@ export interface AiPreferenceRecord {
 
 // ===== interne Modelle (1:1 zu db-schema.sql) =====
 
+// [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09.,
+// "Ansicht: Akzentfarben-Auswahl") -- siehe contracts/design-tokens.json
+// color.accentThemes fuer die 5 moeglichen Werte.
+export type AccentTheme = "teal" | "ocean_blue" | "violett" | "koralle" | "ocean_verlauf";
+
 export interface User {
   id: string;
   email: string;
+  accentTheme: AccentTheme;
   createdAt: string;
 }
 

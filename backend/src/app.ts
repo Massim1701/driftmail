@@ -11,6 +11,7 @@ import { draftsRouter } from "./routes/drafts";
 import { trustedSendersRouter } from "./routes/trustedSenders";
 import { mailProvidersRouter } from "./routes/mailProviders";
 import { aiSettingsRouter } from "./routes/aiSettings";
+import { settingsRouter } from "./routes/settings";
 import { internalRouter } from "./routes/internal";
 import { requireAuth } from "./middleware/auth";
 
@@ -44,6 +45,7 @@ export function createApp() {
   v1.use(draftsRouter);
   v1.use(trustedSendersRouter);
   v1.use(aiSettingsRouter);
+  v1.use(settingsRouter);
   app.use("/v1", v1);
 
   // Betriebs-/Test-Hilfsmittel, kein Contract-Bestandteil.

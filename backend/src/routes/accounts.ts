@@ -35,3 +35,23 @@ accountsRouter.post("/accounts/:accountId/sync", async (req, res) => {
     res.status(502).json({ error: "Sync fehlgeschlagen -- Mail-Server evtl. nicht erreichbar." });
   }
 });
+
+// DELETE /accounts/{accountId} (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+// Einstellungsbereich + Info-Seite", Punkt 1 "Konten-Verwaltung"):
+// entfernt ein verbundenes Konto -- ownership-geprueft wie der Sync-
+// Endpunkt oben. 400, wenn es das letzte Konto des Users waere: die
+// gesamte Auth funktioniert aktuell "implizit ueber Mail-Konto-
+// Verbindung" (siehe backend/README.md "Auth"), ein User ohne jedes Konto
+// haette keinen sinnvollen Weg mehr, sich je wieder anzumelden.
+accountsRouter.delete("/accounts/:accountId", async (req, res) => {
+  const account = await store.getMailAccount(req.params.accountId);
+  if (!account || account.userId !== req.userId) {
+    return res.status(404).json({ error: "Mail-Konto nicht gefunden" });
+  }
+  const ownAccounts = await store.listMailAccountsByUserId(req.userId);
+  if (ownAccounts.length <= 1) {
+    return res.status(400).json({ error: "Das letzte verbundene Konto kann nicht entfernt werden." });
+  }
+  await store.deleteMailAccount(account.id);
+  res.status(204).end();
+});

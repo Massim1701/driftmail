@@ -9,6 +9,14 @@
   },
   "color": {
     "accent": "#1D9E75",
+    "accentThemes": [
+      { "id": "teal", "label": "Teal", "accent": "#1D9E75" },
+      { "id": "ocean_blue", "label": "Ocean Blue", "accent": "#378ADD" },
+      { "id": "violett", "label": "Violett", "accent": "#7F77DD" },
+      { "id": "koralle", "label": "Koralle", "accent": "#D85A30" },
+      { "id": "ocean_verlauf", "label": "Ocean-Verlauf", "accent": "#378ADD", "gradient": ["#378ADD", "#1D9E75"] }
+    ],
+    "_accentThemesNote": "WEB_INBOX.md 21.09. 'ERGAENZUNG zur Design-Richtung': 5 waehlbare Akzentfarben, Default 'teal' (== color.accent oben, unveraendert fuer Code-Pfade ohne User-Praeferenz). NUR die neutrale Akzentfarbe (Buttons, Links, ausgewaehlte Zeile, aktiver Ordner) ist waehlbar -- danger/warning/success bleiben FEST fuer alle User, sind bewusst NICHT Teil dieser Liste (Sicherheits-Farbrollen duerfen ihre Eindeutigkeit nicht verlieren).",
     "danger": "#D85A30",
     "dangerText": "#993C1D",
     "warning": "#EF9F27",

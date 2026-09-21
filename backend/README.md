@@ -1851,6 +1851,61 @@ dokumentierter Verzicht, kein Blocker). `CapabilityChecker`
 (iOS)/aequivalent (Web) sollten dabei von reinen Platzhaltern auf eine
 echte Verfuegbarkeitspruefung umgestellt werden.
 
+## Einstellungsbereich (Backend-Grundlage) -- [2026-09-21] Nachtrag
+(WEB_INBOX.md 21.09. "NEUER AUFTRAG - Einstellungsbereich + Info-Seite")
+
+Backend-seitige Grundlage fuer den gebuendelten Einstellungsbereich (die
+UI selbst bauen Track C/F) -- zwei neue Stücke:
+
+**1) `DELETE /accounts/{accountId}`** (Konten-Verwaltung): entfernt ein
+verbundenes Konto inkl. aller daran haengenden Daten (Ordner, Nachrichten,
+Entwuerfe, ...). Bei Postgres laeuft das Aufraeumen komplett ueber die
+bereits bestehenden `ON DELETE CASCADE`-Foreign-Keys (kein neuer Code
+noetig), bei `InMemoryStore` manuell nachgebildet
+(`deleteMailAccount()` in `src/db/store.ts`). **400, wenn es das letzte
+Konto des Users waere:** Auth laeuft aktuell implizit ueber Mail-Konto-
+Verbindung (siehe Abschnitt "Auth" unten) -- ein User ohne jedes Konto
+haette keinen sinnvollen Weg mehr, sich je wieder anzumelden.
+
+**2) `GET`/`PUT /settings`** (`src/routes/settings.ts`): allgemeine
+UI-Praeferenzen des Users, aktuell nur `accentTheme`. Eigener,
+erweiterbarer Endpunkt statt in ein bestehendes Objekt gequetscht --
+gleiches Prinzip wie `/ai-settings` fuer BYOK. Fuenf waehlbare Werte
+(`teal`/`ocean_blue`/`violett`/`koralle`/`ocean_verlauf`), Default `teal`,
+siehe `contracts/design-tokens.json` `color.accentThemes` fuer die
+tatsaechlichen Farbwerte (inkl. der Zwei-Farb-Gradient-Definition fuer
+`ocean_verlauf`). **Bewusste Grenze, aus einer frueheren Design-Vorgabe
+(WEB_INBOX.md, "ERGAENZUNG zur Design-Richtung"):** NUR die neutrale
+Akzentfarbe ist waehlbar -- `danger`/`warning`/`success` bleiben fuer alle
+User fest, sind nicht Teil dieser Liste, damit das bestehende
+Sicherheits-Warnsystem seine Eindeutigkeit nicht verliert.
+
+`users.accent_theme` ist neu (`contracts/db-schema.sql`) -- echte
+`ALTER TABLE`-Migration in `postgresStore.ts`
+(`migrateUsersAccentTheme()`), da `users` (anders als die zuletzt
+angefassten, bis dahin ungenutzten KI-Tabellen) schon von echtem
+Auth-Code beschrieben wird. Einfacher als die Migrationen davor: reine
+`ADD COLUMN IF NOT EXISTS ... DEFAULT 'teal'`-Ergaenzung, kein Umbau einer
+bestehenden Constraint, der `DEFAULT`-Wert backfuellt bestehende Zeilen
+automatisch.
+
+**Tests:** `smoketest.ts` nutzt die im Mehrfach-Konten-Testblock bereits
+verbundenen zwei Konten: zweites Konto loeschen (204, Ordner mit-entfernt,
+Fremde/unbekannte accountId -> 404), letztes verbleibendes Konto ->
+400 (bleibt unangetastet). `GET`/`PUT /settings`: Default `teal`,
+ungueltiger Wert -> 400, gueltige Aenderung wird korrekt gespeichert und
+bei erneutem `GET` widergespiegelt. Migration zusaetzlich manuell gegen
+eine simulierte Alt-Schema-DB verifiziert (Spalte fehlte, Migration legt
+sie mit korrektem Backfill an, idempotent bei zweimaligem Lauf). Gruen
+in-memory + gegen frisches Postgres.
+
+**Uebergabe an Track C/F:** die eigentliche Einstellungsbereich-UI
+(Konten-Liste + Hinzufuegen/Entfernen, Akzentfarben-Auswahl, gebuendelte
+Sicherheit-Sektion mit KI-Einstellungen/BYOK + App-Sperre + einer
+einfachen Text-Uebersicht der aktiven Sicherheits-Features, Link zur
+Installationsanleitung) ist noch zu bauen -- dieser Nachtrag liefert nur
+die dafuer noetigen neuen Endpunkte.
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war

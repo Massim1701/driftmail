@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Store } from "./store";
 import type {
+  AccentTheme,
   AiPreferenceRecord,
   ContractRecord,
   DraftRecord,
@@ -69,7 +70,7 @@ function configureTypeParsers(): void {
 const SCHEMA_PATH = join(__dirname, "../../../contracts/db-schema.sql");
 
 function rowToUser(r: any): User {
-  return { id: r.id, email: r.email, createdAt: r.created_at };
+  return { id: r.id, email: r.email, accentTheme: r.accent_theme, createdAt: r.created_at };
 }
 
 function rowToSession(r: any): SessionRecord {
@@ -276,6 +277,7 @@ export class PostgresStore implements Store {
   async migrate(): Promise<void> {
     await this.migrateFoldersToAccountScope();
     await this.migrateUnsubscribeActionsStatusCheck();
+    await this.migrateUsersAccentTheme();
     const sql = readFileSync(SCHEMA_PATH, "utf-8");
     await this.pool.query(sql);
   }
@@ -369,6 +371,22 @@ export class PostgresStore implements Store {
     );
   }
 
+  /** [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09.,
+   * "Ansicht: Akzentfarben-Auswahl"): `users.accent_theme` neu. Anders als
+   * die vorige Migration eine reine ADD-COLUMN-Ergaenzung (kein Umbau einer
+   * bestehenden Constraint), `IF NOT EXISTS` macht sie idempotent -- der
+   * DEFAULT sorgt automatisch fuer ein gueltiges Backfill bei bestehenden
+   * Zeilen, kein separater UPDATE-Schritt noetig. */
+  private async migrateUsersAccentTheme(): Promise<void> {
+    const { rows: exists } = await this.pool.query(`SELECT to_regclass('users') AS reg`);
+    if (!exists[0]?.reg) return; // frische DB -- CREATE TABLE unten legt die Spalte gleich mit an
+
+    await this.pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS accent_theme TEXT NOT NULL DEFAULT 'teal'
+        CHECK (accent_theme IN ('teal', 'ocean_blue', 'violett', 'koralle', 'ocean_verlauf'))
+    `);
+  }
+
   // ----- Users / Accounts -----
 
   async createUser(email: string): Promise<User> {
@@ -383,6 +401,16 @@ export class PostgresStore implements Store {
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     const { rows } = await this.pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    return rows[0] ? rowToUser(rows[0]) : undefined;
+  }
+
+  async getUserById(id: string): Promise<User | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM users WHERE id = $1", [id]);
+    return rows[0] ? rowToUser(rows[0]) : undefined;
+  }
+
+  async updateUserAccentTheme(id: string, accentTheme: AccentTheme): Promise<User | undefined> {
+    const { rows } = await this.pool.query("UPDATE users SET accent_theme = $2 WHERE id = $1 RETURNING *", [id, accentTheme]);
     return rows[0] ? rowToUser(rows[0]) : undefined;
   }
 
@@ -439,6 +467,15 @@ export class PostgresStore implements Store {
       [id, patch.syncStatus ?? null, patch.lastSyncedAt ?? null, patch.encryptedOauthToken ?? null],
     );
     return rows[0] ? rowToMailAccount(rows[0]) : undefined;
+  }
+
+  async deleteMailAccount(id: string): Promise<boolean> {
+    // Cascade laeuft ueber die bereits bestehenden `ON DELETE CASCADE`-
+    // Foreign-Keys (folders/messages/drafts -> mail_accounts, siehe
+    // db-schema.sql) -- kein manuelles Aufraeumen mehrerer Tabellen noetig,
+    // anders als bei InMemoryStore.
+    const { rowCount } = await this.pool.query("DELETE FROM mail_accounts WHERE id = $1", [id]);
+    return (rowCount ?? 0) > 0;
   }
 
   // ----- Sessions -----

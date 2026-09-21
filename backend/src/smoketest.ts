@@ -1265,6 +1265,62 @@ async function main() {
       "neu angelegter Ordner sollte zum angegebenen Konto gehören",
     );
 
+    // ----- DELETE /accounts/{accountId} (WEB_INBOX.md 21.09.
+    // "Einstellungsbereich", Konten-Verwaltung) -- nutzt die beiden schon
+    // verbundenen Konten von eben. -----
+
+    // Fremde/unbekannte accountId -> 404 (Ownership-Check).
+    const deleteUnknownAccountRes = await fetch(`${base}/v1/accounts/00000000-0000-0000-0000-000000000000`, { method: "DELETE" });
+    assert(deleteUnknownAccountRes.status === 404, "DELETE /accounts/<unbekannt> sollte 404 liefern");
+
+    // Das zweite Konto entfernen -- erlaubt, da danach noch eines übrig bleibt.
+    const deleteSecondAccountRes = await fetch(`${base}/v1/accounts/${addAccountBody.account.id}`, { method: "DELETE" });
+    assert(deleteSecondAccountRes.status === 204, "DELETE /accounts/:id sollte 204 liefern, wenn noch ein anderes Konto übrig bleibt");
+    assert(
+      (await store.listMailAccountsByUserId(account.userId)).length === 1,
+      "nach dem Löschen sollte nur noch 1 Konto übrig sein",
+    );
+    assert(
+      (await store.getMailAccount(addAccountBody.account.id)) === undefined,
+      "gelöschtes Konto sollte nicht mehr auffindbar sein",
+    );
+    assert(
+      (await store.listFolders(addAccountBody.account.id)).length === 0,
+      "Ordner des gelöschten Kontos sollten mit-entfernt worden sein (Cascade)",
+    );
+
+    // Letztes verbleibendes Konto -> 400, kein Löschen.
+    const deleteLastAccountRes = await fetch(`${base}/v1/accounts/${account.id}`, { method: "DELETE" });
+    assert(deleteLastAccountRes.status === 400, "DELETE /accounts/:id sollte 400 liefern, wenn es das letzte Konto des Users wäre");
+    assert((await store.getMailAccount(account.id)) !== undefined, "letztes Konto sollte trotz des Versuchs weiterhin existieren");
+
+    // ----- GET/PUT /settings (WEB_INBOX.md 21.09. "Einstellungsbereich",
+    // Ansicht: Akzentfarben-Auswahl) -----
+    const settingsDefaultRes = await fetch(`${base}/v1/settings`);
+    assert(settingsDefaultRes.status === 200, "GET /v1/settings sollte 200 liefern");
+    const settingsDefault = (await settingsDefaultRes.json()) as Record<string, unknown>;
+    assert(settingsDefault.accentTheme === "teal", `Default-Akzentfarbe sollte 'teal' sein, war '${settingsDefault.accentTheme}'`);
+
+    const settingsInvalidRes = await fetch(`${base}/v1/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accentTheme: "pink" }),
+    });
+    assert(settingsInvalidRes.status === 400, "PUT /v1/settings mit ungültigem accentTheme sollte 400 liefern");
+
+    const settingsSetRes = await fetch(`${base}/v1/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accentTheme: "ocean_verlauf" }),
+    });
+    assert(settingsSetRes.status === 200, "PUT /v1/settings mit gültigem accentTheme sollte 200 liefern");
+    const settingsSet = (await settingsSetRes.json()) as Record<string, unknown>;
+    assert(settingsSet.accentTheme === "ocean_verlauf", "PUT /v1/settings sollte den neuen Wert zurückgeben");
+
+    const settingsAfterRes = await fetch(`${base}/v1/settings`);
+    const settingsAfter = (await settingsAfterRes.json()) as Record<string, unknown>;
+    assert(settingsAfter.accentTheme === "ocean_verlauf", "GET /v1/settings sollte die gespeicherte Änderung widerspiegeln");
+
     // ----- Autorisierung (echte Auth, [2026-09-10]): ein zweiter, echter
     // User darf NICHT auf die Nachrichten/Ordner des ersten zugreifen, nur
     // weil er selbst eingeloggt ist (Authentifizierung allein reicht nicht,
