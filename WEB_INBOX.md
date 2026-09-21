@@ -1087,3 +1087,25 @@ Massimo muss diese Angaben selbst final ausfuellen -- bitte NICHT mit Platzhalte
 ---
 
 Track C/F: bitte diese sechs Inhalte in die entsprechenden Unterseiten/Bereiche der oeffentlichen driftware.online-Kachel einbauen. Rechtstexte (Seiten 3-5) klar als das kennzeichnen was sie sind, mit einem sichtbaren Hinweis "Entwurf, in anwaltlicher Pruefung" bis Massimo die Pruefung bestaetigt hat -- danach kann der Hinweis entfernt werden.
+
+
+[2026-09-21] [offen] [ERGAENZUNG zum Inhalts-Paket - Eigenverantwortung des Nutzers] [Track C/F] — Massimo: wichtiger Zusatz zum Inhalts-Paket von eben. Dem User muss klar und ehrlich vermittelt werden, dass er auch selbst fuer seinen Schutz verantwortlich ist -- neue Betrugsmaschen und Techniken entstehen laufend, driftmail kann niemals 100%ige Sicherheit garantieren. Bitte als eigenen Abschnitt auf der Produktseite UND als Ergaenzung im Haftungsausschluss-Text einbauen.
+
+---
+## NEUER ABSCHNITT: "So schuetzt du dich zusaetzlich" (auf der Produktseite, sichtbar platziert, nicht versteckt im Kleingedruckten)
+
+**Einleitungssatz:** driftmail nimmt dir viel Arbeit ab -- aber 100%ige Sicherheit gibt es bei keinem Mail-Client, auch nicht bei uns. Angreifer entwickeln staendig neue Tricks. Ein paar einfache Gewohnheiten machen dich zusaetzlich sicherer:
+
+- Nutze die Whitelist aktiv: markiere Absender, denen du wirklich vertraust, ueber den "Absender vertrauen"-Button.
+- Sei besonders misstrauisch bei Dringlichkeit: "Sofort handeln", "Konto wird gesperrt", "Letzte Mahnung" -- Zeitdruck ist die haeufigste Betrugstaktik.
+- Bei Geld-/Bankdaten-Aenderungen: immer telefonisch gegenpruefen, unter einer dir bekannten (nicht der in der Mail genannten) Telefonnummer.
+- Klicke keine Links aus Mails, bei denen du unsicher bist -- rufe die Webseite stattdessen direkt im Browser auf.
+- Halte dein Geraet/Betriebssystem aktuell -- viele Sicherheitsluecken werden nur durch Updates geschlossen.
+- driftmail warnt dich -- die Entscheidung bleibt bei dir.
+
+---
+## Ergaenzung zum Haftungsausschluss-Entwurf von eben (Seite 3), bitte anhaengen:
+
+"driftmail bietet automatisierte Unterstuetzung bei der Erkennung von Spam, Phishing und Betrugsversuchen, kann jedoch keine vollstaendige oder dauerhafte Sicherheit gewaehrleisten. Angreifer entwickeln fortlaufend neue Methoden, die zum Zeitpunkt der Nutzung moeglicherweise noch nicht erkennbar sind. Der Nutzer bleibt selbst dafuer verantwortlich, bei verdaechtigen Nachrichten -- unabhaengig von einer angezeigten oder nicht angezeigten Warnung -- eigene Vorsicht walten zu lassen, insbesondere bei Zahlungsaufforderungen, Preisgabe persoenlicher Daten und Aenderungen von Bankverbindungen."
+
+Bitte diesen Zusatz-Abschnitt gut sichtbar platzieren (z.B. direkt nach der Funktionsuebersicht auf der Produktseite), nicht nur im Kleingedruckten -- das ist Massimo ausdruecklich wichtig.
