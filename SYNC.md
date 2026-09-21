@@ -663,7 +663,7 @@ Punkt 6 damit als eigener Auftrag GESCHLOSSEN (kein Cache = keine Verschluesselu
 Naechste Schritte (siehe auch WEB_INBOX.md): Track C/F UI-Arbeit fuer alle drei Themen -- Onboarding-Provider-Auswahl + IMAP-Formular, UI-Kennzeichen/Badges fuer die 6 neuen Sicherheitssignale (Anzeigename-Spoofing, Reply-To-Mismatch, IBAN-Wechsel, Erster-Kontakt, plus die bereits bestehenden Quarantaene-/Sprechblasen-Warnungen). Outlook/Yahoo-OAuth bleibt gewartet, bis Massimo die jeweiligen Provider-Projekte einrichtet.
 
 
-[2026-09-21] [terminal] [F] — WEB_INBOX.md 19.09. "PRIORITAET - naechster Schritt", Web-Teil aller 3 Punkte umgesetzt (Commit `b273990` auf `main`), Track C/iOS steht noch aus.
+[2026-09-21] [terminal] [F] — WEB_INBOX.md 19.09. "PRIORITAET - naechster Schritt", Web-Teil aller 3 Punkte umgesetzt (Commit `8a45c52` auf `main`), Track C/iOS steht noch aus.
 
 1. **Onboarding-Provider-Auswahl**: `OnboardingScreen.tsx` ersetzt das bisherige `LoginScreen.tsx` (war Gmail-only) als `!token`-Einstiegspunkt in `App.tsx`. Karten-Grid aus `GET /mail-providers` (Fallback auf eine statische Gmail-only-Liste, falls der Endpunkt mal nicht erreichbar ist, damit der Login-Weg nicht komplett blockiert). Gmail bleibt ein echter `<a href>`-Redirect (kein `fetch`), Outlook/Yahoo sind `comingSoon` und nicht klickbar, iCloud/GMX/web.de/generisches IMAP öffnen ein Formular mit den Presets aus dem jeweiligen `MailProvider`-Objekt vorbefüllt (Host/Port/TLS unter "Servereinstellungen anzeigen" einklappbar, damit das Formular für den Normalfall nur E-Mail+Passwort zeigt) + App-Passwort-Hinweis mit Link, wenn `requiresAppPassword=true`. Submit ruft `POST /accounts` (`provider=imap`) und übernimmt den zurückgegebenen Token wie beim Google-Callback.
 
