@@ -830,3 +830,15 @@ Kein einziger Treffer fuer eine Suchfunktion. User muss aktuell jede Mail einzel
 Kein einziger Treffer fuer cc/bcc im gesamten Code/Contract. Aktuell vermutlich nur ein einzelnes "An"-Feld beim Senden moeglich. Vorschlag: POST /messages/send und der Compose-Screen (der ja laut Auftrag von eben ohnehin neu/erweitert gebaut wird) um cc- und bcc-Empfaengerlisten ergaenzen -- bietet sich an, direkt zusammen mit dem Compose-Screen und der Absender-Auswahl bei Mehrfach-Konten zu bauen, nicht als getrennter Schritt.
 
 **Kontext, ehrlich benannt:** diese sechs Luecken zusammen (automatischer Abruf, Mehrfach-Konten, Compose-Button, Weiterleiten, Suche, CC/BCC) haetten von Anfang an als explizite Grundfunktions-Checkliste behandelt werden muessen, nicht erst durch Massimos eigenes Live-Testen auffallen. Bitte alle sechs als zusammenhaengenden Block VOR den 5 Wettbewerbs-Features und dem Malware-Scan-Auftrag einordnen -- das sind keine "nice-to-haves", sondern fehlende Grundfunktionen eines Mail-Clients.
+
+
+[2026-09-21] [offen] [DESIGN-RICHTUNG - von Massimo bestaetigt] [Track C/F, Design/Polish-Ebene] — Massimo hat nach Recherche zu den bestbewerteten Mail-Clients (Superhuman durchgehend als Testsieger in mehreren unabhaengigen Rankings 2026) eine Design-Richtung bestaetigt, per Mockup gezeigt und freigegeben ("so ist schon gut, Farben koennen wir aendern" -- Struktur bestaetigt, Farbwerte bleiben flexibel/Detailarbeit fuer spaeter).
+
+**Bestaetigte Struktur-Prinzipien (Referenz: Superhuman-Stil):**
+1. Sehr schmale, reduzierte Sidebar -- nur Ordnernamen mit kleinem Icon, kein visuelles Uebergewicht.
+2. Kompakte Listenzeilen: Absender (fett wenn ungelesen), einzeiliger Vorschautext, Zeitstempel rechtsbuendig, dezenter Ungelesen-Punkt links -- keine ueberladenen Karten/Schatten pro Zeile, duenne Trennlinien reichen.
+3. Genau EIN Akzent pro Ansicht -- die bestehenden Sicherheits-Badges/Warnhinweise (Neuer Absender, Anzeigename-Spoofing, IBAN-Wechsel etc., siehe fruehere Auftraege) sind die einzigen farbig hervorgehobenen Elemente, alles andere bleibt neutral/grau, damit Warnungen wirklich auffallen statt in einer bunten Oberflaeche unterzugehen.
+4. "Neue Nachricht"-Button klar sichtbar oben in der Listenansicht (behebt gleichzeitig den fruehren Compose-Button-Fund).
+5. Tastenkuerzel/Befehlspalette (z.B. Cmd/Ctrl+K) als Ergaenzung zu Buttons, nicht als Ersatz -- Hinweis dezent in der Sidebar, kein Muss fuer den ersten Entwurf, aber als Zielrichtung im Hinterkopf behalten.
+
+**Kein Contract-Change**, reine visuelle/Layout-Richtlinie fuer design-tokens.json-Anwendung und Komponenten-Struktur in Web/iOS. Bitte NACH den aktuell hoechst-priorisierten Grundfunktions-Luecken (Sync/Mehrfach-Konten/Compose/Weiterleiten/Suche/CC-BCC) und vor den 5 Wettbewerbs-Features einordnen -- das ist die "wenn wir eh am UI arbeiten, gleich in dieser Optik" Ebene, kein eigener grosser Sprint noetig.
