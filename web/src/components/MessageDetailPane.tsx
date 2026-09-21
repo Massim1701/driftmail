@@ -1,39 +1,8 @@
-import { useEffect, useRef, useState } from "react";
-import type { AttachmentScanStatus, Folder, MailSummary, MessageDetail } from "../types";
-import { api, ApiError } from "../api";
+import { useEffect, useState } from "react";
+import type { Folder, MailSummary, MessageDetail } from "../types";
+import { api } from "../api";
 import { SecurityBadge, SecurityDetails, SecuritySignalBadges } from "./SecurityBadge";
 import "./MessageDetailPane.css";
-
-// POST /attachments läuft synchron (siehe backend/README.md "Anhänge"),
-// "uploading"/"error" sind reiner Client-Zustand während des Requests,
-// nicht Teil des Backend-Enums.
-type AttachmentUiStatus = AttachmentScanStatus | "uploading" | "error";
-
-interface ComposeAttachment {
-  localId: string;
-  file: File;
-  attachmentId: string | null;
-  status: AttachmentUiStatus;
-}
-
-function attachmentStatusLabel(status: AttachmentUiStatus): string {
-  switch (status) {
-    case "uploading":
-      return "Wird hochgeladen…";
-    case "pending":
-      return "Wird geprüft…";
-    case "clean":
-      return "Geprüft";
-    case "malicious":
-      return "Gefährlich — wird nicht gesendet";
-    case "blocked_type":
-      return "Dateityp nicht erlaubt";
-    case "scan_failed":
-      return "Prüfung fehlgeschlagen";
-    case "error":
-      return "Hochladen fehlgeschlagen";
-  }
-}
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("de-DE", {
@@ -57,7 +26,8 @@ export function MessageDetailPane({
   onMoved,
   onDeleted,
   onPermanentlyDeleted,
-  onSent,
+  onReply,
+  onForward,
 }: {
   message: MessageDetail | null;
   loading: boolean;
@@ -78,45 +48,28 @@ export function MessageDetailPane({
   onMoved: (id: string, folderId: string) => void;
   onDeleted: (id: string) => void;
   onPermanentlyDeleted: (id: string) => void;
-  /** POST /messages/send war erfolgreich -- die Mail liegt jetzt lokal im
-   * "gesendet"-Ordner (siehe backend/README.md "Versand"). App.tsx nutzt
-   * das, um den Ordner-Zähler/-Inhalt neu zu laden. */
-  onSent: () => void;
+  /** [2026-09-21] Antworten/Weiterleiten öffnen jetzt den gemeinsamen
+   * ComposeModal in App.tsx (siehe dort) statt eines inline hier
+   * eingebetteten Compose-Felds -- dadurch stehen CC/BCC (WEB_INBOX.md
+   * 21.09. "CC/BCC beim Verfassen") auch beim Antworten zur Verfügung,
+   * nicht nur bei neuen Mails. */
+  onReply: (message: MessageDetail) => void;
+  onForward: (message: MessageDetail) => void;
 }) {
   const [summary, setSummary] = useState<MailSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  // [2026-09-10] WEB_INBOX.md-Priorität "Antworten ohne KI-Zwang": das
-  // Compose-Feld muss sofort leer nutzbar sein, der KI-Entwurf ist nur ein
-  // optionaler Zusatz-Button INNERHALB des bereits offenen Feldes --
-  // deshalb zwei getrennte States statt eines einzigen `draft`, der vorher
-  // erst nach einer erfolgreichen KI-Antwort gesetzt wurde und damit
-  // zugleich (missbräuchlich) darüber entschied, ob das Compose-Feld
-  // überhaupt sichtbar war.
-  const [replyOpen, setReplyOpen] = useState(false);
-  const [body, setBody] = useState("");
-  const [draftLoading, setDraftLoading] = useState(false);
   const [quarantining, setQuarantining] = useState(false);
   const [moving, setMoving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [permanentlyDeleting, setPermanentlyDeleting] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
-  const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [unsubscribing, setUnsubscribing] = useState(false);
   const [unsubscribeStatus, setUnsubscribeStatus] = useState<"pending_confirmation" | "confirmed" | "rejected" | null>(null);
 
   // Beim Wechsel der Nachricht abgeleiteten Zustand zurücksetzen
   useEffect(() => {
     setSummary(null);
-    setReplyOpen(false);
-    setBody("");
-    setSendError(null);
-    setSent(false);
     setShowDetails(false);
-    setAttachments([]);
     setUnsubscribeStatus(null);
   }, [message?.id]);
 
@@ -138,26 +91,6 @@ export function MessageDetailPane({
       setSummary(await api.getSummary(message.id));
     } finally {
       setSummaryLoading(false);
-    }
-  }
-
-  // Optionaler Zusatz-Button INNERHALB des bereits offenen Compose-Felds
-  // (siehe replyOpen/body-Kommentar oben) -- fragt einen KI-Entwurf ab und
-  // füllt ihn ins Feld. Überschreibt bereits Getipptes nur nach expliziter
-  // Bestätigung, damit ein versehentlicher Klick keinen angefangenen Text
-  // stillschweigend verwirft.
-  async function requestAiDraft() {
-    if (!message) return;
-    if (body.trim() && !window.confirm("Vorhandenen Text durch einen KI-Entwurf ersetzen?")) {
-      return;
-    }
-    setDraftLoading(true);
-    try {
-      const res = await api.createReplyDraft(message.id);
-      setBody(res.draftText);
-      setSendError(null);
-    } finally {
-      setDraftLoading(false);
     }
   }
 
@@ -207,76 +140,6 @@ export function MessageDetailPane({
       onDeleted(message.id);
     } finally {
       setDeleting(false);
-    }
-  }
-
-  // POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
-  // Eintrags von eben") -- jede ausgewählte Datei wird sofort einzeln
-  // hochgeladen/gescannt, der Sichtbarkeits-Zustand pro Datei (Spinner ->
-  // Ergebnis) ist rein lokal, siehe AttachmentUiStatus.
-  async function handleFilesSelected(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    const newItems: ComposeAttachment[] = Array.from(files).map((file) => ({
-      localId: crypto.randomUUID(),
-      file,
-      attachmentId: null,
-      status: "uploading",
-    }));
-    setAttachments((prev) => [...prev, ...newItems]);
-
-    for (const item of newItems) {
-      try {
-        const result = await api.uploadAttachment(item.file);
-        setAttachments((prev) =>
-          prev.map((a) => (a.localId === item.localId ? { ...a, attachmentId: result.attachmentId, status: result.scanStatus } : a)),
-        );
-      } catch {
-        setAttachments((prev) => prev.map((a) => (a.localId === item.localId ? { ...a, status: "error" } : a)));
-      }
-    }
-  }
-
-  function removeAttachment(localId: string) {
-    setAttachments((prev) => prev.filter((a) => a.localId !== localId));
-  }
-
-  // Solange ein Anhang noch hochgeladen/geprüft wird oder nicht 'clean' ist,
-  // bleibt Senden blockiert (WEB_INBOX.md-Vorgabe) -- ohne diese Prüfung
-  // könnte z.B. ein noch als 'malicious' erkannter Anhang durch einen
-  // erneuten Klick versehentlich mitgesendet werden.
-  const hasBlockingAttachment = attachments.some((a) => a.status !== "clean");
-
-  async function handleSend() {
-    if (!message || !body.trim() || hasBlockingAttachment) return;
-    setSending(true);
-    setSendError(null);
-    try {
-      const subject = message.subject
-        ? message.subject.toLowerCase().startsWith("re:")
-          ? message.subject
-          : `Re: ${message.subject}`
-        : "";
-      await api.sendMessage({
-        inReplyToMessageId: message.id,
-        to: [message.fromAddress],
-        subject,
-        bodyText: body,
-        attachmentIds: attachments.map((a) => a.attachmentId).filter((id): id is string => id !== null),
-      });
-      setSent(true);
-      setReplyOpen(false);
-      setBody("");
-      setAttachments([]);
-      onSent();
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 422) {
-        const body = err.body as { reason?: string } | undefined;
-        setSendError(body?.reason ?? "Versand wurde aus Sicherheitsgründen blockiert.");
-      } else {
-        setSendError("Versand fehlgeschlagen. Bitte später erneut versuchen.");
-      }
-    } finally {
-      setSending(false);
     }
   }
 
@@ -360,19 +223,23 @@ export function MessageDetailPane({
         <button type="button" className="btn btn-secondary" onClick={loadSummary} disabled={summaryLoading}>
           {summaryLoading ? "Fasse zusammen…" : "Inhalt"}
         </button>
-        {/* [2026-09-10] "Antworten ohne KI-Zwang": öffnet das Compose-Feld
-            sofort leer, kein KI-Aufruf nötig (der sitzt jetzt als optionaler
-            Zusatz-Button INNERHALB des Felds, siehe unten). WEB_INBOX.md
-            09.09. "KORREKTUR der letzten Regel" weiterhin gültig:
+        {/* Antworten/Weiterleiten öffnen den gemeinsamen ComposeModal in
+            App.tsx (siehe onReply/onForward-Kommentar oben). WEB_INBOX.md
+            09.09. "KORREKTUR der letzten Regel" weiterhin gültig: Antworten
             ausgeblendet bei aktuellem Ordner spam (folderId-Check), nicht
             bei eingefrorenem classification='spam' -- Antworten auf Spam
             macht keinen Sinn, auf Phishing (Quarantäne) schon (User kann
-            die Mail trotzdem sehen/melden, siehe Warnbanner oben). */}
-        {!isInSpam && !replyOpen && (
-          <button type="button" className="btn btn-secondary" onClick={() => setReplyOpen(true)}>
+            die Mail trotzdem sehen/melden, siehe Warnbanner oben).
+            Weiterleiten (WEB_INBOX.md 21.09. "DREI WEITERE
+            GRUNDFUNKTIONEN") ist unabhängig davon immer sinnvoll. */}
+        {!isInSpam && (
+          <button type="button" className="btn btn-secondary" onClick={() => onReply(message)}>
             Antworten
           </button>
         )}
+        <button type="button" className="btn btn-secondary" onClick={() => onForward(message)}>
+          Weiterleiten
+        </button>
         {/* Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.): manueller
             Abmelden-Button, unabhängig von der Klassifikation -- nur wenn
             die Nachricht einen gültigen List-Unsubscribe-Header hat. */}
@@ -417,91 +284,6 @@ export function MessageDetailPane({
               {summary.actionDescription ? `: ${summary.actionDescription}` : ""}
             </p>
           )}
-        </section>
-      )}
-
-      {replyOpen && (
-        <section className="detail-card">
-          <div className="detail-card-title">Antwort (wird erst nach Klick auf „Senden“ verschickt)</div>
-          <textarea
-            className="draft-textarea"
-            value={body}
-            onChange={(e) => {
-              setBody(e.target.value);
-              setSendError(null);
-            }}
-            rows={6}
-            autoFocus
-            placeholder="Antwort eingeben…"
-          />
-
-          {attachments.length > 0 && (
-            <ul className="attachment-list">
-              {attachments.map((a) => (
-                <li key={a.localId} className={`attachment-item attachment-status-${a.status}`}>
-                  <span className="attachment-filename">{a.file.name}</span>
-                  <span className="attachment-status">{attachmentStatusLabel(a.status)}</span>
-                  <button
-                    type="button"
-                    className="link-button attachment-remove"
-                    onClick={() => removeAttachment(a.localId)}
-                    aria-label={`${a.file.name} entfernen`}
-                  >
-                    Entfernen
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            hidden
-            onChange={(e) => {
-              handleFilesSelected(e.target.files);
-              e.target.value = "";
-            }}
-          />
-
-          {sendError && <p className="send-error">{sendError}</p>}
-          <div className="detail-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
-              Anhang hinzufügen
-            </button>
-            {/* Optionaler Zusatz-Button (siehe requestAiDraft-Kommentar) --
-                erzeugt nie automatisch, nur auf expliziten Klick. */}
-            <button type="button" className="btn btn-secondary" onClick={requestAiDraft} disabled={draftLoading}>
-              {draftLoading ? "Erstelle Entwurf…" : "KI-Entwurf vorschlagen"}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                setReplyOpen(false);
-                setBody("");
-                setAttachments([]);
-                setSendError(null);
-              }}
-            >
-              Verwerfen
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleSend}
-              disabled={sending || !body.trim() || hasBlockingAttachment}
-            >
-              {sending ? "Sende…" : "Senden"}
-            </button>
-          </div>
-        </section>
-      )}
-
-      {sent && (
-        <section className="detail-card send-confirmation">
-          Antwort an {message.fromAddress} wurde gesendet.
         </section>
       )}
 

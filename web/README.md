@@ -411,6 +411,87 @@ Nachrichten) wäre ein eigener, größerer Schritt gewesen -- die
 UI-Logik selbst hängt nicht am Mock, deshalb hier bewusst nicht
 mitgemacht.
 
+## Compose-Screen (neue Mail, Antworten, Weiterleiten, Suche) — [2026-09-21] Nachtrag
+(WEB_INBOX.md 21.09. "BUG - Massimo beim echten Live-Test entdeckt" +
+"ERGAENZUNG" + "DREI WEITERE GRUNDFUNKTIONEN")
+
+**Ein gemeinsamer Dialog statt drei getrennter UIs:** `ComposeModal.tsx`
+deckt alle drei Fälle ab (`mode: "new" | "reply" | "forward"`), weil
+To/CC/BCC/Betreff/Body in allen drei Fällen dieselben Felder sind, nur die
+Vorbefüllung unterscheidet sich. Ersetzt das bisherige inline in
+`MessageDetailPane.tsx` eingebettete Antwort-Compose-Feld (das hatte kein
+eigenes To-Feld -- Empfänger war hart auf `message.fromAddress` verdrahtet
+und damit für Weiterleiten ungeeignet, und kein CC/BCC).
+
+- **Neue Mail:** "Neue Nachricht"-Button in `FolderSidebar.tsx` (oben,
+  direkt unter dem Logo -- behebt den von Massimo gefundenen fehlenden
+  Compose-Button). Sender-Auswahl (`<select>`) nur sichtbar bei mehr als
+  einem verbundenen Konto (WEB_INBOX.md 21.09. "ERGAENZUNG"), bei genau
+  einem Konto automatisch dessen `accountId`.
+- **Antworten:** wie bisher über den "Antworten"-Button in
+  `MessageDetailPane.tsx`, öffnet jetzt aber den ComposeModal statt des
+  inline-Felds -- To vorbefüllt mit der Absenderadresse, Betreff mit
+  `Re: `-Präfix (idempotent, kein doppeltes Präfix bei erneutem Antworten
+  auf eine bereits "Re:"-Mail), Body leer (weiterhin "Antworten ohne
+  KI-Zwang" -- der KI-Entwurf-Button bleibt ein optionaler Zusatz
+  innerhalb des Dialogs, nur im `reply`-Modus sichtbar, kein Pendant für
+  neue Mail/Weiterleiten).
+- **Weiterleiten** (neuer Button daneben, WEB_INBOX.md 21.09. "DREI
+  WEITERE GRUNDFUNKTIONEN" Punkt 1): Betreff mit `Fwd: `-Präfix (gleiche
+  Idempotenz-Logik), Body vorbefüllt mit einer zitierten Kopie der
+  Ursprungsnachricht (Trennzeile + Von/Datum/Betreff + Originaltext), To
+  leer (User trägt den neuen Empfänger ein). **Grenze, bewusst so
+  belassen:** kein `forwardOf`-Bezug im Contract (der ursprünglich in
+  WEB_INBOX.md vorgeschlagene Endpunkt-Umbau war nicht nötig) -- eine
+  Weiterleitung ist technisch eine ganz normale neue Mail über
+  `POST /messages/send` mit vorbefülltem Text, kein serverseitiger
+  Sonderfall. Ebenfalls bewusst nicht automatisch mitgenommen: Original-
+  Anhänge (WEB_INBOX.md nannte das explizit "optional") -- der User kann
+  aber über denselben "Anhang hinzufügen"-Weg wie bei jeder anderen Mail
+  neue Anhänge auswählen.
+- **CC/BCC** (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN" Punkt 3):
+  hinter einem "CC/BCC hinzufügen"-Link eingeklappt (Superhuman-Prinzip
+  "nur zeigen, was gebraucht wird" -- die meisten Mails haben weder CC
+  noch BCC), Klick zeigt beide Felder dauerhaft für den Rest des Dialogs.
+  Komma-/Semikolon-getrennte Adresslisten wie beim bestehenden To-Feld.
+  `api.sendMessage()` reicht `bcc` jetzt zusätzlich zu `cc` durch (Backend
+  seit Commit `9c3a3ec`, siehe `backend/README.md` "Nachtrag: CC/BCC").
+
+`onSent` (App.tsx `handleSent`) läuft unverändert nach jedem erfolgreichen
+Versand -- lädt den "gesendet"-Ordner neu, egal ob aus "neu"/"antworten"/
+"weiterleiten" gesendet wurde.
+
+**Mock-Server:** `POST /messages/send` nahm `bcc` bereits stillschweigend
+entgegen (JSON-Zusatzfelder werden ignoriert, kein Codeänderung nötig) --
+für Konsistenz trotzdem ein erklärender Kommentar ergänzt.
+
+### Suche (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN" Punkt 2)
+
+Neues Suchfeld über der Nachrichtenliste (`message-column-header`),
+kontoweit (nicht auf den gerade aktiven Ordner beschränkt -- beim Suchen
+weiß man oft nicht mehr, in welchem Ordner eine Mail liegt). Ersetzt bei
+nicht-leerem Suchbegriff die normale Ordner-/Entwürfe-Ansicht durch die
+Ergebnisliste (`api.listMessages({ accountId, q })`, 250ms entprellt).
+Klick auf ein Ergebnis öffnet die Detailansicht wie gewohnt.
+`api.listMessages()` nimmt jetzt ein Options-Objekt
+(`{ folderId?, accountId?, q? }`) statt eines einzelnen `folderId`-Strings.
+
+`mock-server/server.mjs` `GET /messages` implementiert `q` mit derselben
+Substring-Semantik wie das echte Backend (`.includes()` über subject/
+fromAddress/fromDisplayName/bodyText), damit die Suche auch ohne den
+echten Backend-Server lokal testbar ist. `accountId` wird im Mock-Server
+nicht ausgewertet (er kennt ohnehin nur ein einziges Konto, siehe
+"Mehrfach-Konten" oben).
+
+**Tests:** `tsc -b` + `vite build` + `oxlint` grün (keine neuen Warnungen
+gegenüber dem Bestand). Kompletter Flow per Browser-Automation gegen den
+Mock-Server durchgeklickt: neue Mail mit CC+BCC gesendet (landet im
+"gesendet"-Ordner), Suche nach dem Betreff dieser Mail findet sie
+kontoweit, Weiterleiten dieser gefundenen Mail zeigt den korrekt
+vorausgefüllten "Fwd:"-Betreff + zitierten Text, Antworten auf eine echte
+Eingangs-Mail inkl. KI-Entwurf-Button funktioniert und sendet erfolgreich
+(Gesendet-Zähler erhöht sich entsprechend).
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge

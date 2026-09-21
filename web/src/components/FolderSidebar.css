@@ -27,6 +27,27 @@
   flex-shrink: 0;
 }
 
+.new-message-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  color: white;
+  background: var(--color-accent);
+  border: none;
+  border-radius: var(--radius-control);
+  padding: var(--space-sm) var(--space-md);
+  margin: calc(-1 * var(--space-sm)) 0 0;
+  cursor: pointer;
+}
+
+.new-message-button:hover {
+  background: color-mix(in srgb, var(--color-accent) 88%, black);
+}
+
 .folder-sidebar-account-row {
   display: flex;
   align-items: center;

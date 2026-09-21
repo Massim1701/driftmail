@@ -180,8 +180,17 @@ export const api = {
 
   deleteFolder: (folderId: string) => request<void>(`/folders/${folderId}`, { method: "DELETE" }),
 
-  listMessages: (folderId?: string) =>
-    request<Message[]>(`/messages${folderId ? `?folderId=${folderId}` : ""}`),
+  // q (WEB_INBOX.md 21.09. "Suche ueber Mails"): Substring-Suche ueber
+  // subject/from_address/from_display_name/body_text, kombinierbar mit
+  // folderId/accountId (siehe backend/README.md "Suche über Mails").
+  listMessages: (params: { folderId?: string; accountId?: string; q?: string } = {}) => {
+    const qs = new URLSearchParams();
+    if (params.folderId) qs.set("folderId", params.folderId);
+    if (params.accountId) qs.set("accountId", params.accountId);
+    if (params.q) qs.set("q", params.q);
+    const query = qs.toString();
+    return request<Message[]>(`/messages${query ? `?${query}` : ""}`);
+  },
 
   getMessage: (id: string) => request<MessageDetail>(`/messages/${id}`),
 
@@ -219,6 +228,7 @@ export const api = {
     inReplyToMessageId?: string;
     to: string[];
     cc?: string[];
+    bcc?: string[];
     subject?: string;
     bodyText: string;
     attachmentIds?: string[];

@@ -1,0 +1,102 @@
+.compose-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, black 45%, transparent);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  padding: var(--space-xl);
+}
+
+@media (min-width: 720px) {
+  .compose-overlay {
+    align-items: center;
+  }
+}
+
+.compose-modal {
+  width: 100%;
+  max-width: 640px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-page);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: 0 16px 48px color-mix(in srgb, black 25%, transparent);
+  overflow: hidden;
+}
+
+.compose-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.compose-modal-header h2 {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.compose-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-lg);
+  overflow-y: auto;
+}
+
+.compose-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-xs);
+}
+
+.compose-field span {
+  flex: 0 0 64px;
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+}
+
+.compose-field input,
+.compose-field select {
+  flex: 1;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+  background: transparent;
+  border: none;
+  padding: var(--space-xs) 0;
+  outline: none;
+}
+
+.compose-ccbcc-toggle {
+  align-self: flex-start;
+}
+
+.compose-body {
+  min-height: 200px;
+  border: none;
+  background: transparent;
+  padding: var(--space-sm) 0;
+}
+
+.compose-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.compose-modal-actions-spacer {
+  flex: 1;
+}

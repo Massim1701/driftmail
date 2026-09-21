@@ -7,6 +7,7 @@ import { DraftList } from "./components/DraftList";
 import { MessageDetailPane } from "./components/MessageDetailPane";
 import { OnboardingScreen } from "./components/OnboardingScreen";
 import { AppLockGate } from "./components/AppLockGate";
+import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
 import { useTheme } from "./useTheme";
 import { useAppLock } from "./useAppLock";
 import "./App.css";
@@ -70,6 +71,20 @@ export default function App() {
 
   const [error, setError] = useState<string | null>(null);
 
+  // Compose (WEB_INBOX.md 21.09. "BUG - Massimo beim echten Live-Test
+  // entdeckt" + "DREI WEITERE GRUNDFUNKTIONEN"): ein gemeinsamer Dialog für
+  // neue Mail/Antworten/Weiterleiten, siehe ComposeModal.tsx.
+  const [compose, setCompose] = useState<{ mode: ComposeMode; original: MessageDetail | null } | null>(null);
+
+  // Suche (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN", Punkt 2):
+  // solange searchQuery gesetzt ist, ersetzt die Ergebnisliste die normale
+  // Ordneransicht (kontoweit, nicht auf den aktuell aktiven Ordner
+  // beschränkt -- der User weiß beim Suchen oft nicht mehr, in welchem
+  // Ordner eine Mail liegt).
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
   // Konten laden -- erst NACH erfolgreichem Login (token gesetzt), siehe
   // OnboardingScreen unten. Beim ersten Laden automatisch das erste Konto
   // aktivieren; ein späteres Neuladen (nach "Konto hinzufügen") rührt eine
@@ -104,7 +119,7 @@ export default function App() {
   const loadFolder = useCallback((folderId: string) => {
     setListLoading(true);
     api
-      .listMessages(folderId)
+      .listMessages({ folderId })
       .then((msgs) => {
         setMessagesByFolder((prev) => ({ ...prev, [folderId]: msgs }));
         setError(null);
@@ -152,6 +167,28 @@ export default function App() {
     folders.forEach((f) => loadFolder(f.id));
   }, [folders, loadFolder]);
 
+  // Suche (siehe searchQuery-Kommentar oben): leicht entprellt (250ms),
+  // damit nicht bei jedem Tastendruck ein eigener Request rausgeht. Leerer
+  // Suchbegriff löscht die Ergebnisse sofort, kein Request nötig.
+  useEffect(() => {
+    if (!activeAccountId || !searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    setSearchLoading(true);
+    const handle = setTimeout(() => {
+      api
+        .listMessages({ accountId: activeAccountId, q: searchQuery.trim() })
+        .then((msgs) => {
+          setSearchResults(msgs);
+          setError(null);
+        })
+        .catch(() => setError("Suche fehlgeschlagen. Bitte später erneut versuchen."))
+        .finally(() => setSearchLoading(false));
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [activeAccountId, searchQuery]);
+
   // "Jetzt aktualisieren" (WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE -
   // HOECHSTE PRIORITAET", Punkt 1): löst POST /accounts/{accountId}/sync
   // aus (sofortiger Mail-Abruf statt auf das automatische Backend-
@@ -176,6 +213,7 @@ export default function App() {
   // übernimmt Laden/Reset.
   function handleSwitchAccount(accountId: string) {
     setActiveAccountId(accountId);
+    setSearchQuery("");
   }
 
   // "Konto hinzufügen" (WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE", Punkt
@@ -250,6 +288,19 @@ export default function App() {
     setActiveFolder(folderId);
     setSelectedId(null);
     setSelectedDetail(null);
+    setSearchQuery("");
+  }
+
+  function handleNewMessage() {
+    setCompose({ mode: "new", original: null });
+  }
+
+  function handleReply(message: MessageDetail) {
+    setCompose({ mode: "reply", original: message });
+  }
+
+  function handleForward(message: MessageDetail) {
+    setCompose({ mode: "forward", original: message });
   }
 
   function handleSelectMessage(id: string) {
@@ -362,6 +413,7 @@ export default function App() {
   const isQuarantineFolder = activeFolderDef?.systemKey === "quarantaene";
   const isPapierkorbFolder = activeFolderDef?.systemKey === "papierkorb";
   const isEntwuerfeFolder = activeFolderDef?.systemKey === "entwuerfe";
+  const isSearching = searchQuery.trim().length > 0;
 
   function handleDeleteDraft(id: string) {
     api
@@ -421,6 +473,7 @@ export default function App() {
           onAddAccount={handleAddAccount}
           onSyncNow={handleSyncNow}
           isSyncing={isSyncing}
+          onNewMessage={handleNewMessage}
           theme={theme}
           onThemeChange={setTheme}
           onCreateFolder={handleCreateFolder}
@@ -430,11 +483,33 @@ export default function App() {
 
         <div className="message-column">
           <div className="message-column-header">
-            <h2>{activeFolderDef?.name ?? "—"}</h2>
-            <span className="message-column-count">{isEntwuerfeFolder ? drafts.length : currentMessages.length}</span>
+            <h2>{isSearching ? `Suche: „${searchQuery.trim()}“` : (activeFolderDef?.name ?? "—")}</h2>
+            <span className="message-column-count">
+              {isSearching ? searchResults.length : isEntwuerfeFolder ? drafts.length : currentMessages.length}
+            </span>
           </div>
+          {/* Suche (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN",
+              Punkt 2): kontoweit, ersetzt bei nicht-leerem Suchbegriff die
+              Ordner-/Entwürfe-Ansicht darunter (siehe searchQuery-Kommentar
+              oben). */}
+          <input
+            type="search"
+            className="message-search-input"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Nach Betreff, Absender oder Inhalt suchen…"
+            aria-label="Mails durchsuchen"
+          />
           {error && <div className="app-error">{error}</div>}
-          {isEntwuerfeFolder ? (
+          {isSearching ? (
+            <MessageList
+              messages={searchResults}
+              selectedId={selectedId}
+              onSelect={handleSelectMessage}
+              loading={searchLoading && searchResults.length === 0}
+              emptyLabel="Keine Treffer."
+            />
+          ) : isEntwuerfeFolder ? (
             <DraftList drafts={drafts} loading={draftsLoading && drafts.length === 0} onDelete={handleDeleteDraft} />
           ) : (
             <MessageList
@@ -465,9 +540,21 @@ export default function App() {
           onMoved={handleMoved}
           onDeleted={handleDeleted}
           onPermanentlyDeleted={handlePermanentlyDeleted}
-          onSent={handleSent}
+          onReply={handleReply}
+          onForward={handleForward}
         />
       </div>
+
+      {compose && (
+        <ComposeModal
+          mode={compose.mode}
+          accounts={accounts}
+          defaultAccountId={activeAccountId}
+          original={compose.original}
+          onClose={() => setCompose(null)}
+          onSent={handleSent}
+        />
+      )}
     </AppLockGate>
   );
 }

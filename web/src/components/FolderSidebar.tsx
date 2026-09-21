@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { Folder, MailAccount } from "../types";
-import { FOLDER_ICONS, FolderIcon, LockIcon, MoonIcon, PencilIcon, PlusIcon, RefreshIcon, SunIcon, SystemIcon, TrashIcon, UnlockIcon } from "../icons";
+import { FOLDER_ICONS, FolderIcon, LockIcon, MoonIcon, PencilIcon, PlusIcon, RefreshIcon, SendIcon, SunIcon, SystemIcon, TrashIcon, UnlockIcon } from "../icons";
 import { SYSTEM_FOLDER_META } from "../folderMeta";
 import type { ThemeChoice } from "../useTheme";
 import "./FolderSidebar.css";
@@ -32,6 +32,7 @@ export function FolderSidebar({
   onAddAccount,
   onSyncNow,
   isSyncing,
+  onNewMessage,
   theme,
   onThemeChange,
   appLockSupported,
@@ -57,6 +58,10 @@ export function FolderSidebar({
    * aus, statt auf das automatische Backend-Intervall zu warten. */
   onSyncNow: () => void;
   isSyncing: boolean;
+  /** "Neue Nachricht"-Button (WEB_INBOX.md 21.09. "BUG - Massimo beim
+   * echten Live-Test entdeckt": fehlender Compose-Button) -- öffnet den
+   * ComposeModal in App.tsx im "new"-Modus. */
+  onNewMessage: () => void;
   theme: ThemeChoice;
   onThemeChange: (t: ThemeChoice) => void;
   /** Web-Äquivalent zur iOS-App-Sperre (WEB_INBOX.md 19.09. Punkt 3, siehe
@@ -111,6 +116,12 @@ export function FolderSidebar({
         <span className="brand-dot" aria-hidden="true" />
         driftmail
       </div>
+
+      <button type="button" className="new-message-button" onClick={onNewMessage}>
+        <SendIcon />
+        Neue Nachricht
+      </button>
+
       {accounts.length > 0 && (
         <div className="folder-sidebar-account-row">
           {accounts.length > 1 ? (

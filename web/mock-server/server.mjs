@@ -350,6 +350,11 @@ const server = createServer(async (req, res) => {
   if (req.method === "POST" && parts.length === 2 && parts[0] === "messages" && parts[1] === "send") {
     const body = (await readJsonBody(req)) ?? {};
     const to = Array.isArray(body.to) ? body.to.filter((x) => typeof x === "string" && x.trim()) : [];
+    // cc/bcc (WEB_INBOX.md 21.09. "CC/BCC beim Verfassen"): der Mock-Server
+    // simuliert keinen echten Versand, deshalb reicht reines Entgegennehmen
+    // ohne separate Header-Logik -- bcc bleibt (wie beim echten Backend)
+    // unsichtbar, taucht also bewusst nirgends in der lokalen
+    // "gesendet"-Zeile unten auf.
     const bodyText = typeof body.bodyText === "string" ? body.bodyText : "";
     if (to.length === 0 || !bodyText.trim()) {
       return badRequest(res, "to (mindestens 1 Empfänger) und bodyText sind erforderlich");
@@ -464,11 +469,28 @@ const server = createServer(async (req, res) => {
     return send(res, 200, { attachmentId: record.id, scanStatus: record.scanStatus });
   }
 
-  // GET /messages?folderId=&accountId=
+  // GET /messages?folderId=&accountId=&q= (q: WEB_INBOX.md 21.09. "Suche
+  // ueber Mails", siehe backend/README.md "Suche über Mails" fuer die
+  // echte Implementierung -- hier dieselbe einfache Substring-Semantik
+  // ueber subject/fromAddress/fromDisplayName/bodyText, damit die Web-Suche
+  // auch ohne den echten Backend-Server testbar ist. accountId wird hier
+  // nicht ausgewertet, da dieser Mock-Server ohnehin nur ein einziges Konto
+  // kennt (siehe data.mjs).
   if (req.method === "GET" && parts.length === 1 && parts[0] === "messages") {
     const folderId = url.searchParams.get("folderId");
+    const q = url.searchParams.get("q");
     let result = messages;
     if (folderId) result = result.filter((m) => m.folderId === folderId);
+    if (q) {
+      const needle = q.toLowerCase();
+      result = result.filter(
+        (m) =>
+          m.subject?.toLowerCase().includes(needle) ||
+          m.fromAddress?.toLowerCase().includes(needle) ||
+          m.fromDisplayName?.toLowerCase().includes(needle) ||
+          m.bodyText?.toLowerCase().includes(needle),
+      );
+    }
     return send(
       res,
       200,
