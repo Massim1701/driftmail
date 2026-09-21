@@ -168,10 +168,23 @@ actor MockAPIClient: APIClient {
         db.folders.removeAll { $0.id == id }
     }
 
-    func fetchMessages(folderId: String?, accountId: String?) async throws -> [Message] {
+    /// `accountId` bleibt hier ungenutzt (Mock kennt wie `MockDatabase.json`
+    /// nur ein einziges Konto, siehe Kommentar bei `createFolder`).
+    /// `query` (WEB_INBOX.md 21.09. "Suche ueber Mails"): dieselbe
+    /// Substring-Semantik wie das echte Backend, siehe
+    /// backend/README.md "Suche über Mails".
+    func fetchMessages(folderId: String?, accountId: String?, query: String?) async throws -> [Message] {
         await delay()
+        let needle = query?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return db.messages
             .filter { folderId == nil || $0.folderId == folderId }
+            .filter { message in
+                guard let needle, !needle.isEmpty else { return true }
+                return (message.subject?.lowercased().contains(needle) ?? false)
+                    || message.fromAddress.lowercased().contains(needle)
+                    || (message.fromDisplayName?.lowercased().contains(needle) ?? false)
+                    || (message.bodyText?.lowercased().contains(needle) ?? false)
+            }
             .sorted { $0.receivedAt > $1.receivedAt }
             .map(\.asMessage)
     }
@@ -281,10 +294,21 @@ actor MockAPIClient: APIClient {
     /// Legt zusätzlich (Ordner-Umbau 09.09.) eine lokale `MessageDetail` im
     /// "gesendet"-Ordner an und verwirft den `draftId`-Entwurf, falls
     /// gesetzt -- analog zum echten Backend.
-    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String {
+    /// [2026-09-21] Compose-Screen (WEB_INBOX.md 21.09.): genau eines von
+    /// `accountId`/`inReplyToMessageId` erforderlich, analog zum echten
+    /// Backend -- `cc`/`bcc` werden vom Mock entgegengenommen, aber (wie
+    /// beim echten Versand ohnehin nicht sichtbar) nirgends weiter
+    /// ausgewertet.
+    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String {
         await delay()
-        guard db.messages.contains(where: { $0.id == inReplyToMessageId }) else {
-            throw APIError.notFound
+        if let inReplyToMessageId {
+            guard db.messages.contains(where: { $0.id == inReplyToMessageId }) else {
+                throw APIError.notFound
+            }
+        } else {
+            guard let accountId, db.accounts.contains(where: { $0.id == accountId }) else {
+                throw APIError.notFound
+            }
         }
         for attachmentId in attachmentIds {
             guard let status = uploadedAttachments[attachmentId] else { throw APIError.notFound }

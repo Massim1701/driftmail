@@ -44,7 +44,12 @@ protocol APIClient {
     func updateFolder(id: String, name: String?, icon: String?, sortOrder: Int?) async throws -> Folder
     func deleteFolder(id: String) async throws
 
-    func fetchMessages(folderId: String?, accountId: String?) async throws -> [Message]
+    /// `query` (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN" Punkt 2,
+    /// "Suche ueber Mails"): Substring-Suche ueber subject/fromAddress/
+    /// fromDisplayName/bodyText (siehe backend/README.md "Suche über
+    /// Mails"), kombinierbar mit `folderId`/`accountId`. `nil` = kein
+    /// Suchfilter, unveraendertes Verhalten.
+    func fetchMessages(folderId: String?, accountId: String?, query: String?) async throws -> [Message]
     func fetchMessageDetail(id: String) async throws -> MessageDetail
     func quarantineMessage(id: String) async throws
     /// `POST /messages/{messageId}/unsubscribe` — manuelle Abmeldung über
@@ -88,7 +93,15 @@ protocol APIClient {
     /// `draftId` (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des
     /// Ordner-Umbau-Eintrags"): falls gesetzt, verwirft der Server den
     /// Entwurf nach erfolgreichem Versand automatisch (intern).
-    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String
+    /// [2026-09-21] Compose-Screen (WEB_INBOX.md 21.09. "BUG - Massimo beim
+    /// echten Live-Test entdeckt" + "DREI WEITERE GRUNDFUNKTIONEN" Punkt
+    /// 3): erweitert um `accountId` (neue Mail/Weiterleiten -- kein Bezug
+    /// zu einer Ursprungsnachricht, Backend leitet das Konto dann NICHT
+    /// aus `inReplyToMessageId` ab) sowie `cc`/`bcc`. Genau eines von
+    /// `accountId`/`inReplyToMessageId` ist erforderlich (siehe
+    /// backend/README.md "Versand") -- bei einer Antwort reicht
+    /// `inReplyToMessageId`, das Backend leitet das Konto daraus ab.
+    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String
     /// `POST /attachments` — lädt eine Datei hoch und lässt sie sofort
     /// scannen (siehe backend/README.md "Anhänge").
     func uploadAttachment(filename: String, mimeType: String, data: Data) async throws -> AttachmentUploadResult

@@ -676,6 +676,119 @@ gleichzeitig) ließ sich in dieser Umgebung nicht end-to-end durchklicken
 iOS-Einträge) -- die zugrunde liegende Logik ist identisch zur bereits
 per Backend-Smoketest verifizierten Mehrfach-Konten-Funktionalität.
 
+## [2026-09-21] Nachtrag: Compose-Screen (neue Mail, Antworten, Weiterleiten, Suche, CC/BCC)
+
+Backend-Teil siehe `backend/README.md` "Suche über Mails"/"Nachtrag: CC/BCC"
+(Commit `9c3a3ec`), Web-Teil siehe `web/README.md` "Compose-Screen" (Commit
+`18f36eb`). Dieser Nachtrag ist der iOS-Teil derselben vier
+zusammengehörigen WEB_INBOX.md-21.09.-Aufträge (fehlender Compose-Button,
+Absender-Auswahl, Weiterleiten/Suche/CC-BCC).
+
+**Ein gemeinsamer Compose-Screen statt drei getrennter UIs:** neue Datei
+`Views/ComposeView.swift`, `enum ComposeMode { case new; case
+reply(MessageDetail); case forward(MessageDetail) }` (analog zu
+`web/src/components/ComposeModal.tsx`s `mode`-Prop). To/CC/BCC/Betreff/
+Body sind in allen drei Fällen dieselben Felder, nur die Vorbefüllung
+unterscheidet sich (`setUpPrefill()`): Antworten -> An = Absender, Betreff
+mit "Re:"-Präfix (idempotent), Body leer ("Antworten ohne KI-Zwang" bleibt
+gültig). Weiterleiten -> Betreff mit "Fwd:"-Präfix (idempotent), Body mit
+zitiertem Original (Trennzeile + Von/Datum/Betreff + Originaltext), An
+leer. Ersetzt das bisherige INLINE in `MessageDetailView.swift`
+eingebettete Antwortfeld (`isReplyOpen`/`replyCard(for:)` -- kein eigenes
+To-Feld, kein CC/BCC, für Weiterleiten strukturell ungeeignet) komplett,
+als `.sheet` präsentiert.
+
+- **Neue Mail:** neuer Toolbar-Button in `FolderListView.swift`
+  (`square.and.pencil`-Icon, neben "Neuer Ordner"), öffnet `ComposeView`
+  im `.new`-Modus. Sender-`Picker` nur sichtbar bei mehr als einem
+  verbundenen Konto (`environment.accounts.count > 1`), bei genau einem
+  Konto automatisch dessen `accountId` (`environment.activeAccountId`).
+- **Antworten/Weiterleiten:** zwei Buttons in `MessageDetailView.swift`s
+  `actions(for:)`, setzen `composeMode` und präsentieren `ComposeView` als
+  `.sheet`. "Antworten" bleibt bei aktuellem Ordner `spam` ausgeblendet
+  (WEB_INBOX.md 09.09. "KORREKTUR der letzten Regel", unverändert),
+  "Weiterleiten" ist immer sichtbar.
+- **KI-Entwurf:** der optionale "KI-Entwurf"-Button (`requestReplyDraft`)
+  ist nur im `.reply`-Modus sichtbar -- hat kein Äquivalent für neue Mail/
+  Weiterleiten (bezieht sich auf eine Ursprungsnachricht).
+- **Anhänge:** dieselbe `ComposeAttachment`/`fileImporter`-Logik wie zuvor
+  in `MessageDetailView.swift`, jetzt in `ComposeView.swift`. **Grenze,
+  bewusst so belassen (wie auf Web):** Original-Anhänge einer
+  weitergeleiteten Mail werden NICHT automatisch mitgenommen
+  (WEB_INBOX.md nannte das explizit "optional") -- der User kann aber neue
+  Anhänge über denselben Weg hinzufügen.
+- **CC/BCC:** zwei zusätzliche `TextField`s, hinter einem "CC/BCC
+  hinzufügen"-Button eingeklappt (Superhuman-Prinzip: nur zeigen, was
+  gebraucht wird, gleiches UX-Muster wie `ComposeModal.tsx`).
+
+**`APIClient.sendMessage(...)`** (Protokoll + `RemoteAPIClient` +
+`MockAPIClient`) erweitert: `inReplyToMessageId: String` (Pflicht) wurde
+`inReplyToMessageId: String?` (optional), plus neue Parameter `accountId:
+String?`, `cc: [String]`, `bcc: [String]` -- genau eines von `accountId`/
+`inReplyToMessageId` ist erforderlich, analog zu `POST /messages/send` im
+Backend. Vorher unterstützte der iOS-Client GAR KEINE neue (nicht-
+antwortende) Mail, nur Antworten -- das war die eigentliche Ursache des
+fehlenden Compose-Buttons, nicht nur ein UI-Problem.
+
+**`APIClient.fetchMessages(...)`** um ein drittes Argument `query: String?`
+erweitert (Suche, siehe unten) -- alle drei bestehenden Call-Sites
+(`FolderListView` Zähler-Ladepfad, `InboxListView`) auf `query: nil`
+umgestellt, kein Verhaltensunterschied dort.
+
+### Suche (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN" Punkt 2)
+
+`.searchable(text:)` auf der Ordnerliste (`FolderListView.swift`, die
+einzige naheliegende Stelle für eine KONTOWEITE Suche -- sie ist die
+Wurzel-Ansicht, es gibt dort keinen "aktuellen Ordner", anders als in
+`InboxListView`). Bei nicht-leerem Suchbegriff ersetzt eine flache
+Trefferliste (`MessageRowView`, `NavigationLink(value:)` zu
+`MessageDetailView`) die Ordnerliste. 250ms entprellt über einen
+abbrechbaren `Task` in `.onChange(of: searchText)` (`searchTask?.cancel()`
++ `Task.sleep`), analog zum 250ms-Debounce in `web/src/App.tsx`.
+`fetchMessages(folderId: nil, accountId: environment.activeAccountId,
+query:)` -- kontoweit, wie auf Web.
+
+`MockAPIClient.fetchMessages(...)` implementiert dieselbe
+Substring-Semantik wie das echte Backend (`.lowercased().contains(...)`
+über subject/fromAddress/fromDisplayName/bodyText).
+
+**Tests:** `xcodebuild -project DriftmailApp.xcodeproj -scheme
+DriftmailApp -destination 'id=<Simulator-UDID>' build` **BUILD
+SUCCEEDED**. Per `simctl uninstall`+`install`+`launch` auf einem echten,
+laufenden Simulator (iPhone 17 Pro) sauber neu installiert (Absturz-Check
+per `xcrun simctl spawn ... log show` -- kein `DecodingError`, kein
+`fatalError`, gleiche Methode wie beim `accountId`-Absturzfund vom
+Mehrfach-Konten-Nachtrag oben) und per Screenshot bestätigt: Onboarding-
+Bildschirm rendert unverändert korrekt.
+
+**Ehrlich benannte Grenze dieser Verifikation:** die neuen,
+AUTHENTIFIZIERTEN Screens (Compose-Dialog, Suche, Antworten/Weiterleiten
+in `MessageDetailView`) ließen sich in dieser Umgebung NICHT interaktiv
+gegen einen echten Simulator durchklicken -- seit "voll verdrahten"
+(21.09.) braucht `OnboardingAccountConnectView` für JEDEN Konto-Connect
+(auch für den Mock-Entwicklungspfad) einen echten, unauthentifizierten
+`RemoteAPIClient`-Request (`POST /accounts` mit `provider=imap` testet
+die IMAP-Zugangsdaten serverseitig ECHT, siehe `backend/src/routes/
+auth.ts` `testConnection()`) -- ohne eine echte, erreichbare Test-Mailbox
+kommt man in dieser Umgebung nicht mehr am Onboarding-Gate vorbei, um
+`FolderListView`/`ComposeView` überhaupt zu sehen. (Kurz erwogen: ein
+env-var-gesteuerter Auth-Bypass in `AppEnvironment.init()` nur für lokale
+Verifikation -- verworfen, weil das strukturell genau das Sicherheits-
+Antimuster ist, das die "voll verdrahten"-Entscheidung gerade vermeiden
+sollte, selbst wenn er vor dem Commit wieder entfernt worden wäre.)
+Stattdessen abgesichert durch: (1) der komplette Typ-Check des SwiftUI-
+View-Baums läuft durch den `xcodebuild`-Build (jede Binding-/Protokoll-
+Signatur ist strukturell korrekt, sonst BUILD FAILED), (2) die Such-/
+Compose-/CC-BCC-Logik ist 1:1 aus der bereits per Browser-Automation
+end-to-end verifizierten Web-Implementierung übertragen (`ComposeModal.tsx`,
+Commit `18f36eb`), (3) `MockAPIClient`s neue `sendMessage`/`fetchMessages`-
+Zweige folgen exakt demselben Validierungsmuster wie die bereits
+verifizierten bestehenden Methoden in derselben Datei. **Übergabe/offener
+Punkt:** eine spätere Session mit Zugriff auf eine echte Test-Mailbox
+(oder ein XCTest-UI-Test-Target mit injizierbarem `APIClient` statt der
+produktiven `AppEnvironment.init()`-Logik) sollte den authentifizierten
+Flow einmal live durchklicken.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

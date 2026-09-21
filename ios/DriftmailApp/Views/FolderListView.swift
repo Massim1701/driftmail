@@ -20,6 +20,22 @@ struct FolderListView: View {
     // statt eines eigenen Screens/Tabs -- kann bei Bedarf zu einer echten
     // Settings-Liste wachsen, sobald es mehr als eine Einstellung gibt.
     @State private var isShowingSettings = false
+    // "Neue Nachricht" (WEB_INBOX.md 21.09. "BUG - Massimo beim echten
+    // Live-Test entdeckt"): öffnet `ComposeView` im `.new`-Modus.
+    @State private var isComposingNew = false
+    // Suche (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN" Punkt 2,
+    // "Suche ueber Mails"): kontoweit wie im Web-Client (nicht auf den
+    // gerade betrachteten Ordner beschränkt -- diese Ansicht IST die
+    // Ordnerliste, es gibt hier gar keinen "aktuellen Ordner"). Ersetzt bei
+    // nicht-leerem Suchbegriff die Ordnerliste durch die Trefferliste.
+    @State private var searchText = ""
+    @State private var searchResults: [Message] = []
+    @State private var isSearching = false
+    @State private var searchTask: Task<Void, Never>?
+
+    private var isSearchActive: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         NavigationStack {
@@ -31,16 +47,44 @@ struct FolderListView: View {
                         .listRowBackground(Color.clear)
                 }
 
-                ForEach(environment.folders) { folder in
-                    NavigationLink(value: folder) {
-                        FolderRow(folder: folder, count: counts[folder.id] ?? 0)
+                if isSearchActive {
+                    if searchResults.isEmpty && !isSearching {
+                        ContentUnavailableCompat(title: "Keine Treffer", systemImage: "magnifyingglass")
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
                     }
-                    .listRowBackground(DesignTokens.Color.surfaceCard)
+                    ForEach(searchResults) { message in
+                        NavigationLink(value: message) {
+                            MessageRowView(message: message)
+                        }
+                        .listRowBackground(DesignTokens.Color.surfaceCard)
+                    }
+                } else {
+                    ForEach(environment.folders) { folder in
+                        NavigationLink(value: folder) {
+                            FolderRow(folder: folder, count: counts[folder.id] ?? 0)
+                        }
+                        .listRowBackground(DesignTokens.Color.surfaceCard)
+                    }
                 }
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .background(DesignTokens.Color.surfacePage)
+            .searchable(text: $searchText, prompt: "Nach Betreff, Absender oder Inhalt suchen…")
+            .onChange(of: searchText) { _, newValue in
+                searchTask?.cancel()
+                guard !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    searchResults = []
+                    isSearching = false
+                    return
+                }
+                searchTask = Task {
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    guard !Task.isCancelled else { return }
+                    await runSearch(query: newValue)
+                }
+            }
             // [2026-09-15] WEB_INBOX.md 10.09.: zeigt die E-Mail-Adresse des
             // AKTIVEN Kontos statt des App-Namens, sobald geladen -- User
             // soll immer sofort sehen, in welchem Postfach er ist. Fällt auf
@@ -77,9 +121,20 @@ struct FolderListView: View {
                     }
                     .accessibilityLabel("Neuer Ordner")
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        isComposingNew = true
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                    }
+                    .accessibilityLabel("Neue Nachricht")
+                }
             }
             .sheet(isPresented: $isShowingSettings) {
                 SettingsView()
+            }
+            .sheet(isPresented: $isComposingNew) {
+                ComposeView(mode: .new, onSent: {})
             }
             .navigationDestination(for: Folder.self) { folder in
                 // "entwuerfe" zeigt GET /drafts, nicht GET /messages (siehe
@@ -90,6 +145,9 @@ struct FolderListView: View {
                 } else {
                     InboxListView(folder: folder)
                 }
+            }
+            .navigationDestination(for: Message.self) { message in
+                MessageDetailView(messageId: message.id)
             }
             .overlay {
                 if isLoading && environment.folders.isEmpty {
@@ -161,7 +219,7 @@ struct FolderListView: View {
             // Nachrichten in die Zähler-Berechnung des ersten mischen
             // (folderId ist zwar pro Konto eindeutig, aber "alle Ordner
             // dieses Kontos" ist genau das, was hier gebraucht wird).
-            let all = try await environment.apiClient.fetchMessages(folderId: nil, accountId: environment.activeAccountId)
+            let all = try await environment.apiClient.fetchMessages(folderId: nil, accountId: environment.activeAccountId, query: nil)
             counts = Dictionary(grouping: all, by: \.folderId).mapValues(\.count)
         } catch {
             counts = [:]
@@ -174,6 +232,23 @@ struct FolderListView: View {
             } catch {
                 counts[entwuerfeFolder.id] = 0
             }
+        }
+    }
+
+    /// Suche (siehe `searchText`-Kommentar oben) -- 250ms entprellt über
+    /// den `.onChange`-Handler, der diese Funktion aufruft. Kontoweit
+    /// (`folderId: nil`), analog zu web/src/App.tsx.
+    private func runSearch(query: String) async {
+        isSearching = true
+        defer { isSearching = false }
+        do {
+            searchResults = try await environment.apiClient.fetchMessages(
+                folderId: nil,
+                accountId: environment.activeAccountId,
+                query: query
+            )
+        } catch {
+            searchResults = []
         }
     }
 

@@ -40,6 +40,7 @@
 		689E46E1971421446498BF2F /* TrustedSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9FCDE9892BAE90D849D0DD8 /* TrustedSender.swift */; };
 		AF7B28B5DC85681902EA027D /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80514C76AD43F6907485DFF /* SessionStore.swift */; };
 		B7F7E4294BE911E327E403DC /* OnboardingAccountConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */; };
+		7149640EA5C046CDF2D0DDF1 /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6A0A6DD232DDE1F2F93EBE /* ComposeView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -77,6 +78,7 @@
 		C9FCDE9892BAE90D849D0DD8 /* TrustedSender.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TrustedSender.swift; sourceTree = "<group>"; };
 		C80514C76AD43F6907485DFF /* SessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
 		B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingAccountConnectView.swift; sourceTree = "<group>"; };
+		2F6A0A6DD232DDE1F2F93EBE /* ComposeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
 		D3A1F4C6E0904A2F8C7B1E5A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -224,6 +226,7 @@
 				61B316CEEB06B495EE114590 /* RootView.swift */,
 				EF0C1B44A8174871A27378CE /* AppLockGateView.swift */,
 				B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */,
+				2F6A0A6DD232DDE1F2F93EBE /* ComposeView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -337,6 +340,7 @@
 				689E46E1971421446498BF2F /* TrustedSender.swift in Sources */,
 				AF7B28B5DC85681902EA027D /* SessionStore.swift in Sources */,
 				B7F7E4294BE911E327E403DC /* OnboardingAccountConnectView.swift in Sources */,
+				7149640EA5C046CDF2D0DDF1 /* ComposeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

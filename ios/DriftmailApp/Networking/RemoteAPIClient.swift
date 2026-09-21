@@ -123,11 +123,12 @@ struct RemoteAPIClient: APIClient {
         try await delete("/folders/\(id)")
     }
 
-    func fetchMessages(folderId: String?, accountId: String?) async throws -> [Message] {
+    func fetchMessages(folderId: String?, accountId: String?, query: String?) async throws -> [Message] {
         var components = URLComponents(url: baseURL.appendingPathComponent("/messages"), resolvingAgainstBaseURL: false)!
         var items: [URLQueryItem] = []
         if let folderId { items.append(.init(name: "folderId", value: folderId)) }
         if let accountId { items.append(.init(name: "accountId", value: accountId)) }
+        if let query, !query.isEmpty { items.append(.init(name: "q", value: query)) }
         components.queryItems = items.isEmpty ? nil : items
         return try await get(components.url!)
     }
@@ -176,10 +177,13 @@ struct RemoteAPIClient: APIClient {
     /// true`) ein erwarteter, vom Erfolgsfall inhaltlich verschiedener
     /// Ausgang ist (siehe `APIError.blocked`), keine generische
     /// Netzwerk-/Decoding-Fehlerbedingung.
-    func sendMessage(inReplyToMessageId: String, to: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String {
+    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String {
         struct Body: Encodable {
-            let inReplyToMessageId: String
+            let accountId: String?
+            let inReplyToMessageId: String?
             let to: [String]
+            let cc: [String]
+            let bcc: [String]
             let subject: String?
             let bodyText: String
             let attachmentIds: [String]
@@ -192,7 +196,7 @@ struct RemoteAPIClient: APIClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         authorize(&request)
-        request.httpBody = try JSONEncoder().encode(Body(inReplyToMessageId: inReplyToMessageId, to: to, subject: subject, bodyText: bodyText, attachmentIds: attachmentIds, draftId: draftId))
+        request.httpBody = try JSONEncoder().encode(Body(accountId: accountId, inReplyToMessageId: inReplyToMessageId, to: to, cc: cc, bcc: bcc, subject: subject, bodyText: bodyText, attachmentIds: attachmentIds, draftId: draftId))
 
         let data: Data
         let response: URLResponse

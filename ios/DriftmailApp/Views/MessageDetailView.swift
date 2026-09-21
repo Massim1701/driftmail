@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// GET /messages/{messageId} — full message + security analysis, plus the
 /// on-demand actions from api-spec.yaml: /summary, /reply-draft and /move.
@@ -15,31 +14,21 @@ struct MessageDetailView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var detail: MessageDetail?
     @State private var summary: MailSummary?
-    // [2026-09-10] WEB_INBOX.md-Priorität "Antworten ohne KI-Zwang" (siehe
-    // web/src/components/MessageDetailPane.tsx für dieselbe Web-Änderung):
-    // getrennte States statt eines einzigen `draft: String?`, der vorher
-    // erst nach einer erfolgreichen KI-Antwort gesetzt wurde und damit
-    // zugleich (missbräuchlich) darüber entschied, ob das Compose-Feld
-    // überhaupt sichtbar war. `isReplyOpen` steuert jetzt allein die
-    // Sichtbarkeit, `replyBody` ist von Anfang an leer nutzbar.
-    @State private var isReplyOpen = false
-    @State private var replyBody = ""
-    @State private var showAiOverwriteConfirm = false
     @State private var isLoadingSummary = false
-    @State private var isLoadingDraft = false
     @State private var isQuarantining = false
     @State private var isMoving = false
     @State private var isDeleting = false
     @State private var isPermanentlyDeleting = false
     @State private var showPermanentDeleteConfirm = false
     @State private var errorMessage: String?
-    @State private var isSending = false
-    @State private var sendBlockedReason: String?
-    @State private var sentConfirmation: String?
-    @State private var composeAttachments: [ComposeAttachment] = []
-    @State private var showFileImporter = false
     @State private var isUnsubscribing = false
     @State private var unsubscribeStatus: UnsubscribeStatus?
+    // [2026-09-21] Antworten/Weiterleiten öffnen jetzt den gemeinsamen
+    // `ComposeView` als Sheet (siehe dort) statt eines inline hier
+    // eingebetteten Compose-Felds -- dadurch stehen CC/BCC (WEB_INBOX.md
+    // 21.09. "DREI WEITERE GRUNDFUNKTIONEN" Punkt 3) und Weiterleiten
+    // (Punkt 1) auch hier zur Verfügung, nicht nur bei neuen Mails.
+    @State private var composeMode: ComposeMode?
 
     /// The folder the message currently sits in, looked up from
     /// `environment.folders` via `detail.folderId`. `nil` while folders or
@@ -47,13 +36,6 @@ struct MessageDetailView: View {
     private var currentFolder: Folder? {
         guard let detail else { return nil }
         return environment.folders.first { $0.id == detail.folderId }
-    }
-
-    /// Solange ein Anhang noch hochgeladen/geprüft wird, fehlgeschlagen ist
-    /// oder nicht `.clean` ist, bleibt Senden blockiert (WEB_INBOX.md
-    /// 09.09. "Erweiterung des Send-Endpunkt-Eintrags von eben").
-    private var hasBlockingAttachment: Bool {
-        composeAttachments.contains { !$0.status.isClean }
     }
 
     var body: some View {
@@ -87,22 +69,6 @@ struct MessageDetailView: View {
 
                     if let summary {
                         summaryCard(summary)
-                    }
-
-                    if isReplyOpen {
-                        replyCard(for: detail)
-                    }
-
-                    if let sentConfirmation {
-                        Text("Antwort an \(sentConfirmation) wurde gesendet.")
-                            .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
-                            .foregroundStyle(DesignTokens.Color.success)
-                            .padding(DesignTokens.Spacing.lg)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                                    .fill(DesignTokens.Color.success.opacity(0.1))
-                            )
                     }
                 } else {
                     ProgressView()
@@ -138,19 +104,12 @@ struct MessageDetailView: View {
         } message: {
             Text("Diese Nachricht wird unwiderruflich gelöscht und kann nicht wiederhergestellt werden.")
         }
-        .confirmationDialog(
-            "Vorhandenen Text durch einen KI-Entwurf ersetzen?",
-            isPresented: $showAiOverwriteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Ersetzen", role: .destructive) {
-                Task { await requestAiDraft() }
-            }
-            Button("Abbrechen", role: .cancel) {}
-        }
-        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            if case .success(let urls) = result {
-                for url in urls { Task { await uploadAttachment(from: url) } }
+        .sheet(isPresented: Binding(
+            get: { composeMode != nil },
+            set: { if !$0 { composeMode = nil } }
+        )) {
+            if let composeMode {
+                ComposeView(mode: composeMode, onSent: {})
             }
         }
     }
@@ -185,24 +144,33 @@ struct MessageDetailView: View {
                 .buttonStyle(.bordered)
                 .disabled(isLoadingSummary)
 
-                // [2026-09-10] "Antworten ohne KI-Zwang": öffnet das
-                // Compose-Feld sofort leer, kein KI-Aufruf nötig (der sitzt
-                // jetzt als optionaler Zusatz-Button INNERHALB des Felds,
-                // siehe replyCard). WEB_INBOX.md 09.09. "KORREKTUR der
-                // letzten Regel" weiterhin gültig: ausgeblendet bei
+                // Antworten/Weiterleiten öffnen den gemeinsamen
+                // `ComposeView` als Sheet (siehe `composeMode`-Kommentar
+                // oben). WEB_INBOX.md 09.09. "KORREKTUR der letzten Regel"
+                // weiterhin gültig für Antworten: ausgeblendet bei
                 // aktuellem Ordner spam (folderId-/systemKey-Check), nicht
                 // bei eingefrorenem classification='spam' -- Antworten auf
                 // Spam macht keinen Sinn, auf Phishing (Quarantäne) schon
-                // (Warnbanner oben).
-                if currentFolder?.systemKey != .spam && !isReplyOpen {
+                // (Warnbanner oben). Weiterleiten (WEB_INBOX.md 21.09.
+                // "DREI WEITERE GRUNDFUNKTIONEN" Punkt 1) ist unabhängig
+                // davon immer sinnvoll.
+                if currentFolder?.systemKey != .spam {
                     Button {
-                        isReplyOpen = true
+                        composeMode = .reply(detail)
                     } label: {
                         Label("Antworten", systemImage: "arrowshape.turn.up.left")
                             .font(.system(size: DesignTokens.Typography.Size.body))
                     }
                     .buttonStyle(.bordered)
                 }
+
+                Button {
+                    composeMode = .forward(detail)
+                } label: {
+                    Label("Weiterleiten", systemImage: "arrowshape.turn.up.right")
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                }
+                .buttonStyle(.bordered)
             }
 
             // Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.):
@@ -313,123 +281,6 @@ struct MessageDetailView: View {
         )
     }
 
-    /// Zeigt das (von Anfang an leere, sofort nutzbare) Antwortfeld +
-    /// Senden-Button. Bindet direkt an `$replyBody`, damit der Nutzer frei
-    /// tippen ODER optional per "KI-Entwurf vorschlagen" einen Vorschlag
-    /// einfüllen kann — der Versand selbst wird erst durch den Klick auf
-    /// "Senden" ausgelöst (`POST /messages/send`).
-    private func replyCard(for detail: MessageDetail) -> some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
-            Text("Antwort (wird erst nach Tippen auf „Senden“ verschickt)")
-                .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
-                .foregroundStyle(DesignTokens.Color.textSecondary)
-            TextEditor(text: Binding(get: { replyBody }, set: { replyBody = $0; sendBlockedReason = nil }))
-                .font(.system(size: DesignTokens.Typography.Size.body))
-                .frame(minHeight: 120)
-                .scrollContentBackground(.hidden)
-
-            if !composeAttachments.isEmpty {
-                VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
-                    ForEach(composeAttachments) { attachment in
-                        HStack(spacing: DesignTokens.Spacing.sm) {
-                            Text(attachment.filename)
-                                .font(.system(size: DesignTokens.Typography.Size.small))
-                                .foregroundStyle(DesignTokens.Color.textPrimary)
-                                .lineLimit(1)
-                            Spacer()
-                            Text(attachment.status.label)
-                                .font(.system(size: DesignTokens.Typography.Size.caption, weight: .medium))
-                                .foregroundStyle(attachment.status.isClean ? DesignTokens.Color.success : DesignTokens.Color.dangerText)
-                            Button {
-                                composeAttachments.removeAll { $0.id == attachment.id }
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(DesignTokens.Color.textMuted)
-                            }
-                        }
-                        .padding(.horizontal, DesignTokens.Spacing.sm)
-                        .padding(.vertical, DesignTokens.Spacing.xs)
-                        .background(
-                            RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                                .fill(DesignTokens.Color.surfacePage)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: DesignTokens.Radius.control)
-                                        .stroke(DesignTokens.Color.border, lineWidth: 1)
-                                )
-                        )
-                    }
-                }
-            }
-
-            if let sendBlockedReason {
-                Text(sendBlockedReason)
-                    .font(.system(size: DesignTokens.Typography.Size.small))
-                    .foregroundStyle(DesignTokens.Color.dangerText)
-            }
-
-            HStack(spacing: DesignTokens.Spacing.sm) {
-                Button {
-                    showFileImporter = true
-                } label: {
-                    Label("Anhang hinzufügen", systemImage: "paperclip")
-                        .font(.system(size: DesignTokens.Typography.Size.body))
-                }
-                .buttonStyle(.bordered)
-
-                // Optionaler Zusatz-Button (siehe replyCard-Kommentar) --
-                // erzeugt nie automatisch, nur auf expliziten Tap. Fragt
-                // erst nach, wenn bereits eigener Text im Feld steht,
-                // damit ein versehentlicher Tap nichts stillschweigend
-                // verwirft.
-                Button {
-                    if replyBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Task { await requestAiDraft() }
-                    } else {
-                        showAiOverwriteConfirm = true
-                    }
-                } label: {
-                    Label(isLoadingDraft ? "Erstelle Entwurf…" : "KI-Entwurf", systemImage: "sparkles")
-                        .font(.system(size: DesignTokens.Typography.Size.body))
-                }
-                .buttonStyle(.bordered)
-                .disabled(isLoadingDraft)
-            }
-
-            HStack(spacing: DesignTokens.Spacing.sm) {
-                Button(role: .destructive) {
-                    isReplyOpen = false
-                    replyBody = ""
-                    composeAttachments = []
-                    sendBlockedReason = nil
-                } label: {
-                    Text("Verwerfen")
-                        .font(.system(size: DesignTokens.Typography.Size.body))
-                }
-                .buttonStyle(.bordered)
-
-                Button {
-                    Task { await send(to: detail) }
-                } label: {
-                    Text(isSending ? "Sende…" : "Senden")
-                        .font(.system(size: DesignTokens.Typography.Size.body))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isSending || replyBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || hasBlockingAttachment)
-            }
-        }
-        .padding(DesignTokens.Spacing.lg)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                .fill(DesignTokens.Color.surfaceCard)
-                .overlay(
-                    RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                        .stroke(DesignTokens.Color.border, lineWidth: 1)
-                )
-        )
-    }
-
     // MARK: - Loading
 
     private func loadDetail() async {
@@ -447,75 +298,6 @@ struct MessageDetailView: View {
             summary = try await environment.apiClient.fetchSummary(messageId: messageId)
         } catch {
             errorMessage = "Zusammenfassung fehlgeschlagen."
-        }
-    }
-
-    private func requestAiDraft() async {
-        isLoadingDraft = true
-        defer { isLoadingDraft = false }
-        do {
-            replyBody = try await environment.apiClient.requestReplyDraft(messageId: messageId)
-        } catch {
-            errorMessage = "KI-Entwurf fehlgeschlagen."
-        }
-    }
-
-    /// `POST /messages/send` — sendet den aktuellen Entwurfstext als
-    /// Antwort auf diese Nachricht. Backend leitet Konto + In-Reply-To-
-    /// Header aus `messageId` ab (siehe `APIClient.sendMessage`).
-    private func send(to detail: MessageDetail) async {
-        guard !replyBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        guard !hasBlockingAttachment else { return }
-        isSending = true
-        sendBlockedReason = nil
-        defer { isSending = false }
-        let subject = detail.subject.map { $0.lowercased().hasPrefix("re:") ? $0 : "Re: \($0)" } ?? ""
-        let attachmentIds = composeAttachments.compactMap(\.attachmentId)
-        do {
-            _ = try await environment.apiClient.sendMessage(
-                inReplyToMessageId: messageId,
-                to: [detail.fromAddress],
-                subject: subject,
-                bodyText: replyBody,
-                attachmentIds: attachmentIds,
-                draftId: nil
-            )
-            sentConfirmation = detail.fromAddress
-            isReplyOpen = false
-            replyBody = ""
-            composeAttachments = []
-        } catch APIError.blocked(let reason) {
-            sendBlockedReason = reason ?? "Versand wurde aus Sicherheitsgründen blockiert."
-        } catch {
-            errorMessage = "Versand fehlgeschlagen. Bitte später erneut versuchen."
-        }
-    }
-
-    /// `POST /attachments` — liest die vom `.fileImporter` gelieferte
-    /// (security-scoped) URL, lädt sie hoch und trägt das Scan-Ergebnis in
-    /// `composeAttachments` ein. Ein separater `ComposeAttachment`-Eintrag
-    /// je Datei, damit Uploads parallel laufen können, ohne sich
-    /// gegenseitig zu blockieren.
-    private func uploadAttachment(from url: URL) async {
-        let filename = url.lastPathComponent
-        var entry = ComposeAttachment(filename: filename, status: .uploading)
-        composeAttachments.append(entry)
-
-        let accessing = url.startAccessingSecurityScopedResource()
-        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-
-        do {
-            let data = try Data(contentsOf: url)
-            let mimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
-            let result = try await environment.apiClient.uploadAttachment(filename: filename, mimeType: mimeType, data: data)
-            entry.attachmentId = result.attachmentId
-            entry.status = .scanned(result.scanStatus)
-        } catch {
-            entry.status = .error
-        }
-
-        if let index = composeAttachments.firstIndex(where: { $0.id == entry.id }) {
-            composeAttachments[index] = entry
         }
     }
 

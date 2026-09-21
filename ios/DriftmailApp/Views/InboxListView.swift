@@ -102,7 +102,7 @@ struct InboxListView: View {
         isLoading = true
         defer { isLoading = false }
         do {
-            messages = try await environment.apiClient.fetchMessages(folderId: folder.id, accountId: nil)
+            messages = try await environment.apiClient.fetchMessages(folderId: folder.id, accountId: nil, query: nil)
         } catch {
             messages = []
         }
