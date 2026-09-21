@@ -915,3 +915,16 @@ Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
 **Uebergabe an Track C/F:** Einstellungsbildschirm (Ein/Aus-Schalter, Start-/End-Datumsfelder, Betreff/Text-Eingabe, `GET`/`PUT /absence-responder`) + aktiver Banner mit "Jetzt beenden"-Schnellaktion noch zu bauen, siehe WEB_INBOX.md-Originaltext.
 
 **Kein Blocker.**
+
+
+[2026-09-21] [terminal] [C] — WEB_INBOX.md 21.09. "NEUER AUFTRAG - Abwesenheitsassistent", iOS-UI fertig (Commit `cf20a24`), aufbauend auf dem Backend (`fc4e287`/`7215149`). Web-Teil laeuft parallel in einem anderen Fork.
+
+**Einstellungsbildschirm:** neuer Screen `AbsenceResponderView` (gleicher Aufbau wie `AiSettingsView` -- Toggle steuert nur lokalen Zustand, "Speichern" loest erst den echten `PUT /absence-responder` aus), erreichbar aus `FolderListView.SettingsView` direkt unter "KI-Anbindung". Start-`DatePicker` (Pflicht bei aktivem Assistenten), "Enddatum festlegen"-Toggle mit optionalem End-`DatePicker`, Betreff-`TextField`, Text-`TextEditor`.
+
+**Aktiver Banner:** oben in der Ordnerliste (nicht waehrend einer Suche), solange der Assistent aktiv ist, mit Enddatum (falls gesetzt) und einer "Jetzt beenden"-Schnellaktion, die NUR `active: false` setzt -- Start-/Enddatum, Betreff und Text bleiben erhalten.
+
+**Technische Randnotiz:** `startDate`/`endDate` bewusst als rohe `String?` ("yyyy-MM-dd") statt `Date` im neuen `AbsenceResponder`-Modell -- es gab noch keine etablierte Konvention fuer AUSGEHENDE `Date`-Felder in diesem Client (der generische `JSONEncoder()` wuerde ohne eigene Strategie einen Unix-Timestamp senden). Ausserdem ein eigener `clearEndDate`-Parameter in `updateAbsenceResponder(...)`, weil normales `nil` (= "unangetastet lassen") nicht ausdruecken kann "ein zuvor gesetztes Enddatum jetzt wieder entfernen" -- `RemoteAPIClient` sendet dafuer ueber ein manuelles `encode(to:)` ein echtes JSON-`null` statt eines weggelassenen Felds.
+
+**Tests:** `xcodebuild` BUILD SUCCEEDED (neue Dateien manuell in `project.pbxproj` eingetragen, keine Ordner-Referenzen in diesem Projekt). Sauberer Uninstall/Install/Launch, `log show` auf Crash/Fatal/DecodingError geprueft -- keine Treffer. Screenshot bestaetigt unveraenderten Onboarding-Screen. Wie bei allen vorherigen iOS-Schritten dieser Session liess sich der neue Screen selbst NICHT interaktiv durchklicken (kein Weg am Onboarding-Gate vorbei ohne echte Test-Mailbox).
+
+**Kein Blocker.** Web-Teil folgt separat.

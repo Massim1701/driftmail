@@ -940,7 +940,7 @@ Zusaetzlich zur bestehenden automatischen Spam-Abmeldung: ein sichtbarer "Abmeld
 Kein Contract-Bruch bei 1/2/5 (additive UI/Ableitung aus bestehenden Daten). Bei 3/4 bitte kurz Umfang/Grenzen in SYNC.md dokumentieren. Bitte nach dem aktuell laufenden Testen und dem Einstellungsbereich-Auftrag einordnen, kein Blocker.
 
 
-[2026-09-21] [teilweise erledigt: fc4e287 -- Backend (contracts + Track A) fertig, Track C/F (Einstellungsbildschirm + Banner) noch offen] [NEUER AUFTRAG - Abwesenheitsassistent] [contracts + Track A + Track C/F] — Massimo: Abwesenheitsmelder einbauen, Vorbild Gmail/Outlook, aber mit einem echten Sicherheitsvorteil, den andere Clients nicht haben.
+[2026-09-21] [teilweise erledigt: fc4e287 -- Backend (contracts + Track A) fertig; Track C (iOS-Einstellungsbildschirm + Banner) fertig (cf20a24); Track F (Web) noch offen] [NEUER AUFTRAG - Abwesenheitsassistent] [contracts + Track A + Track C/F] — Massimo: Abwesenheitsmelder einbauen, Vorbild Gmail/Outlook, aber mit einem echten Sicherheitsvorteil, den andere Clients nicht haben.
 
 **Standard-Umfang (wie Gmail "Vacation Responder"/Outlook "Automatische Antworten"):**
 - Zeitraum: Start-Datum Pflicht, End-Datum optional (automatisches Abschalten).
