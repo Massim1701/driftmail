@@ -30,7 +30,13 @@ export function cors(req: Request, res: Response, next: NextFunction): void {
   if (origin && allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS");
+    // [2026-09-21] Fund beim Testen der KI-Einstellungen (PUT /ai-settings,
+    // TERMINAL_INBOX.md 21.09. "KORREKTUR"): PUT fehlte hier -- curl
+    // funktionierte (kein Preflight), ein echter Browser scheiterte aber
+    // still am CORS-Preflight (Methode nicht in der erlaubten Liste), bevor
+    // der eigentliche Request je rausging. Gleiches CORS-Symptom-Muster wie
+    // der urspruengliche Fund oben (WEB_INBOX.md 21.09. "BUG").
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   }
   if (req.method === "OPTIONS") {
