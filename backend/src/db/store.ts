@@ -18,6 +18,7 @@
 import { randomUUID } from "node:crypto";
 import { PostgresStore } from "./postgresStore";
 import type {
+  AiPreferenceRecord,
   ContractRecord,
   DraftRecord,
   FolderRecord,
@@ -140,6 +141,15 @@ export interface Store {
   // ----- AI Capability -----
   setUserAiCapability(record: UserAiCapabilityRecord): Promise<void>;
 
+  // ----- KI-Cloud-Einstellung (BYOK, TERMINAL_INBOX.md 21.09. KORREKTUR) -----
+  getAiPreference(userId: string): Promise<AiPreferenceRecord | undefined>;
+  /** Upsert -- `patch` ueberschreibt nur die uebergebenen Felder, Rest bleibt
+   * wie vorher (bzw. Default beim allerersten Aufruf fuer diesen User). */
+  setAiPreference(
+    userId: string,
+    patch: Partial<Pick<AiPreferenceRecord, "mode" | "byokProvider" | "encryptedApiKey" | "cloudConsentGivenAt">>,
+  ): Promise<AiPreferenceRecord>;
+
   // ----- IBAN-Historie (Grundlage für containsNewIban) -----
   hasSeenIban(userId: string, senderAddress: string, iban: string): Promise<boolean>;
   recordIban(userId: string, senderAddress: string, iban: string): Promise<void>;
@@ -211,6 +221,7 @@ export class InMemoryStore implements Store {
   contracts: ContractRecord[] = [];
   messageAiSummary: Map<string, MessageAiSummaryRecord> = new Map(); // key: messageId
   userAiCapability: Map<string, UserAiCapabilityRecord> = new Map(); // key: userId:platform
+  aiPreference: Map<string, AiPreferenceRecord> = new Map(); // key: userId
   // `drafts` (db-schema.sql) -- siehe DraftRecord-Kommentar in types.ts.
   drafts: DraftRecord[] = [];
   // `unsubscribe_actions` (db-schema.sql) -- siehe UnsubscribeActionRecord-
@@ -530,6 +541,30 @@ export class InMemoryStore implements Store {
 
   async setUserAiCapability(record: UserAiCapabilityRecord): Promise<void> {
     this.userAiCapability.set(`${record.userId}:${record.platform}`, record);
+  }
+
+  // ----- KI-Cloud-Einstellung (BYOK, TERMINAL_INBOX.md 21.09. KORREKTUR) -----
+
+  async getAiPreference(userId: string): Promise<AiPreferenceRecord | undefined> {
+    return this.aiPreference.get(userId);
+  }
+
+  async setAiPreference(
+    userId: string,
+    patch: Partial<Pick<AiPreferenceRecord, "mode" | "byokProvider" | "encryptedApiKey" | "cloudConsentGivenAt">>,
+  ): Promise<AiPreferenceRecord> {
+    const existing = this.aiPreference.get(userId);
+    const updated: AiPreferenceRecord = {
+      userId,
+      mode: patch.mode ?? existing?.mode ?? "off",
+      byokProvider: patch.byokProvider !== undefined ? patch.byokProvider : (existing?.byokProvider ?? null),
+      encryptedApiKey: patch.encryptedApiKey !== undefined ? patch.encryptedApiKey : (existing?.encryptedApiKey ?? null),
+      cloudConsentGivenAt:
+        patch.cloudConsentGivenAt !== undefined ? patch.cloudConsentGivenAt : (existing?.cloudConsentGivenAt ?? null),
+      updatedAt: new Date().toISOString(),
+    };
+    this.aiPreference.set(userId, updated);
+    return updated;
   }
 
   // ----- IBAN-Historie (Grundlage für containsNewIban) -----

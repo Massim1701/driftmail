@@ -287,16 +287,32 @@ CREATE TABLE IF NOT EXISTS signatures (
 
 -- ===== KI: Zusammenfassungen & Provider-Konfiguration =====
 
+-- [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): source akzeptiert jetzt
+-- auch 'heuristic' (deterministische Mustererkennung ohne KI-Modell, siehe
+-- ai-adapter-interface.ts AiSource-Kommentar) -- vorher fälschlich immer
+-- als 'cloud_fallback' gelabelt, obwohl kein externer Anbieter aufgerufen
+-- wurde. Tabelle war bis zu diesem Schritt von keinem Code beschrieben
+-- ausser mit dem alten Enum, direkt am CREATE TABLE geändert (Repo-
+-- Konvention), kein ALTER noetig.
 CREATE TABLE IF NOT EXISTS message_ai_summary (
     message_id UUID PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
     summary_text TEXT,
     action_required BOOLEAN NOT NULL DEFAULT false,
     action_description TEXT,
     deadline DATE,
-    source TEXT NOT NULL CHECK (source IN ('on_device', 'cloud_fallback')),
+    source TEXT NOT NULL CHECK (source IN ('on_device', 'cloud_fallback', 'heuristic')),
     generated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
+-- [2026-09-21] KORREKTUR: bewusst UNGENUTZT. War urspruenglich fuer einen
+-- driftmail-finanzierten "kostenlosen" Cloud-Pfad ueber guenstige Anbieter
+-- (Groq/Gemini/OpenRouter) gedacht -- genau das hat Massimo direkt an
+-- Claude Code korrigiert (TERMINAL_INBOX.md 21.09.): KEIN von driftmail
+-- bezahlter Cloud-API-Zugang, auch nicht ueber einen guenstigen Anbieter.
+-- Tabelle bleibt im Schema stehen (falls spaeter doch mal ein Admin-
+-- Quota-Konzept noetig wird), aber KEIN Code liest/schreibt sie aktuell --
+-- siehe user_ai_preference unten fuer den tatsaechlich implementierten Weg
+-- (Geraete-eigene KI primaer, BYOK optional auf User-Kosten).
 CREATE TABLE IF NOT EXISTS ai_provider_config (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     task_type TEXT NOT NULL CHECK (task_type IN ('classification', 'extraction', 'summary', 'reply_draft')),
@@ -317,15 +333,24 @@ CREATE TABLE IF NOT EXISTS user_ai_capability (
     PRIMARY KEY (user_id, platform)
   );
 
--- User-Wahl: kostenloser Standard-Pfad vs. eigener (bezahlter) KI-Zugang.
--- Wird beim Onboarding und in den Einstellungen gesetzt. Routing-Logik
--- prueft dies VOR der ai_provider_config-Kaskade: bei 'byok' geht der
--- Call an den eigenen Schluessel des Users statt On-Device/Free-Tier.
+-- [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): User-Wahl fuer Cloud-KI
+-- ist jetzt ausschliesslich "aus" vs. "eigener Zugang" (BYOK) -- kein
+-- driftmail-finanzierter "free"-Modus mehr (siehe ai_provider_config-
+-- Kommentar oben, dessen ehemals geplante Kaskade damit entfaellt).
+-- cloud_consent_given_at: Consent-Zeitstempel, NULL = kein Consent erteilt.
+-- Routing-Logik (backend/src/ai/index.ts getAiAdapterForUser()) nutzt BYOK
+-- NUR wenn mode='byok' UND encrypted_api_key gesetzt UND
+-- cloud_consent_given_at NICHT NULL ist -- sonst heuristischer Fallback,
+-- nie automatisch On-Device (das entscheidet der jeweilige Client selbst,
+-- bevor er das Backend ueberhaupt fuer eine KI-Aktion anfragt). Tabelle war
+-- bis zu diesem Schritt von keinem Code beschrieben, direkt am CREATE TABLE
+-- geändert (Repo-Konvention), kein ALTER noetig.
 CREATE TABLE IF NOT EXISTS user_ai_preference (
     user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    mode TEXT NOT NULL DEFAULT 'free' CHECK (mode IN ('free', 'byok')),
+    mode TEXT NOT NULL DEFAULT 'off' CHECK (mode IN ('off', 'byok')),
     byok_provider TEXT CHECK (byok_provider IN ('anthropic', 'openai', 'google', 'other')),
     encrypted_api_key TEXT,
+    cloud_consent_given_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 

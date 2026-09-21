@@ -343,11 +343,90 @@ async function main() {
     assert(summaryRes.status === 200, "GET .../summary sollte 200 liefern");
     const summary = (await summaryRes.json()) as Record<string, unknown>;
     assert(typeof summary.summaryText === "string", "summaryText erwartet");
+    // KORREKTUR (TERMINAL_INBOX.md 21.09.): ohne BYOK-Konfiguration ist die
+    // Quelle "heuristic", NICHT "cloud_fallback" -- kein externer Anbieter
+    // beteiligt (siehe ai-adapter-interface.ts AiSource-Kommentar).
+    assert(summary.source === "heuristic", `summary.source sollte ohne BYOK 'heuristic' sein, war '${summary.source}'`);
 
     const draftRes = await fetch(`${base}/v1/messages/${first.id}/reply-draft`, { method: "POST" });
     assert(draftRes.status === 200, "POST .../reply-draft sollte 200 liefern");
     const draft = (await draftRes.json()) as Record<string, unknown>;
     assert(typeof draft.draftText === "string", "draftText erwartet");
+    assert(draft.source === "heuristic", `draft.source sollte ohne BYOK 'heuristic' sein, war '${draft.source}'`);
+
+    // ----- KI-Cloud-Einstellung / BYOK (TERMINAL_INBOX.md 21.09.
+    // KORREKTUR, ersetzt WEB_INBOX.md "ECHTE KI-ANBINDUNG" c3ec563) -----
+    const aiSettingsDefaultRes = await fetch(`${base}/v1/ai-settings`);
+    assert(aiSettingsDefaultRes.status === 200, "GET /v1/ai-settings sollte 200 liefern");
+    const aiSettingsDefault = (await aiSettingsDefaultRes.json()) as Record<string, unknown>;
+    assert(aiSettingsDefault.mode === "off", "Default-Modus sollte 'off' sein -- kein driftmail-finanzierter Cloud-Zugang");
+    assert(aiSettingsDefault.hasApiKey === false, "hasApiKey sollte im Default false sein");
+    assert(aiSettingsDefault.cloudConsentGiven === false, "cloudConsentGiven sollte im Default false sein");
+
+    // Nicht angebundener Provider -> 400, kein stiller Fehlschlag erst beim Versand.
+    const aiSettingsGoogleRes = await fetch(`${base}/v1/ai-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "byok", byokProvider: "google", apiKey: "irrelevant" }),
+    });
+    assert(aiSettingsGoogleRes.status === 400, "PUT /v1/ai-settings mit byokProvider=google sollte 400 liefern (noch nicht implementiert)");
+
+    // mode=byok ohne apiKey und ohne bereits hinterlegten Key -> 400.
+    const aiSettingsNoKeyRes = await fetch(`${base}/v1/ai-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "byok", byokProvider: "anthropic" }),
+    });
+    assert(aiSettingsNoKeyRes.status === 400, "PUT /v1/ai-settings mit mode=byok ohne apiKey sollte 400 liefern");
+
+    // Echtes Aktivieren: absichtlich UNGUELTIGER Anthropic-Key -- die Anthropic-
+    // API selbst wird gleich real angesprochen (kein Mock), lehnt den Key
+    // aber sofort mit 401 ab. Grundlage fuer den Graceful-Fallback-Test unten.
+    const aiSettingsSetRes = await fetch(`${base}/v1/ai-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "byok",
+        byokProvider: "anthropic",
+        apiKey: "sk-ant-smoketest-absichtlich-ungueltig",
+        cloudConsent: true,
+      }),
+    });
+    assert(aiSettingsSetRes.status === 200, "PUT /v1/ai-settings mit gueltiger Provider-Kombination sollte 200 liefern");
+    const aiSettingsSet = (await aiSettingsSetRes.json()) as Record<string, unknown>;
+    assert(aiSettingsSet.mode === "byok" && aiSettingsSet.byokProvider === "anthropic", "mode/byokProvider sollten gesetzt sein");
+    assert(aiSettingsSet.hasApiKey === true, "hasApiKey sollte nach dem Setzen true sein");
+    assert(aiSettingsSet.cloudConsentGiven === true, "cloudConsentGiven sollte nach dem Setzen true sein");
+    assert(
+      (aiSettingsSet as { apiKey?: unknown }).apiKey === undefined,
+      "der Key selbst darf NIE in der Antwort auftauchen",
+    );
+
+    // Graceful Fallback (src/ai/index.ts runAiTask()): der echte Cloud-
+    // Aufruf schlaegt mit dem ungueltigen Key fehl (echter Netzwerk-
+    // Roundtrip zu api.anthropic.com), die Route faellt automatisch auf
+    // die Heuristik zurueck statt eines 500ers -- reply-draft ist
+    // ungecacht, deshalb hier statt summary genutzt (das war fuer diese
+    // Nachricht oben schon gecacht und wuerde den Cache treffen, nicht den
+    // Adapter erneut aufrufen).
+    const fallbackDraftRes = await fetch(`${base}/v1/messages/${first.id}/reply-draft`, { method: "POST" });
+    assert(fallbackDraftRes.status === 200, "POST .../reply-draft mit ungueltigem BYOK-Key sollte trotzdem 200 liefern (graceful fallback)");
+    const fallbackDraft = (await fallbackDraftRes.json()) as Record<string, unknown>;
+    assert(typeof fallbackDraft.draftText === "string" && (fallbackDraft.draftText as string).length > 0, "draftText sollte trotz fehlgeschlagenem Cloud-Call vorhanden sein");
+    assert(
+      fallbackDraft.source === "heuristic",
+      `source sollte nach fehlgeschlagenem Cloud-Call auf 'heuristic' zurueckfallen, war '${fallbackDraft.source}'`,
+    );
+
+    // Ausschalten setzt Provider/Key/Consent zurueck.
+    const aiSettingsOffRes = await fetch(`${base}/v1/ai-settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "off" }),
+    });
+    assert(aiSettingsOffRes.status === 200, "PUT /v1/ai-settings mit mode=off sollte 200 liefern");
+    const aiSettingsOff = (await aiSettingsOffRes.json()) as Record<string, unknown>;
+    assert(aiSettingsOff.mode === "off" && aiSettingsOff.hasApiKey === false && aiSettingsOff.cloudConsentGiven === false, "off sollte Provider/Key/Consent zuruecksetzen");
 
     const quarantineRes = await fetch(`${base}/v1/messages/${first.id}/quarantine`, { method: "POST" });
     assert(quarantineRes.status === 200, "POST .../quarantine sollte 200 liefern");

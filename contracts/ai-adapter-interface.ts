@@ -9,7 +9,29 @@
 // dasselbe Interface nativ in Swift für On-Device-Ausführung.
 
 export type Classification = "safe" | "spam" | "phishing" | "unclear";
-export type AiSource = "on_device" | "cloud_fallback";
+// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09., ersetzt WEB_INBOX.md
+// 21.09. "ECHTE KI-ANBINDUNG" c3ec563 vollstaendig): Geraete-eigene KI ist
+// die PRIMAERE Quelle (Apple Intelligence/Foundation Models auf iOS,
+// browser-eigene On-Device-KI auf Web falls verfuegbar) -- KEIN driftmail-
+// finanzierter Cloud-API-Key. Cloud-KI nur mit vom User selbst
+// eingetragenem, verschluesselt gespeichertem eigenen API-Key ("BYOK",
+// siehe contracts/db-schema.sql `user_ai_preference`), auf dessen eigene
+// Kosten, nur nach explizitem Consent (Consent-Pruefung serverseitig vor
+// JEDEM Cloud-Dispatch, siehe backend/README.md).
+//
+// Drei moegliche Quellen fuer ein KI-Ergebnis, ehrlich unterschieden:
+// - "on_device": lief auf dem Geraet des Users selbst (Foundation Models/
+//   Browser-KI), Inhalt hat das Geraet nie verlassen.
+// - "cloud_fallback": echter Netzwerk-Call an einen externen KI-Anbieter,
+//   NUR moeglich mit BYOK-Konfiguration + Consent, auf Kosten des Users.
+// - "heuristic": kein KI-Modell beteiligt, deterministische Muster-
+//   erkennung (server- oder client-seitig, verlaesst das Geraet
+//   ggf. schon rein weil driftmail Mails ohnehin zentral speichert, aber
+//   OHNE dass ein externer KI-Anbieter involviert ist) -- der Fallback,
+//   wenn weder On-Device-Modell noch BYOK-Cloud verfuegbar/konfiguriert
+//   sind. Vorher fälschlich als "cloud_fallback" gelabelt, obwohl kein
+//   externer Anbieter aufgerufen wurde -- mit dieser Korrektur behoben.
+export type AiSource = "on_device" | "cloud_fallback" | "heuristic";
 
 export interface SecurityResult {
   spfStatus: "pass" | "fail" | "none";

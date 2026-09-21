@@ -1640,6 +1640,154 @@ gegen frisches Postgres.
 aktiven `accountId`/`folderId` kombiniert, damit die Suche im Kontext der
 gerade sichtbaren Ansicht bleibt).
 
+## KI-Anbindung (BYOK) -- [2026-09-21] Nachtrag
+(TERMINAL_INBOX.md 21.09. "KORREKTUR", ersetzt WEB_INBOX.md 21.09. "ECHTE
+KI-ANBINDUNG" Commit c3ec563 vollstaendig -- siehe dort fuer den
+ueberholten Ursprungsauftrag)
+
+**Kernentscheidung (Massimo woertlich, direkt an Claude Code korrigiert,
+nicht ueber WEB_INBOX.md):** Geraete-eigene KI ist die PRIMAERE Quelle
+(Apple Intelligence/Foundation Models auf iOS, browser-eigene On-Device-KI
+auf Web falls verfuegbar) -- KEIN driftmail-finanzierter Cloud-API-Key.
+Cloud-KI (gleich welcher Anbieter) nur, wenn der User selbst einen eigenen
+Zugang/API-Key in den Einstellungen eintraegt ("BYOK" -- Bring Your Own
+Key), dann auf seine eigenen Kosten. Consent-Pruefung vor jedem
+Cloud-Dispatch bleibt Pflicht, unabhaengig davon wer zahlt.
+
+**Wichtige Abgrenzung:** Backend kennt gar keinen On-Device-Pfad -- das
+entscheidet ausschliesslich der jeweilige Client (iOS/Web), BEVOR er das
+Backend fuer eine der drei KI-Aktionen ueberhaupt anfragt. Ein Client mit
+funktionierender On-Device-KI sollte diese Endpunkte fuer summarize/
+draftReply im Idealfall nie aufrufen. Das Backend selbst kann nur zwischen
+zwei Quellen waehlen: BYOK-Cloud (echter externer Anbieter, User-Kosten)
+oder Heuristik (deterministische Mustererkennung, kein KI-Modell).
+
+**Drei Quellen, ehrlich unterschieden (`AiSource`, contracts/
+ai-adapter-interface.ts):**
+- `on_device`: lief auf dem Geraet des Users, hat es nie verlassen (rein
+  Client-seitig, Backend sieht das nur als fertiges Ergebnis oder gar
+  nicht).
+- `cloud_fallback`: echter Netzwerk-Call an einen externen KI-Anbieter,
+  NUR mit BYOK-Konfiguration + Consent moeglich.
+- `heuristic`: NEU seit dieser Korrektur. Kein KI-Modell beteiligt,
+  dieselbe deterministische Mustererkennung wie vorher (`MockAiAdapter`,
+  Track B fuer `analyzeMail`, simple Keyword-Heuristik fuer die anderen
+  drei Funktionen) -- vorher fälschlich immer als `cloud_fallback`
+  gelabelt, obwohl nie ein externer Anbieter aufgerufen wurde. Das war die
+  eigentliche Namensluege, die diese Korrektur behebt, unabhaengig von der
+  BYOK-Frage selbst.
+
+**Umfang: nur die drei bereits im Ursprungsauftrag genannten Funktionen**
+(`extractContract`/`summarize`/`draftReply`) -- `analyzeMail` (Spam-/
+Phishing-Klassifikation) ist explizit NICHT Teil dieser KI-Anbindung,
+bleibt unveraendert die deterministische Track-B-Logik
+(`@driftmail/security-classification`), unabhaengig von BYOK-Konfiguration.
+Sicherheitsklassifikation soll nie davon abhaengen, ob ein User einen
+eigenen KI-Key hinterlegt hat.
+
+**`user_ai_preference` (db-schema.sql, KORREKTUR-Version):** `mode`
+('off'/'byok', Default 'off' -- kein driftmail-finanzierter "free"-Modus
+mehr, die urspruenglich dafuer vorgesehene `ai_provider_config`-Tabelle
+bleibt bewusst ungenutzt, siehe Kommentar dort), `byok_provider`
+('anthropic'/'openai'/'google'/'other'), `encrypted_api_key` (AES-256-GCM,
+**wiederverwendet** `src/auth/credentialsEncryption.ts` -- dieselbe
+Verschluesselung wie fuer OAuth-/IMAP-Zugangsdaten, kein zweites Krypto-
+Modul), `cloud_consent_given_at` (NULL = kein Consent). Tabelle war zu
+Beginn dieses Schritts von keinem Code beschrieben, direkt am CREATE TABLE
+geändert (Repo-Konvention), kein ALTER noetig.
+
+**`GET`/`PUT /ai-settings`** (`src/routes/aiSettings.ts`): eigene
+Cloud-KI-Einstellung lesen/setzen. `apiKey` wird NIE zurueckgegeben, nur
+`hasApiKey` (boolean). `PUT` mit `mode=byok` verlangt `byokProvider` +
+`apiKey` (Ausnahme: `apiKey` darf weggelassen werden, wenn schon einer
+hinterlegt ist und nur `cloudConsent` geaendert wird). `mode=off` setzt
+Provider/Key/Consent IMMER zurueck -- ein spaeteres erneutes Aktivieren
+verlangt bewusst wieder ein explizites Consent, kein "totes" Consent-Flag,
+das unbemerkt Monate spaeter ohne erneute Bestaetigung wieder greift.
+
+**Anbieter-Umfang, ehrlich benannt (kein stiller Fehlschlag):** nur
+`anthropic`/`openai` sind in `src/ai/cloudAdapter.ts` wirklich angebunden
+(einfache, gut dokumentierte REST-APIs, echte Netzwerk-Calls, keine
+Mocks). `google`/`other` existieren im Contract/DB-Enum fuer spaetere
+Erweiterung, werden aber bereits bei `PUT /ai-settings` mit 400
+("noch nicht implementiert") abgelehnt -- **Fail fast beim Konfigurieren,
+nicht erst beim spaeteren Nutzen.** Modelle bewusst klein/guenstig gewaehlt
+(`claude-haiku-4-5-20251001`/`gpt-4o-mini`) -- diese drei Funktionen sind
+kurze, on-demand ausgeloeste Aktionen auf Kosten des Users, kein Grund fuer
+ein teures Modell.
+
+**Graceful Fallback (`src/ai/index.ts` `runAiTask()`):** schlaegt der
+echte BYOK-Cloud-Call fehl (falscher/abgelaufener Key, Netzwerk,
+Rate-Limit, unerwartete Antwortform), faellt die Route automatisch auf die
+Heuristik zurueck statt eines 500ers -- eine BYOK-Fehlkonfiguration soll
+eine KI-Aktion nie kaputtmachen, nur schlechter machen. Der Fehlschlag
+wird serverseitig geloggt, nicht dem User als Fehler angezeigt.
+`source` in der Antwort spiegelt IMMER, was tatsaechlich passiert ist
+(nie das, was eigentlich versucht war) -- bei einem Fallback also
+`heuristic`, nicht `cloud_fallback`.
+
+**`GET /messages/{id}/summary` + `POST /messages/{id}/reply-draft`:**
+nutzen jetzt `getAiAdapterForUser(req.userId)`/`runAiTask()` statt des
+vorher global fest verdrahteten Mock-Adapters. `reply-draft` bekam dabei
+ein bisher fehlendes `source`-Feld in der Antwort (Contract-Luecke, siehe
+api-spec.yaml-Kommentar -- `draftReply()` liefert laut
+ai-adapter-interface.ts schon seit dem 08.09. ein `AiAdapterResult<string>`
+mit Quelle, das Feld fehlte aber im HTTP-Response-Schema).
+
+**Bewusste Grenze -- `extractContract` bleibt NUR heuristisch:** die
+Vertragsextraktion laeuft waehrend des Hintergrund-Syncs
+(`syncAccount()`/`mail/scheduler.ts`), nicht als on-demand User-Aktion wie
+die anderen beiden Funktionen. Ein Per-User-BYOK-Upgrade dort haette eine
+zusaetzliche asynchrone Preference-Lookup fuer JEDEN einzelnen
+Sync-Tick JEDES Kontos bedeutet (Scheduler laeuft alle paar Minuten fuer
+alle Konten aller User) -- unverhaeltnismaessiger Aufwand/Latenz-Zuwachs
+fuer diesen ersten Schritt. `extractContract` nutzt deshalb weiterhin
+IMMER den heuristischen Singleton-Adapter (`aiAdapter`-Export in
+`src/ai/index.ts`, unveraendert), auch wenn ein User BYOK konfiguriert
+hat. Spaetere Ausbaustufe, nicht Teil dieses Schritts.
+
+**Onboarding-Zustimmungsschritt, bewusst NICHT als eigener Onboarding-
+Screen gebaut:** ein frueheres Mockup (SYNC.md 15.09., "Willkommen ->
+Mail-Konto verbinden -> KI-Capability-Check/Zustimmung -> Signatur ->
+Fertig") sah einen eigenen Onboarding-Schritt vor. Mit BYOK als Default-
+"off"-Zustand braucht die grosse Mehrheit der User NIE einen
+Cloud-Consent-Dialog (nur wer aktiv einen eigenen Key eintraegt) -- ein
+verpflichtender Onboarding-Schritt fuer alle waere fuer den Normalfall
+irrefuehrend/unnoetige Reibung. Der Consent lebt deshalb direkt in den
+KI-Einstellungen (`cloudConsent` in `PUT /ai-settings`), an der einzigen
+Stelle, an der er ueberhaupt relevant wird -- serverseitig bei JEDEM
+einzelnen Dispatch geprueft (`getAiAdapterForUser()`), nicht nur einmalig
+beim Speichern vertraut. Web/iOS bauen die UI dafuer in ihren jeweiligen
+Einstellungen, nicht im Onboarding-Flow.
+
+**Tests:** `smoketest.ts` deckt ab: Default-Zustand (`mode=off`,
+`hasApiKey=false`), `summary`/`reply-draft` liefern ohne BYOK `source:
+"heuristic"`, `PUT /ai-settings` lehnt `byokProvider=google` mit 400 ab,
+lehnt `mode=byok` ohne `apiKey` mit 400 ab, akzeptiert eine gueltige
+Provider-Kombination (Key wird NIE in der Antwort zurueckgegeben), UND
+ein echter Graceful-Fallback-Test mit einem absichtlich UNGUELTIGEN
+Anthropic-Key -- **echter Netzwerk-Roundtrip zu api.anthropic.com** (kein
+Mock), die Anthropic-API lehnt mit 401 ab, die Route faellt automatisch
+auf `heuristic` zurueck statt eines 500ers. `mode=off` setzt Provider/Key/
+Consent nachweislich zurueck. Gruen ohne UND mit `DATABASE_URL` gegen
+frisches Postgres. **Nicht getestet (kein gueltiger Key verfuegbar, aus
+gutem Grund nicht erfunden):** ein tatsaechlich ERFOLGREICHER BYOK-Cloud-
+Aufruf -- die Request-/Response-Parsing-Logik selbst (`cloudAdapter.ts`)
+ist gegen die dokumentierten, oeffentlichen API-Formate beider Anbieter
+geschrieben, aber nie gegen eine echte erfolgreiche Antwort verifiziert.
+
+**Uebergabe an Track C (iOS) + Track F (Web):** beide bauen jeweils (1)
+eine Einstellungs-UI fuer `GET`/`PUT /ai-settings` (Provider-Auswahl,
+API-Key-Eingabe als Passwort-Feld, Consent-Checkbox), (2) einen echten
+On-Device-KI-Versuch VOR jedem Aufruf der Backend-Endpunkte fuer
+summarize/draftReply (iOS: Apple Foundation Models, verfuegbar ab iOS 26
+laut SDK-Check in dieser Umgebung, mit Verfuegbarkeits-Gate + Fallback auf
+den bisherigen Heuristik-Stub fuer aeltere Geraete; Web: Browser-eigene
+On-Device-KI falls in der Zielumgebung ueberhaupt verfuegbar, sonst
+dokumentierter Verzicht, kein Blocker). `CapabilityChecker`
+(iOS)/aequivalent (Web) sollten dabei von reinen Platzhaltern auf eine
+echte Verfuegbarkeitspruefung umgestellt werden.
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war

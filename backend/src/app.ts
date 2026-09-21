@@ -10,6 +10,7 @@ import { attachmentsRouter } from "./routes/attachments";
 import { draftsRouter } from "./routes/drafts";
 import { trustedSendersRouter } from "./routes/trustedSenders";
 import { mailProvidersRouter } from "./routes/mailProviders";
+import { aiSettingsRouter } from "./routes/aiSettings";
 import { internalRouter } from "./routes/internal";
 import { requireAuth } from "./middleware/auth";
 
@@ -42,6 +43,7 @@ export function createApp() {
   v1.use(attachmentsRouter);
   v1.use(draftsRouter);
   v1.use(trustedSendersRouter);
+  v1.use(aiSettingsRouter);
   app.use("/v1", v1);
 
   // Betriebs-/Test-Hilfsmittel, kein Contract-Bestandteil.

@@ -2,12 +2,12 @@ import type { Request, Response } from "express";
 import { Router } from "express";
 import { store } from "../db/store";
 import { toApiMessage, toApiMessageDetail, toApiMailSummary } from "../mappers";
-import { aiAdapter } from "../ai";
+import { runAiTask } from "../ai";
 import { checkDraftForPhishing } from "@driftmail/security-classification";
 import { recipientReputationLookup } from "../lookups";
 import { adapterForAccount } from "../mail/sync";
 import { parseListUnsubscribeHeader } from "../mail/listUnsubscribe";
-import type { AiSource, ApiDraftPhishingCheckLink } from "../types";
+import type { ApiDraftPhishingCheckLink } from "../types";
 import type { MailAccountRecord, MessageRecord } from "../types";
 
 // [2026-09-10] echte Auth: Besitz-Prüfung an einer Stelle gebündelt, statt
@@ -463,8 +463,12 @@ messagesRouter.get("/messages/:messageId/summary", async (req, res) => {
   const cached = await store.getMessageAiSummary(message.id);
   if (cached) return res.json(toApiMailSummary(cached));
 
-  const summary = await aiAdapter.summarize(message.bodyText ?? "");
-  const source: AiSource = "cloud_fallback"; // Backend-Mock läuft serverseitig, siehe src/ai/mockAdapter.ts
+  // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): pro-User-Adapterwahl
+  // statt des vorher fest verdrahteten Mock-Adapters mit hartcodiertem
+  // source="cloud_fallback" (was schon vorher irrefuehrend war -- der Mock
+  // lief serverseitig, rief aber nie einen externen Anbieter auf). Siehe
+  // src/ai/index.ts runAiTask() fuer BYOK-Routing + Graceful-Fallback.
+  const { result: summary, source } = await runAiTask(req.userId, (adapter) => adapter.summarize(message.bodyText ?? ""));
   const record = {
     messageId: message.id,
     summaryText: summary.summaryText,
@@ -484,16 +488,20 @@ messagesRouter.post("/messages/:messageId/reply-draft", async (req, res) => {
   if (!owned) return;
   const { message } = owned;
 
-  const draftText = await aiAdapter.draftReply({
-    messages: [
-      {
-        fromAddress: message.fromAddress,
-        subject: message.subject ?? "",
-        bodyText: message.bodyText ?? "",
-        receivedAt: message.receivedAt,
-      },
-    ],
-  });
+  const { result: draftText, source } = await runAiTask(req.userId, (adapter) =>
+    adapter.draftReply({
+      messages: [
+        {
+          fromAddress: message.fromAddress,
+          subject: message.subject ?? "",
+          bodyText: message.bodyText ?? "",
+          receivedAt: message.receivedAt,
+        },
+      ],
+    }),
+  );
 
-  res.json({ draftText });
+  // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): source war hier
+  // vorher komplett abwesend, siehe api-spec.yaml-Kommentar am Endpunkt.
+  res.json({ draftText, source });
 });

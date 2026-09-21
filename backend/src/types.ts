@@ -21,9 +21,31 @@ export type SyncStatus = "pending" | "syncing" | "ok" | "error";
 export type SystemFolderKey = "eingang" | "entwuerfe" | "gesendet" | "sonstiges" | "quarantaene" | "spam" | "papierkorb";
 export type Classification = "safe" | "spam" | "phishing" | "unclear";
 export type ContractStatus = "active" | "cancelled" | "expired" | "needs_review";
-export type AiSource = "on_device" | "cloud_fallback";
+// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09., ersetzt WEB_INBOX.md
+// "ECHTE KI-ANBINDUNG" c3ec563): "heuristic" neu -- siehe
+// contracts/ai-adapter-interface.ts AiSource-Kommentar fuer die volle
+// Begruendung (kein driftmail-finanzierter Cloud-Key, drei ehrlich
+// unterschiedene Quellen statt vorher zwei).
+export type AiSource = "on_device" | "cloud_fallback" | "heuristic";
 export type Platform = "ios" | "android" | "windows" | "web";
 export type ActiveMode = "on_device" | "cloud_fallback";
+
+// `user_ai_preference` (db-schema.sql, KORREKTUR 21.09.): BYOK-Einstellung
+// des Users fuer Cloud-KI. "off" ist der Default -- kein driftmail-
+// finanzierter Cloud-Pfad, nur Geraete-eigene KI (Client-seitig) oder der
+// deterministische Heuristik-Fallback. encryptedApiKey ist NIE Teil einer
+// API-Response (siehe routes/aiSettings.ts toApiAiSettings()).
+export type AiPreferenceMode = "off" | "byok";
+export type AiProvider = "anthropic" | "openai" | "google" | "other";
+
+export interface AiPreferenceRecord {
+  userId: string;
+  mode: AiPreferenceMode;
+  byokProvider: AiProvider | null;
+  encryptedApiKey: string | null;
+  cloudConsentGivenAt: string | null;
+  updatedAt: string;
+}
 
 // ===== interne Modelle (1:1 zu db-schema.sql) =====
 

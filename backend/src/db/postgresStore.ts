@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Store } from "./store";
 import type {
+  AiPreferenceRecord,
   ContractRecord,
   DraftRecord,
   FolderRecord,
@@ -186,6 +187,17 @@ function rowToMessageAiSummary(r: any): MessageAiSummaryRecord {
     deadline: r.deadline,
     source: r.source,
     generatedAt: r.generated_at,
+  };
+}
+
+function rowToAiPreference(r: any): AiPreferenceRecord {
+  return {
+    userId: r.user_id,
+    mode: r.mode,
+    byokProvider: r.byok_provider,
+    encryptedApiKey: r.encrypted_api_key,
+    cloudConsentGivenAt: r.cloud_consent_given_at,
+    updatedAt: r.updated_at,
   };
 }
 
@@ -861,6 +873,41 @@ export class PostgresStore implements Store {
         record.checkedAt,
       ],
     );
+  }
+
+  // ----- KI-Cloud-Einstellung (BYOK, TERMINAL_INBOX.md 21.09. KORREKTUR) -----
+
+  async getAiPreference(userId: string): Promise<AiPreferenceRecord | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM user_ai_preference WHERE user_id = $1", [userId]);
+    return rows[0] ? rowToAiPreference(rows[0]) : undefined;
+  }
+
+  async setAiPreference(
+    userId: string,
+    patch: Partial<Pick<AiPreferenceRecord, "mode" | "byokProvider" | "encryptedApiKey" | "cloudConsentGivenAt">>,
+  ): Promise<AiPreferenceRecord> {
+    const existing = await this.getAiPreference(userId);
+    const merged: Omit<AiPreferenceRecord, "updatedAt"> = {
+      userId,
+      mode: patch.mode ?? existing?.mode ?? "off",
+      byokProvider: patch.byokProvider !== undefined ? patch.byokProvider : (existing?.byokProvider ?? null),
+      encryptedApiKey: patch.encryptedApiKey !== undefined ? patch.encryptedApiKey : (existing?.encryptedApiKey ?? null),
+      cloudConsentGivenAt:
+        patch.cloudConsentGivenAt !== undefined ? patch.cloudConsentGivenAt : (existing?.cloudConsentGivenAt ?? null),
+    };
+    const { rows } = await this.pool.query(
+      `INSERT INTO user_ai_preference (user_id, mode, byok_provider, encrypted_api_key, cloud_consent_given_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, now())
+       ON CONFLICT (user_id) DO UPDATE SET
+         mode = EXCLUDED.mode,
+         byok_provider = EXCLUDED.byok_provider,
+         encrypted_api_key = EXCLUDED.encrypted_api_key,
+         cloud_consent_given_at = EXCLUDED.cloud_consent_given_at,
+         updated_at = EXCLUDED.updated_at
+       RETURNING *`,
+      [merged.userId, merged.mode, merged.byokProvider, merged.encryptedApiKey, merged.cloudConsentGivenAt],
+    );
+    return rowToAiPreference(rows[0]);
   }
 
   // ----- IBAN-Historie (Grundlage für containsNewIban) -----

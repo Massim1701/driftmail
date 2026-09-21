@@ -555,6 +555,16 @@ paths:
                 properties:
                   draftText:
                     type: string
+                  source:
+                    type: string
+                    enum: [on_device, cloud_fallback, heuristic]
+                    description: >
+                      [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.):
+                      neues Feld -- vorher fehlte source hier komplett,
+                      obwohl draftReply() laut ai-adapter-interface.ts schon
+                      laenger ein AiAdapterResult<string> liefert (siehe
+                      SYNC.md 08.09.). Ohne dieses Feld konnte die UI nie
+                      ehrlich anzeigen, woher ein KI-Entwurf kam.
 
   /messages/draft/phishing-check:
     post:
@@ -976,6 +986,57 @@ paths:
         "200":
           description: Gespeichert
 
+  /ai-settings:
+    get:
+      summary: >
+        [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09., ersetzt
+        WEB_INBOX.md "ECHTE KI-ANBINDUNG" c3ec563): eigene Cloud-KI-
+        Zugangsdaten des Users (BYOK) abfragen. apiKey wird NIE
+        zurückgegeben, nur ob einer hinterlegt ist (hasApiKey).
+      responses:
+        "200":
+          description: Aktuelle Einstellung
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSettings"
+    put:
+      summary: >
+        Cloud-KI-Einstellung setzen. mode=off löscht byokProvider/apiKey
+        serverseitig. mode=byok verlangt byokProvider + apiKey (Ausnahme:
+        apiKey darf weggelassen werden, wenn schon einer hinterlegt ist und
+        nur cloudConsent geändert wird) -- byokProvider aktuell nur
+        'anthropic'/'openai' wirklich angebunden, 'google'/'other' liefern
+        400 (ehrlich als "noch nicht implementiert" markiert, kein stiller
+        Fehlschlag beim tatsächlichen Versand). cloudConsent ist unabhängig
+        vom Rest jederzeit setz-/widerrufbar. Echter Cloud-Dispatch (siehe
+        GET /messages/{id}/summary, POST /messages/{id}/reply-draft)
+        braucht IMMER mode=byok UND einen hinterlegten Key UND
+        cloudConsent=true gleichzeitig, serverseitig bei jedem einzelnen
+        Dispatch geprüft (nicht nur einmalig beim Speichern).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode: { type: string, enum: [off, byok] }
+                byokProvider: { type: string, enum: [anthropic, openai, google, other], nullable: true }
+                apiKey:
+                  type: string
+                  nullable: true
+                  description: Nur beim Setzen/Ändern gesendet, wird verschlüsselt gespeichert.
+                cloudConsent: { type: boolean, nullable: true }
+      responses:
+        "200":
+          description: Gespeicherte Einstellung
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiSettings"
+        "400":
+          description: Ungültige Kombination (z.B. mode=byok ohne Provider/Key, oder nicht angebundener Provider)
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1166,7 +1227,26 @@ components:
         actionRequired: { type: boolean }
         actionDescription: { type: string }
         deadline: { type: string, format: date, nullable: true }
-        source: { type: string, enum: [on_device, cloud_fallback] }
+        source:
+          type: string
+          enum: [on_device, cloud_fallback, heuristic]
+          description: >
+            [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): neuer Wert
+            "heuristic" -- deterministische Mustererkennung ohne KI-Modell,
+            weder On-Device-Modell noch externer Cloud-Anbieter beteiligt.
+            Vorher fälschlich immer als "cloud_fallback" geliefert.
+
+    AiSettings:
+      type: object
+      description: >
+        [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.), siehe GET/PUT
+        /ai-settings. Spiegelt db-schema.sql user_ai_preference, ohne den
+        Key selbst.
+      properties:
+        mode: { type: string, enum: [off, byok] }
+        byokProvider: { type: string, enum: [anthropic, openai, google, other], nullable: true }
+        hasApiKey: { type: boolean }
+        cloudConsentGiven: { type: boolean }
 
     Contract:
       type: object

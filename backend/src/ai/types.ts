@@ -5,7 +5,10 @@
 // backend/ baubar bleibt (siehe README "Annahmen").
 
 export type Classification = "safe" | "spam" | "phishing" | "unclear";
-export type AiSource = "on_device" | "cloud_fallback";
+// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): "heuristic" neu, siehe
+// contracts/ai-adapter-interface.ts AiSource-Kommentar.
+export type AiSource = "on_device" | "cloud_fallback" | "heuristic";
+export type AiProvider = "anthropic" | "openai" | "google" | "other";
 
 export interface SecurityResult {
   spfStatus: "pass" | "fail" | "none";
