@@ -1032,3 +1032,24 @@ Cmd/Ctrl+K: echter globaler `keydown`-Listener in `App.tsx` fokussiert das beste
 **Tests:** echte EICAR-Test-Signatur (offizieller, ungefaehrlicher AV-Test-String) fuer den `malicious`-Fall, echter PE-Header in einer als `.jpg`/`.pdf` getarnten Datei fuer den Magic-Bytes-Fall -- beide Richtungen (Senden per Upload-Test, Empfangen per zwei neuen Fixture-Anhaengen). Gruen in-memory + gegen frisches Postgres, gegen einen echten lokalen `clamd`-Daemon (Setup-Anleitung in `backend/README.md` "Malware-Scan").
 
 **Kein Blocker.**
+
+
+[2026-09-21] [terminal] [A] — WEB_INBOX.md 21.09. "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" (Proton/Hey/Superhuman-Vergleich), Backend fertig (Commit `f189450`).
+
+**1) Tracking-Pixel-Blockierung:** `GET`/`PUT /privacy-settings`, echter gespeicherter Schalter -- aber ehrlich eingeordnet: `blockRemoteImages` hat aktuell KEINE technische Wirkung, weil driftmail strukturell nirgends HTML-Mail-Inhalte rendert (alle drei Mail-Adapter extrahieren durchgaengig nur die Klartext-Variante) -- der klassische Tracking-Pixel-Angriffsweg kann in dieser Architektur gar nicht greifen. Ein echter, unbeabsichtigter Privatsphäre-Vorteil des bestehenden Designs. `blockTrackingLinks` braucht `message_links` (Contract existiert seit Track 0, Backend nie gebaut -- separate, bei dieser Gelegenheit entdeckte Luecke, nicht Teil dieses Auftrags).
+
+**2) Undo Send:** bewusst OHNE Backend-Aenderung -- reine Client-seitige Verzoegerung vor dem `POST /messages/send`-Aufruf, wie im Auftrag selbst vorgeschlagen.
+
+**3) Darkweb-/Datenleck-Ueberwachung:** `GET`/`PATCH /security/breaches`, Mock-Anbindung (`lookups/dataBreachMock.ts`) -- ein echter Dienst wie haveibeenpwned verlangt einen kostenpflichtigen API-Key, den driftmail nicht ungefragt fuer alle User vorfinanzieren will (gleiche Linie wie die KI-Anbindungs-Korrektur), BYOK passt hier nicht (geteilter Bedrohungsdaten-Dienst, kein persoenlicher KI-Zugang). Laeuft periodisch im bestehenden Scheduler-Tick, aber mit eigenem 24-Stunden-Cooldown pro Konto.
+
+**4) Schedule Send:** `drafts` um `bccAddresses`/`scheduledFor` erweitert. Groessere interne Aufraeumung dabei: der Versand-Kern von `POST /messages/send` wurde nach `mail/sendMessage.ts` ausgelagert, damit die Route UND der Scheduler beim automatischen Versand eines faelligen Entwurfs EXAKT denselben Weg nehmen (Phishing-Check, Anhang-Gate, `outgoing_send_log`, "gesendet"-Ordner) -- gleiches Prinzip wie `syncAccount()`. Schlaegt der automatische Versand fehl, wird die Planung aufgehoben statt endlos erneut zu versuchen, der Entwurf selbst bleibt erhalten.
+
+**5) Snooze:** `messages.snoozed_until`, bewusst OHNE periodischen Job -- reiner Zeitvergleich bei jedem Lesezugriff in `listMessages()`, eine gesnoozte Nachricht taucht automatisch wieder auf. `reminders` bewusst nicht wiederverwendet (`contract_id NOT NULL` bindet sie fest an die Vertragserkennung, gleiche Abwaegung wie beim Nudge-Feature).
+
+**Nebenbei behoben:** `PUT /settings`-Contract hatte `nudgeUnansweredEnabled` im Request-Body nicht dokumentiert (Uebersehen beim urspruenglichen Nudge-Auftrag). `PostgresStore.updateDraft()` von COALESCE auf echtes Lesen-Mergen-Schreiben umgestellt (COALESCE kann "Feld fehlt" nicht von "Feld=null" unterscheiden, Schedule Send braucht aber eine echte "Planung aufheben"-Semantik).
+
+**Tests:** alle vier Backend-relevanten Punkte abgedeckt (Punkt 2 ist reine Client-Logik). Gruen in-memory + gegen frisches Postgres + gegen eine simulierte Alt-Schema-DB (drei neue/geaenderte Spalten fehlten vorher, `migrate()` legt sie korrekt nach).
+
+**Uebergabe an Track C/F:** UI fuer alle fuenf Punkte noch zu bauen.
+
+**Kein Blocker.**
