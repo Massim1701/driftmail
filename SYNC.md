@@ -993,3 +993,14 @@ Haftungsausschluss/AGB/Datenschutzerklaerung tragen alle drei einen deutlich sic
 Alte Pfade (z.B. `/kitchen-king/impressum.html`) bleiben als Redirects erreichbar, falls irgendwo verlinkt. Getestet: lokal per HTTP-Server + echtem Browser durchgeklickt (driftmail/Kitchen King/Orakel + ein Dekaden-Beispiel), Konsole ueberall ohne Fehler.
 
 **Kein Blocker.**
+
+
+[2026-09-21] [terminal] [C] — WEB_INBOX.md 21.09. "DESIGN-RICHTUNG - von Massimo bestaetigt", Track C fertig (Commit `b32eedf`). Track F (Web) laeuft parallel in einem anderen Fork.
+
+App war bereits sehr nah an der Zielrichtung (schlanke `.plain`-Listen ohne Karten/Schatten, kompakte Zeilen in `MessageRowView`, sichtbarer Compose-Button, keine `.shadow()`-Aufrufe irgendwo im Code) -- organisch ueber die Session so entstanden, kein grosser Umbau noetig. Systematisch gegen alle 5 bestaetigten Struktur-Prinzipien geprueft, ein echter Fund: `FolderListView.FolderRow` faerbte JEDES Ordner-Icon in der User-Akzentfarbe (nur Quarantaene korrekt in `danger`) -- eine 7-fach wiederholte Akzentfarbe ist das Gegenteil von "genau EIN Akzent pro Ansicht" und verwaessert den Kontrast zur echten Sicherheitswarnung. Icons sind jetzt neutral, Quarantaene behaelt `danger`. Alle uebrigen Akzent-Verwendungen einzeln per `grep` gegengeprueft (Buttons/Controls via `.tint()`, je ein Hero-Icon pro Onboarding-/Lock-Screen, die "Check Mail"-Karte, aktiver Konto-Haken) -- bereits korrekt, keine weitere Aenderung noetig.
+
+**Bewusst nicht umgesetzt:** "Absender fett wenn ungelesen" -- es gibt weder im Contract (`ApiMessage`) noch im iOS-Code ein Gelesen/Ungelesen-Konzept fuer Nachrichten, das waere ein echter Contract-Change (Auftrag verlangt ausdruecklich "Kein Contract-Change"). Cmd/Ctrl+K-Hinweis: reines Tastatur-/Desktop-Konzept, fuer iOS/Touch bewusst nicht uebertragen (kein sinnvolles Aequivalent, native `.searchable()` deckt Suche bereits ab).
+
+**Tests:** `xcodebuild` BUILD SUCCEEDED, sauberer Uninstall/Install/Launch im Simulator, `log show` ohne Crash/Fatal. Gleiche bekannte Grenze wie bei jedem vorherigen iOS-Nachtrag: kein Weg am Onboarding-Gate vorbei ohne echte Test-Mailbox, die eigentliche Ordner-/Nachrichtenliste liess sich deshalb nur per Code-Review + erfolgreichem Build verifizieren, nicht live durchklicken.
+
+**Kein Blocker.**
