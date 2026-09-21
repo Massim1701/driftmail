@@ -2087,6 +2087,99 @@ Schalter, Start-/End-Datumsfelder, Betreff-/Text-Eingabe, gebunden an
 "Jetzt beenden"-Schnellaktion, wie im WEB_INBOX.md-Originaltext
 vorgeschlagen.
 
+## Drei weitere Features -- Gmail-Recherche (Backend-Grundlage) -- [2026-09-21] Nachtrag
+(WEB_INBOX.md 21.09. "DREI WEITERE FEATURES - Gmail-Recherche")
+
+Backend-Teile fuer zwei der drei vorgeschlagenen Features (Punkt 1,
+"Vergessener-Anhang-Erkennung", ist reine Client-Logik ohne Contract-
+Aenderung, siehe unten). UI fuer alle drei folgt in Web/iOS.
+
+**1) Vergessener-Anhang-Erkennung:** KEINE Backend-Aenderung -- reine
+Client-seitige Textsuche im Compose-Screen nach typischen Phrasen ("im
+Anhang", "siehe Anhang", "anbei", "attached", "see attachment") vor dem
+Senden, kein neuer Endpunkt noetig.
+
+**2) "Nudge" -- Erinnerung an unbeantwortete Mails:** `Message.awaitingReply`
+(neu, zur Laufzeit abgeleitet, kein eigenes Feld/Cache -- siehe
+`mail/nudge.ts`) ist true, wenn eine Nachricht mindestens
+`NUDGE_THRESHOLD_DAYS` (Default 3, wie Gmail) alt ist UND in der jeweils
+GEGENUEBERLIEGENDEN Ordner-Richtung desselben Kontos keine Antwort
+existiert: fuer eine Nachricht im "eingang"-Ordner wird geprueft, ob im
+"gesendet"-Ordner eine Nachricht mit `inReplyToMessageId` darauf zeigt
+(hat der USER geantwortet, nicht nur "gibt es irgendeine weitere Nachricht
+im Thread") -- fuer eine eigene Nachricht im "gesendet"-Ordner umgekehrt,
+ob im "eingang"-Ordner eine Antwort ankam. Als spam/phishing klassifizierte
+Mail nudgt nie. `users.nudge_unanswered_enabled` (Default true, wie im
+Auftrag verlangt "manche Nutzer empfinden es als aufdringlich") schaltet
+die Berechnung komplett ab, ueber `GET`/`PUT /settings`.
+
+Gepruefte Wiederverwendung der bestehenden reminders-Infrastruktur
+(`Reminder`-Contract-Typ, `contracts-logic/src/scheduler.ts`) wie im
+Auftrag vorgeschlagen -- **bewusst NICHT wiederverwendet**: `Reminder` ist
+fest an `contractId` gebunden (Vertragserkennungs-Feature), eine eigene,
+kleinere zur-Laufzeit-Ableitung passt hier besser als ein Schema-Umbau
+eines fachlich anderen Features.
+
+**3) Vertraulicher Modus:** `messages.confidential_until` (neu, additive
+Spalte) -- setzbar ueber `POST /messages/send` (`confidentialUntil`, muss
+ein gueltiger, in der Zukunft liegender Zeitpunkt sein, sonst 400). Nach
+Ablauf wird `bodyText` serverseitig geloescht -- **kein Hintergrund-Job**
+(gleiche bewusste Grenze wie ueberall sonst in diesem Projekt, siehe
+"Annahmen" unten): der Ablauf wird stattdessen LAZY beim naechsten
+Lesezugriff (`store.getMessage()`/`listMessages()`) geprueft und dann
+EINMALIG echt geloescht (persistiert, nicht nur pro Response maskiert),
+siehe `mail/confidential.ts` (reine Entscheidungsfunktion) + die
+`expireConfidentialIfDue()`-Methoden in `store.ts`/`postgresStore.ts`
+(die eigentliche Loesch-Mutation, je Persistenzschicht). Das Feld
+`confidentialUntil` selbst bleibt auf der Nachricht erhalten (auch nach
+Ablauf), damit der Client "war vertraulich, seit X nicht mehr lesbar"
+anzeigen kann, statt einfach kommentarlos leer zu wirken.
+
+Automatischer Vorschlag "Vertraulich senden?" bei erkannten sensiblen
+Daten (IBAN/Kreditkartennummer): **keine Backend-Aenderung noetig** --
+`POST /messages/draft/phishing-check` liefert `containsSensitiveData`
+(`iban`/`credit_card`/`other`) bereits seit laengerem
+(`security-classification/src/draftPhishingCheck.ts`), der Client kann
+das direkt fuer den proaktiven Vorschlag nutzen, ohne dass der Composer
+dafuer einen zweiten Request braucht.
+
+**Bewusst nicht umgesetzt (ehrlich dokumentierte Grenze, wie im Auftrag
+selbst schon vorweggenommen):** kein Kopieren-/Weiterleiten-/Drucken-Schutz
+clientseitig erzwingbar -- reine Client-Beschraenkung wie bei jedem
+Anbieter, kein technischer Schutz gegen Screenshots o.ae. Attachment-Bytes
+werden ueber diese API ohnehin nie ausgeliefert (kein Download-Endpunkt
+existiert, siehe "Anhänge" oben) -- fuer den "Vertraulich"-Zweck also
+bereits strukturell kein zusaetzliches Leck.
+
+**Tests:** `smoketest.ts` deckt Punkt 2 (alte unbeantwortete Eingang-Mail
+-> `awaitingReply=true`, eigene Antwort im gesendet-Ordner macht es wieder
+false, alte eigene gesendete Mail ohne Antwort -> true, als-spam-
+klassifizierte Mail -> nie true, Ein/Aus-Schalter blendet alles aus) und
+Punkt 3 ab (Ablaufzeit in der Vergangenheit -> 400 beim Senden, gueltige
+Ablaufzeit -> vor Ablauf lesbar, nach Ablauf `bodyText=null` sowohl in der
+API-Response als auch bei direktem `store.getMessage()`-Zugriff --
+Persistenz-Check, keine reine Pro-Response-Maskierung -- waehrend
+`confidentialUntil` selbst erhalten bleibt). Migration
+(`messages.confidential_until` + `users.nudge_unanswered_enabled`) manuell
+gegen eine simulierte Alt-Schema-DB verifiziert (beide Spalten fehlten
+vorher, `migrate()` legt sie korrekt nach, Smoketest bleibt danach gruen).
+Gruen in-memory + zweimal hintereinander gegen dieselbe frische Postgres-DB
+(Migrations-Idempotenz).
+
+**Dabei gefundener und behobener Bug:** `PostgresStore.updateUserSettings()`
+kannte `nudgeUnansweredEnabled` zunaechst nicht (nur beim InMemoryStore
+ergaenzt) -- `PUT /settings` mit diesem Feld hatte gegen eine echte
+Postgres-DB stillschweigend keine Wirkung (die Spalte wurde nie
+geschrieben). Nur durch den Postgres-Smoketest-Lauf aufgefallen (der
+In-Memory-Lauf verdeckte den Fehler, da `InMemoryStore` korrekt war) --
+weiterer Beleg dafuer, warum dieses Projekt konsequent gegen BEIDE Stores
+testet, nicht nur gegen den bequemeren In-Memory-Fallback.
+
+**Uebergabe an Track C/F:** UI fuer alle drei Punkte noch zu bauen (Punkt 1
+komplett client-seitig, Punkt 2 dezenter Listen-Hinweis + Einstellungs-
+Schalter, Punkt 3 Compose-Option + automatischer Vorschlag bei erkannten
+sensiblen Daten + Anzeige des Ablaufzustands in der Detailansicht).
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war

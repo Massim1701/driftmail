@@ -932,6 +932,7 @@ async function main() {
         folderId: legacyWichtigFolder.id,
         rawHeaders: null,
         inReplyToMessageId: null,
+        confidentialUntil: null,
       });
       await ensureDemoUser(); // triggert migrateLegacySystemFolders() (Store hat bereits Ordner -> else-Zweig)
       const migratedMessage = await store.getMessage(legacyMessage.id);
@@ -1089,6 +1090,7 @@ async function main() {
       // Echte Thread-Antwort auf Fixture 4 (Subject "Re: ..." oben) --
       // nebenbei Grundlage für den IBAN-Wechsel-im-Thread-Test unten.
       inReplyToMessageId: fixture4!.id,
+      confidentialUntil: null,
     });
     const fixture4DetailAfterSecond = (await (await fetch(`${base}/v1/messages/${fixture4!.id}`)).json()) as Record<string, unknown>;
     assert(
@@ -1491,6 +1493,192 @@ async function main() {
       "bei deaktiviertem Abwesenheitsassistenten sollte KEINE automatische Antwort rausgehen",
     );
 
+    // ----- "Nudge" -- Erinnerung an unbeantwortete Mails (WEB_INBOX.md
+    // 21.09. "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2) -----
+    const NUDGE_OLD_RECEIVED_AT = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString();
+
+    const nudgeInboxMessage = await store.insertMessage({
+      mailAccountId: account.id,
+      messageIdHeader: "<nudge-test-eingang@example.com>",
+      providerMessageId: null,
+      fromAddress: "wartet-auf-antwort@example.com",
+      fromDisplayName: null,
+      replyToAddress: null,
+      subject: "Nudge-Test: unbeantwortet im Eingang",
+      bodyText: "Bitte antworten.",
+      receivedAt: NUDGE_OLD_RECEIVED_AT,
+      folderId: eingangFolder!.id as string,
+      rawHeaders: null,
+      inReplyToMessageId: null,
+      confidentialUntil: null,
+    });
+    const nudgeInboxListRes = await fetch(`${base}/v1/messages?folderId=${eingangFolder!.id}`);
+    const nudgeInboxList = (await nudgeInboxListRes.json()) as Array<Record<string, unknown>>;
+    const nudgeInboxApi = nudgeInboxList.find((m) => m.id === nudgeInboxMessage.id);
+    assert(nudgeInboxApi?.awaitingReply === true, "alte unbeantwortete Eingang-Mail sollte awaitingReply=true liefern");
+
+    // Eigene Antwort im "gesendet"-Ordner -> awaitingReply muss danach false sein.
+    await store.insertMessage({
+      mailAccountId: account.id,
+      messageIdHeader: "<nudge-test-antwort@example.com>",
+      providerMessageId: null,
+      fromAddress: account.emailAddress,
+      fromDisplayName: null,
+      replyToAddress: null,
+      subject: "Re: Nudge-Test: unbeantwortet im Eingang",
+      bodyText: "Hier die Antwort.",
+      receivedAt: new Date().toISOString(),
+      folderId: gesendetFolder!.id as string,
+      rawHeaders: null,
+      inReplyToMessageId: nudgeInboxMessage.id,
+      confidentialUntil: null,
+    });
+    const nudgeInboxAfterReplyRes = await fetch(`${base}/v1/messages/${nudgeInboxMessage.id}`);
+    const nudgeInboxAfterReply = (await nudgeInboxAfterReplyRes.json()) as Record<string, unknown>;
+    assert(nudgeInboxAfterReply.awaitingReply === false, "nach eigener Antwort im gesendet-Ordner sollte awaitingReply=false sein");
+
+    // Alte eigene gesendete Mail ohne erhaltene Antwort -> awaitingReply=true.
+    const nudgeSentMessage = await store.insertMessage({
+      mailAccountId: account.id,
+      messageIdHeader: "<nudge-test-gesendet@example.com>",
+      providerMessageId: null,
+      fromAddress: account.emailAddress,
+      fromDisplayName: null,
+      replyToAddress: null,
+      subject: "Nudge-Test: eigene Mail ohne Antwort",
+      bodyText: "Bitte um Rückmeldung.",
+      receivedAt: NUDGE_OLD_RECEIVED_AT,
+      folderId: gesendetFolder!.id as string,
+      rawHeaders: null,
+      inReplyToMessageId: null,
+      confidentialUntil: null,
+    });
+    const nudgeSentDetailRes = await fetch(`${base}/v1/messages/${nudgeSentMessage.id}`);
+    const nudgeSentDetail = (await nudgeSentDetailRes.json()) as Record<string, unknown>;
+    assert(nudgeSentDetail.awaitingReply === true, "alte eigene gesendete Mail ohne erhaltene Antwort sollte awaitingReply=true liefern");
+
+    // Als spam klassifizierte, sonst identische Mail soll NIE nudgen.
+    const nudgeSpamMessage = await store.insertMessage({
+      mailAccountId: account.id,
+      messageIdHeader: "<nudge-test-spam@example.com>",
+      providerMessageId: null,
+      fromAddress: "spam-nudge-test@example.com",
+      fromDisplayName: null,
+      replyToAddress: null,
+      subject: "Nudge-Test: Spam",
+      bodyText: "Werbung.",
+      receivedAt: NUDGE_OLD_RECEIVED_AT,
+      folderId: eingangFolder!.id as string,
+      rawHeaders: null,
+      inReplyToMessageId: null,
+      confidentialUntil: null,
+    });
+    await store.setMessageSecurity({
+      messageId: nudgeSpamMessage.id,
+      spfStatus: null,
+      dkimStatus: null,
+      dmarcStatus: null,
+      senderDomainAgeDays: null,
+      domainReputationScore: null,
+      homoglyphDetected: false,
+      linkMismatchDetected: false,
+      displayNameSpoofingDetected: false,
+      replyToMismatchDetected: false,
+      urgencyLanguageScore: null,
+      containsNewIban: false,
+      ibanChangedInThread: false,
+      classification: "spam",
+      spamSubcategory: "marketing",
+      ipReputationFlag: null,
+      heloMismatch: false,
+      imageToTextRatio: null,
+      confidenceScore: null,
+      analyzedAt: new Date().toISOString(),
+    });
+    const nudgeSpamDetailRes = await fetch(`${base}/v1/messages/${nudgeSpamMessage.id}`);
+    const nudgeSpamDetail = (await nudgeSpamDetailRes.json()) as Record<string, unknown>;
+    assert(nudgeSpamDetail.awaitingReply === false, "als spam klassifizierte Mail sollte NIE awaitingReply=true liefern");
+
+    // Ein/Aus-Schalter: deaktiviert -> awaitingReply ueberall false, auch
+    // fuer sonst zutreffende Faelle.
+    const nudgeToggleOffRes = await fetch(`${base}/v1/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nudgeUnansweredEnabled: false }),
+    });
+    assert(nudgeToggleOffRes.status === 200, "PUT /v1/settings mit nudgeUnansweredEnabled sollte 200 liefern");
+    const nudgeSentDetailDisabledRes = await fetch(`${base}/v1/messages/${nudgeSentMessage.id}`);
+    const nudgeSentDetailDisabled = (await nudgeSentDetailDisabledRes.json()) as Record<string, unknown>;
+    assert(nudgeSentDetailDisabled.awaitingReply === false, "bei deaktiviertem Schalter sollte awaitingReply ueberall false sein");
+    // Wieder aktivieren, um den Default-Zustand fuer die folgenden Tests
+    // nicht zu veraendern.
+    await fetch(`${base}/v1/settings`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nudgeUnansweredEnabled: true }),
+    });
+
+    // ----- Vertraulicher Modus (WEB_INBOX.md 21.09. "DREI WEITERE
+    // FEATURES - Gmail-Recherche" Punkt 3) -----
+    const confidentialPastRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: account.id,
+        to: ["kollegin@example.com"],
+        subject: "Vertraulich-Test (ungueltig)",
+        bodyText: "Sollte abgelehnt werden.",
+        confidentialUntil: new Date(Date.now() - 1000).toISOString(),
+      }),
+    });
+    assert(
+      confidentialPastRes.status === 400,
+      "POST /v1/messages/send mit confidentialUntil in der Vergangenheit sollte 400 liefern",
+    );
+
+    const confidentialSendRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: account.id,
+        to: ["kollegin@example.com"],
+        subject: "Vertraulich-Test",
+        bodyText: "Dieser Text soll nach Ablauf verschwinden.",
+        confidentialUntil: new Date(Date.now() + 1500).toISOString(),
+      }),
+    });
+    assert(confidentialSendRes.status === 200, "POST /v1/messages/send mit gueltigem confidentialUntil sollte 200 liefern");
+    const confidentialSent = (await confidentialSendRes.json()) as Record<string, unknown>;
+    const confidentialMessage = await store.findMessageByHeader(account.id, `sent-${confidentialSent.sentMessageId}`);
+    assert(confidentialMessage !== undefined, "gesendete vertrauliche Nachricht sollte lokal auffindbar sein");
+    assert(confidentialMessage!.confidentialUntil !== null, "confidentialUntil sollte auf der gespeicherten Nachricht gesetzt sein");
+
+    const confidentialBeforeExpiryRes = await fetch(`${base}/v1/messages/${confidentialMessage!.id}`);
+    const confidentialBeforeExpiry = (await confidentialBeforeExpiryRes.json()) as Record<string, unknown>;
+    assert(
+      confidentialBeforeExpiry.bodyText === "Dieser Text soll nach Ablauf verschwinden.",
+      "vor Ablauf sollte bodyText noch lesbar sein",
+    );
+
+    // Warten, bis die oben gesetzte Ablaufzeit (1500ms in der Zukunft)
+    // wirklich erreicht ist, dann erneut abrufen -- muss jetzt geloescht sein.
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    const confidentialAfterExpiryRes = await fetch(`${base}/v1/messages/${confidentialMessage!.id}`);
+    const confidentialAfterExpiry = (await confidentialAfterExpiryRes.json()) as Record<string, unknown>;
+    assert(confidentialAfterExpiry.bodyText === null, "nach Ablauf sollte bodyText serverseitig geloescht (null) sein");
+    assert(
+      confidentialAfterExpiry.confidentialUntil !== null,
+      "confidentialUntil selbst sollte auch nach Ablauf erhalten bleiben (Client kann 'war vertraulich, seit X abgelaufen' anzeigen)",
+    );
+
+    // Persistenz-Check: wirklich geloescht, nicht nur in dieser einen
+    // Response maskiert.
+    const confidentialPersisted = await store.getMessage(confidentialMessage!.id);
+    assert(
+      confidentialPersisted?.bodyText === null,
+      "bodyText sollte auch bei direktem Store-Zugriff geloescht sein (echte Persistenz, keine Pro-Response-Maskierung)",
+    );
+
     // ----- Autorisierung (echte Auth, [2026-09-10]): ein zweiter, echter
     // User darf NICHT auf die Nachrichten/Ordner des ersten zugreifen, nur
     // weil er selbst eingeloggt ist (Authentifizierung allein reicht nicht,
@@ -1714,7 +1902,7 @@ async function main() {
     // Massimo müsste den kompletten Weg einmal mit einem echten GMX-/
     // web.de-/iCloud-Konto gegentesten.
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent) end-to-end grün.");
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent -> Nudge -> Vertraulicher Modus) end-to-end grün.");
   } finally {
     server.close();
     // Ohne das haelt der tesseract.js-Worker (worker_threads) den Prozess

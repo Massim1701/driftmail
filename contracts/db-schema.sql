@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL,
     accent_theme TEXT NOT NULL DEFAULT 'teal' CHECK (accent_theme IN ('teal', 'ocean_blue', 'violett', 'koralle', 'ocean_verlauf')),
     strict_unknown_senders BOOLEAN NOT NULL DEFAULT true,
+    -- [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2 ("Nudge"):
+    -- Ein/Aus-Schalter, wie im Auftrag ausdruecklich verlangt ("manche Nutzer
+    -- empfinden es als aufdringlich"). Default true, wie Gmail.
+    nudge_unanswered_enabled BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 
@@ -129,6 +133,14 @@ CREATE TABLE IF NOT EXISTS messages (
     -- gleiches Grenzen-Muster wie ueberall sonst in diesem Schema (NULL statt
     -- geraten). Self-Referencing FK, analog zu drafts.in_reply_to_message_id.
     in_reply_to_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+    -- [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
+    -- ("Vertraulicher Modus"): Ablaufdatum, ab dem der Nachrichtentext
+    -- serverseitig geloescht (bodyText -> NULL) wird. NULL = keine
+    -- Ablaufzeit gesetzt (Normalfall). Siehe backend/src/mail/confidential.ts
+    -- fuer die Loesch-Logik -- kein Hintergrund-Job, Ablauf wird lazy beim
+    -- naechsten Lesezugriff (GET /messages, GET /messages/:id) geprueft und
+    -- dann EINMALIG wirklich geloescht, nicht nur pro Response maskiert.
+    confidential_until TIMESTAMPTZ,
     UNIQUE (mail_account_id, message_id_header)
   );
 

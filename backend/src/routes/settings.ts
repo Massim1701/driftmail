@@ -12,8 +12,12 @@ export const settingsRouter = Router();
 
 const VALID_ACCENT_THEMES: AccentTheme[] = ["teal", "ocean_blue", "violett", "koralle", "ocean_verlauf"];
 
-function toApiSettings(user: Pick<User, "accentTheme" | "strictUnknownSenders">) {
-  return { accentTheme: user.accentTheme, strictUnknownSenders: user.strictUnknownSenders };
+function toApiSettings(user: Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled">) {
+  return {
+    accentTheme: user.accentTheme,
+    strictUnknownSenders: user.strictUnknownSenders,
+    nudgeUnansweredEnabled: user.nudgeUnansweredEnabled,
+  };
 }
 
 settingsRouter.get("/settings", async (req, res) => {
@@ -23,11 +27,11 @@ settingsRouter.get("/settings", async (req, res) => {
 });
 
 settingsRouter.put("/settings", async (req, res) => {
-  const body = req.body as { accentTheme?: AccentTheme; strictUnknownSenders?: boolean };
+  const body = req.body as { accentTheme?: AccentTheme; strictUnknownSenders?: boolean; nudgeUnansweredEnabled?: boolean };
   if (body.accentTheme !== undefined && !VALID_ACCENT_THEMES.includes(body.accentTheme)) {
     return res.status(400).json({ error: `accentTheme muss eines von ${VALID_ACCENT_THEMES.join(", ")} sein` });
   }
-  if (body.accentTheme === undefined && body.strictUnknownSenders === undefined) {
+  if (body.accentTheme === undefined && body.strictUnknownSenders === undefined && body.nudgeUnansweredEnabled === undefined) {
     const user = await store.getUserById(req.userId);
     if (!user) return res.status(404).json({ error: "User nicht gefunden" });
     return res.json(toApiSettings(user));
@@ -35,6 +39,7 @@ settingsRouter.put("/settings", async (req, res) => {
   const updated = await store.updateUserSettings(req.userId, {
     accentTheme: body.accentTheme,
     strictUnknownSenders: body.strictUnknownSenders,
+    nudgeUnansweredEnabled: body.nudgeUnansweredEnabled,
   });
   if (!updated) return res.status(404).json({ error: "User nicht gefunden" });
   res.json(toApiSettings(updated));

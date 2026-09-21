@@ -17,6 +17,7 @@
 
 import { randomUUID } from "node:crypto";
 import { PostgresStore } from "./postgresStore";
+import { isConfidentialExpired } from "../mail/confidential";
 import type {
   AbsenceResponderRecord,
   AiPreferenceRecord,
@@ -61,7 +62,7 @@ export interface Store {
   /** [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 1: erweitert um
    * strictUnknownSenders, `updateUserAccentTheme` bewusst nicht zu einer
    * zweiten near-doppelten Methode ausgebaut. */
-  updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders">>): Promise<User | undefined>;
+  updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled">>): Promise<User | undefined>;
   createMailAccount(input: Omit<MailAccountRecord, "id">): Promise<MailAccountRecord>;
   listMailAccounts(): Promise<MailAccountRecord[]>;
   getMailAccount(id: string): Promise<MailAccountRecord | undefined>;
@@ -134,6 +135,10 @@ export interface Store {
    * Zur Laufzeit abgeleitet, kein eigenes Feld/Cache -- siehe
    * routes/messages.ts. Case-insensitiver Adressvergleich. */
   hasOtherMessageFromAddress(mailAccountId: string, fromAddress: string, excludingMessageId: string): Promise<boolean>;
+  /** "Nudge" (WEB_INBOX.md 21.09. "DREI WEITERE FEATURES..." Punkt 2):
+   * true, wenn es in `folderId` eine Nachricht gibt, deren
+   * inReplyToMessageId auf `messageId` zeigt. Siehe mail/nudge.ts. */
+  hasReplyInFolder(folderId: string, messageId: string): Promise<boolean>;
 
   // ----- Quarantäne -----
   quarantineMessage(messageId: string, reason: string): Promise<QuarantineRecord>;
@@ -311,6 +316,7 @@ export class InMemoryStore implements Store {
       email,
       accentTheme: "teal",
       strictUnknownSenders: true,
+      nudgeUnansweredEnabled: true,
       createdAt: new Date().toISOString(),
     };
     this.users.push(user);
@@ -325,11 +331,12 @@ export class InMemoryStore implements Store {
     return this.users.find((u) => u.id === id);
   }
 
-  async updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders">>): Promise<User | undefined> {
+  async updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled">>): Promise<User | undefined> {
     const user = await this.getUserById(id);
     if (!user) return undefined;
     if (patch.accentTheme !== undefined) user.accentTheme = patch.accentTheme;
     if (patch.strictUnknownSenders !== undefined) user.strictUnknownSenders = patch.strictUnknownSenders;
+    if (patch.nudgeUnansweredEnabled !== undefined) user.nudgeUnansweredEnabled = patch.nudgeUnansweredEnabled;
     return user;
   }
 
@@ -483,11 +490,21 @@ export class InMemoryStore implements Store {
     return record;
   }
 
+  /** Vertraulicher Modus (siehe mail/confidential.ts): prueft/loescht
+   * bodyText EINMALIG, in-place -- danach ist isConfidentialExpired() fuer
+   * dieselbe Nachricht false (bodyText bereits null), kein wiederholtes
+   * Ueberschreiben. */
+  private expireConfidentialIfDue(m: MessageRecord): MessageRecord {
+    if (isConfidentialExpired(m)) m.bodyText = null;
+    return m;
+  }
+
   async listMessages(filter: { folderId?: string; accountId?: string; q?: string }): Promise<MessageRecord[]> {
     const q = filter.q?.trim().toLowerCase();
     return this.messages
       .filter((m) => (filter.folderId ? m.folderId === filter.folderId : true))
       .filter((m) => (filter.accountId ? m.mailAccountId === filter.accountId : true))
+      .map((m) => this.expireConfidentialIfDue(m))
       .filter((m) =>
         !q
           ? true
@@ -500,7 +517,12 @@ export class InMemoryStore implements Store {
   }
 
   async getMessage(id: string): Promise<MessageRecord | undefined> {
-    return this.messages.find((m) => m.id === id);
+    const m = this.messages.find((m) => m.id === id);
+    return m ? this.expireConfidentialIfDue(m) : undefined;
+  }
+
+  async hasReplyInFolder(folderId: string, messageId: string): Promise<boolean> {
+    return this.messages.some((m) => m.folderId === folderId && m.inReplyToMessageId === messageId);
   }
 
   /** Verschiebt eine Nachricht in einen anderen Ordner (POST /messages/:id/move). */

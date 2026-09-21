@@ -61,6 +61,9 @@ export interface User {
   // [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 1 ("Unbekannte
   // Absender streng behandeln"), Default true.
   strictUnknownSenders: boolean;
+  // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
+  // ("Nudge" -- Erinnerung an unbeantwortete Mails), Default true.
+  nudgeUnansweredEnabled: boolean;
   createdAt: string;
 }
 
@@ -119,6 +122,11 @@ export interface MessageRecord {
   // vorhanden ist oder die referenzierte Nachricht nicht synchronisiert
   // wurde. Siehe mail/inReplyTo.ts.
   inReplyToMessageId: string | null;
+  // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
+  // ("Vertraulicher Modus"): Ablaufdatum, danach wird bodyText serverseitig
+  // geloescht (lazy beim naechsten Lesezugriff, siehe mail/confidential.ts).
+  // `null` = keine Ablaufzeit gesetzt (Normalfall).
+  confidentialUntil: string | null;
 }
 
 // `message_attachments` (db-schema.sql, WEB_INBOX.md 09.09. "Erweiterung
@@ -330,6 +338,12 @@ export interface ApiMessage {
   // [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES", Punkt 4
   // "Threaded Ansicht" -- siehe mappers.ts toApiMessage()-Kommentar.
   inReplyToMessageId: string | null;
+  // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
+  // ("Nudge") -- siehe mail/nudge.ts.
+  awaitingReply: boolean;
+  // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
+  // ("Vertraulicher Modus") -- siehe MessageRecord-Kommentar.
+  confidentialUntil: string | null;
 }
 
 export interface ApiDraft {

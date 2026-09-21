@@ -22,6 +22,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Store } from "./store";
+import { isConfidentialExpired } from "../mail/confidential";
 import type {
   AbsenceResponderRecord,
   AiPreferenceRecord,
@@ -76,6 +77,7 @@ function rowToUser(r: any): User {
     email: r.email,
     accentTheme: r.accent_theme,
     strictUnknownSenders: r.strict_unknown_senders,
+    nudgeUnansweredEnabled: r.nudge_unanswered_enabled,
     createdAt: r.created_at,
   };
 }
@@ -151,6 +153,7 @@ function rowToMessage(r: any): MessageRecord {
     folderId: r.folder_id,
     rawHeaders: r.raw_headers,
     inReplyToMessageId: r.in_reply_to_message_id,
+    confidentialUntil: r.confidential_until,
   };
 }
 
@@ -308,6 +311,7 @@ export class PostgresStore implements Store {
     await this.migrateFoldersToAccountScope();
     await this.migrateUnsubscribeActionsStatusCheck();
     await this.migrateUsersAccentTheme();
+    await this.migrateMessagesConfidentialUntil();
     const sql = readFileSync(SCHEMA_PATH, "utf-8");
     await this.pool.query(sql);
   }
@@ -420,6 +424,25 @@ export class PostgresStore implements Store {
     await this.pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS strict_unknown_senders BOOLEAN NOT NULL DEFAULT true
     `);
+    // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
+    // ("Nudge"): dritte additive Spalte, gleiches Muster.
+    await this.pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS nudge_unanswered_enabled BOOLEAN NOT NULL DEFAULT true
+    `);
+  }
+
+  /** [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
+   * ("Vertraulicher Modus"): `messages.confidential_until` neu, additive
+   * ADD-COLUMN-Ergaenzung (kein Backfill noetig, NULL = keine Ablaufzeit
+   * gesetzt ist fuer bestehende Zeilen der korrekte Ausgangszustand).
+   * Guard analog zu den anderen Migrationen -- No-Op auf einer frischen DB,
+   * die `messages` noch gar nicht hat (CREATE TABLE unten legt die Spalte
+   * direkt mit an). */
+  private async migrateMessagesConfidentialUntil(): Promise<void> {
+    const { rows: exists } = await this.pool.query(`SELECT to_regclass('messages') AS reg`);
+    if (!exists[0]?.reg) return;
+
+    await this.pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS confidential_until TIMESTAMPTZ`);
   }
 
   // ----- Users / Accounts -----
@@ -444,14 +467,18 @@ export class PostgresStore implements Store {
     return rows[0] ? rowToUser(rows[0]) : undefined;
   }
 
-  async updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders">>): Promise<User | undefined> {
+  async updateUserSettings(
+    id: string,
+    patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled">>,
+  ): Promise<User | undefined> {
     const { rows } = await this.pool.query(
       `UPDATE users SET
          accent_theme = COALESCE($2, accent_theme),
-         strict_unknown_senders = COALESCE($3, strict_unknown_senders)
+         strict_unknown_senders = COALESCE($3, strict_unknown_senders),
+         nudge_unanswered_enabled = COALESCE($4, nudge_unanswered_enabled)
        WHERE id = $1
        RETURNING *`,
-      [id, patch.accentTheme ?? null, patch.strictUnknownSenders ?? null],
+      [id, patch.accentTheme ?? null, patch.strictUnknownSenders ?? null, patch.nudgeUnansweredEnabled ?? null],
     );
     return rows[0] ? rowToUser(rows[0]) : undefined;
   }
@@ -652,8 +679,9 @@ export class PostgresStore implements Store {
     const { rows } = await this.pool.query(
       `INSERT INTO messages
          (mail_account_id, message_id_header, provider_message_id, from_address, from_display_name,
-          reply_to_address, subject, body_text, received_at, folder_id, raw_headers, in_reply_to_message_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          reply_to_address, subject, body_text, received_at, folder_id, raw_headers, in_reply_to_message_id,
+          confidential_until)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         input.mailAccountId,
@@ -668,9 +696,19 @@ export class PostgresStore implements Store {
         input.folderId,
         input.rawHeaders,
         input.inReplyToMessageId,
+        input.confidentialUntil,
       ],
     );
     return rowToMessage(rows[0]);
+  }
+
+  /** Vertraulicher Modus (siehe mail/confidential.ts): loescht bodyText
+   * EINMALIG per echtem UPDATE, wenn faellig -- kein Hintergrund-Job, wird
+   * lazy von listMessages()/getMessage() unten aufgerufen. */
+  private async expireConfidentialIfDue(m: MessageRecord): Promise<MessageRecord> {
+    if (!isConfidentialExpired(m)) return m;
+    await this.pool.query("UPDATE messages SET body_text = NULL WHERE id = $1", [m.id]);
+    return { ...m, bodyText: null };
   }
 
   async listMessages(filter: { folderId?: string; accountId?: string; q?: string }): Promise<MessageRecord[]> {
@@ -699,12 +737,21 @@ export class PostgresStore implements Store {
     }
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const { rows } = await this.pool.query(`SELECT * FROM messages ${where} ORDER BY received_at DESC`, params);
-    return rows.map(rowToMessage);
+    return Promise.all(rows.map(rowToMessage).map((m) => this.expireConfidentialIfDue(m)));
   }
 
   async getMessage(id: string): Promise<MessageRecord | undefined> {
     const { rows } = await this.pool.query("SELECT * FROM messages WHERE id = $1", [id]);
-    return rows[0] ? rowToMessage(rows[0]) : undefined;
+    if (!rows[0]) return undefined;
+    return this.expireConfidentialIfDue(rowToMessage(rows[0]));
+  }
+
+  async hasReplyInFolder(folderId: string, messageId: string): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      "SELECT 1 FROM messages WHERE folder_id = $1 AND in_reply_to_message_id = $2 LIMIT 1",
+      [folderId, messageId],
+    );
+    return rows.length > 0;
   }
 
   async moveMessage(id: string, folderId: string): Promise<MessageRecord | undefined> {

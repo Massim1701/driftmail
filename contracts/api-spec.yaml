@@ -737,6 +737,15 @@ paths:
                     /drafts) stammt, wird dieser Entwurf nach erfolgreichem
                     Versand automatisch geloescht (intern, kein separater
                     DELETE /drafts/{draftId}-Aufruf noetig).
+                confidentialUntil:
+                  type: string
+                  format: date-time
+                  nullable: true
+                  description: >
+                    [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-
+                    Recherche" Punkt 3 ("Vertraulicher Modus"). Muss, falls
+                    gesetzt, ein gueltiger, in der Zukunft liegender
+                    Zeitpunkt sein (sonst 400) -- siehe Message.confidentialUntil.
       responses:
         "200":
           description: Gesendet
@@ -1281,13 +1290,41 @@ components:
             client-seitiges Gruppieren von Nachrichten in der Listenansicht
             (Eltern-Verweis nur innerhalb desselben Kontos aufloesbar, siehe
             backend/README.md).
+        awaitingReply:
+          type: boolean
+          description: >
+            [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-
+            Recherche" Punkt 2 ("Nudge"): true, wenn diese Nachricht seit
+            mindestens dem Schwellenwert (Default 3 Tage) unbeantwortet ist
+            (Eingang: keine eigene Antwort im selben Thread; Gesendet: keine
+            Antwort erhalten) UND der User die Erinnerung nicht in den
+            Einstellungen deaktiviert hat UND die Nachricht nicht als spam/
+            phishing klassifiziert ist. Zur Laufzeit abgeleitet, kein eigenes
+            Feld/Cache -- siehe backend/src/mail/nudge.ts.
+        confidentialUntil:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-
+            Recherche" Punkt 3 ("Vertraulicher Modus"): nur bei selbst
+            gesendeten Nachrichten setzbar (siehe POST /messages/send). Nach
+            Ablauf wird bodyText serverseitig geloescht (siehe MessageDetail
+            unten) -- dieses Feld selbst bleibt erhalten, damit der Client
+            "war vertraulich, seit X abgelaufen" anzeigen kann.
 
     MessageDetail:
       allOf:
         - $ref: "#/components/schemas/Message"
         - type: object
           properties:
-            bodyText: { type: string }
+            bodyText:
+              type: string
+              nullable: true
+              description: >
+                Kann `null` sein, wenn `confidentialUntil` in der
+                Vergangenheit liegt (Vertraulicher Modus, siehe oben) -- der
+                Text wurde dann serverseitig geloescht.
             security:
               $ref: "#/components/schemas/SecurityResult"
             links:
@@ -1420,6 +1457,12 @@ components:
             Absender"-Badge -- reine Client-Darstellungsentscheidung, das
             Backend liefert isNewSender unveraendert, nur dieser Schalter
             neu.
+        nudgeUnansweredEnabled:
+          type: boolean
+          description: >
+            [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-
+            Recherche" Punkt 2 ("Nudge"): Ein/Aus-Schalter fuer
+            Message.awaitingReply, Default true (wie Gmail).
 
     Contract:
       type: object

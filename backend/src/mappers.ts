@@ -86,7 +86,7 @@ export function toApiSecurityResult(s: MessageSecurityRecord): ApiSecurityResult
   };
 }
 
-export function toApiMessage(m: MessageRecord, security: MessageSecurityRecord | undefined): ApiMessage {
+export function toApiMessage(m: MessageRecord, security: MessageSecurityRecord | undefined, awaitingReply: boolean): ApiMessage {
   return {
     id: m.id,
     fromAddress: m.fromAddress,
@@ -101,6 +101,14 @@ export function toApiMessage(m: MessageRecord, security: MessageSecurityRecord |
     // seitig gruppieren zu koennen, ohne fuer jede einzeln GET /messages/:id
     // nachzuladen.
     inReplyToMessageId: m.inReplyToMessageId,
+    // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
+    // ("Nudge") -- siehe mail/nudge.ts.
+    awaitingReply,
+    // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
+    // ("Vertraulicher Modus"). `m.bodyText` ist zu diesem Zeitpunkt schon
+    // vom Store abgelaufen-geloescht, falls faellig (siehe
+    // mail/confidential.ts) -- hier nur reines Durchreichen.
+    confidentialUntil: m.confidentialUntil,
   };
 }
 
@@ -113,9 +121,10 @@ export function toApiMessageDetail(
   security: MessageSecurityRecord | undefined,
   quarantine: QuarantineRecord | undefined,
   isNewSender: boolean,
+  awaitingReply: boolean,
 ): ApiMessageDetail {
   return {
-    ...toApiMessage(m, security),
+    ...toApiMessage(m, security, awaitingReply),
     bodyText: m.bodyText,
     security: security ? toApiSecurityResult(security) : null,
     quarantine: quarantine ? toApiQuarantineInfo(quarantine) : null,

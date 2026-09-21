@@ -7,6 +7,7 @@ import { checkDraftForPhishing } from "@driftmail/security-classification";
 import { recipientReputationLookup } from "../lookups";
 import { adapterForAccount } from "../mail/sync";
 import { parseListUnsubscribeHeader, performUnsubscribe } from "../mail/listUnsubscribe";
+import { loadNudgeFolderContext, computeAwaitingReply } from "../mail/nudge";
 import type { ApiDraftPhishingCheckLink } from "../types";
 import type { MailAccountRecord, MessageRecord } from "../types";
 
@@ -129,6 +130,23 @@ messagesRouter.post("/messages/send", async (req, res) => {
   const subject = typeof body.subject === "string" ? body.subject : "";
   const inReplyToMessageId = typeof body.inReplyToMessageId === "string" ? body.inReplyToMessageId : null;
 
+  // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
+  // ("Vertraulicher Modus"): muss, falls gesetzt, ein gueltiger, in der
+  // Zukunft liegender Zeitpunkt sein -- ein bereits abgelaufener Wert waere
+  // fuer den Absender sinnlos (die eigene "gesendet"-Kopie wuerde sofort
+  // nach dem Senden schon geloescht).
+  let confidentialUntil: string | null = null;
+  if (body.confidentialUntil !== undefined && body.confidentialUntil !== null) {
+    if (typeof body.confidentialUntil !== "string") {
+      return res.status(400).json({ error: "confidentialUntil muss ein ISO-Zeitstempel-String sein" });
+    }
+    const parsed = new Date(body.confidentialUntil);
+    if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+      return res.status(400).json({ error: "confidentialUntil muss ein gueltiger, in der Zukunft liegender Zeitpunkt sein" });
+    }
+    confidentialUntil = parsed.toISOString();
+  }
+
   // Konto ermitteln: bei einer Antwort das Konto der Ursprungsnachricht
   // (der User antwortet aus demselben Postfach, in dem die Mail ankam),
   // sonst das explizit angegebene accountId.
@@ -230,6 +248,7 @@ messagesRouter.post("/messages/send", async (req, res) => {
       // Request aufgeloest (inReplyToMessageId ist hier schon die interne
       // UUID der Ursprungsnachricht, falls diese Mail eine Antwort ist).
       inReplyToMessageId,
+      confidentialUntil,
     });
     // TODO (bewusst offen, siehe backend/README.md "Anhänge"): die Bytes der
     // geprüften Anhänge werden NICHT tatsächlich in die ausgehende Mail
@@ -283,6 +302,10 @@ messagesRouter.get("/messages", async (req, res) => {
     if (!folderAccount || folderAccount.userId !== req.userId) {
       return res.status(403).json({ error: "Ordner gehört nicht zum angemeldeten User" });
     }
+    // [2026-09-21] "Nudge" (siehe unten): ohne explizites accountId lässt
+    // sich sonst nicht ermitteln, welches Konto die eingang-/gesendet-
+    // System-Ordner-IDs hat -- der Ordner selbst kennt sein Konto bereits.
+    if (!accountId) accountId = folder.mailAccountId;
   }
 
   if (accountId) {
@@ -298,8 +321,25 @@ messagesRouter.get("/messages", async (req, res) => {
     accountId = (await store.getMailAccountByUserId(req.userId))?.id;
   }
 
+  // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
+  // ("Nudge"): User-Praeferenz + die beiden System-Ordner-IDs EINMAL pro
+  // Request laden, nicht pro Nachricht (siehe mail/nudge.ts).
+  const user = await store.getUserById(req.userId);
+  const nudgeEnabled = user?.nudgeUnansweredEnabled ?? true;
+  const nudgeFolders = accountId && nudgeEnabled
+    ? await loadNudgeFolderContext(accountId)
+    : { eingangFolderId: undefined, gesendetFolderId: undefined };
+
   const messages = await store.listMessages({ folderId, accountId, q });
-  res.json(await Promise.all(messages.map(async (m) => toApiMessage(m, await store.getMessageSecurity(m.id)))));
+  res.json(
+    await Promise.all(
+      messages.map(async (m) => {
+        const security = await store.getMessageSecurity(m.id);
+        const awaitingReply = await computeAwaitingReply(m, security, nudgeEnabled, nudgeFolders);
+        return toApiMessage(m, security, awaitingReply);
+      }),
+    ),
+  );
 });
 
 // GET /messages/:messageId — siehe api-spec.yaml
@@ -308,12 +348,15 @@ messagesRouter.get("/messages/:messageId", async (req, res) => {
   if (!owned) return;
   const { message } = owned;
 
-  const [security, quarantine, hasOtherMessage] = await Promise.all([
+  const [security, quarantine, hasOtherMessage, nudgeFolders, user] = await Promise.all([
     store.getMessageSecurity(message.id),
     store.getQuarantineForMessage(message.id),
     store.hasOtherMessageFromAddress(message.mailAccountId, message.fromAddress, message.id),
+    loadNudgeFolderContext(message.mailAccountId),
+    store.getUserById(req.userId),
   ]);
-  res.json(toApiMessageDetail(message, security, quarantine, !hasOtherMessage));
+  const awaitingReply = await computeAwaitingReply(message, security, user?.nudgeUnansweredEnabled ?? true, nudgeFolders);
+  res.json(toApiMessageDetail(message, security, quarantine, !hasOtherMessage, awaitingReply));
 });
 
 // POST /messages/:messageId/quarantine — siehe api-spec.yaml
@@ -391,7 +434,15 @@ messagesRouter.post("/messages/:messageId/move", async (req, res) => {
   }
 
   const updated = (await store.moveMessage(message.id, folderId))!;
-  res.json(toApiMessage(updated, await store.getMessageSecurity(updated.id)));
+  const movedSecurity = await store.getMessageSecurity(updated.id);
+  const movedUser = await store.getUserById(req.userId);
+  const movedAwaitingReply = await computeAwaitingReply(
+    updated,
+    movedSecurity,
+    movedUser?.nudgeUnansweredEnabled ?? true,
+    await loadNudgeFolderContext(updated.mailAccountId),
+  );
+  res.json(toApiMessage(updated, movedSecurity, movedAwaitingReply));
 });
 
 // DELETE /messages/:messageId — Mail in den Papierkorb verschieben (soft
@@ -420,7 +471,9 @@ messagesRouter.delete("/messages/:messageId", async (req, res) => {
   await mirrorToProvider(message, "trash");
   await store.moveMessage(message.id, papierkorb.id);
   const updated = (await store.getMessage(message.id))!;
-  res.status(200).json(toApiMessage(updated, await store.getMessageSecurity(message.id)));
+  // Papierkorb ist nie eingang/gesendet -- awaitingReply ist hier immer
+  // false, keine extra Berechnung noetig (siehe mail/nudge.ts).
+  res.status(200).json(toApiMessage(updated, await store.getMessageSecurity(message.id), false));
 });
 
 // DELETE /messages/:messageId/permanent — Mail endgültig löschen, siehe

@@ -279,6 +279,9 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         folderId,
         rawHeaders: mail.rawHeaders,
         inReplyToMessageId,
+        // Vertraulicher Modus (siehe types.ts MessageRecord-Kommentar) ist
+        // nur beim eigenen Versand setzbar, nie bei empfangener Mail.
+        confidentialUntil: null,
       });
 
       await store.setMessageSecurity({
