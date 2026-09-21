@@ -41,6 +41,10 @@ enum SystemFolderKey: String, Codable, CaseIterable, Hashable {
 /// Backend geseedet), sind aber jetzt Daten, keine kompilierte Konstante.
 struct Folder: Codable, Identifiable, Hashable {
     let id: String
+    /// [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): Ordner
+    /// gehören jetzt zu genau einem Konto ("getrennte Ansichten pro Konto"),
+    /// nicht mehr direkt zum User.
+    let accountId: String
     var name: String
     var icon: String
     let isSystem: Bool

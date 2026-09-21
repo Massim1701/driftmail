@@ -10,6 +10,7 @@
   "folders": [
     {
       "id": "folder-eingang",
+      "accountId": "acc-001",
       "name": "Eingang",
       "icon": "inbox",
       "isSystem": true,
@@ -18,6 +19,7 @@
     },
     {
       "id": "folder-entwuerfe",
+      "accountId": "acc-001",
       "name": "Entwürfe",
       "icon": "file-pencil",
       "isSystem": true,
@@ -26,6 +28,7 @@
     },
     {
       "id": "folder-gesendet",
+      "accountId": "acc-001",
       "name": "Gesendet",
       "icon": "send",
       "isSystem": true,
@@ -34,6 +37,7 @@
     },
     {
       "id": "folder-sonstiges",
+      "accountId": "acc-001",
       "name": "Sonstiges",
       "icon": "folder",
       "isSystem": true,
@@ -42,6 +46,7 @@
     },
     {
       "id": "folder-quarantaene",
+      "accountId": "acc-001",
       "name": "Quarantäne",
       "icon": "shield-exclamation",
       "isSystem": true,
@@ -50,6 +55,7 @@
     },
     {
       "id": "folder-spam",
+      "accountId": "acc-001",
       "name": "Spam",
       "icon": "trash",
       "isSystem": true,
@@ -58,6 +64,7 @@
     },
     {
       "id": "folder-papierkorb",
+      "accountId": "acc-001",
       "name": "Papierkorb",
       "icon": "trash-2",
       "isSystem": true,
@@ -66,6 +73,7 @@
     },
     {
       "id": "folder-familie",
+      "accountId": "acc-001",
       "name": "Familie",
       "icon": "folder",
       "isSystem": false,
@@ -74,6 +82,7 @@
     },
     {
       "id": "folder-rechnungen",
+      "accountId": "acc-001",
       "name": "Rechnungen",
       "icon": "receipt",
       "isSystem": false,

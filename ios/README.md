@@ -615,6 +615,67 @@ nötig). `MockAPIClient` liefert einen Platzhalter-Erfolg. Kein eigener
 Button (anders als Web) -- Pull-to-Refresh ist die iOS-native Konvention
 dafür.
 
+## [2026-09-21] Nachtrag: Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2, "getrennte Ansichten pro Konto")
+
+Backend-Teil siehe `backend/README.md` "Mehrfach-Konten-Unterstützung"
+(Commit `b6add62`), Web-Teil siehe `web/README.md` (Commit `987ab9c`).
+Dieser Nachtrag ist der iOS-Teil derselben Übergabe.
+
+`Models/Folder.swift` bekommt ein Pflichtfeld `accountId` (Ordner gehören
+jetzt zu einem Konto, nicht mehr implizit zu "dem einen" Konto).
+`APIClient.fetchFolders(accountId:)`/`createFolder(..., accountId:)` statt
+parameterlos. `AppEnvironment.account: MailAccount?` → `accounts: [MailAccount]`
++ `activeAccountId` + `activeAccount`-Computed-Property, `loadAccount()` →
+`loadAccounts(forceRefresh:)` (lädt alle, aktiviert beim ersten Laden
+automatisch das erste, überschreibt eine bereits aktive Auswahl nicht),
+neue `switchAccount(to:)` (verwirft `folders`/`trustedSenderAddresses` des
+vorherigen Kontos) und `handleAccountAdded(_:)` (nach erfolgreichem
+"Konto hinzufügen": Konten neu laden + zum neuen Konto wechseln).
+
+`FolderListView.swift`: Titel zeigt `activeAccount`, ein Konto-Umschalter
+(`Menu` im Toolbar, System-Icon "person.crop.circle") erscheint NUR bei
+mehr als einem Konto (kein totes UI für den häufigeren Einzelkonto-Fall,
+gleiches Prinzip wie `web/src/components/FolderSidebar.tsx`). Der
+Zähler-Ladepfad (`fetchMessages(accountId:)`) ist jetzt explizit auf das
+aktive Konto gescoped -- vorher `accountId: nil` (alle Nachrichten), was
+bei mehreren Konten deren Zähler vermischt hätte. **Fund beim Bauen:** die
+Menu-Konstruktion direkt im `.toolbar`-Builder (verschachteltes `if` +
+`ForEach` + bedingtes `Label`/`Text`) ließ den Swift-Type-Checker mit
+"unable to type-check in reasonable time" scheitern -- als eigene
+computed property (`accountSwitcherMenu`) mit einer einfachen
+String-Ternary statt Label/Text-Verzweigung kompiliert es sauber.
+
+**"Konto hinzufügen"**: `OnboardingAccountConnectView` bekommt einen neuen
+`mode: Mode = .login`-Parameter (`.login`/`.addAccount`). Im Settings-Sheet
+(`FolderListView.swift`s `SettingsView`) gibt es jetzt eine Liste der
+verbundenen Konten + einen "Konto hinzufügen"-Button, der denselben
+Onboarding-Screen als `.sheet` präsentiert (`mode: .addAccount`, mit
+"Abbrechen"-Button statt Vollbild-Gate). Gmail war auf iOS ohnehin schon
+komplett deaktiviert (siehe vorheriger Nachtrag), keine zusätzliche
+Sonderbehandlung für den `addAccount`-Fall nötig.
+
+**Fund beim Bauen, ECHTER Absturz (nicht nur Compile-Fehler):**
+`MockDatabase.json` hatte kein `accountId`-Feld auf den Ordner-Fixtures --
+`MockAPIClient.init()` dekodiert die Datei synchron und ruft bei
+Decode-Fehlern `fatalError()`, das heißt die App stürzte bei JEDEM
+Start ohne Keychain-Token (also nach jeder Neuinstallation oder für jede
+`#Preview`) sofort beim Launch ab, VOR jedem sichtbaren Screen. Per
+Live-Simulator-Absturz entdeckt (`xcrun simctl spawn ... log show`
+zeigte den exakten `DecodingError.keyNotFound`), nicht nur durch
+`BUILD SUCCEEDED` angenommen. Fix: `accountId` bei allen Ordner-Fixtures
+ergänzt (Wert = die einzige Mock-Account-ID `acc-001`).
+
+**Tests:** `xcodebuild -scheme DriftmailApp -destination 'generic/platform=iOS
+Simulator' build` **BUILD SUCCEEDED**. Zusätzlich per `simctl install`+
+`launch` auf einem echten Simulator verifiziert -- der obige Absturz wurde
+dabei live gefunden (nicht beim Bauen sichtbar) und nach dem Fix erneut
+per Screenshot bestätigt (Onboarding-Bildschirm rendert wieder normal,
+kein Absturz mehr). Der Account-Switcher selbst (mehrere echte Konten
+gleichzeitig) ließ sich in dieser Umgebung nicht end-to-end durchklicken
+(kein `idb`, keine automatisierten Tap-Interaktionen, siehe frühere
+iOS-Einträge) -- die zugrunde liegende Logik ist identisch zur bereits
+per Backend-Smoketest verifizierten Mehrfach-Konten-Funktionalität.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

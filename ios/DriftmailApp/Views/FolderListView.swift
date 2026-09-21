@@ -42,12 +42,14 @@ struct FolderListView: View {
             .scrollContentBackground(.hidden)
             .background(DesignTokens.Color.surfacePage)
             // [2026-09-15] WEB_INBOX.md 10.09.: zeigt die E-Mail-Adresse des
-            // verbundenen Kontos statt des App-Namens, sobald geladen --
-            // User soll immer sofort sehen, in welchem Postfach er ist.
-            // Fällt auf "driftmail" zurück, solange das Konto noch lädt
-            // oder aus einem echten Fehler heraus (loadAccount() lässt
-            // account dann bewusst nil statt einen Ladezustand zu erzwingen).
-            .navigationTitle(environment.account?.emailAddress ?? "driftmail")
+            // AKTIVEN Kontos statt des App-Namens, sobald geladen -- User
+            // soll immer sofort sehen, in welchem Postfach er ist. Fällt auf
+            // "driftmail" zurück, solange Konten noch laden oder aus einem
+            // echten Fehler heraus (loadAccounts() lässt activeAccountId
+            // dann bewusst nil statt einen Ladezustand zu erzwingen).
+            // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2):
+            // activeAccount statt des einzelnen account.
+            .navigationTitle(environment.activeAccount?.emailAddress ?? "driftmail")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -56,6 +58,15 @@ struct FolderListView: View {
                         Image(systemName: "gearshape")
                     }
                     .accessibilityLabel("Einstellungen")
+                }
+                // [2026-09-21] Mehrfach-Konten: Umschalter nur sichtbar, wenn
+                // es tatsächlich mehr als ein Konto gibt -- kein totes UI
+                // für den (häufigeren) Einzelkonto-Fall, gleiches Prinzip
+                // wie web/src/components/FolderSidebar.tsx.
+                if environment.accounts.count > 1 {
+                    ToolbarItem(placement: .topBarLeading) {
+                        accountSwitcherMenu
+                    }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -86,7 +97,7 @@ struct FolderListView: View {
                 }
             }
             .task {
-                await environment.loadAccount()
+                await environment.loadAccounts()
                 await loadFoldersAndCounts()
             }
             .refreshable {
@@ -95,8 +106,9 @@ struct FolderListView: View {
                 // einen echten Mail-Abruf aus (statt nur den lokalen Stand
                 // neu zu laden), bevor Ordner/Zähler aktualisiert werden --
                 // sonst würde Pull-to-Refresh nie neue Mail zeigen, egal
-                // wie oft man zieht.
-                if let accountId = environment.account?.id {
+                // wie oft man zieht. Nur für das AKTIVE Konto (Mehrfach-
+                // Konten, WEB_INBOX.md 21.09. Punkt 2).
+                if let accountId = environment.activeAccountId {
                     _ = try? await environment.apiClient.syncAccount(id: accountId)
                 }
                 await loadFoldersAndCounts(forceRefresh: true)
@@ -117,12 +129,39 @@ struct FolderListView: View {
         }
     }
 
+    /// Ausgelagert aus dem `.toolbar`-Builder (verschachtelte `if` +
+    /// `ForEach` + bedingtes Label direkt im Toolbar-ViewBuilder ließ den
+    /// Swift-Type-Checker mit "unable to type-check in reasonable time"
+    /// scheitern -- als eigene computed property kompiliert es sauber).
+    private var accountSwitcherMenu: some View {
+        Menu {
+            ForEach(environment.accounts) { acc in
+                Button(accountMenuLabel(acc)) {
+                    environment.switchAccount(to: acc.id)
+                    Task { await loadFoldersAndCounts() }
+                }
+            }
+        } label: {
+            Image(systemName: "person.crop.circle")
+        }
+        .accessibilityLabel("Konto wechseln")
+    }
+
+    private func accountMenuLabel(_ account: MailAccount) -> String {
+        account.id == environment.activeAccountId ? "✓ \(account.emailAddress)" : account.emailAddress
+    }
+
     private func loadFoldersAndCounts(forceRefresh: Bool = false) async {
         isLoading = counts.isEmpty
         defer { isLoading = false }
         await environment.loadFolders(forceRefresh: forceRefresh)
         do {
-            let all = try await environment.apiClient.fetchMessages(folderId: nil, accountId: nil)
+            // [2026-09-21] Mehrfach-Konten: explizit auf das AKTIVE Konto
+            // scoped -- ohne accountId würde ein zweites Konto seine
+            // Nachrichten in die Zähler-Berechnung des ersten mischen
+            // (folderId ist zwar pro Konto eindeutig, aber "alle Ordner
+            // dieses Kontos" ist genau das, was hier gebraucht wird).
+            let all = try await environment.apiClient.fetchMessages(folderId: nil, accountId: environment.activeAccountId)
             counts = Dictionary(grouping: all, by: \.folderId).mapValues(\.count)
         } catch {
             counts = [:]
@@ -142,7 +181,7 @@ struct FolderListView: View {
         let name = newFolderName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
         do {
-            _ = try await environment.apiClient.createFolder(name: name, icon: nil)
+            _ = try await environment.apiClient.createFolder(name: name, icon: nil, accountId: environment.activeAccountId)
             await environment.loadFolders(forceRefresh: true)
         } catch {
             errorMessage = "Ordner konnte nicht angelegt werden."
@@ -189,6 +228,11 @@ private struct SettingsView: View {
     @EnvironmentObject private var environment: AppEnvironment
     private let biometricKind = BiometricLock.availableKind()
     @State private var showLogoutConfirm = false
+    // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2,
+    // Übergabe von Track A): "Konto hinzufügen" öffnet denselben
+    // Onboarding-Provider-Auswahlbildschirm wie beim Erst-Login, hier als
+    // Sheet statt als Vollbild-Gate.
+    @State private var isAddingAccount = false
 
     var body: some View {
         NavigationStack {
@@ -199,19 +243,29 @@ private struct SettingsView: View {
                     Text("Schützt deinen lokalen Mail-Cache zusätzlich zum Mail-Konto-Login, falls dein Gerät verloren geht oder gestohlen wird.")
                 }
 
+                Section {
+                    ForEach(environment.accounts) { acc in
+                        Text(acc.emailAddress)
+                            .foregroundStyle(acc.id == environment.activeAccountId ? DesignTokens.Color.accent : DesignTokens.Color.textPrimary)
+                    }
+                    Button("Konto hinzufügen") {
+                        isAddingAccount = true
+                    }
+                } header: {
+                    Text("Verbundene Konten")
+                }
+
                 // [2026-09-21] WEB_INBOX.md 19.09. "Onboarding: Provider-
                 // Auswahlbildschirm" ("voll verdrahten"): mit einem echten
                 // Login-Gate in RootView braucht es zwingend einen Weg
                 // zurück, sonst ist ein falsch verbundenes Konto nicht mehr
                 // korrigierbar ohne App-Neuinstallation.
                 Section {
-                    Button("Konto trennen", role: .destructive) {
+                    Button("Alle Konten trennen", role: .destructive) {
                         showLogoutConfirm = true
                     }
                 } footer: {
-                    if let account = environment.account {
-                        Text("Aktuell verbunden: \(account.emailAddress)")
-                    }
+                    Text("Trennt ALLE verbundenen Konten. Du musst dich danach erneut anmelden.")
                 }
             }
             .navigationTitle("Einstellungen")
@@ -233,6 +287,12 @@ private struct SettingsView: View {
                 Button("Abbrechen", role: .cancel) {}
             } message: {
                 Text("Du musst dich danach erneut mit einem E-Mail-Konto verbinden.")
+            }
+            .sheet(isPresented: $isAddingAccount) {
+                OnboardingAccountConnectView(mode: .addAccount) { account, _ in
+                    isAddingAccount = false
+                    Task { await environment.handleAccountAdded(account) }
+                }
             }
         }
     }

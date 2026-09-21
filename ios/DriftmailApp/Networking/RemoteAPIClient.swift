@@ -100,13 +100,18 @@ struct RemoteAPIClient: APIClient {
         try await post("/accounts/\(id)/sync", body: Optional<String>.none)
     }
 
-    func fetchFolders() async throws -> [Folder] {
-        try await get("/folders")
+    func fetchFolders(accountId: String?) async throws -> [Folder] {
+        if let accountId {
+            var components = URLComponents(url: baseURL.appendingPathComponent("/folders"), resolvingAgainstBaseURL: false)!
+            components.queryItems = [.init(name: "accountId", value: accountId)]
+            return try await get(components.url!)
+        }
+        return try await get("/folders")
     }
 
-    func createFolder(name: String, icon: String?) async throws -> Folder {
-        struct Body: Encodable { let name: String; let icon: String? }
-        return try await post("/folders", body: Body(name: name, icon: icon))
+    func createFolder(name: String, icon: String?, accountId: String?) async throws -> Folder {
+        struct Body: Encodable { let name: String; let icon: String?; let accountId: String? }
+        return try await post("/folders", body: Body(name: name, icon: icon, accountId: accountId))
     }
 
     func updateFolder(id: String, name: String?, icon: String?, sortOrder: Int?) async throws -> Folder {

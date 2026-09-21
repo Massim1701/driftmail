@@ -108,20 +108,29 @@ actor MockAPIClient: APIClient {
         return SyncResult(imported: 0, autoDeleted: 0, syncStatus: .ok)
     }
 
-    func fetchFolders() async throws -> [Folder] {
+    func fetchFolders(accountId: String?) async throws -> [Folder] {
         await delay()
-        return db.folders.sorted { $0.sortOrder < $1.sortOrder }
+        let filtered = accountId == nil ? db.folders : db.folders.filter { $0.accountId == accountId }
+        return filtered.sorted { $0.sortOrder < $1.sortOrder }
     }
 
-    func createFolder(name: String, icon: String?) async throws -> Folder {
+    func createFolder(name: String, icon: String?, accountId: String?) async throws -> Folder {
         await delay()
+        // Mock hat wie MockDatabase.json aktuell nur ein Konto -- fällt ohne
+        // explizite accountId auf dieses zurück, analog zur echten
+        // Backend-Logik bei genau einem verbundenen Konto.
+        guard let resolvedAccountId = accountId ?? db.accounts.first?.id else {
+            throw APIError.notFound
+        }
+        let siblingSortOrders = db.folders.filter { $0.accountId == resolvedAccountId }.map(\.sortOrder)
         let folder = Folder(
             id: UUID().uuidString,
+            accountId: resolvedAccountId,
             name: name,
             icon: icon ?? DesignTokens.CustomFolder.defaultIcon,
             isSystem: false,
             systemKey: nil,
-            sortOrder: (db.folders.map(\.sortOrder).max() ?? -1) + 1
+            sortOrder: (siblingSortOrders.max() ?? -1) + 1
         )
         db.folders.append(folder)
         return folder

@@ -186,7 +186,7 @@ struct ContentUnavailableCompat: View {
 #Preview {
     NavigationStack {
         InboxListView(folder: Folder(
-            id: "folder-quarantaene", name: "Quarantäne", icon: "shield-exclamation",
+            id: "folder-quarantaene", accountId: "preview-account", name: "Quarantäne", icon: "shield-exclamation",
             isSystem: true, systemKey: .quarantaene, sortOrder: 3
         ))
     }

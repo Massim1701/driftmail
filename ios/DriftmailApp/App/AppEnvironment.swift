@@ -33,10 +33,16 @@ final class AppEnvironment: ObservableObject {
     /// [2026-09-15] WEB_INBOX.md 10.09. "UX-Fund im echten Geräte-Test":
     /// der Header soll die E-Mail-Adresse des verbundenen Kontos zeigen,
     /// nicht das App-Branding -- damit klar ist, in welchem Postfach man
-    /// gerade ist. Zentral hier gehalten (wie `folders`), sobald mehrere
-    /// Konten unterstützt werden ist das derselbe Ort für einen
-    /// Account-Switcher (laut Auftrag aber kein Muss für diesen Schritt).
-    @Published var account: MailAccount?
+    /// gerade ist. [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09.
+    /// Punkt 2): mehrere Konten statt eines einzelnen, `activeAccountId`
+    /// bestimmt, welches Konto gerade angezeigt wird ("getrennte Ansichten
+    /// pro Konto", Massimos Entscheidung per Rückfrage).
+    @Published var accounts: [MailAccount] = []
+    @Published var activeAccountId: String?
+
+    var activeAccount: MailAccount? {
+        accounts.first { $0.id == activeAccountId }
+    }
 
     /// `GET /trusted-senders` (WEB_INBOX.md 15.09.), kombiniert mit
     /// `MessageDetail.isNewSender` in `MessageDetailView`'s Badges. Nur die
@@ -74,9 +80,31 @@ final class AppEnvironment: ObservableObject {
     /// `APIClient` protocol.
     func completeAccountConnection(account: MailAccount, token: String) {
         SessionStore.save(token: token)
-        self.account = account
+        self.accounts = [account]
+        self.activeAccountId = account.id
         self.apiClient = RemoteAPIClient(token: token)
         self.isAuthenticated = true
+    }
+
+    /// [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): ein
+    /// weiteres Konto wurde über `OnboardingAccountConnectView` (im
+    /// `addAccount`-Modus, aus `FolderListView`s Settings-Sheet heraus)
+    /// erfolgreich verbunden -- `accounts` neu laden (statt nur lokal
+    /// anzuhängen, damit der Server die Quelle der Wahrheit bleibt) und
+    /// direkt zu diesem Konto wechseln.
+    func handleAccountAdded(_ account: MailAccount) async {
+        await loadAccounts(forceRefresh: true)
+        switchAccount(to: account.id)
+    }
+
+    /// Wechselt das aktive Konto ("getrennte Ansichten pro Konto") --
+    /// Ordner/Trusted-Senders gehören zum vorherigen Konto und werden
+    /// verworfen, Aufrufer (`FolderListView`) laden für das neue Konto neu.
+    func switchAccount(to accountId: String) {
+        guard accountId != activeAccountId else { return }
+        activeAccountId = accountId
+        folders = []
+        trustedSenderAddresses = []
     }
 
     /// "Abmelden" (`SettingsView`) — löscht den Token, fällt zurück auf
@@ -87,7 +115,8 @@ final class AppEnvironment: ObservableObject {
         SessionStore.clear()
         apiClient = MockAPIClient()
         isAuthenticated = false
-        account = nil
+        accounts = []
+        activeAccountId = nil
         folders = []
         trustedSenderAddresses = []
     }
@@ -98,26 +127,36 @@ final class AppEnvironment: ObservableObject {
         capability?.activeMode == .onDevice ? onDeviceAdapter : cloudFallbackAdapter
     }
 
-    /// Loads `folders` once and caches it; pass `forceRefresh` after a
-    /// mutation (create/rename/delete/move) or on pull-to-refresh.
+    /// Loads `folders` for the ACTIVE account once and caches it; pass
+    /// `forceRefresh` after a mutation (create/rename/delete/move) or on
+    /// pull-to-refresh. [2026-09-21] Mehrfach-Konten: scoped auf
+    /// `activeAccountId` -- ohne aktives Konto (noch nicht geladen) ein
+    /// No-Op, `FolderListView` ruft das nach `loadAccounts()` erneut auf.
     func loadFolders(forceRefresh: Bool = false) async {
+        guard let activeAccountId else { return }
         if !forceRefresh && !folders.isEmpty { return }
         do {
-            folders = try await apiClient.fetchFolders().sorted { $0.sortOrder < $1.sortOrder }
+            folders = try await apiClient.fetchFolders(accountId: activeAccountId).sorted { $0.sortOrder < $1.sortOrder }
         } catch {
             // Leave the previous list in place; callers show their own
             // loading/error state and can retry via pull-to-refresh.
         }
     }
 
-    /// Lädt das aktive Mail-Konto einmalig (gecacht, wie `loadFolders()`).
-    /// `fetchAccounts()` liefert laut Contract alle verbundenen Konten des
-    /// Users -- solange driftmail nur ein Konto pro User unterstützt,
-    /// reicht das erste. Kein Fehler-State nötig: bleibt `nil`, der
+    /// Lädt ALLE verbundenen Mail-Konten (gecacht, wie `loadFolders()`) und
+    /// aktiviert bei der ersten Ladung automatisch das erste. [2026-09-21]
+    /// Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): vorher nur das erste
+    /// Konto, jetzt alle -- "getrennte Ansichten pro Konto" statt
+    /// implizitem Einzelkonto. Kein Fehler-State nötig: bleibt leer, der
     /// Aufrufer zeigt dann einfach das App-Branding statt der Adresse.
-    func loadAccount() async {
-        if account != nil { return }
-        account = try? await apiClient.fetchAccounts().first
+    func loadAccounts(forceRefresh: Bool = false) async {
+        if !forceRefresh && !accounts.isEmpty { return }
+        let fetched = (try? await apiClient.fetchAccounts()) ?? []
+        accounts = fetched
+        if let activeAccountId, fetched.contains(where: { $0.id == activeAccountId }) {
+            return // bereits aktives Konto ist weiterhin gültig, nicht überschreiben
+        }
+        activeAccountId = fetched.first?.id
     }
 
     /// `GET /trusted-senders`, gecacht wie `folders`/`account`. Fehler

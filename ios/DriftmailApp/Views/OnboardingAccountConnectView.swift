@@ -17,7 +17,20 @@ import SwiftUI
 /// `environment.apiClient` für den Rest der App auf einen echten,
 /// token-tragenden `RemoteAPIClient` umstellt.
 struct OnboardingAccountConnectView: View {
+    /// [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): `.login`
+    /// ist der bisherige Erst-Onboarding-Schritt (kein Zurück möglich, es
+    /// gibt noch nichts, wohin), `.addAccount` wird als Sheet aus
+    /// `FolderListView`s Settings heraus präsentiert (Übergabe von Track A)
+    /// -- mit Abbrechen-Möglichkeit statt Vollbild-Gate.
+    enum Mode {
+        case login
+        case addAccount
+    }
+
+    var mode: Mode = .login
     let onConnected: (MailAccount, String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
 
     private enum Step {
         case pickProvider
@@ -47,7 +60,17 @@ struct OnboardingAccountConnectView: View {
 
     private var providerPicker: some View {
         VStack(spacing: DesignTokens.Spacing.xl) {
-            Spacer()
+            if mode == .addAccount {
+                HStack {
+                    Button("Abbrechen") { dismiss() }
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                    Spacer()
+                }
+                .padding(.horizontal, DesignTokens.Spacing.xl)
+                .padding(.top, DesignTokens.Spacing.lg)
+            } else {
+                Spacer()
+            }
 
             Image(systemName: "envelope.badge.shield.half.filled")
                 .font(.system(size: 40))
@@ -56,7 +79,7 @@ struct OnboardingAccountConnectView: View {
             VStack(spacing: DesignTokens.Spacing.xs) {
                 Text("driftmail")
                     .font(.system(size: DesignTokens.Typography.Size.heading, weight: .medium))
-                Text("Wähle dein E-Mail-Konto, um loszulegen.")
+                Text(mode == .addAccount ? "Welches weitere Konto möchtest du verbinden?" : "Wähle dein E-Mail-Konto, um loszulegen.")
                     .font(.system(size: DesignTokens.Typography.Size.body))
                     .foregroundStyle(DesignTokens.Color.textSecondary)
             }

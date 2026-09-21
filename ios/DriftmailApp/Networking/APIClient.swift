@@ -34,8 +34,13 @@ protocol APIClient {
     // [2026-09-08] Neu seit der Ordner-Contract-Änderung: Ordner sind
     // jetzt benutzerdefiniert (anlegen/umbenennen/löschen), nicht mehr
     // eine feste Liste.
-    func fetchFolders() async throws -> [Folder]
-    func createFolder(name: String, icon: String?) async throws -> Folder
+    /// [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): mit
+    /// `accountId` nur die Ordner dieses Kontos ("getrennte Ansichten pro
+    /// Konto"), `nil` liefert die Ordner ALLER eigenen Konten zusammen.
+    func fetchFolders(accountId: String?) async throws -> [Folder]
+    /// `accountId` ist erforderlich, sobald mehr als ein Konto verbunden
+    /// ist (siehe backend/README.md) -- bei genau einem Konto optional.
+    func createFolder(name: String, icon: String?, accountId: String?) async throws -> Folder
     func updateFolder(id: String, name: String?, icon: String?, sortOrder: Int?) async throws -> Folder
     func deleteFolder(id: String) async throws
 
