@@ -777,3 +777,14 @@ Kein Contract-Bruch bei der Logik selbst (scan_status-Enum bleibt), aber die bis
 **Bitte pruefen:** CORS-Konfiguration im Backend (backend/src/index.ts oder wo der Server aufgesetzt wird) -- lokaler Dev-Port des Web-Frontends (5173) muss als erlaubte Origin zugelassen sein, damit GET /mail-providers (und vermutlich auch andere Endpunkte) im lokalen Zwei-Server-Testbetrieb erreichbar sind. Falls CORS in Produktion anders/enger gehandhabt werden soll als im Dev-Betrieb: bitte per Umgebungsvariable unterscheiden (z.B. CORS_ALLOWED_ORIGINS), nicht hart pauschal oeffnen.
 
 Das ist ein echter Blocker fuer den laufenden manuellen IMAP-Verifikationstest -- bitte zeitnah beheben, danach kann Massimo den web.de-Test fortsetzen.
+
+
+[2026-09-21] [offen] [BUG - Massimo beim echten Live-Test entdeckt] [Track F, vermutlich auch Track C] [hohe Prioritaet] — Erster erfolgreicher End-to-End-Test mit echtem web.de-Konto (nach IMAP-Aktivierung + CORS-Fix): Login, Ordnerliste, Header-Anzeige (E-Mail-Adresse statt "Driftmail" -- funktioniert korrekt), "Neuer Ordner"-Feld -- alles bestaetigt funktionsfaehig.
+
+**Aber:** Es gibt AN KEINER STELLE der Web-Oberflaeche einen sichtbaren "Neue Nachricht"/"Verfassen"-Button oder Aehnliches, um eine komplett NEUE Mail zu schreiben (nicht als Antwort auf eine bestehende). Screenshot des leeren Eingangs zeigt nur die Ordnerliste + "Neuer Ordner"-Feld, keinen Compose-Einstieg.
+
+Wichtig, Abgrenzung zum frueheren Auftrag "Antworten ohne KI-Zwang" (WEB_INBOX.md 10.09., laut SYNC.md erledigt): das betraf nur den Antworten-Flow auf eine bestehende Mail. Der GRUNDSAETZLICHE Weg, ueberhaupt eine neue, eigenstaendige Mail zu verfassen (kein Bezug zu einer existierenden Nachricht), scheint komplett zu fehlen -- das ist eine andere, grundlegendere Luecke.
+
+Bitte pruefen: existiert ein POST /messages/send-faehiger Compose-Screen fuer NEUE Mails (mit leerem To-Feld, nicht vorausgefuellt aus einer Antwort) ueberhaupt im Code, nur ohne sichtbaren Einstiegspunkt in der UI (dann reicht ein UI-Fix: z.B. Button oben in der Sidebar oder Ordneransicht)? Oder fehlt der ganze Neu-Verfassen-Flow strukturell? Bitte auch Track C (iOS) auf dieselbe Luecke pruefen.
+
+Hohe Prioritaet -- ohne diesen Einstiegspunkt ist driftmail aktuell nur zum Lesen/Antworten nutzbar, nicht um selbst aktiv eine neue Konversation zu beginnen. Bitte vor den 5 Wettbewerbs-Features und dem Malware-Scan-Auftrag einordnen, da dies eine Kernfunktion betrifft, nicht eine Erweiterung.
