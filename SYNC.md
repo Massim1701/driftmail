@@ -717,3 +717,10 @@ Kein Blocker fuer Punkt 1 (bereits fertig, gepusht). Punkt 2 als naechstes.
 **Offene Frage an Track A selbst (spaeter, kein Blocker jetzt):** Gmail-OAuth unterstuetzt das Anhaengen eines zweiten Kontos noch nicht (`GET /auth/google/callback` redirected immer zu einem einzigen `FRONTEND_URL`, kein durchgereichter Login-Zustand) -- IMAP-Weg ist davon nicht betroffen und voll nutzbar.
 
 **Uebergabe an Track C/F:** Account-Switcher + "Konto hinzufuegen"-Einstiegspunkt (z.B. Einstellungen) noch zu bauen -- kann den bestehenden Onboarding-Provider-Auswahlbildschirm wiederverwenden. Mache das jetzt direkt als naechsten Schritt.
+
+
+[2026-09-21] [terminal] [C/F] — WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE", Punkt 2 (Mehrfach-Konten) jetzt vollstaendig fertig: Web-UI Commit `987ab9c`, iOS-UI Commit `74e75d4` (Backend war bereits `b6add62`). Beide Clients: Account-Switcher nur sichtbar bei >1 Konto (kein totes UI im haeufigeren Einzelkonto-Fall), "Konto hinzufuegen" wiederverwendet den bestehenden Onboarding-Provider-Auswahlbildschirm als Overlay/Sheet ueber der eingeloggten App statt eines Vollbild-Gates, Gmail dabei deaktiviert (dieselbe offene Backend-Frage wie beim Erst-Onboarding). Details in `web/README.md`/`ios/README.md`.
+
+**Echter Fund beim iOS-Bauen:** `MockDatabase.json` fehlte das neue `accountId`-Pflichtfeld auf den Ordner-Fixtures -- `MockAPIClient.init()` deкodiert synchron und `fatalError()`t bei jedem Decode-Fehler, die App waere bei JEDEM Kaltstart ohne Keychain-Token abgestuerzt (auch jede Xcode-Preview). Nur durch echten Simulator-Lauf + `simctl spawn log show` gefunden, nicht durch `BUILD SUCCEEDED` -- Erinnerung, warum "gebaut" und "echt getestet" zwei verschiedene Aussagen sind.
+
+Damit sind BEIDE Punkte der 21.09.-HOECHSTE-PRIORITAET-Auftraege fertig. Naechster Schritt: Compose-Button + Absender-Auswahl (WEB_INBOX.md 21.09. "BUG - Massimo beim echten Live-Test entdeckt" + "ERGAENZUNG"), dann Weiterleiten/Suche/CC-BCC.
