@@ -766,3 +766,14 @@ Kein Blocker, bitte nach der aktuell laufenden UI-Arbeit (Onboarding-Provider-Au
 **Fotos brauchen keinen separaten Sonderweg** -- ein echter Scan-Motor plus Magic-Bytes-Pruefung deckt auch manipulierte/getarnte Bilddateien ab, kein zusaetzliches Bild-spezifisches Verfahren noetig fuer diesen Auftrag.
 
 Kein Contract-Bruch bei der Logik selbst (scan_status-Enum bleibt), aber die bisher dokumentierte Grenze "kein echter Virenscan" wird damit aufgehoben -- bitte SYNC.md entsprechend aktualisieren, sobald umgesetzt, nicht nur den Code-Kommentar. Hohe Prioritaet, da dies eine der zentralen Sicherheitsversprechen von driftmail direkt betrifft -- bitte zeitnah nach der aktuell laufenden UI-Arbeit einordnen, eher frueher als die 5 Wettbewerbs-Feature-Luecken von eben.
+
+
+[2026-09-21] [offen] [BUG - Massimo beim manuellen Test gefunden] [Track A oder F] [hohe Prioritaet - blockiert den laufenden IMAP-Verifikationstest] — Massimo hat den lokalen Test (Backend localhost:3000 + Web localhost:5173) gestartet, um den IMAP-Login-Weg mit einem echten web.de-Konto zu pruefen (letzter offener Punkt aus dem 19.09.-Auftrag).
+
+**Fehlerbild:** Im Onboarding erscheint nur "Gmail" als Option, mit Hinweistext "Anbieterliste konnte nicht geladen werden — Gmail ist trotzdem nutzbar". Web.de, GMX, iCloud etc. fehlen komplett aus der Auswahl.
+
+**Root Cause bereits eingegrenzt:** GET /mail-providers direkt im Browser aufgerufen (http://localhost:3000/v1/mail-providers) -- Endpunkt antwortet korrekt mit allen Providern (gmail, outlook, yahoo, icloud, gmx, web_de, other_imap), valides JSON. Das Web-Frontend (laeuft auf Port 5173) kann diese Antwort aber offenbar nicht abrufen, obwohl der direkte Browser-Aufruf funktioniert -- klassisches Muster fuer ein CORS-Problem (unterschiedliche Ports = unterschiedliche Origin aus Browser-Sicht, Backend setzt vermutlich keine oder eine zu enge Access-Control-Allow-Origin-Kopfzeile fuer lokale Dev-Ports).
+
+**Bitte pruefen:** CORS-Konfiguration im Backend (backend/src/index.ts oder wo der Server aufgesetzt wird) -- lokaler Dev-Port des Web-Frontends (5173) muss als erlaubte Origin zugelassen sein, damit GET /mail-providers (und vermutlich auch andere Endpunkte) im lokalen Zwei-Server-Testbetrieb erreichbar sind. Falls CORS in Produktion anders/enger gehandhabt werden soll als im Dev-Betrieb: bitte per Umgebungsvariable unterscheiden (z.B. CORS_ALLOWED_ORIGINS), nicht hart pauschal oeffnen.
+
+Das ist ein echter Blocker fuer den laufenden manuellen IMAP-Verifikationstest -- bitte zeitnah beheben, danach kann Massimo den web.de-Test fortsetzen.
