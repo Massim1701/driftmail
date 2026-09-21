@@ -6,7 +6,7 @@ import { runAiTask } from "../ai";
 import { checkDraftForPhishing } from "@driftmail/security-classification";
 import { recipientReputationLookup } from "../lookups";
 import { adapterForAccount } from "../mail/sync";
-import { parseListUnsubscribeHeader } from "../mail/listUnsubscribe";
+import { parseListUnsubscribeHeader, performUnsubscribe } from "../mail/listUnsubscribe";
 import type { ApiDraftPhishingCheckLink } from "../types";
 import type { MailAccountRecord, MessageRecord } from "../types";
 
@@ -331,10 +331,14 @@ messagesRouter.post("/messages/:messageId/quarantine", async (req, res) => {
 // implementiert -- beim Umsetzen der automatischen Abmeldung (WEB_INBOX.md
 // 09.09. "Automatisches Abmelden bei Spam", siehe mail/sync.ts) nachgezogen,
 // da beide denselben Store-Mechanismus (insertUnsubscribeAction) brauchen.
-// Manuell vom User angestoßen -> status='pending_confirmation' (anders als
-// die automatische Variante, die direkt 'confirmed' setzt, siehe
-// mail/sync.ts maybeAutoUnsubscribeFromSpam()). NIE Klick auf Links im
-// Mail-Body, nur der sichere List-Unsubscribe-Header-Mechanismus.
+// NIE Klick auf Links im Mail-Body, nur der sichere List-Unsubscribe-Header-
+// Mechanismus.
+//
+// [2026-09-21] "LUECKE SCHLIESSEN - echter Abmelde-Aufruf" (WEB_INBOX.md
+// 21.09.): loest jetzt performUnsubscribe() synchron aus statt nur
+// status='pending_confirmation' abzulegen und nie wieder anzufassen (ein
+// dauerhafter Endzustand ohne je folgenden Schritt -- die eigentliche
+// Luecke). Ergebnis steht bei Rueckgabe fest, kein Rueckfrage-Schritt mehr.
 messagesRouter.post("/messages/:messageId/unsubscribe", async (req, res) => {
   const owned = await requireOwnMessage(req, res, req.params.messageId);
   if (!owned) return;
@@ -345,13 +349,18 @@ messagesRouter.post("/messages/:messageId/unsubscribe", async (req, res) => {
     return res.status(400).json({ error: "Nachricht hat keinen gültigen List-Unsubscribe-Header" });
   }
 
+  const adapter = adapterForAccount(account);
+  const result = await performUnsubscribe(parsed, (input) =>
+    adapter.sendMail({ ...input, cc: [], bcc: [], inReplyToMessageIdHeader: null }),
+  );
+
   const action = await store.insertUnsubscribeAction({
     userId: account.userId,
     messageId: message.id,
     method: "manual",
     listUnsubscribeHeaderValue: parsed.raw,
-    status: "pending_confirmation",
-    userConfirmedAt: null,
+    status: result.status,
+    userConfirmedAt: result.status === "confirmed" ? new Date().toISOString() : null,
   });
 
   res.status(200).json({ status: action.status });

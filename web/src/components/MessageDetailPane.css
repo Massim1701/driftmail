@@ -109,6 +109,10 @@
   color: var(--color-success);
 }
 
+.unsubscribe-status-failed {
+  color: var(--color-danger-text);
+}
+
 .btn {
   font-family: var(--font-family);
   font-size: var(--font-size-small);

@@ -67,30 +67,42 @@ async function main() {
   );
 
   // Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09. "Automatische
-  // Abmeldung bei Spam"): List-Unsubscribe-Header wird bei spam-Klassifikation
-  // automatisch ausgewertet und als 'confirmed' in unsubscribe_actions
-  // protokolliert -- rein syntaktische Auswertung, kein echter Netzwerk-Call
-  // (siehe mail/listUnsubscribe.ts). Direkt nach dem Sync geprüft, bevor die
-  // spätere Papierkorb-Sektion Fixture 3 löscht.
+  // Abmeldung bei Spam", echter Aufruf nachgezogen WEB_INBOX.md 21.09.
+  // "LUECKE SCHLIESSEN"): List-Unsubscribe-Header wird bei spam-
+  // Klassifikation automatisch ausgewertet UND jetzt echt dispatcht (siehe
+  // mail/listUnsubscribe.ts performUnsubscribe()). Direkt nach dem Sync
+  // geprüft, bevor die spätere Papierkorb-Sektion Fixture 3 löscht.
+  //
+  // Fixture 3s mailto-Ziel geht ueber den Account-Mail-Adapter
+  // (FixtureMailAdapter in diesem Testlauf, da kein echtes Gmail/IMAP-Konto
+  // konfiguriert ist) -- der simuliert IMMER einen erfolgreichen Versand,
+  // deshalb 'confirmed' erwartet, genau wie POST /messages/send anderswo
+  // im Smoketest gegen dieselbe Fixture erfolgreich ist.
   const fixture3ForUnsub = await store.findMessageByHeader(account.id, "<fixture-3@newsletter-deals.example>");
   assert(fixture3ForUnsub !== undefined, "Fixture 3 sollte importiert worden sein (Abmelde-Test)");
   const fixture3UnsubActions = await store.listUnsubscribeActions({ messageId: fixture3ForUnsub!.id });
   assert(
     fixture3UnsubActions.some((a) => a.status === "confirmed" && a.method === "list_unsubscribe_header"),
-    "Fixture 3 (Marketing-Spam mit List-Unsubscribe-Header) sollte automatisch abgemeldet worden sein",
+    "Fixture 3 (Marketing-Spam mit List-Unsubscribe-Header, mailto:) sollte automatisch abgemeldet worden sein",
   );
 
   // Fixture 5 (adult/gambling, auto-gelöscht): Abmeldung muss VOR dem
-  // Verwerfen laufen, messageId=null, da nie eine messages-Zeile angelegt wird.
+  // Verwerfen laufen, messageId=null, da nie eine messages-Zeile angelegt
+  // wird. Ihr List-Unsubscribe-Ziel ist eine https:-URL auf einer frei
+  // erfundenen, nicht aufloesbaren Test-Domain -- der jetzt ECHTE
+  // HTTP-Aufruf schlaegt deshalb zwangslaeufig fehl (DNS-Fehler), status
+  // muss 'failed' sein. Das ist genau der Beweis, dass hier wirklich ein
+  // Netzwerk-Request passiert (vorher waere das syntaktische Parsing blind
+  // 'confirmed' gewesen, egal ob die Domain existiert).
   const fixture5UnsubActions = await store.listUnsubscribeActions({ messageId: null });
   assert(
     fixture5UnsubActions.some(
       (a) =>
-        a.status === "confirmed" &&
+        a.status === "failed" &&
         a.method === "list_unsubscribe_header" &&
         (a.listUnsubscribeHeaderValue ?? "").includes("casino-bonus-express"),
     ),
-    "Fixture 5 (adult/gambling-Spam) sollte VOR dem Auto-Delete automatisch abgemeldet worden sein (messageId=null)",
+    "Fixture 5 (adult/gambling-Spam, https: auf nicht aufloesbare Test-Domain) sollte einen fehlgeschlagenen echten Abmelde-Versuch protokolliert haben",
   );
 
   // Fixture 2 (Phishing mit gefälschtem List-Unsubscribe-Header): automatische
@@ -1157,10 +1169,14 @@ async function main() {
     assert(fixture2Detail.canUnsubscribe === true, "Fixture 2 (mit List-Unsubscribe-Header) sollte canUnsubscribe=true liefern");
     assert(fixture4Detail.canUnsubscribe === false, "Fixture 4 (ohne List-Unsubscribe-Header) sollte canUnsubscribe=false liefern");
 
+    // [2026-09-21] "LUECKE SCHLIESSEN": der Aufruf ist jetzt synchron und
+    // echt -- Fixture 2s mailto-Ziel geht ueber den FixtureMailAdapter
+    // (immer erfolgreich in diesem Testlauf), deshalb 'confirmed' statt des
+    // vorherigen dauerhaften 'pending_confirmation'-Endzustands.
     const manualUnsubRes = await fetch(`${base}/v1/messages/${fixture2!.id}/unsubscribe`, { method: "POST" });
     assert(manualUnsubRes.status === 200, "POST .../unsubscribe auf eine Nachricht mit List-Unsubscribe-Header sollte 200 liefern");
     const manualUnsub = (await manualUnsubRes.json()) as Record<string, unknown>;
-    assert(manualUnsub.status === "pending_confirmation", "manuelle Abmeldung sollte status 'pending_confirmation' liefern");
+    assert(manualUnsub.status === "confirmed", "manuelle Abmeldung sollte nach dem echten Aufruf status 'confirmed' liefern");
 
     // Edge Case: Nachricht ohne List-Unsubscribe-Header -> 400.
     const manualUnsubNoHeaderRes = await fetch(`${base}/v1/messages/${fixture1!.id}/unsubscribe`, { method: "POST" });

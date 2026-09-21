@@ -78,7 +78,9 @@ export function MessageDetailPane({
   const [permanentlyDeleting, setPermanentlyDeleting] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [unsubscribing, setUnsubscribing] = useState(false);
-  const [unsubscribeStatus, setUnsubscribeStatus] = useState<"pending_confirmation" | "confirmed" | "rejected" | null>(null);
+  // [2026-09-21] "LUECKE SCHLIESSEN - echter Abmelde-Aufruf": nur noch
+  // confirmed/failed, siehe api.ts-Kommentar.
+  const [unsubscribeStatus, setUnsubscribeStatus] = useState<"confirmed" | "failed" | null>(null);
 
   // Beim Wechsel der Nachricht abgeleiteten Zustand zurücksetzen
   useEffect(() => {
@@ -264,17 +266,19 @@ export function MessageDetailPane({
         </button>
         {/* Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.): manueller
             Abmelden-Button, unabhängig von der Klassifikation -- nur wenn
-            die Nachricht einen gültigen List-Unsubscribe-Header hat. */}
-        {message.canUnsubscribe && unsubscribeStatus === null && (
+            die Nachricht einen gültigen List-Unsubscribe-Header hat.
+            [2026-09-21] "LUECKE SCHLIESSEN": der Aufruf ist jetzt ein
+            echter Netzwerk-Seiteneffekt und kann fehlschlagen -- bei
+            status='failed' bleibt der Button sichtbar (erneuter Versuch
+            möglich), statt den User mit einer stillen Fehlanzeige
+            hängenzulassen. */}
+        {message.canUnsubscribe && unsubscribeStatus !== "confirmed" && (
           <button type="button" className="btn btn-secondary" onClick={handleUnsubscribe} disabled={unsubscribing}>
-            {unsubscribing ? "Melde ab…" : "Von Absender abmelden"}
+            {unsubscribing ? "Melde ab…" : unsubscribeStatus === "failed" ? "Erneut versuchen" : "Von Absender abmelden"}
           </button>
         )}
-        {unsubscribeStatus !== null && (
-          <span className="unsubscribe-status">
-            {unsubscribeStatus === "pending_confirmation" ? "Abmeldung angestoßen" : "Abgemeldet"}
-          </span>
-        )}
+        {unsubscribeStatus === "failed" && <span className="unsubscribe-status unsubscribe-status-failed">Abmeldung fehlgeschlagen</span>}
+        {unsubscribeStatus === "confirmed" && <span className="unsubscribe-status">Abgemeldet</span>}
         <select
           className="move-select"
           value=""

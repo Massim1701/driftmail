@@ -28,8 +28,13 @@ enum PassFailNone: String, Codable {
 /// Response of `POST /messages/{messageId}/unsubscribe` (WEB_INBOX.md 09.09.
 /// "Automatische Abmeldung bei Spam"), mirrors `unsubscribe_actions.status`
 /// in contracts/db-schema.sql.
+///
+/// [2026-09-21] "LUECKE SCHLIESSEN - echter Abmelde-Aufruf" (WEB_INBOX.md
+/// 21.09.): the call is now synchronous and real (an actual network side
+/// effect), so this endpoint only ever returns `confirmed`/`failed` --
+/// `pendingConfirmation` was a permanent dead-end state with no follow-up
+/// step and no longer occurs here.
 enum UnsubscribeStatus: String, Codable {
-    case pendingConfirmation = "pending_confirmation"
     case confirmed
-    case rejected
+    case failed
 }

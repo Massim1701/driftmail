@@ -165,7 +165,12 @@ export interface UnsubscribeActionRecord {
   messageId: string | null;
   method: "list_unsubscribe_header" | "manual";
   listUnsubscribeHeaderValue: string | null;
-  status: "pending_confirmation" | "confirmed" | "rejected";
+  // [2026-09-21] "LUECKE SCHLIESSEN - echter Abmelde-Aufruf" (WEB_INBOX.md
+  // 21.09.): "failed" neu -- der Aufruf ist jetzt ein echter Netzwerk-
+  // Seiteneffekt (mailto: ueber den Provider-Sende-Mechanismus, https: per
+  // HTTP-Request), kann also fehlschlagen (Netzwerkfehler, 4xx/5xx, Timeout,
+  // Redirect auf fremde Domain). Siehe mail/listUnsubscribe.ts performUnsubscribe().
+  status: "pending_confirmation" | "confirmed" | "rejected" | "failed";
   triggeredAt: string;
   userConfirmedAt: string | null;
 }

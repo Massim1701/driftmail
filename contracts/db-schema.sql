@@ -225,7 +225,15 @@ CREATE TABLE IF NOT EXISTS unsubscribe_actions (
     message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
     method TEXT NOT NULL CHECK (method IN ('list_unsubscribe_header', 'manual')),
     list_unsubscribe_header_value TEXT,
-    status TEXT NOT NULL DEFAULT 'pending_confirmation' CHECK (status IN ('pending_confirmation', 'confirmed', 'rejected')),
+    -- [2026-09-21] "LUECKE SCHLIESSEN - echter Abmelde-Aufruf" (WEB_INBOX.md
+    -- 21.09.): 'failed' neu -- vorher wurde status blind auf 'confirmed'
+    -- gesetzt, ohne dass je ein echter Netzwerk-Aufruf/Mail-Versand
+    -- stattfand. Jetzt wird wirklich dispatcht (siehe mail/listUnsubscribe.ts
+    -- performUnsubscribe()), 'failed' bei Netzwerkfehler/4xx/5xx/fremder
+    -- Redirect-Domain. Tabelle war schon von echtem Code beschrieben (nicht
+    -- wie manche andere KI-Tabellen ungenutzt) -- echte Migration in
+    -- postgresStore.ts noetig, siehe migrateUnsubscribeActionsStatusCheck().
+    status TEXT NOT NULL DEFAULT 'pending_confirmation' CHECK (status IN ('pending_confirmation', 'confirmed', 'rejected', 'failed')),
     triggered_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     user_confirmed_at TIMESTAMPTZ
   );

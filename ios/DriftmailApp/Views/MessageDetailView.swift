@@ -177,18 +177,32 @@ struct MessageDetailView: View {
             // manueller Abmelden-Button, unabhängig von der Klassifikation
             // -- nur wenn die Nachricht einen gültigen List-Unsubscribe-
             // Header hat (siehe backend/README.md).
+            //
+            // [2026-09-21] "LUECKE SCHLIESSEN - echter Abmelde-Aufruf": der
+            // Aufruf ist jetzt ein echter Netzwerk-Seiteneffekt und kann
+            // fehlschlagen -- bei .failed bleibt der Button sichtbar
+            // (erneuter Versuch möglich), statt den User mit einer stillen
+            // Fehlanzeige hängenzulassen.
             if detail.canUnsubscribe {
-                if let unsubscribeStatus {
-                    Text(unsubscribeStatus == .pendingConfirmation ? "Abmeldung angestoßen" : "Abgemeldet")
+                if unsubscribeStatus == .failed {
+                    Text("Abmeldung fehlgeschlagen")
+                        .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
+                        .foregroundStyle(DesignTokens.Color.danger)
+                }
+                if unsubscribeStatus == .confirmed {
+                    Text("Abgemeldet")
                         .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
                         .foregroundStyle(DesignTokens.Color.success)
                 } else {
                     Button {
                         Task { await unsubscribe() }
                     } label: {
-                        Label("Von Absender abmelden", systemImage: "envelope.badge.shield.half.filled")
-                            .font(.system(size: DesignTokens.Typography.Size.body))
-                            .frame(maxWidth: .infinity)
+                        Label(
+                            unsubscribeStatus == .failed ? "Erneut versuchen" : "Von Absender abmelden",
+                            systemImage: "envelope.badge.shield.half.filled",
+                        )
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                        .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
                     .disabled(isUnsubscribing)

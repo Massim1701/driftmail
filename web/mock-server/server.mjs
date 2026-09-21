@@ -562,14 +562,15 @@ const server = createServer(async (req, res) => {
     }
 
     // POST /messages/{id}/unsubscribe (WEB_INBOX.md 09.09. "Automatische
-    // Abmeldung bei Spam", manueller Pfad) -- vereinfachter Mock: prüft nur
-    // das Flag hasListUnsubscribe statt echter Header-Syntax (siehe
-    // backend/README.md "Automatische Abmeldung bei Spam" für den echten
-    // Mechanismus), liefert wie das Backend status='pending_confirmation'.
+    // Abmeldung bei Spam", manueller Pfad; echter Aufruf im Backend seit
+    // WEB_INBOX.md 21.09. "LUECKE SCHLIESSEN") -- vereinfachter Mock: prüft
+    // nur das Flag hasListUnsubscribe statt echter Header-Syntax, simuliert
+    // aber wie das echte Backend jetzt einen synchronen, immer erfolgreichen
+    // Aufruf (kein echter Netzwerk-Seiteneffekt im Mock-Server nötig/gewollt).
     if (req.method === "POST" && parts.length === 3 && parts[2] === "unsubscribe") {
       if (!msg) return notFound(res);
       if (msg.hasListUnsubscribe !== true) return badRequest(res, "Nachricht hat keinen gültigen List-Unsubscribe-Header");
-      return send(res, 200, { status: "pending_confirmation" });
+      return send(res, 200, { status: "confirmed" });
     }
 
     // POST /messages/{id}/move

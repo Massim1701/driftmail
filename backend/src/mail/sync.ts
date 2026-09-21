@@ -15,7 +15,7 @@ import { FixtureMailAdapter } from "./fixtureAdapter";
 import { GmailAdapter } from "./gmailAdapter";
 import { ImapAdapter, type ImapCredentials } from "./imapAdapter";
 import { parseInReplyToHeader } from "./inReplyTo";
-import { parseListUnsubscribeHeader } from "./listUnsubscribe";
+import { parseListUnsubscribeHeader, performUnsubscribe } from "./listUnsubscribe";
 import { store } from "../db/store";
 import type { AiAdapter } from "../ai/types";
 import {
@@ -108,15 +108,22 @@ async function resolveFolderId(classification: string, accountId: string): Promi
  * marketing), NIEMALS bei 'phishing' -- ein Phishing-Versender hat
  * ohnehin meist keinen echten List-Unsubscribe-Header, und selbst wenn,
  * wäre automatisches Vertrauen in dessen Header-Angaben ein Risiko (der
- * Header selbst könnte Teil eines Trick-Musters sein). Anders als die
- * manuelle Abmeldung (POST /messages/:id/unsubscribe,
- * status='pending_confirmation') gilt die Spam-Klassifikation selbst hier
- * schon als Bestätigung -> status='confirmed' direkt, keine Rückfrage.
- * `userConfirmedAt` wird trotzdem gesetzt (Zeitpunkt der automatischen
- * Bestätigung) statt null zu bleiben, damit jede 'confirmed'-Zeile einen
- * Zeitstempel hat -- der Spaltenname passt nicht perfekt (kein Mensch hat
- * hier geklickt), ein eigenes "system_confirmed_at"-Feld nur dafür wäre
- * aber unnötiges Schema-Wachstum für dieses eine Detail.
+ * Header selbst könnte Teil eines Trick-Musters sein). Die
+ * Spam-Klassifikation selbst gilt hier schon als Bestätigung, keine
+ * Rückfrage nötig -- anders als bei einer vom User selbst angestoßenen
+ * Abmeldung (POST /messages/:id/unsubscribe).
+ *
+ * [2026-09-21] "LUECKE SCHLIESSEN - echter Abmelde-Aufruf" (WEB_INBOX.md
+ * 21.09.): löst jetzt performUnsubscribe() (echter Netzwerk-Aufruf) aus,
+ * status spiegelt das tatsächliche Ergebnis ('confirmed'/'failed') statt
+ * blind 'confirmed' zu setzen. `userConfirmedAt` wird bei Erfolg trotzdem
+ * gesetzt (Zeitpunkt der automatischen Bestätigung) statt null zu bleiben,
+ * damit jede 'confirmed'-Zeile einen Zeitstempel hat -- der Spaltenname
+ * passt nicht perfekt (kein Mensch hat hier geklickt), ein eigenes
+ * "system_confirmed_at"-Feld nur dafür wäre aber unnötiges Schema-Wachstum
+ * für dieses eine Detail. Ein Fehlschlag hier darf den restlichen
+ * Mail-Sync nicht blockieren -- performUnsubscribe() wirft nie, liefert
+ * immer ein Ergebnis.
  *
  * Aufrufer übergibt `messageId=null` für adult/gambling (Auto-Delete-Pfad,
  * VOR dem Verwerfen aufgerufen, siehe dortiger Kommentar) bzw. die echte
@@ -125,17 +132,20 @@ async function maybeAutoUnsubscribeFromSpam(
   rawHeaders: Record<string, string>,
   userId: string,
   messageId: string | null,
+  adapter: MailAdapter,
 ): Promise<void> {
   const parsed = parseListUnsubscribeHeader(rawHeaders);
   if (!parsed) return;
-  const now = new Date().toISOString();
+  const result = await performUnsubscribe(parsed, (input) =>
+    adapter.sendMail({ ...input, cc: [], bcc: [], inReplyToMessageIdHeader: null }),
+  );
   await store.insertUnsubscribeAction({
     userId,
     messageId,
     method: "list_unsubscribe_header",
     listUnsubscribeHeaderValue: parsed.raw,
-    status: "confirmed",
-    userConfirmedAt: now,
+    status: result.status,
+    userConfirmedAt: result.status === "confirmed" ? new Date().toISOString() : null,
   });
 }
 
@@ -239,7 +249,7 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         // Automatische Abmeldung (WEB_INBOX.md 09.09.) VOR dem Verwerfen --
         // der Header steht hier schon zur Verfügung, danach nicht mehr
         // (keine messages-Zeile, aus der er sich später noch lesen ließe).
-        await maybeAutoUnsubscribeFromSpam(mail.rawHeaders, account.userId, null);
+        await maybeAutoUnsubscribeFromSpam(mail.rawHeaders, account.userId, null, adapter);
         await store.logSecurityAudit({
           userId: account.userId,
           messageId: null,
@@ -282,7 +292,7 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         // Automatische Abmeldung (WEB_INBOX.md 09.09.) -- adult/gambling
         // erreichen diese Stelle nie (siehe Auto-Delete-Pfad oben), hier
         // also nur generic/marketing-Spam, die normal persistiert wird.
-        await maybeAutoUnsubscribeFromSpam(mail.rawHeaders, account.userId, message.id);
+        await maybeAutoUnsubscribeFromSpam(mail.rawHeaders, account.userId, message.id, adapter);
       }
 
       // Vertragsdaten best-effort extrahieren (Mock).

@@ -275,6 +275,7 @@ export class PostgresStore implements Store {
    * überhaupt die Chance hätte, die Spalte anzulegen. */
   async migrate(): Promise<void> {
     await this.migrateFoldersToAccountScope();
+    await this.migrateUnsubscribeActionsStatusCheck();
     const sql = readFileSync(SCHEMA_PATH, "utf-8");
     await this.pool.query(sql);
   }
@@ -337,6 +338,35 @@ export class PostgresStore implements Store {
     await this.pool.query(`DROP INDEX IF EXISTS idx_folders_user`);
 
     console.log("[migrate] folders.user_id -> mail_account_id abgeschlossen.");
+  }
+
+  /** [2026-09-21] "LUECKE SCHLIESSEN - echter Abmelde-Aufruf" (WEB_INBOX.md
+   * 21.09.): `unsubscribe_actions.status` bekommt den neuen Wert 'failed'
+   * (echter Netzwerk-Aufruf kann jetzt fehlschlagen, siehe
+   * mail/listUnsubscribe.ts). Anders als die Folder-Migration oben keine
+   * Datentransformation noetig, nur eine CHECK-Constraint-Erweiterung --
+   * Constraint-Name dynamisch ueber pg_constraint gesucht (nicht den
+   * Postgres-Auto-Namen geraten, gleiches Prinzip wie oben), immer
+   * drop+recreate (idempotent: laeuft die Migration mehrfach, ist das
+   * Ergebnis jedesmal dieselbe, feste Definition). No-Op auf einer frischen
+   * DB, die die Tabelle noch gar nicht hat -- die kommt gleich danach ueber
+   * das CREATE TABLE IF NOT EXISTS unten mit der neuen Definition direkt. */
+  private async migrateUnsubscribeActionsStatusCheck(): Promise<void> {
+    const { rows: exists } = await this.pool.query(`SELECT to_regclass('unsubscribe_actions') AS reg`);
+    if (!exists[0]?.reg) return;
+
+    const { rows: constraints } = await this.pool.query(`
+      SELECT con.conname
+      FROM pg_constraint con
+      JOIN pg_class rel ON rel.oid = con.conrelid
+      WHERE rel.relname = 'unsubscribe_actions' AND con.contype = 'c' AND pg_get_constraintdef(con.oid) ILIKE '%status%'
+    `);
+    for (const c of constraints) {
+      await this.pool.query(`ALTER TABLE unsubscribe_actions DROP CONSTRAINT IF EXISTS "${c.conname}"`);
+    }
+    await this.pool.query(
+      `ALTER TABLE unsubscribe_actions ADD CONSTRAINT unsubscribe_actions_status_check CHECK (status IN ('pending_confirmation', 'confirmed', 'rejected', 'failed'))`,
+    );
   }
 
   // ----- Users / Accounts -----

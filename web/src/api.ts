@@ -210,8 +210,11 @@ export const api = {
   // POST /messages/{id}/unsubscribe (WEB_INBOX.md 09.09. "Automatische
   // Abmeldung bei Spam", manueller Pfad) -- nur aufrufbar, wenn
   // MessageDetail.canUnsubscribe=true ist (siehe backend/README.md).
+  // [2026-09-21] "LUECKE SCHLIESSEN - echter Abmelde-Aufruf": der Aufruf ist
+  // jetzt synchron und echt -- nur noch confirmed/failed statt des
+  // vorherigen dauerhaften pending_confirmation-Endzustands.
   unsubscribeFromMessage: (id: string) =>
-    request<{ status: "pending_confirmation" | "confirmed" | "rejected" }>(`/messages/${id}/unsubscribe`, { method: "POST" }),
+    request<{ status: "confirmed" | "failed" }>(`/messages/${id}/unsubscribe`, { method: "POST" }),
 
   // Soft delete: verschiebt die Nachricht in den Papierkorb (analog moveMessage,
   // nur mit fest verdrahtetem Ziel-Ordner serverseitig statt frei wählbarem folderId).

@@ -484,16 +484,21 @@ paths:
   /messages/{messageId}/unsubscribe:
     post:
       summary: >
-        Manuelle Abmeldung ueber RFC-8058 List-Unsubscribe-Header anstoßen.
-        Legt einen unsubscribe_actions-Eintrag mit status='pending_confirmation'
-        an, nie automatischer Klick auf Links im Mail-Body. 400, wenn die
-        Nachricht keinen gueltigen List-Unsubscribe-Header hat. Siehe auch
-        WEB_INBOX.md 09.09. "Automatisches Abmelden bei Spam": fuer
+        Abmeldung ueber RFC-8058 List-Unsubscribe-Header anstoßen. 400, wenn
+        die Nachricht keinen gueltigen List-Unsubscribe-Header hat. Siehe
+        auch WEB_INBOX.md 09.09. "Automatisches Abmelden bei Spam": fuer
         Nachrichten mit classification='spam' (NIE 'phishing') loest das
-        Backend denselben Mechanismus zusaetzlich automatisch aus (ohne
-        Rueckfrage, status='confirmed' direkt) -- dieser Endpunkt bleibt der
-        Weg fuer eine vom User selbst angestoßene Abmeldung bei allen
-        anderen Nachrichten mit einem List-Unsubscribe-Header.
+        Backend denselben Mechanismus zusaetzlich automatisch aus, ohne
+        Rueckfrage -- dieser Endpunkt bleibt der Weg fuer eine vom User
+        selbst angestoßene Abmeldung bei allen anderen Nachrichten mit einem
+        List-Unsubscribe-Header.
+        [2026-09-21] "LUECKE SCHLIESSEN - echter Abmelde-Aufruf" (WEB_INBOX.md
+        21.09.): loest jetzt einen ECHTEN Netzwerk-Aufruf aus (mailto: ueber
+        den Provider-Sende-Mechanismus, https: per HTTP-GET/POST je nachdem
+        ob List-Unsubscribe-Post vorhanden ist) und liefert synchron das
+        tatsaechliche Ergebnis zurueck -- status='pending_confirmation' aus
+        der Ursprungsversion gibt es nicht mehr (war ein dauerhafter
+        Endzustand ohne je folgenden Schritt).
       parameters:
         - name: messageId
           in: path
@@ -511,7 +516,11 @@ paths:
                 properties:
                   status:
                     type: string
-                    enum: [pending_confirmation, confirmed, rejected]
+                    enum: [confirmed, failed]
+                    description: >
+                      [2026-09-21] KORREKTUR: pending_confirmation/rejected
+                      entfallen -- der Aufruf ist jetzt synchron, das
+                      Ergebnis steht sofort fest.
         "400":
           description: Nachricht hat keinen gueltigen List-Unsubscribe-Header
         "404":

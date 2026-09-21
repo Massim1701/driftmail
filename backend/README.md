@@ -503,29 +503,92 @@ anzulegen:
   in der Sync-Pipeline, entweder nach dem Anlegen der normalen `messages`-Zeile
   (`message_id` gesetzt) oder — bei adult/gambling-Spam — **vor** dem
   Auto-Delete (siehe oben), mit `message_id = null`, da dort nie eine
-  `messages`-Zeile existiert. Status landet direkt auf `'confirmed'`
-  (`user_confirmed_at = now()`), da hier kein User in der Schleife ist.
-  `classification === "phishing"` löst NIE automatisch aus, auch wenn ein
-  (dann meist gefälschter) `List-Unsubscribe`-Header vorhanden ist — ein
-  Angreifer könnte sonst über einen frei erfundenen Header serverseitig einen
-  Netzwerk-Call/E-Mail-Versand an eine beliebige Adresse auslösen.
+  `messages`-Zeile existiert. Status spiegelt seit dem Nachtrag unten das
+  ECHTE Ergebnis des Abmelde-Aufrufs (`'confirmed'`/`'failed'`,
+  `user_confirmed_at = now()` nur bei Erfolg), keine Rückfrage nötig, da hier
+  kein User in der Schleife ist. `classification === "phishing"` löst NIE
+  automatisch aus, auch wenn ein (dann meist gefälschter)
+  `List-Unsubscribe`-Header vorhanden ist — ein Angreifer könnte sonst über
+  einen frei erfundenen Header serverseitig einen Netzwerk-Call/E-Mail-Versand
+  an eine beliebige Adresse auslösen.
 - **Manuell** (`POST /messages/:messageId/unsubscribe`, `src/routes/
-  messages.ts`): prüft nur, ob die (bereits gespeicherte) Nachricht einen
+  messages.ts`): prüft, ob die (bereits gespeicherte) Nachricht einen
   gültigen `List-Unsubscribe`-Header hat — unabhängig von ihrer
   Klassifikation, da hier explizit der User selbst entscheidet. `404` wenn die
   `messageId` unbekannt ist, `400` wenn kein gültiger Header vorliegt, sonst
-  `200` mit einer neuen Zeile im Status `'pending_confirmation'`.
+  `200` mit dem tatsächlichen Ergebnis (`'confirmed'`/`'failed'`) des sofort
+  ausgeführten Abmelde-Aufrufs.
 
 **Header-Parsing** (`src/mail/listUnsubscribe.ts`,
 `parseListUnsubscribeHeader()`): liest `mailto:`/`https:`-URIs aus den
 kommagetrennten `<...>`-Einträgen von RFC 2369 (`List-Unsubscribe`), analog zu
-RFC 8058. **Bewusste Einschränkung:** rein syntaktische Auswertung — es wird
-nie wirklich eine Mail verschickt oder eine URL aufgerufen (kein
-Netzwerk-Call), und der `List-Unsubscribe-Post`-Header (RFC 8058,
-One-Click-Bestätigung per POST) wird nicht geprüft/verlangt. Für einen
-echten Versand/Call bräuchte es eine explizite Freigabe (Netzwerkzugriff auf
-beliebige, aus Mail-Headern stammende Adressen ist ein reales Missbrauchs-
-/SSRF-Risiko) — außerhalb des Rahmens dieses ersten Durchstichs.
+RFC 8058, sowie den `List-Unsubscribe-Post`-Header (RFC 8058, bestätigt den
+sicheren One-Click-POST-Mechanismus).
+
+### [2026-09-21] Nachtrag: echter Abmelde-Aufruf (WEB_INBOX.md 21.09.
+"LUECKE SCHLIESSEN - echter Abmelde-Aufruf")
+
+**Fund:** bis zu diesem Schritt war der komplette Mechanismus oben rein
+syntaktisch — der Header wurde geparst, `status` aber blind auf
+`'confirmed'` gesetzt (automatischer Pfad) bzw. auf einen dauerhaften
+`'pending_confirmation'`-Endzustand ohne je folgenden Schritt (manueller
+Pfad), OHNE dass je eine Mail verschickt oder eine URL aufgerufen wurde.
+Eine bereits als "fertig" kommunizierte Funktion war damit faktisch eine
+Attrappe — von Massimo beim Nachfragen aufgedeckt.
+
+**`performUnsubscribe()`** (`src/mail/listUnsubscribe.ts`), jetzt von
+beiden Pfaden genutzt:
+
+- **`mailto:`-Ziel:** eine Mail (Betreff aus einem etwaigen
+  `?subject=`-Query-Parameter der mailto-URI, sonst `"unsubscribe"`,
+  Text `"unsubscribe"`) über den bestehenden Provider-Sende-Mechanismus
+  (`MailAdapter.sendMail()` des Kontos, intern genutzt — nicht über den
+  öffentlichen `POST /messages/send`-Pfad, kein Phishing-Check/
+  `outgoing_send_log`-Eintrag dafür nötig, das ist kein User-Compose).
+- **`https:`-Ziel:** ein echter HTTP-Request — `POST` mit Body
+  `List-Unsubscribe=One-Click` (RFC 8058 "One-Click"), wenn der
+  `List-Unsubscribe-Post`-Header vorhanden ist, sonst `GET` als Fallback.
+- **Sicherheitsbewusst umgesetzt** (wie im Auftrag verlangt): 8-Sekunden-
+  Timeout (`AbortController`) pro Request, damit ein hängender Server nicht
+  den Mail-Sync blockiert. Redirects werden manuell verfolgt (`redirect:
+  "manual"`), maximal 3 Hops, und NUR wenn Ziel-Host === Ursprungs-Host der
+  `List-Unsubscribe`-URL — ein Redirect auf eine fremde Domain wird
+  abgelehnt (`status: 'failed'`) statt automatisch verfolgt zu werden (ein
+  Absender könnte sonst über eine Redirect-Kette auf beliebige interne/
+  fremde Ziele zeigen, SSRF-artiges Risiko).
+- Jeder Fehlerpfad (Netzwerkfehler, Timeout, 4xx/5xx, fremde Redirect-
+  Domain, kein `mailto:`/`https:`-Ziel) liefert `{ status: 'failed', error
+  }` statt zu werfen — `maybeAutoUnsubscribeFromSpam()` darf den restlichen
+  Mail-Sync nie blockieren/abbrechen.
+
+**`unsubscribe_actions.status`** bekommt den neuen Wert `'failed'`
+(`contracts/db-schema.sql`, echte Migration in `postgresStore.ts`
+`migrateUnsubscribeActionsStatusCheck()` — anders als die meisten anderen
+Tabellen in diesem Schritt war diese schon von echtem Code beschrieben,
+eine reine `CREATE TABLE IF NOT EXISTS`-Änderung hätte auf einer
+bestehenden DB nicht gewirkt). Der manuelle Endpunkt liefert jetzt nur noch
+`'confirmed'`/`'failed'` (kein `'pending_confirmation'`/`'rejected'` mehr —
+der Aufruf ist synchron, das Ergebnis steht sofort fest).
+
+**Tests:** `smoketest.ts` nutzt bewusst die vorhandenen Fixtures, um echtes
+Verhalten zu beweisen, nicht nur zu behaupten: Fixture 3s `mailto:`-Ziel
+läuft über den `FixtureMailAdapter` (simuliert in Tests immer einen
+erfolgreichen Versand) → `'confirmed'`. Fixture 5s `https:`-Ziel zeigt auf
+eine frei erfundene, nicht auflösbare Test-Domain → der jetzt echte
+HTTP-Aufruf schlägt zwangsläufig fehl (DNS-Fehler) → `'failed'` — genau der
+Beweis, dass hier wirklich ein Netzwerk-Request passiert (vorher wäre das
+blind `'confirmed'` gewesen, egal ob die Domain existiert). Migration
+zusätzlich manuell gegen eine simulierte Alt-Schema-DB verifiziert (alte
+3-Wert-Constraint → neue 4-Wert-Constraint). Grün ohne UND mit
+`DATABASE_URL` gegen frisches Postgres.
+
+**Übergabe an Track C/F:** `UnsubscribeStatus`/der entsprechende Web-Typ
+verlieren `pending_confirmation`/`rejected`, bekommen `failed` -- beide
+Clients zeigen bei `failed` jetzt einen "Erneut versuchen"-Button statt
+den User mit einer stillen/falschen "Abgemeldet"-Anzeige hängenzulassen
+(war vorher ein Bug-in-Wartestellung: der bisherige Zwei-Werte-Ternary
+`status === 'pending_confirmation' ? ... : "Abgemeldet"` hätte einen
+künftigen dritten Wert fälschlich als "Abgemeldet" angezeigt).
 
 **Contract-Ergänzung (kleine, additive Änderung ohne Web-Vorabsprache, siehe
 Muster unten "Annahmen"):** `unsubscribe_actions.message_id` war im Contract
