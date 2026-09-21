@@ -1,4 +1,5 @@
 import express from "express";
+import { cors } from "./middleware/cors";
 import { accountsRouter } from "./routes/accounts";
 import { authRouter } from "./routes/auth";
 import { foldersRouter } from "./routes/folders";
@@ -14,6 +15,10 @@ import { requireAuth } from "./middleware/auth";
 
 export function createApp() {
   const app = express();
+  // Vor allem anderen (auch vor express.json()): OPTIONS-Preflights
+  // brauchen keinen geparsten Body, und alle Antworten -- auch Fehler --
+  // sollen die CORS-Header tragen (WEB_INBOX.md 21.09. "BUG").
+  app.use(cors);
   app.use(express.json());
 
   // api-spec.yaml: servers[0].url = https://api.driftware.online/v1
