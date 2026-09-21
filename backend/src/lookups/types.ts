@@ -75,9 +75,13 @@ export interface AttachmentScanResult {
   isDangerousType: boolean;
 }
 
-/** Reale Implementierung: echter Virenscan-Dienst (z.B. ClamAV/VirusTotal),
- * siehe WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-Eintrags von
- * eben". Mock: einfache Dateiendungs-Prüfung, siehe attachmentScanMock.ts. */
+/** [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": echte
+ * Implementierung ist jetzt ClamAV (siehe attachmentScanClamAv.ts) statt
+ * der frueheren reinen Dateiendungs-Pruefung (attachmentScanMock.ts, noch
+ * vorhanden als Fallback-Referenz/fuer Tests ohne laufenden ClamAV-Daemon).
+ * `buffer` neu: der echte Scan braucht die tatsaechlichen Bytes, nicht nur
+ * Metadaten -- multer haelt den Upload ohnehin schon im Speicher (siehe
+ * routes/attachments.ts), kein zusaetzlicher Lese-Schritt noetig. */
 export interface AttachmentScanner {
-  scan(input: { filename: string; mimeType: string | null; sizeBytes: number }): Promise<AttachmentScanResult>;
+  scan(input: { filename: string; mimeType: string | null; sizeBytes: number; buffer: Buffer }): Promise<AttachmentScanResult>;
 }

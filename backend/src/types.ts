@@ -383,6 +383,16 @@ export interface ApiQuarantineInfo {
   userReviewed: boolean;
 }
 
+export interface ApiMessageAttachment {
+  id: string;
+  filename: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  scanStatus: MessageAttachmentRecord["scanStatus"];
+  isDangerousType: boolean;
+  containsSensitiveDocument: SensitiveDocumentKind;
+}
+
 export interface ApiMessageDetail extends ApiMessage {
   bodyText: string | null;
   security: ApiSecurityResult | null;
@@ -390,6 +400,10 @@ export interface ApiMessageDetail extends ApiMessage {
   canUnsubscribe: boolean;
   // "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09.), siehe api-spec.yaml.
   isNewSender: boolean;
+  // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": Anhaenge
+  // dieser Nachricht, bereits gescannt (siehe mail/incomingAttachments.ts
+  // fuer eingehende, routes/attachments.ts fuer beim Senden hochgeladene).
+  attachments: ApiMessageAttachment[];
 }
 
 export interface ApiMailSummary {

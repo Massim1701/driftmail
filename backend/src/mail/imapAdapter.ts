@@ -6,7 +6,7 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import nodemailer from "nodemailer";
-import type { FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
+import type { FetchedAttachment, FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
 
 export interface ImapCredentials {
   host: string;
@@ -62,6 +62,14 @@ export class ImapAdapter implements MailAdapter {
           });
 
           const fromAddr = parsed.from?.value?.[0];
+          // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan":
+          // mailparser liefert Anhaenge (inkl. Bytes) bereits fertig geparst
+          // mit -- kein zusaetzlicher Fetch-Schritt noetig.
+          const attachments: FetchedAttachment[] = parsed.attachments.map((a) => ({
+            filename: a.filename ?? "unbenannt",
+            mimeType: a.contentType || null,
+            content: a.content,
+          }));
           results.push({
             messageIdHeader: parsed.messageId ?? `imap-${message.uid}`,
             providerMessageId: String(message.uid),
@@ -72,6 +80,7 @@ export class ImapAdapter implements MailAdapter {
             bodyText: parsed.text ?? null,
             receivedAt: (parsed.date ?? new Date()).toISOString(),
             rawHeaders,
+            attachments,
           });
         }
       } finally {

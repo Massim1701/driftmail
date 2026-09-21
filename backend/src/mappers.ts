@@ -11,6 +11,7 @@ import type {
   ApiMailAccount,
   ApiMailSummary,
   ApiMessage,
+  ApiMessageAttachment,
   ApiMessageDetail,
   ApiQuarantineInfo,
   ApiSecurityResult,
@@ -21,6 +22,7 @@ import type {
   FolderRecord,
   MailAccountRecord,
   MessageAiSummaryRecord,
+  MessageAttachmentRecord,
   MessageRecord,
   MessageSecurityRecord,
   QuarantineRecord,
@@ -41,6 +43,19 @@ export function toApiFolder(f: FolderRecord): ApiFolder {
     isSystem: f.isSystem,
     systemKey: f.systemKey,
     sortOrder: f.sortOrder,
+  };
+}
+
+// [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan".
+export function toApiMessageAttachment(a: MessageAttachmentRecord): ApiMessageAttachment {
+  return {
+    id: a.id,
+    filename: a.filename,
+    mimeType: a.mimeType,
+    sizeBytes: a.sizeBytes,
+    scanStatus: a.scanStatus,
+    isDangerousType: a.isDangerousType,
+    containsSensitiveDocument: a.containsSensitiveDocument,
   };
 }
 
@@ -122,6 +137,7 @@ export function toApiMessageDetail(
   quarantine: QuarantineRecord | undefined,
   isNewSender: boolean,
   awaitingReply: boolean,
+  attachments: MessageAttachmentRecord[],
 ): ApiMessageDetail {
   return {
     ...toApiMessage(m, security, awaitingReply),
@@ -130,6 +146,7 @@ export function toApiMessageDetail(
     quarantine: quarantine ? toApiQuarantineInfo(quarantine) : null,
     canUnsubscribe: parseListUnsubscribeHeader(m.rawHeaders) !== null,
     isNewSender,
+    attachments: attachments.map(toApiMessageAttachment),
   };
 }
 

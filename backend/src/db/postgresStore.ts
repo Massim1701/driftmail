@@ -1157,6 +1157,11 @@ export class PostgresStore implements Store {
     await this.pool.query("UPDATE message_attachments SET message_id = $2 WHERE id = ANY($1::uuid[])", [ids, messageId]);
   }
 
+  async listAttachmentsForMessage(messageId: string): Promise<MessageAttachmentRecord[]> {
+    const { rows } = await this.pool.query("SELECT * FROM message_attachments WHERE message_id = $1", [messageId]);
+    return rows.map(rowToMessageAttachment);
+  }
+
   // ----- Entwürfe -----
 
   async createDraft(input: Omit<DraftRecord, "id" | "updatedAt">): Promise<DraftRecord> {

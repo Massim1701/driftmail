@@ -3,6 +3,16 @@
 // konkreten Provider — neue Provider lassen sich ergänzen, ohne die
 // Pipeline anzufassen.
 
+// [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": Anhaenge
+// einer EMPFANGENEN Mail, inkl. Bytes (fuer den echten Scan beim Sync,
+// siehe mail/incomingAttachments.ts) -- vorher gab es hierfuer ueberhaupt
+// kein Feld, eingehende Anhaenge wurden komplett ignoriert.
+export interface FetchedAttachment {
+  filename: string;
+  mimeType: string | null;
+  content: Buffer;
+}
+
 export interface FetchedMail {
   messageIdHeader: string;
   // Provider-natives Handle für spätere Schreib-Operationen (Papierkorb/
@@ -22,6 +32,10 @@ export interface FetchedMail {
   bodyText: string | null;
   receivedAt: string; // ISO datetime
   rawHeaders: Record<string, string>;
+  // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": leeres
+  // Array = keine Anhaenge ODER Adapter unterstuetzt (noch) kein Auslesen
+  // -- beides fuehrt zum selben, sicheren Verhalten (nichts zu scannen).
+  attachments: FetchedAttachment[];
 }
 
 // POST /messages/send (WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt"):

@@ -777,10 +777,12 @@ paths:
         Datei hochladen und sofort scannen (vor dem eigentlichen Senden).
         Muss scan_status='clean' liefern, bevor die attachmentId bei
         POST /messages/send verwendet werden darf. Siehe WEB_INBOX.md 09.09.
-        "Erweiterung des Send-Endpunkt-Eintrags von eben". Scan-Logik selbst
-        (was genau 'malicious'/'blocked_type' ausloest) ist bewusst noch
-        einfach gehalten (siehe backend/README.md) -- ein spaeterer Schritt
-        analog zu den externen Lookup-Adaptern.
+        "Erweiterung des Send-Endpunkt-Eintrags von eben". [2026-09-21]
+        "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": echter ClamAV-Scan
+        (Dateiendungs-Blockliste + Magic-Bytes-Pruefung + Signaturabgleich),
+        siehe backend/README.md "Malware-Scan". Derselbe Scan laeuft jetzt
+        auch fuer EINGEHENDE Mail-Anhaenge (siehe MessageDetail.attachments
+        unten) -- nicht nur beim Senden.
       requestBody:
         content:
           multipart/form-data:
@@ -1350,6 +1352,35 @@ components:
                 sich mit GET /trusted-senders -- die Client-UI kombiniert
                 beides (Badge nur bei isNewSender=true UND Absender nicht
                 auf der Whitelist).
+            attachments:
+              type: array
+              items:
+                $ref: "#/components/schemas/MessageAttachment"
+              description: >
+                [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan":
+                Anhaenge dieser Nachricht wurden beim Mail-Sync bereits
+                gescannt (ClamAV + Magic-Bytes-Pruefung, siehe
+                backend/README.md "Malware-Scan"), BEVOR sie hier sichtbar
+                werden. Ein als 'malicious'/'scan_failed' erkannter Anhang
+                wird NICHT automatisch geloescht (die Mail selbst bleibt
+                immer sichtbar) -- nur der Anhang selbst ist gesperrt, die
+                Client-UI muss `scanStatus` respektieren und darf einen
+                nicht-'clean' Anhang nicht zum Oeffnen/Herunterladen anbieten.
+
+    MessageAttachment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        mimeType: { type: string, nullable: true }
+        sizeBytes: { type: integer, nullable: true }
+        scanStatus:
+          type: string
+          enum: [pending, clean, malicious, blocked_type, scan_failed]
+        isDangerousType: { type: boolean }
+        containsSensitiveDocument:
+          type: string
+          enum: [none, credit_card, id_document]
 
     QuarantineInfo:
       type: object

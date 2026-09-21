@@ -9,6 +9,12 @@
 // in domainReputationMock.ts. `scan_failed` wird hier nie geliefert (kein
 // echter Dienst, der fehlschlagen könnte) -- der Enum-Wert existiert im
 // Contract für eine spätere echte Anbindung.
+//
+// [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": nicht mehr
+// die produktiv verdrahtete Implementierung (siehe lookups/index.ts --
+// attachmentScanner zeigt jetzt auf ClamAvAttachmentScanner). Bleibt als
+// leichtgewichtige Referenz/fuer lokale Tests ohne laufenden ClamAV-Daemon
+// erhalten, nicht geloescht.
 
 import type { AttachmentScanner, AttachmentScanResult } from "./types";
 
@@ -27,7 +33,7 @@ function extensionOf(filename: string): string {
 }
 
 export class MockAttachmentScanner implements AttachmentScanner {
-  async scan(input: { filename: string; mimeType: string | null; sizeBytes: number }): Promise<AttachmentScanResult> {
+  async scan(input: { filename: string; mimeType: string | null; sizeBytes: number; buffer: Buffer }): Promise<AttachmentScanResult> {
     // Deterministischer Test-Trigger fuer den "malicious"-Fall (analog zur
     // Botnetz-Beispiel-IP-Liste in ipReputationMock.ts) -- kein echter
     // Signatur-Abgleich, nur ein Name, der in Tests/Demos absichtlich

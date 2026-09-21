@@ -193,6 +193,8 @@ export interface Store {
   /** Trägt nach erfolgreichem Versand die neu entstandene messageId auf die
    * (vorher nur per uploadedByUserId zugeordneten) Anhänge nach. */
   linkAttachmentsToMessage(ids: string[], messageId: string): Promise<void>;
+  /** [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan". */
+  listAttachmentsForMessage(messageId: string): Promise<MessageAttachmentRecord[]>;
 
   // ----- Entwürfe (POST/GET /drafts, PATCH/DELETE /drafts/{id}, WEB_INBOX.md
   // 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags") -----
@@ -757,6 +759,12 @@ export class InMemoryStore implements Store {
     for (const attachment of this.messageAttachments) {
       if (ids.includes(attachment.id)) attachment.messageId = messageId;
     }
+  }
+
+  /** [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": Anhaenge
+   * einer Nachricht fuer GET /messages/:id (siehe mappers.ts). */
+  async listAttachmentsForMessage(messageId: string): Promise<MessageAttachmentRecord[]> {
+    return this.messageAttachments.filter((a) => a.messageId === messageId);
   }
 
   // ----- Entwürfe -----

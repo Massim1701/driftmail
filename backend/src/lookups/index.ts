@@ -5,7 +5,7 @@
 // src/routes/messages.ts) kennen nur die Interfaces aus ./types.
 
 import { store } from "../db/store";
-import { MockAttachmentScanner } from "./attachmentScanMock";
+import { ClamAvAttachmentScanner } from "./attachmentScanClamAv";
 import { MockDomainReputationLookup } from "./domainReputationMock";
 import { StoreIbanHistoryCheck } from "./ibanHistoryCheck";
 import { StoreIbanThreadCheck } from "./ibanThreadCheck";
@@ -25,7 +25,10 @@ export const ipReputationLookup: IpReputationLookup = new MockIpReputationLookup
 export const ibanHistoryCheck: IbanHistoryCheck = new StoreIbanHistoryCheck(store);
 export const ibanThreadCheck: IbanThreadCheck = new StoreIbanThreadCheck(store);
 export const recipientReputationLookup: RecipientReputationLookup = new MockRecipientReputationLookup(store);
-export const attachmentScanner: AttachmentScanner = new MockAttachmentScanner();
+// [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": echter
+// ClamAV-Scan statt der fruehen Dateiendungs-Attrappe, siehe
+// attachmentScanClamAv.ts.
+export const attachmentScanner: AttachmentScanner = new ClamAvAttachmentScanner();
 
 export { extractSendingIp } from "./ipReputationMock";
 export { extractIbanCandidates } from "./ibanHistoryCheck";

@@ -661,7 +661,7 @@ async function main() {
     // unauffällige Datei -> 200, scanStatus 'clean'.
     async function uploadAttachment(
       filename: string,
-      content: string,
+      content: string | Uint8Array,
     ): Promise<{ status: number; attachmentId?: string; scanStatus?: string; containsSensitiveDocument?: string }> {
       const form = new FormData();
       form.append("file", new Blob([content], { type: "text/plain" }), filename);
@@ -699,16 +699,37 @@ async function main() {
     assert(cleanUpload.status === 200, "POST /v1/attachments (unauffällige Datei) sollte 200 liefern");
     assert(cleanUpload.scanStatus === "clean", "unauffällige Datei sollte scanStatus 'clean' liefern");
 
-    // Fall 2: gefährliche Dateiendung -> 'blocked_type' (Dateityp-Prüfung,
-    // siehe attachmentScanMock.ts).
+    // Fall 2: gefährliche Dateiendung -> 'blocked_type' (Endungs-Blockliste,
+    // siehe attachmentScanClamAv.ts -- greift schon vor dem eigentlichen
+    // ClamAV-Aufruf, unabhängig vom Dateiinhalt).
     const blockedTypeUpload = await uploadAttachment("installer.exe", "fake-binary-content");
     assert(blockedTypeUpload.status === 200, "POST /v1/attachments (gefährliche Endung) sollte trotzdem 200 liefern (Scan-Ergebnis im Body, kein HTTP-Fehler)");
     assert(blockedTypeUpload.scanStatus === "blocked_type", "installer.exe sollte scanStatus 'blocked_type' liefern");
 
-    // Fall 3: deterministischer 'malicious'-Test-Trigger (Dateiname enthält
-    // 'virus', siehe attachmentScanMock.ts -- kein echter Signatur-Scan).
-    const maliciousUpload = await uploadAttachment("rechnung-virus.pdf", "content");
-    assert(maliciousUpload.scanStatus === "malicious", "Dateiname mit 'virus' sollte scanStatus 'malicious' liefern");
+    // Fall 3: ECHTER Virenscan (WEB_INBOX.md 21.09. "WICHTIGE LUECKE
+    // ENTDECKT - echter Malware-Scan") -- die offizielle, ungefährliche
+    // EICAR-Test-Signatur, die JEDER echte Virenscanner (inkl. ClamAV) als
+    // "Virus" erkennt. Kein Dateiname-Trigger mehr wie bei der alten
+    // Mock-Implementierung, sondern ein echter Signaturabgleich durch den
+    // laufenden clamd-Daemon.
+    const eicarBytes = new TextEncoder().encode("X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*");
+    const maliciousUpload = await uploadAttachment("rechnung.pdf", eicarBytes);
+    assert(
+      maliciousUpload.scanStatus === "malicious",
+      `EICAR-Test-Datei sollte durch echten ClamAV-Scan als 'malicious' erkannt werden, war '${maliciousUpload.scanStatus}'`,
+    );
+
+    // Fall 3b: Magic-Bytes-Pruefung (Punkt 3 desselben Auftrags) -- eine
+    // als "urlaubsfoto.jpg" getarnte, aber tatsächlich ausführbare Datei
+    // (echter Windows-PE-"MZ"-Header). Weder die Endung noch ClamAV allein
+    // (kein bekanntes Virus-Signaturmuster) würden das fangen -- nur die
+    // Magic-Bytes-Prüfung.
+    const disguisedExeBytes = new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
+    const disguisedUpload = await uploadAttachment("urlaubsfoto.jpg", disguisedExeBytes);
+    assert(
+      disguisedUpload.scanStatus === "blocked_type",
+      `als .jpg getarnte PE-Datei sollte per Magic-Bytes-Pruefung als 'blocked_type' erkannt werden, war '${disguisedUpload.scanStatus}'`,
+    );
 
     // Fall 4: kein Datei-Feld -> 400 (Edge Case).
     const noFileRes = await fetch(`${base}/v1/attachments`, { method: "POST", body: new FormData() });
@@ -1019,6 +1040,21 @@ async function main() {
       "ohne ermittelbare IP in den Headern sollte ipReputationFlag weiterhin 'unknown' sein, nie geraten",
     );
 
+    // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan", Punkt 2
+    // ("NEU (Empfangen)"): Fixture 4 hat einen EICAR-Test-Anhang bei einem
+    // sonst voellig vertrauenswuerdigen Absender (siehe fixtureAdapter.ts) --
+    // muss echt als 'malicious' erkannt werden, UND die Mail selbst darf
+    // trotzdem ganz normal sichtbar sein (kein Auto-Delete wie bei
+    // spam/gambling -- ein legitimer Absender koennte versehentlich einen
+    // infizierten Anhang mitschicken).
+    const fixture4Attachments = fixture4Detail.attachments as Array<Record<string, unknown>>;
+    assert(fixture4Attachments.length === 1, "Fixture 4 sollte genau einen (gescannten) Anhang haben");
+    assert(
+      fixture4Attachments[0]!.scanStatus === "malicious",
+      `eingehender EICAR-Anhang sollte scanStatus 'malicious' liefern, war '${fixture4Attachments[0]!.scanStatus}'`,
+    );
+    assert(fixture4Detail.subject !== undefined, "Mail mit infiziertem Anhang bleibt trotzdem normal sichtbar (kein Auto-Delete)");
+
     // Track A + Track B Integration (09.09., WEB_INBOX.md "Track A + Track B
     // Integration"): Fixture 6 beweist, dass analyzeMail() jetzt echte
     // Track-B-Logik läuft, nicht mehr den alten Mock -- Homoglyph-Erkennung
@@ -1143,6 +1179,16 @@ async function main() {
     assert(
       fixture9Security.ibanChangedInThread === true,
       "Fixture 9 (andere IBAN als Fixture 8, selber Thread) sollte ibanChangedInThread=true liefern",
+    );
+
+    // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan", Punkt 3
+    // ("Magic-Bytes-Pruefung"): Fixture 9 hat einen als "rechnung.pdf"
+    // getarnten, aber tatsaechlich ausfuehrbaren Anhang (echter PE-Header).
+    const fixture9Attachments = fixture9Detail.attachments as Array<Record<string, unknown>>;
+    assert(fixture9Attachments.length === 1, "Fixture 9 sollte genau einen (gescannten) Anhang haben");
+    assert(
+      fixture9Attachments[0]!.scanStatus === "blocked_type",
+      `als PDF getarnter eingehender PE-Anhang sollte per Magic-Bytes-Pruefung als 'blocked_type' erkannt werden, war '${fixture9Attachments[0]!.scanStatus}'`,
     );
 
     // 4) Recipient-Reputation-Lookup über POST /messages/draft/phishing-check
@@ -1902,7 +1948,7 @@ async function main() {
     // Massimo müsste den kompletten Weg einmal mit einem echten GMX-/
     // web.de-/iCloud-Konto gegentesten.
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent -> Nudge -> Vertraulicher Modus) end-to-end grün.");
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent -> Nudge -> Vertraulicher Modus -> Echter Malware-Scan) end-to-end grün.");
   } finally {
     server.close();
     // Ohne das haelt der tesseract.js-Worker (worker_threads) den Prozess

@@ -45,6 +45,7 @@ const FIXTURES: FetchedMail[] = [
       "Content-Type": "text/plain",
       "X-Originating-IP": "[203.0.113.10]",
     },
+    attachments: [],
   },
   {
     messageIdHeader: "<fixture-2@sicherheit-konto-check.tk>",
@@ -80,6 +81,7 @@ const FIXTURES: FetchedMail[] = [
       "List-Unsubscribe": "<mailto:fake-unsubscribe@sicherheit-konto-check.tk>",
       Received: "from unknown (unknown [185.220.101.7]) by mx.example.com",
     },
+    attachments: [],
   },
   {
     messageIdHeader: "<fixture-3@newsletter-deals.example>",
@@ -108,6 +110,7 @@ const FIXTURES: FetchedMail[] = [
       "Content-Type": "text/plain",
       "Received-SPF": "fail",
     },
+    attachments: [],
   },
   {
     messageIdHeader: "<fixture-4@kollegin.example.com>",
@@ -119,6 +122,23 @@ const FIXTURES: FetchedMail[] = [
     bodyText: "Hi, anbei das Update zum Projekt. Bitte antworten bis Freitag mit deinem Feedback. Danke!",
     receivedAt: daysAgo(0),
     rawHeaders: { From: "Anna Kollegin <kollegin@example.com>", "Received-SPF": "pass", "Content-Type": "text/plain" },
+    // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan":
+    // absichtlich EIN infizierter Anhang bei einem sonst voellig
+    // unauffaelligen, vertrauenswuerdigen Absender -- genau der im Auftrag
+    // beschriebene Fall ("koennte z.B. ein legitimer Absender mit einem
+    // versehentlich infizierten Anhang sein"), der Auslöser dafür, dass
+    // eine als malicious erkannte eingehende Mail NICHT automatisch
+    // verworfen wird (anders als beim spam/gambling-Auto-Delete-Pfad),
+    // sondern sichtbar bleibt und nur der Anhang selbst gesperrt wird.
+    // EICAR-Test-Signatur (offizieller, ungefaehrlicher AV-Test-String,
+    // von jedem echten Virenscanner inkl. ClamAV als "Virus" erkannt).
+    attachments: [
+      {
+        filename: "projektplan.txt",
+        mimeType: "text/plain",
+        content: Buffer.from("X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"),
+      },
+    ],
   },
   {
     // Auto-Delete-Pfad (WEB_INBOX.md 08.09.): eindeutiger Glücksspiel-Spam
@@ -153,6 +173,7 @@ const FIXTURES: FetchedMail[] = [
       "Received-SPF": "pass",
       "List-Unsubscribe": "<https://casino-bonus-express.example/unsubscribe?id=42>",
     },
+    attachments: [],
   },
   {
     // integration (09.09.): demonstriert echte (nicht Mock-)Klassifikation
@@ -183,6 +204,7 @@ const FIXTURES: FetchedMail[] = [
       "Received-SPF": "none",
       "Content-Type": "text/plain",
     },
+    attachments: [],
   },
   {
     // Auto-Delete-Pfad (WEB_INBOX.md 15.09., "Neue Auto-Loesch-Kategorie:
@@ -209,6 +231,7 @@ const FIXTURES: FetchedMail[] = [
       "Content-Type": "text/plain",
       "Received-SPF": "pass",
     },
+    attachments: [],
   },
   {
     // IBAN-Wechsel im selben Thread (WEB_INBOX.md 15.09., "6 Sicherheits-
@@ -233,6 +256,7 @@ const FIXTURES: FetchedMail[] = [
       "Received-SPF": "pass",
       "Content-Type": "text/plain",
     },
+    attachments: [],
   },
   {
     // Thread-Antwort auf Fixture 8 (siehe "In-Reply-To") mit einer ANDEREN
@@ -258,6 +282,18 @@ const FIXTURES: FetchedMail[] = [
       "Received-SPF": "pass",
       "Content-Type": "text/plain",
     },
+    // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan", Punkt 3
+    // ("Magic-Bytes-Pruefung"): eine als "rechnung.pdf" getarnte, aber
+    // tatsaechlich ausfuehrbare Datei (echter PE-"MZ"-Header) -- der
+    // klassische Verschleierungstrick, den die reine Endungs-/ClamAV-Pruefung
+    // allein nicht zuverlaessig faengt, siehe magicBytes.ts.
+    attachments: [
+      {
+        filename: "rechnung.pdf",
+        mimeType: "application/pdf",
+        content: Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]),
+      },
+    ],
   },
 ];
 

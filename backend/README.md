@@ -236,12 +236,16 @@ curl -X POST http://localhost:3000/v1/capability-check \
   Abschnitt "Versand" unten für Grenzen (Link-Extraktion aus reinem Text,
   SMTP-Host-Fallback bei generischem IMAP).
 - **Anhang-Upload/Scan** (neu, `POST /attachments`, `src/routes/
-  attachments.ts` + `AttachmentScanner`): echte Dateityp-/Endungsprüfung
+  attachments.ts` + `AttachmentScanner`): ~~echte Dateityp-/Endungsprüfung
   (`attachmentScanMock.ts`), kein echter Virenscan-Dienst — Mock, analog zu
-  den externen Lookup-Adaptern. Dateiinhalt wird nicht gespeichert (keine
-  `content`-Spalte im Contract), deshalb wird ein geprüfter Anhang aktuell
-  auch nicht tatsächlich in die ausgehende Mail eingebettet. Siehe eigener
-  Abschnitt "Anhänge" unten.
+  den externen Lookup-Adaptern~~. **Nachgezogen (Terminal 21.09., "WICHTIGE
+  LUECKE ENTDECKT - echter Malware-Scan"):** siehe Abschnitt "Malware-Scan
+  (echt, ClamAV)" unten — echter ClamAV-Scan + Magic-Bytes-Prüfung, jetzt
+  auch für EINGEHENDE Anhänge, nicht mehr nur beim Senden. Dateiinhalt wird
+  weiterhin nicht dauerhaft gespeichert (keine `content`-Spalte im
+  Contract), deshalb wird ein geprüfter Anhang weiterhin nicht tatsächlich
+  in die ausgehende Mail eingebettet. Siehe eigener Abschnitt "Anhänge"
+  unten.
 - **Entwürfe** (neu, `GET`/`POST /drafts`, `PATCH`/`DELETE
   /drafts/{draftId}`, `src/routes/drafts.ts`): echte CRUD-Persistenz
   (eigene `drafts`-Tabelle), Endpunkte selbst sind Contract-vollständig und
@@ -934,31 +938,32 @@ Bestand, der eine echte Migration bräuchte).
    haben (sonst 422, `blocked: true` + `reason` mit Dateiname/Status) —
    geprüft NACH dem Phishing-Check, VOR dem eigentlichen Provider-Send-Call.
 
-**Scan-Logik (`src/lookups/attachmentScanMock.ts`):** wie bei den externen
-Lookups ein austauschbares `AttachmentScanner`-Interface
-(`src/lookups/types.ts`) + eine bewusst simple Mock-Implementierung — KEIN
-echter Virenscan (kein ClamAV-/VirusTotal-Aufruf). Prüft nur die
-Dateiendung gegen eine Beispielliste ausführbarer/makrofähiger Typen (`.exe`,
-`.bat`, `.js`, `.docm`, …) → `blocked_type`; ein Dateiname, der
-`virus`/`malware` enthält, ist ein deterministischer Test-Trigger für
-`malicious` (analog zur Botnetz-Beispiel-IP-Liste in `ipReputationMock.ts`);
-alles andere → `clean`. `scan_failed` wird vom Mock nie geliefert (kein
-echter Dienst, der fehlschlagen könnte) — der Enum-Wert existiert im
-Contract für eine spätere echte Anbindung.
+**Scan-Logik:** austauschbares `AttachmentScanner`-Interface
+(`src/lookups/types.ts`), produktiv verdrahtet mit
+`src/lookups/attachmentScanClamAv.ts` (echter ClamAV-Scan + Magic-Bytes-
+Prüfung, siehe Abschnitt "Malware-Scan (echt, ClamAV)" weiter unten für
+die vollen Details). ~~KEIN echter Virenscan (kein ClamAV-/VirusTotal-
+Aufruf) — reine Dateiendungs-/Dateiname-Heuristik~~ **Nachgezogen (Terminal
+21.09.).** Die frühere Mock-Implementierung (`attachmentScanMock.ts`,
+reine Dateiendungs-Blockliste + deterministischer `virus`/`malware`-
+Dateiname-Trigger) bleibt als Referenz/für Tests ohne laufenden
+ClamAV-Daemon im Repo, ist aber nicht mehr produktiv verdrahtet.
 
 **Eine bewusste, dokumentierte Grenze dieses Schritts (kein Blocker, aber
 nicht stillschweigend als "fertig" markiert):**
 
-**Der Dateiinhalt selbst wird nicht gespeichert.** `message_attachments`
-hat laut Contract keine `content`-Spalte (eine echte Implementierung
-würde Objektspeicher wie S3 nutzen, kein DB-Feld) — der Scan läuft daher
-nur gegen Metadaten (Dateiname/MIME-Typ/Größe), nicht gegen den
-tatsächlichen Byte-Inhalt. Folge: `POST /messages/send` bettet geprüfte
-Anhänge aktuell **nicht tatsächlich** in die ausgehende Mail ein (die
-Bytes sind nach dem Upload-Request nicht mehr vorhanden) — der Endpunkt
-stellt nur sicher, dass kein ungeprüfter/gefährlicher Anhang "mitgeschickt"
-werden darf. Echte Speicherung + MIME-Einbettung beim Versand ist ein
-späterer Schritt.
+**Der Dateiinhalt selbst wird nicht dauerhaft gespeichert.**
+`message_attachments` hat laut Contract keine `content`-Spalte (eine
+echte Implementierung würde Objektspeicher wie S3 nutzen, kein DB-Feld).
+[2026-09-21] **Nachgezogen:** der Scan selbst läuft inzwischen echt gegen
+die tatsächlichen Bytes (`multer`-Memory-Storage hält den Upload während
+des Requests, siehe Abschnitt "Malware-Scan (echt, ClamAV)") — nur *nach*
+dem Scan werden die Bytes nicht weiter aufgehoben. Folge weiterhin
+unverändert: `POST /messages/send` bettet geprüfte Anhänge aktuell
+**nicht tatsächlich** in die ausgehende Mail ein (die Bytes sind nach dem
+Upload-Request nicht mehr vorhanden) — der Endpunkt stellt nur sicher,
+dass kein ungeprüfter/gefährlicher Anhang "mitgeschickt" werden darf.
+Echte Speicherung + MIME-Einbettung beim Versand ist ein späterer Schritt.
 
 **[2026-09-10] Nachgezogen (Ordner-Umbau, WEB_INBOX.md 09.09.):**
 `store.linkAttachmentsToMessage()` wird jetzt tatsächlich aufgerufen —
@@ -2179,6 +2184,112 @@ testet, nicht nur gegen den bequemeren In-Memory-Fallback.
 komplett client-seitig, Punkt 2 dezenter Listen-Hinweis + Einstellungs-
 Schalter, Punkt 3 Compose-Option + automatischer Vorschlag bei erkannten
 sensiblen Daten + Anzeige des Ablaufzustands in der Detailansicht).
+
+## Malware-Scan (echt, ClamAV) -- [2026-09-21] Nachtrag
+(WEB_INBOX.md 21.09. "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan")
+
+**Vorgefundene Luecke:** Anhang-Scan existierte bisher NUR beim SENDEN
+(`POST /attachments`), und selbst dort war es laut eigener Dokumentation
+nur ein Mock (`attachmentScanMock.ts`: Dateiendungs-Blockliste + ein
+deterministischer Dateiname-Trigger fuer "malicious", kein echter
+Signatur-Abgleich). Fuer EINGEHENDE Mail-Anhaenge gab es ueberhaupt
+keinen Scan -- eine Mail mit boesartigem Anhang landete komplett ungeprueft
+im Postfach.
+
+**Drei Ebenen, wie im Auftrag verlangt** (`lookups/attachmentScanClamAv.ts`,
+jetzt die produktiv verdrahtete `AttachmentScanner`-Implementierung statt
+des Mocks, siehe `lookups/index.ts`):
+1. Dateiendungs-Blockliste (aus `attachmentScanMock.ts` uebernommen --
+   ausfuehrbare/Makro-faehige Typen werden unabhaengig vom Inhalt geblockt).
+2. Magic-Bytes-Pruefung (`lookups/magicBytes.ts`): erkennt eine als
+   harmlos (z.B. `.jpg`/`.pdf`) getarnte, aber tatsaechlich ausfuehrbare
+   Datei (PE/ELF/Mach-O-Header oder Shell-Skript-Shebang in den ersten
+   Bytes) -- der klassische Umbenennungs-Trick. Bewusst kein npm-Paket wie
+   `file-type` (reines ESM, wuerde in diesem CommonJS-Backend nur per
+   dynamischem `import()` gehen) -- fuer die paar sicherheitsrelevanten
+   Signaturen reicht eine kleine, selbst gepflegte Liste.
+3. Echter ClamAV-Signaturabgleich ueber einen lokalen `clamd`-Daemon (per
+   `clamscan`-npm-Package, Unix-Socket oder TCP), inklusive laufender
+   Virendefinitionen (`freshclam`).
+
+**Beide Richtungen** (wie im Auftrag "Bestehend (Senden)" + "NEU
+(Empfangen)"):
+- **Senden** (`routes/attachments.ts`): `multer` haelt den Upload ohnehin
+  im Speicher (`file.buffer`) -- der Scan bekommt jetzt echte Bytes statt
+  nur Metadaten (Dateiname/MIME-Typ/Groesse wie zuvor).
+- **Empfangen** (neu, `mail/incomingAttachments.ts`): jeder Mail-Adapter
+  liefert Anhaenge jetzt mit (`FetchedMail.attachments`, neues Feld in
+  `mail/types.ts`) -- `imapAdapter.ts` bekommt sie direkt von `mailparser`
+  fertig geparst mit, `gmailAdapter.ts` braucht dafuer einen zusaetzlichen
+  `users.messages.attachments.get`-Aufruf pro Anhang (Gmail liefert bei
+  `format=full` nur eine `attachmentId`-Referenz, nicht die Bytes selbst).
+  `mail/sync.ts` scannt jeden Anhang direkt nach dem Import der Nachricht,
+  unabhaengig von deren Spam/Phishing-Klassifikation.
+
+**Wichtige Verhaltens-Entscheidung:** ein als `malicious` erkannter
+eingehender Anhang loescht NICHT automatisch die ganze Mail (anders als
+der bestehende spam/gambling-Auto-Delete-Pfad) -- ein legitimer Absender
+koennte versehentlich einen infizierten Anhang mitschicken, der User soll
+die Mail selbst trotzdem sehen koennen. Nur der Anhang selbst bleibt
+gesperrt: `GET /messages/{id}` liefert jetzt ein neues
+`attachments`-Array (`MessageAttachment`-Schema, api-spec.yaml) mit
+`scanStatus` je Anhang, die Client-UI darf einen nicht-`clean` Anhang
+nicht zum Oeffnen/Herunterladen anbieten.
+
+**Ehrlicher Umgang mit einem nicht erreichbaren ClamAV-Daemon:** schlaegt
+die Verbindung zu `clamd` fehl, faellt der Scanner NICHT stillschweigend
+auf "clean" zurueck (anders als z.B. der KI-Adapter, wo ein Fallback auf
+eine schwaechere Heuristik bei einem reinen Komfort-Feature vertretbar
+ist) -- bei einem Sicherheits-Scanner waere das grob irrefuehrend.
+Stattdessen liefert er den dafuer bereits im Contract vorgesehenen Wert
+`scan_failed`: `POST /messages/send` lehnt das wie jeden Nicht-`clean`-
+Status mit 422 ab, ein eingehender Anhang mit `scan_failed` wird in der
+API-Antwort wie `malicious` behandelt (nicht oeffenbar). Echt
+gegengetestet: `clamd` waehrend der Entwicklung kurz beendet, Scan-Aufruf
+liefert nachweislich `scan_failed` (nicht `clean`), danach `clamd` wieder
+gestartet und erneut gruen verifiziert.
+
+### Lokales Setup (macOS, Homebrew)
+
+```bash
+brew install clamav
+
+# Freshclam (Virendefinitionen) -- einmalig konfigurieren + laden:
+cp /opt/homebrew/etc/clamav/freshclam.conf.sample /opt/homebrew/etc/clamav/freshclam.conf
+# "Example"-Zeile am Anfang der Datei entfernen/auskommentieren, dann:
+/opt/homebrew/opt/clamav/bin/freshclam --config-file=/opt/homebrew/etc/clamav/freshclam.conf
+
+# clamd (Scan-Daemon) -- einmalig konfigurieren:
+cp /opt/homebrew/etc/clamav/clamd.conf.sample /opt/homebrew/etc/clamav/clamd.conf
+# "Example"-Zeile entfernen, dann LocalSocket (z.B. /tmp/clamd.sock) +
+# DatabaseDirectory ergaenzen, siehe die Kommentare in clamd.conf.sample.
+
+# Starten:
+/opt/homebrew/opt/clamav/sbin/clamd --config-file=/opt/homebrew/etc/clamav/clamd.conf --foreground=false
+```
+
+Ohne laufenden `clamd` liefert JEDER Scan `scan_failed` (siehe oben) --
+`POST /messages/send` mit einem Anhang schlaegt dann immer mit 422 fehl,
+und der Smoketest scheitert an den EICAR-/Magic-Bytes-Testfaellen (siehe
+unten). Ein laufender `clamd` ist damit fuer `npm test` PFLICHT, anders
+als `DATABASE_URL` (die dort weiterhin optional bleibt, In-Memory-
+Fallback).
+
+**Tests:** `smoketest.ts` deckt beide Richtungen ab:
+- Senden: eine unauffaellige Datei (`clean`), eine gefaehrliche Endung
+  (`blocked_type`), die echte EICAR-Test-Signatur (offizieller,
+  ungefaehrlicher AV-Test-String, von jedem echten Scanner inkl. ClamAV
+  als Virus erkannt -> `malicious`), eine als `.jpg` getarnte Datei mit
+  echtem PE-Header (`blocked_type` per Magic-Bytes).
+- Empfangen: Fixture 4 (`fixtureAdapter.ts`, sonst ein voellig
+  unauffaelliger, vertrauenswuerdiger Absender) hat jetzt einen echten
+  EICAR-Anhang -- muss als `malicious` erkannt werden, UND die Mail selbst
+  bleibt normal sichtbar (kein Auto-Delete). Fixture 9 (IBAN-Wechsel-im-
+  Thread-Testfall) hat einen als PDF getarnten PE-Anhang -> `blocked_type`.
+
+Gruen in-memory + gegen frisches Postgres (kein Migrations-Bedarf --
+`message_attachments` existierte als Tabelle bereits, nur ohne bisherigen
+Konsumenten fuer den Empfangen-Fall).
 
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 

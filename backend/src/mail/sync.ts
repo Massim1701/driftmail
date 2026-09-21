@@ -17,6 +17,7 @@ import { ImapAdapter, type ImapCredentials } from "./imapAdapter";
 import { parseInReplyToHeader } from "./inReplyTo";
 import { parseListUnsubscribeHeader, performUnsubscribe } from "./listUnsubscribe";
 import { maybeSendAbsenceResponse } from "./absenceResponder";
+import { scanAndStoreIncomingAttachments } from "./incomingAttachments";
 import { store } from "../db/store";
 import type { AiAdapter } from "../ai/types";
 import {
@@ -289,6 +290,14 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         ...security,
         analyzedAt: new Date().toISOString(),
       });
+
+      // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan":
+      // Anhaenge dieser Mail scannen, BEVOR sie im Client sicht-/oeffenbar
+      // ist -- unabhaengig von der Spam/Phishing-Klassifikation, auch eine
+      // legitime Mail kann einen infizierten Anhang haben.
+      if (mail.attachments.length > 0) {
+        await scanAndStoreIncomingAttachments(message.id, mail.attachments);
+      }
 
       if (security.classification === "phishing") {
         await store.quarantineMessage(message.id, "Automatisch: Phishing-Klassifikation (Mock-KI)");

@@ -348,15 +348,16 @@ messagesRouter.get("/messages/:messageId", async (req, res) => {
   if (!owned) return;
   const { message } = owned;
 
-  const [security, quarantine, hasOtherMessage, nudgeFolders, user] = await Promise.all([
+  const [security, quarantine, hasOtherMessage, nudgeFolders, user, attachments] = await Promise.all([
     store.getMessageSecurity(message.id),
     store.getQuarantineForMessage(message.id),
     store.hasOtherMessageFromAddress(message.mailAccountId, message.fromAddress, message.id),
     loadNudgeFolderContext(message.mailAccountId),
     store.getUserById(req.userId),
+    store.listAttachmentsForMessage(message.id),
   ]);
   const awaitingReply = await computeAwaitingReply(message, security, user?.nudgeUnansweredEnabled ?? true, nudgeFolders);
-  res.json(toApiMessageDetail(message, security, quarantine, !hasOtherMessage, awaitingReply));
+  res.json(toApiMessageDetail(message, security, quarantine, !hasOtherMessage, awaitingReply, attachments));
 });
 
 // POST /messages/:messageId/quarantine — siehe api-spec.yaml

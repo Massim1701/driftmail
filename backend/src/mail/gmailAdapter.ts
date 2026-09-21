@@ -6,7 +6,7 @@
 // (src/mail/sync.ts fällt dann auf den Fixture-Adapter zurück).
 
 import { google } from "googleapis";
-import type { FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
+import type { FetchedAttachment, FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
 
 export interface GmailCredentials {
   clientId: string;
@@ -35,6 +35,29 @@ function extractPlainTextBody(payload: any): string | null {
 function headerValue(headers: Array<{ name: string; value: string }>, name: string): string | null {
   const h = headers.find((x) => x.name.toLowerCase() === name.toLowerCase());
   return h ? h.value : null;
+}
+
+// [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": ein Anhang
+// ist ein `parts`-Eintrag mit gesetztem `filename` -- anders als der reine
+// Textkoerper (extractPlainTextBody oben) traegt Gmail den eigentlichen
+// Byte-Inhalt bei "full"-Format NICHT direkt im payload, sondern nur eine
+// `body.attachmentId`-Referenz, die separat per `attachments.get`
+// nachgeladen werden muss (siehe fetchAttachmentParts unten).
+interface GmailAttachmentPart {
+  filename: string;
+  mimeType: string | null;
+  attachmentId: string;
+}
+
+function collectAttachmentParts(payload: any, out: GmailAttachmentPart[] = []): GmailAttachmentPart[] {
+  if (!payload) return out;
+  if (payload.filename && payload.body?.attachmentId) {
+    out.push({ filename: payload.filename, mimeType: payload.mimeType || null, attachmentId: payload.body.attachmentId });
+  }
+  if (Array.isArray(payload.parts)) {
+    for (const part of payload.parts) collectAttachmentParts(part, out);
+  }
+  return out;
 }
 
 export class GmailAdapter implements MailAdapter {
@@ -66,6 +89,27 @@ export class GmailAdapter implements MailAdapter {
       const fromRaw = headerValue(headers, "From") ?? "";
       const fromMatch = fromRaw.match(/^(.*?)\s*<(.+)>$/);
 
+      // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": jeder
+      // Anhang braucht einen eigenen API-Aufruf fuer die Bytes -- nacheinander
+      // statt Promise.all, um bei vielen Anhaengen nicht das Gmail-API-
+      // Rate-Limit fuer dieses Konto zu sprengen (gleiches Vorsichtsprinzip
+      // wie beim seriellen Nachrichten-Loop hier oben).
+      const attachmentParts = collectAttachmentParts(payload);
+      const attachments: FetchedAttachment[] = [];
+      for (const part of attachmentParts) {
+        const attachmentData = await this.client.users.messages.attachments.get({
+          userId: "me",
+          messageId: id,
+          id: part.attachmentId,
+        });
+        if (!attachmentData.data.data) continue;
+        attachments.push({
+          filename: part.filename,
+          mimeType: part.mimeType,
+          content: Buffer.from(attachmentData.data.data, "base64url"),
+        });
+      }
+
       results.push({
         messageIdHeader: headerValue(headers, "Message-ID") ?? id,
         providerMessageId: id,
@@ -78,6 +122,7 @@ export class GmailAdapter implements MailAdapter {
           ? new Date(Number(full.data.internalDate)).toISOString()
           : new Date().toISOString(),
         rawHeaders,
+        attachments,
       });
     }
     return results;
