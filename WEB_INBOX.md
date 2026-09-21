@@ -861,3 +861,12 @@ Kein einziger Treffer fuer cc/bcc im gesamten Code/Contract. Aktuell vermutlich 
 - design-tokens.json um die 5 Presets ergaenzen, CSS-Variable fuer Akzentfarbe (z.B. --accent-user) wird je nach Auswahl gesetzt, alle bestehenden Akzent-Verwendungen (Buttons, aktiver Ordner, Links) darauf umstellen statt fest verdrahteter Farbe.
 
 Kein Contract-Bruch (additive Erweiterung von design-tokens.json + ein neues User-Praeferenz-Feld). Bitte zusammen mit der Design-Richtung von eben einordnen (nach den Grundfunktions-Luecken, vor den 5 Wettbewerbs-Features) -- kleine Ergaenzung, kein Blocker.
+
+
+[2026-09-21] [offen] [JETZT LOSBAUEN - alles entschieden, kein Warten mehr] [alle Tracks] — Massimo: bitte JETZT direkt anfangen, ohne weitere Rueckfrage. Alles Noetige ist entschieden und dokumentiert. Feste Reihenfolge:
+
+1. Grundfunktionen (hoechste Prioritaet, siehe Eintraege von heute): automatischer+manueller Mail-Abruf, echte Mehrfach-Konten-Unterstuetzung, Compose-Button mit Absender-Auswahl, Weiterleiten, Suche, CC/BCC.
+2. Waehrend/danach die UI dieser Funktionen direkt im neuen Design bauen (Superhuman-Referenz, siehe "DESIGN-RICHTUNG" Eintrag): schmale Sidebar, kompakte Listenzeilen, EIN Akzent fuer Sicherheits-Badges, sichtbarer Neue-Nachricht-Button, plus die 5 waehlbaren Akzentfarben-Themes.
+3. Danach die 5 Wettbewerbs-Features (Tracking-Pixel, Undo-Send, Darkweb-Monitoring, Schedule-Send, Snooze) und der Malware-Scan-Auftrag (ClamAV, beide Richtungen).
+
+Keine weitere Design- oder Prioritaets-Rueckfrage mehr noetig -- alle offenen Entscheidungen sind getroffen. Bitte durcharbeiten und wie gewohnt in SYNC.md/TERMINAL_INBOX.md dokumentieren.
