@@ -800,3 +800,16 @@ Track C (iOS) laeuft parallel in einer eigenen Session, hier nicht angefasst.
 **Weitergabe an Track A:** Web hat einen echten CORS-Bug im Backend gefunden (`backend/src/middleware/cors.ts` fehlt `PUT` in `Access-Control-Allow-Methods`, `PUT /ai-settings` schlaegt deshalb aus einem echten Browser fehl, obwohl der Smoketest gruen ist -- Node-`fetch()` im Smoketest umgeht CORS-Preflight komplett). Bewusst nicht selbst gefixt (iOS-Track-Scope), siehe voriger Eintrag.
 
 Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
+
+
+[2026-09-21] [terminal] [A/C/F] — WEB_INBOX.md 21.09. "LUECKE SCHLIESSEN - echter Abmelde-Aufruf" behoben (Commit `63c1c0b`). Massimo hatte nachgefragt, ob die automatische Spam-Abmeldung wirklich funktioniert -- Antwort: nein, bisher rein syntaktisches Header-Parsing, status wurde blind auf 'confirmed' gesetzt bzw. blieb beim manuellen Pfad dauerhaft auf 'pending_confirmation' haengen, OHNE dass je eine Mail verschickt oder eine URL aufgerufen wurde.
+
+**Jetzt echt:** `performUnsubscribe()` (`backend/src/mail/listUnsubscribe.ts`) fuehrt den tatsaechlichen Aufruf aus -- `mailto:` ueber den bestehenden Provider-Sende-Mechanismus (intern, nicht ueber den oeffentlichen Send-Endpunkt), `https:` per echtem HTTP-Request (POST mit `List-Unsubscribe=One-Click`, wenn `List-Unsubscribe-Post` vorhanden ist, sonst GET). Sicherheitsbewusst umgesetzt wie im Auftrag verlangt: 8s-Timeout, max. 3 Redirect-Hops, kein automatisches Folgen von Redirects auf eine andere Domain als die Ursprungs-URL. Beide Pfade (automatisch bei Spam UND der manuelle `POST /messages/{id}/unsubscribe`-Endpunkt) nutzen jetzt dieselbe Funktion und liefern `status: 'confirmed'|'failed'` -- der bisherige `'pending_confirmation'`-Endzustand beim manuellen Pfad ist weg (war ein dauerhafter Zustand ohne je folgenden Schritt, die eigentliche Luecke).
+
+**Migration noetig, anders als bei anderen kuerzlich ungenutzten Tabellen:** `unsubscribe_actions` war schon von echtem Code beschrieben, eine reine `CREATE TABLE IF NOT EXISTS`-Aenderung haette auf einer bestehenden DB nicht gewirkt -- echte `ALTER TABLE`-Migration in `postgresStore.ts` (`migrateUnsubscribeActionsStatusCheck()`) ergaenzt, manuell gegen eine simulierte Alt-Schema-DB verifiziert (alte 3-Wert- auf neue 4-Wert-CHECK-Constraint).
+
+**Web + iOS klein mitgezogen:** `UnsubscribeStatus` verliert `pending_confirmation`/`rejected`, bekommt `failed`. Dabei einen echten, bisher unbemerkten Bug in beiden Clients gefunden: der bisherige Zwei-Werte-Ternary (`status === 'pending_confirmation' ? ... : "Abgemeldet"`) haette einen kuenftigen dritten Statuswert faelschlich als "Abgemeldet" angezeigt statt als Fehler -- jetzt korrekt mit "Erneut versuchen"-Button bei `failed`.
+
+**Tests:** `smoketest.ts` nutzt die vorhandenen Fixtures, um echtes Verhalten zu beweisen: Fixture 3s `mailto:`-Ziel laeuft ueber den `FixtureMailAdapter` (simuliert immer Erfolg) -> `confirmed`. Fixture 5s `https:`-Ziel zeigt auf eine frei erfundene, nicht aufloesbare Test-Domain -- der jetzt echte HTTP-Aufruf schlaegt zwangslaeufig fehl (DNS-Fehler) -> `failed`, der Beweis, dass hier wirklich ein Netzwerk-Request passiert. Gruen in-memory + gegen frisches Postgres. iOS `xcodebuild` BUILD SUCCEEDED, Web `tsc -b`/`vite build` gruen.
+
+**Kein Blocker, keine offene Frage.**

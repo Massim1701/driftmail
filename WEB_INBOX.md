@@ -962,7 +962,7 @@ KEINE automatische Antwort an Absender, die als spam/phishing/advance_fee_scam k
 Kein Contract-Bruch (additive neue Tabelle/Erweiterung). Bitte nach dem aktuellen Testen und den bereits laufenden Auftraegen (Einstellungsbereich, 5 Komfort-Features) einordnen, kein Blocker.
 
 
-[2026-09-21] [offen] [LUECKE SCHLIESSEN - echter Abmelde-Aufruf] [backend/src/mail/listUnsubscribe.ts + Track A] [hohe Prioritaet, echte Funktionslücke] — Massimo hat nachgefragt, ob die automatische Spam-Abmeldung wirklich funktioniert. Geprueft: NEIN, nicht vollstaendig -- bisher wird der List-Unsubscribe-Header nur SYNTAKTISCH geparst und status='confirmed' gesetzt, es findet aber KEIN echter Netzwerk-Aufruf/Mail-Versand an die im Header angegebene Adresse statt (bewusst dokumentierte Grenze, jetzt nachzuziehen).
+[2026-09-21] [erledigt: 63c1c0b] [LUECKE SCHLIESSEN - echter Abmelde-Aufruf] [backend/src/mail/listUnsubscribe.ts + Track A] [hohe Prioritaet, echte Funktionslücke] — Massimo hat nachgefragt, ob die automatische Spam-Abmeldung wirklich funktioniert. Geprueft: NEIN, nicht vollstaendig -- bisher wird der List-Unsubscribe-Header nur SYNTAKTISCH geparst und status='confirmed' gesetzt, es findet aber KEIN echter Netzwerk-Aufruf/Mail-Versand an die im Header angegebene Adresse statt (bewusst dokumentierte Grenze, jetzt nachzuziehen).
 
 **Bitte den echten Aufruf ergaenzen:**
 - Bei mailto:-URI im Header: eine leere (oder mit "unsubscribe" als Betreff) Mail an die angegebene Adresse ueber den bestehenden Sende-Mechanismus (POST /messages/send-Pfad intern nutzen, nicht ueber die UI) verschicken.
