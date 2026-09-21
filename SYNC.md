@@ -19,7 +19,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | C — iOS App | ios/ | fertig | 2026-09-19 |
 | D — Vertrag & Reminder | contracts-logic/ | fertig | 2026-09-08 |
 | E — Antwort & Signatur | mail-actions/ | fertig | 2026-09-09 |
-| F — Web-Fallback-UI | web/ | fertig | 2026-09-08 |
+| F — Web-Fallback-UI | web/ | fertig | 2026-09-21 |
 
 Status-Werte: offen · in arbeit · fertig · blockiert
 
@@ -661,3 +661,20 @@ Antwort: KEIN dedizierter lokaler On-Device-Cache fuer jetzt. Begruendung: Die N
 Punkt 6 damit als eigener Auftrag GESCHLOSSEN (kein Cache = keine Verschluesselung noetig). Wandert als Idee in IDEEN_BACKLOG.md fuer spaeter, falls Offline-Faehigkeit mal Thema wird.
 
 Naechste Schritte (siehe auch WEB_INBOX.md): Track C/F UI-Arbeit fuer alle drei Themen -- Onboarding-Provider-Auswahl + IMAP-Formular, UI-Kennzeichen/Badges fuer die 6 neuen Sicherheitssignale (Anzeigename-Spoofing, Reply-To-Mismatch, IBAN-Wechsel, Erster-Kontakt, plus die bereits bestehenden Quarantaene-/Sprechblasen-Warnungen). Outlook/Yahoo-OAuth bleibt gewartet, bis Massimo die jeweiligen Provider-Projekte einrichtet.
+
+
+[2026-09-21] [terminal] [F] — WEB_INBOX.md 19.09. "PRIORITAET - naechster Schritt", Web-Teil aller 3 Punkte umgesetzt (Commit `b273990` auf `main`), Track C/iOS steht noch aus.
+
+1. **Onboarding-Provider-Auswahl**: `OnboardingScreen.tsx` ersetzt das bisherige `LoginScreen.tsx` (war Gmail-only) als `!token`-Einstiegspunkt in `App.tsx`. Karten-Grid aus `GET /mail-providers` (Fallback auf eine statische Gmail-only-Liste, falls der Endpunkt mal nicht erreichbar ist, damit der Login-Weg nicht komplett blockiert). Gmail bleibt ein echter `<a href>`-Redirect (kein `fetch`), Outlook/Yahoo sind `comingSoon` und nicht klickbar, iCloud/GMX/web.de/generisches IMAP öffnen ein Formular mit den Presets aus dem jeweiligen `MailProvider`-Objekt vorbefüllt (Host/Port/TLS unter "Servereinstellungen anzeigen" einklappbar, damit das Formular für den Normalfall nur E-Mail+Passwort zeigt) + App-Passwort-Hinweis mit Link, wenn `requiresAppPassword=true`. Submit ruft `POST /accounts` (`provider=imap`) und übernimmt den zurückgegebenen Token wie beim Google-Callback.
+
+2. **Sicherheits-Badges**: `SecurityBadge.tsx` bekommt eine neue `SecuritySignalBadges`-Komponente (Header-Zeile der Detailansicht, neben der bestehenden Klassifikations-Badge) plus drei neue Zeilen in `SecurityDetails` (aufklappbarer Bereich) für `displayNameSpoofingDetected`/`replyToMismatchDetected`/`ibanChangedInThread` -- diese Felder existierten im Contract/Backend bereits seit den Sicherheits-Ergänzungen vom 15.09., waren im Web-Client (`types.ts`) bisher nicht gespiegelt. `isNewSender` (Feld auf `MessageDetail`, nicht `SecurityResult`) wird zusätzlich mit `GET /trusted-senders` kombiniert (App.tsx lädt die Liste einmal beim Login) -- Badge nur bei `isNewSender=true` UND Absender nicht auf der Whitelist, exakt wie in `api-spec.yaml` beschrieben. Durchgehend die bestehende `tone-{success|warning|danger}`-Konvention genutzt, keine neue visuelle Sprache. Bewusst nur in der Detailansicht, nicht in `MessageList`-Zeilen (die dort verwendete `Message`-Summary aus `GET /messages` enthält diese Felder nicht, nur `MessageDetail` aus `GET /messages/{id}`).
+
+3. **Web-Äquivalent zur iOS-App-Sperre**: `useAppLock.ts` + `AppLockGate.tsx`, Toggle in `FolderSidebar.tsx` (nur sichtbar, wenn der Browser einen Plattform-Authenticator hat). GEPRÜFT UND UMGESETZT, kein reiner Verzicht mit Begründung. Nutzt die WebAuthn-Plattform-Authenticator-API (Touch ID/Windows Hello/Android-Biometrie) rein lokal -- kein Server-Roundtrip, direkt analog zu iOS' `LocalAuthentication` (`ios/DriftmailApp/Security/BiometricLock.swift`): einmalige lokale Passkey-Registrierung beim Aktivieren, `navigator.credentials.get()` bei jeder Entsperrung. Sperrt nach 5 Minuten Inaktivität oder >15s im Hintergrund. **Bewusst dokumentierte Grenze** (Kopfkommentar `useAppLock.ts`): kann den Session-Token in `localStorage` NICHT kryptografisch schützen wie iOS' Keychain (siehe `api.ts` `TOKEN_STORAGE_KEY`-Kommentar) -- ist eine Blickschutz-/Shoulder-Surfing-Maßnahme, keine echte Zugriffskontrolle. Deshalb mit "Stattdessen abmelden"-Fallback im Sperrbildschirm, damit ein Sensor-/Browser-Problem niemanden dauerhaft aussperrt.
+
+Mock-Server (`mock-server/server.mjs`/`data.mjs`): `GET /mail-providers` liefert `contracts/mail-providers.json` unverändert aus (gleiches Muster wie `backend/src/routes/mailProviders.ts`), `GET/POST/DELETE /trusted-senders` als einfacher In-Memory-Array, Phishing-Demo-Mail + eine Eingang-Mail (Notariat Weber) mit den neuen Feldern befüllt, damit die Badges in der Mock-UI sichtbar sind.
+
+**Tests:** `tsc -b` + `vite build` + `oxlint` grün. Mock-Server-Endpunkte per `curl` verifiziert. Kompletter Flow (Provider-Grid, IMAP-Formular inkl. Preset-Vorbefüllung, alle vier neuen Badges an den passenden Demo-Nachrichten, App-Sperre-Toggle) per Browser-Automation gegen den Mock-Server durchgeklickt. App-Sperre-Erfolgspfad (echte Touch-ID-Geste) in dieser Umgebung nicht separat verifizierbar (kein Plattform-Authenticator in der Testumgebung) -- der Fehlerpfad (Registrierung schlägt fehl -> Sperre bleibt aus, verständliche Meldung) wurde live beobachtet und funktioniert wie vorgesehen. Details/Grenzen in `web/README.md` Abschnitt "Onboarding, Sicherheits-Badges, App-Sperre".
+
+**Übergabe:** Track C (iOS) hat denselben Auftrag noch offen (Punkt 1+2 -- Punkt 3 ist für iOS bereits erledigt, siehe Status-Tabelle oben). Die 5 neuen Wettbewerbs-Feature-Anfragen von heute (WEB_INBOX.md 21.09., Tracking-Pixel/Undo-Send/Darkweb-Monitoring/Schedule-Send/Snooze) sind explizit "nach der aktuell laufenden UI-Arbeit" eingeordnet, hier bewusst nicht angefasst.
+
+**Kein Blocker, keine offene Frage.**

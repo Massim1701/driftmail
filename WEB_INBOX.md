@@ -720,7 +720,7 @@ Kein Contract-Bruch bei 1/2/4 (neue Felder/Signale, additiv). Bei 3 und 6 bitte 
 Kein Blocker fuer die aktuell laufenden Auftraege (Stabilitaets-Check, OCR, Whitelist, die 6 Sicherheits-Ergaenzungen), aber bitte zeitnah einordnen -- ohne das ist der Client fuer alle Nicht-Gmail-Nutzer aktuell gar nicht nutzbar.
 
 
-[2026-09-19] [offen] [PRIORITAET - naechster Schritt] [Track C/F] — Backend-Seite von drei grossen Themen ist fertig (Whitelist/Vorschussbetrug, 5 von 6 Sicherheitsergaenzungen, IMAP-Provider-Support inkl. zweier kritischer Sicherheitsfixes, siehe SYNC.md 19.09.). Bitte jetzt die UI-Seite nachziehen:
+[2026-09-19] [teilweise erledigt: b273990 (Web-Teil aller 3 Punkte), Track C/iOS steht noch aus] [PRIORITAET - naechster Schritt] [Track C/F] — Backend-Seite von drei grossen Themen ist fertig (Whitelist/Vorschussbetrug, 5 von 6 Sicherheitsergaenzungen, IMAP-Provider-Support inkl. zweier kritischer Sicherheitsfixes, siehe SYNC.md 19.09.). Bitte jetzt die UI-Seite nachziehen:
 
 1. Onboarding: Provider-Auswahlbildschirm (Gmail, Outlook/Yahoo als "demnaechst", iCloud, GMX, web.de, generisches IMAP) + IMAP-Verbindungsformular mit Preset-Vorbefuellung (GET /mail-providers nutzen) + kurze App-Passwort-Erklaerung mit Link zur jeweiligen Anbieter-Anleitung.
 2. Sichtbare Kennzeichen/Badges fuer die neuen Sicherheitssignale: Anzeigename-Spoofing, Reply-To-Mismatch, IBAN-Wechsel im Thread, "Neuer Absender" (isNewSender). Bitte am bestehenden Farbrollen-/Warnhinweis-System orientieren (design-tokens.json colorRole, gleiche Sprechblasen-/Banner-Optik wie bei den bereits bestehenden Warnungen), keine neue visuelle Sprache erfinden.
