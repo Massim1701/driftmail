@@ -816,3 +816,14 @@ Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
 
 
 [2026-09-21] [terminal] [C/F] — Zwei kleine WEB_INBOX.md-21.09.-Auftraege erledigt (Commit `96d9472`): "Inhalt" -> "Check Mail" (Label-Umbenennung, ausdruecklich von Massimo entschieden) und ein "Absender vertrauen"-Button direkt am "Neuer Absender"-Badge in der Detailansicht (ruft `POST /trusted-senders` auf, Endpunkt existierte im Contract bereits, war aber nur lesend angebunden -- optimistisches Update auf beiden Plattformen, Badge verschwindet sofort fuer alle Nachrichten dieses Absenders). Web `tsc -b`/`vite build`/`oxlint` gruen, iOS `xcodebuild` BUILD SUCCEEDED, sauberer Uninstall/Install/Launch ohne Crash. Kein Blocker.
+
+
+[2026-09-21] [terminal] [A] — WEB_INBOX.md 21.09. "NEUER AUFTRAG - Einstellungsbereich + Info-Seite", Backend-Grundlage fertig (Commit `3454bc1`). Massimo: Punkt 2 (oeffentliche Info-Seite auf driftware.online) laeuft bereits ueber Web-Claude, deshalb hier bewusst nicht angefasst -- nur Punkt 1 (In-App-Einstellungsbereich) vorbereitet.
+
+**`DELETE /accounts/{accountId}`:** entfernt ein Konto inkl. aller daran haengenden Daten. Cascade bei Postgres komplett ueber bereits bestehende `ON DELETE CASCADE`-FKs, bei `InMemoryStore` manuell nachgebildet. 400 beim Versuch, das letzte Konto zu entfernen (Auth laeuft implizit ueber Mail-Konto-Verbindung, ein User ohne jedes Konto haette keinen Weg mehr sich anzumelden).
+
+**`GET`/`PUT /settings`:** neuer, eigener Endpunkt (analog `/ai-settings`) fuer allgemeine UI-Praeferenzen, aktuell nur `accentTheme`. Fuenf waehlbare Akzentfarben (`teal`/`ocean_blue`/`violett`/`koralle`/`ocean_verlauf`, Default `teal`) jetzt echt in `contracts/design-tokens.json` `color.accentThemes` definiert -- die im Auftrag erwaehnte "bereits gebaute Akzentfarben-Auswahl" existierte tatsaechlich noch NICHT (nur als fruehere Idee/Text, kein Code), hier erstmals wirklich angelegt. `danger`/`warning`/`success` bleiben bewusst fest fuer alle User (fruehere Design-Vorgabe). `users.accent_theme` neu, echte Postgres-Migration noetig (Tabelle hat bereits echte Auth-Daten) -- einfacher als vorherige Migrationen, reine `ADD COLUMN`-Ergaenzung mit automatischem Default-Backfill, manuell gegen eine simulierte Alt-Schema-DB verifiziert.
+
+**Tests:** Smoketest deckt beide Endpunkte ab (Konto loeschen inkl. Cascade-Verifikation, letztes Konto -> 400, Settings-Default/-Aenderung/-Validierung). Gruen in-memory + gegen frisches Postgres.
+
+**Uebergabe an Track C/F:** die eigentliche Einstellungsbereich-UI (Konten-Liste + Hinzufuegen/Entfernen, Akzentfarben-Auswahl, gebuendelte Sicherheit-Sektion mit KI-Einstellungen/App-Sperre + einfacher Text-Uebersicht der aktiven Sicherheitsfeatures, Link zur Installationsanleitung) ist noch zu bauen -- Details in `backend/README.md` "Einstellungsbereich (Backend-Grundlage)".
