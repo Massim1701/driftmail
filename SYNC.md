@@ -900,3 +900,18 @@ Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
 **Tests:** `tsc -b`/`vite build`/`oxlint` gruen (keine neuen Warnungen). Per Browser-Automation gegen den Mock-Server durchgeklickt: Toggle an/aus mit sichtbarem Unterschied am Header (Badge bleibt in beiden Zustaenden), Autocomplete-Vorschlag ueber die `<datalist>`-Optionen im DOM bestaetigt (18 Kontakte aus `GET /contacts`), Autosave ueber sichtbaren "Entwurf gespeichert"-Hinweis UND direkt per `GET /drafts` gegen den Mock-Server bestaetigt, Thread-Gruppierung im "Eingang"-Ordner (eine Zeile + "+1 aeltere", Aufklappen zeigt die aeltere Nachricht, beide Zeilen oeffnen die richtige Nachricht). Konsole ohne Fehler.
 
 **Kein Blocker.** Damit sind beide Clients (iOS + Web) fuer diesen Auftrag fertig.
+
+
+[2026-09-21] [terminal] [A] — WEB_INBOX.md 21.09. "NEUER AUFTRAG - Abwesenheitsassistent", Backend-Teil fertig (Commit `fc4e287`).
+
+**Vorgefundene Luecke:** `signatures` stand schon laenger als `CREATE TABLE` + `GET /signatures` in den Contracts, hatte aber noch NIE Backend-Code (kein Router, keine Store-Methoden). Fuer den Signatur-Anhang an die Abwesenheitsantwort musste das jetzt sowieso nachgezogen werden -- echtes `GET`/`POST`/`PATCH`/`DELETE /signatures` inkl. Default-Signatur-Invariante (genau eine Default-Signatur pro Konto, automatische Neuvergabe beim Loeschen).
+
+**Dabei behobener Packaging-Fehler in `mail-actions`:** das laengst existierende, aber nie genutzte Geschwister-Package (Track E) hatte einen `export type {...}`-Import ueber die Package-Grenze hinweg (`../../contracts/...`). `tsc` mit `declaration: true` berechnet dafuer trotz zur-Laufzeit-Wegfall einen gemeinsamen `rootDir`, was einen kaputten verschachtelten `dist/`-Baum erzeugte. Behoben durch lokales Typ-Spiegeln (gleiche Konvention wie `backend/src/ai/types.ts`) + Umstellung auf `NodeNext`-Module mit expliziten `.js`-Endungen (sonst `ERR_MODULE_NOT_FOUND` unter echtem Node-ESM). Erst dadurch war `@driftmail/mail-actions` ueberhaupt real als `file:`-Dependency ins Backend einbindbar -- die dort fertig getestete Signatur-Auswahl-Logik (`selectSignatureForContext`, `appendSignature`) wird jetzt echt wiederverwendet statt neu gebaut.
+
+**Abwesenheitsassistent selbst:** `GET`/`PUT /absence-responder` (Einstellungen, Pflichtfelder bei `active:true` serverseitig geprueft) + `maybeSendAbsenceResponse()` im Sync-Pfad (Ausloesung direkt nach der Spam/Phishing-Klassifikation jeder eingehenden Mail). Sicherheits-Verbesserung wie im Auftrag beschrieben: keine Auto-Antwort an spam/phishing-klassifizierte Absender oder Mailinglisten (`List-Unsubscribe`-Header), Pro-Absender-Cooldown (Default 4 Tage, neue Tabelle `absence_responder_log`). `advance_fee_scam` erreicht die Funktion strukturell nie (Auto-Delete-Pfad `continue`t vorher). Default-Signatur wird automatisch angehaengt, falls vorhanden.
+
+**Tests:** Smoketest deckt Signatur-CRUD (Default-Vergabe/-Neuvergabe) und den Abwesenheitsassistenten ab (Pflichtfeld-Validierung, normaler Versand, Cooldown-Blockade, Spam/Mailinglisten-Ausschluss, inaktiv-Zustand) -- letzteres ueber direkten Aufruf von `maybeSendAbsenceResponse()` statt vollem Sync-HTTP-Weg (Cooldown-Testen wuerde sonst die bestehende Fixture-Dedup-Logik umgehen muessen). Gruen in-memory + gegen frisches Postgres (`signatures`/`absence_responder`/`absence_responder_log` komplett neue Tabellen, reines `CREATE TABLE IF NOT EXISTS`, kein Alt-Schema-Fall).
+
+**Uebergabe an Track C/F:** Einstellungsbildschirm (Ein/Aus-Schalter, Start-/End-Datumsfelder, Betreff/Text-Eingabe, `GET`/`PUT /absence-responder`) + aktiver Banner mit "Jetzt beenden"-Schnellaktion noch zu bauen, siehe WEB_INBOX.md-Originaltext.
+
+**Kein Blocker.**
