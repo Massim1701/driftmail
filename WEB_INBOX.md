@@ -727,3 +727,25 @@ Kein Blocker fuer die aktuell laufenden Auftraege (Stabilitaets-Check, OCR, Whit
 3. Face-ID/Touch-ID-App-Sperre ist auf iOS laut Bericht schon "echt gebaut" -- bitte auf Web pruefen, ob/wie ein Aequivalent sinnvoll ist (z.B. WebAuthn/Passkey-Sperre beim Aufwachen aus Inaktivitaet), oder dokumentieren falls technisch nicht sinnvoll uebertragbar.
 
 Kein Blocker, alle drei Punkte unabhaengig. IMAP-Login-Weg bitte einmal von Massimo selbst mit echtem GMX-/web.de-/iCloud-Konto gegengetestet werden, sobald Zeit ist (siehe SYNC.md 19.09.) -- das kann parallel zur UI-Arbeit laufen, ist kein Abhaengigkeits-Blocker dafuer.
+
+
+[2026-09-21] [offen] [NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken] [contracts + Track A/B + Track C/F] [nach der aktuell laufenden UI-Arbeit] — Massimo hat driftmail gegen Proton Mail, Hey und Superhuman/Canary Mail verglichen (Web-Recherche). Fuenf Punkte bestaetigt, alle sollen in die Queue:
+
+**1) Tracking-Pixel-Blockierung (Track A + C/F):**
+Eingehende Mails enthalten oft unsichtbare 1x1-Bilder ("Tracking-Pixel"), die dem Absender melden, wann/ob/wie oft die Mail geoeffnet wurde. Proton und Hey blockieren das standardmaessig per Bild-Proxy (Bilder werden ueber einen eigenen Server geladen statt direkt vom Absender, IP/Oeffnungszeitpunkt bleibt verborgen). Vorschlag: Bilder in HTML-Mails standardmaessig NICHT automatisch laden (aehnlich wie viele Mail-Clients das schon bei "externe Bilder blockieren" machen), User kann pro Mail oder generell "Bilder immer laden" waehlen. Reine Client-seitige Aenderung, kein neuer Server-Proxy noetig fuer die einfache Variante (nur Bild-Autoload deaktivieren) -- ein echter Proxy (der auch die Absender-IP-Sicht verbirgt) waere die staerkere, aber aufwendigere Variante, Track A entscheidet Umfang.
+
+**2) Undo Send (Track A + C/F):**
+Kurzes Zeitfenster (z.B. 5-10 Sekunden, konfigurierbar) nach Klick auf "Senden", in dem der Versand noch zurueckgeholt werden kann, bevor er tatsaechlich beim Provider rausgeht. Passt technisch gut zum bestehenden POST /messages/send-Flow: Client zeigt sofort eine "Rueckgaengig"-Leiste, der tatsaechliche Provider-Send-Call wird verzoegert ausgefuehrt (z.B. per Timer, der bei Klick auf "Rueckgaengig" abgebrochen wird). Kein Contract-Bruch, eher eine Ablauf-/UI-Aenderung um den bestehenden Endpunkt herum.
+
+**3) Darkweb-/Datenleck-Ueberwachung (Track A):**
+Warnt den User, falls seine verbundene Mail-Adresse in einem bekannten oeffentlichen Datenleck auftaucht (aehnliches Prinzip wie Proton). Braucht Anbindung an einen externen Leak-Datenbank-Dienst (z.B. haveibeenpwned-artige API) -- passt vom Muster her zu den bereits bestehenden vier externen Lookups (WHOIS/Spamhaus/IBAN-Historie/fraud_alerts), gleiche Architektur-Entscheidung gilt (Nachbearbeitungsschritt, nicht in security-classification/ selbst). Neue Tabelle fuer gemeldete Leck-Treffer + Benachrichtigung, Details/Contract Track A ueberlassen.
+
+**4) Schedule Send / Spaeter senden (Track A + C/F):**
+Standard-Feature: User waehlt beim Senden einen spaeteren Zeitpunkt statt sofort. Erweiterung von POST /messages/send um ein optionales scheduledFor-Feld, oder als eigener Entwurfs-Status in der bereits bestehenden drafts-Tabelle (Track A entscheidet, welcher Ansatz sich besser in die bestehende Architektur einfuegt).
+
+**5) Snooze / "Spaeter erinnern" (Track A + C/F):**
+Mail voruebergehend aus dem Eingang ausblenden, taucht zum gewaehlten Zeitpunkt automatisch wieder oben auf. Ergaenzt sich gut mit dem bereits bestehenden reminders-Feature (aehnliches Prinzip, aber auf die Nachricht selbst bezogen statt auf einen erkannten Termin/Vertrag) -- pruefen, ob reminders wiederverwendet werden kann oder ein eigenes, einfacheres Feld an messages (z.B. snoozed_until) sinnvoller ist.
+
+**Bewusst NICHT uebernommen, zur Kenntnis:** Lesebestaetigungen/Sender-seitiges Oeffnungs-Tracking (wie bei Superhuman) passt nicht zur Philosophie von driftmail -- das ist genau das Gegenteil von Punkt 1 (wir blockieren Tracking, bauen keins fuer den eigenen Versand ein). Keine Aktion noetig, nur zur Abgrenzung dokumentiert.
+
+Kein Blocker, bitte nach der aktuell laufenden UI-Arbeit (Onboarding-Provider-Auswahl, Sicherheits-Badges) einordnen. Alle fuenf Punkte unabhaengig voneinander umsetzbar.
