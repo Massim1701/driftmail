@@ -788,3 +788,24 @@ Wichtig, Abgrenzung zum frueheren Auftrag "Antworten ohne KI-Zwang" (WEB_INBOX.m
 Bitte pruefen: existiert ein POST /messages/send-faehiger Compose-Screen fuer NEUE Mails (mit leerem To-Feld, nicht vorausgefuellt aus einer Antwort) ueberhaupt im Code, nur ohne sichtbaren Einstiegspunkt in der UI (dann reicht ein UI-Fix: z.B. Button oben in der Sidebar oder Ordneransicht)? Oder fehlt der ganze Neu-Verfassen-Flow strukturell? Bitte auch Track C (iOS) auf dieselbe Luecke pruefen.
 
 Hohe Prioritaet -- ohne diesen Einstiegspunkt ist driftmail aktuell nur zum Lesen/Antworten nutzbar, nicht um selbst aktiv eine neue Konversation zu beginnen. Bitte vor den 5 Wettbewerbs-Features und dem Malware-Scan-Auftrag einordnen, da dies eine Kernfunktion betrifft, nicht eine Erweiterung.
+
+
+[2026-09-21] [offen] [SEHR WICHTIGE LUECKE - HOECHSTE PRIORITAET] [contracts + Track A + Track C/F] — Massimo hat eine Testmail an sein web.de-Testkonto geschickt und erwartet, dass sie automatisch ankommt. Geprueft: es gibt AKTUELL NUR EINEN EINMALIGEN SYNC beim ersten Verbinden eines Kontos ("Initialer Sync"), danach passiert nichts mehr automatisch -- keine Polling-Schleife, kein Cron, kein IMAP IDLE (Volltextsuche in SYNC.md: keine Treffer fuer Polling/Sync-Intervall/Cron/periodisch). Ausserdem bestaetigt: es gibt bisher KEINEN Account-Switcher in der UI (bewusst zurueckgestellt bei einem frueheren Auftrag), obwohl mail_accounts schon mehrere Konten pro User im Schema erlaubt.
+
+Massimo braucht BEIDES, mit hoechster Prioritaet vor allen anderen offenen Punkten (noch vor dem fehlenden Compose-Button von eben):
+
+**1) Automatischer UND manueller Mail-Abruf:**
+- Automatisch: Backend soll pro verbundenem Konto periodisch (z.B. alle 2-5 Minuten, Track A entscheidet sinnvollen Standardwert, gerne konfigurierbar) per IMAP nach neuen Nachrichten schauen und diese importieren -- gleiche Klassifikations-/Sicherheitspipeline wie beim initialen Sync durchlaufen lassen (Track-B-Analyse, Ordner-Zuordnung etc.), nicht nur roh speichern.
+- Manuell: zusaetzlich ein "Jetzt aktualisieren"-Button/Pull-to-Refresh in der UI (Web + iOS), der einen sofortigen Sync fuer das/die aktuell verbundene(n) Konto(en) ausloest, ohne auf das naechste automatische Intervall zu warten.
+- Technischer Ansatz offen fuer Track A: klassisches Polling ist der pragmatischere erste Schritt (IMAP-Verbindung in Intervallen neu aufbauen und pruefen), IMAP IDLE (Server haelt Verbindung offen, meldet neue Mail sofort) waere die bessere, aber aufwendigere Loesung fuer spaeter -- fuer jetzt reicht Polling, Architektur aber bitte so anlegen, dass IDLE spaeter nachgezogen werden kann ohne alles umzubauen.
+
+**2) Echte Mehrfach-Konten-Unterstuetzung in der UI:**
+Viele User haben mehrere Mail-Konten (privat, geschaeftlich, verschiedene Anbieter). mail_accounts erlaubt das laut Schema schon, aber es fehlt der tatsaechliche Weg in der UI:
+- Moeglichkeit, ein WEITERES Konto hinzuzufuegen, nachdem man schon eines verbunden hat (nicht nur beim allerersten Onboarding) -- z.B. "Konto hinzufuegen" in den Einstellungen.
+- Account-Switcher, um zwischen den verbundenen Konten zu wechseln (siehe fruehere Notiz "Header zeigt E-Mail-Adresse", dort war das schon als natuerlicher Ort dafuer vorgeschlagen, aber bewusst nicht Teil dieses Auftrags -- JETZT nachholen).
+- Jedes Konto braucht seinen eigenen automatischen Sync-Zyklus (siehe Punkt 1) -- unabhaengig voneinander, ein langsames/fehlerhaftes Konto darf die anderen nicht blockieren.
+- Offene Frage an Track A/C/F: getrennte Ordneransichten pro Konto, oder ein vereinheitlichter Eingang ueber alle Konten hinweg (mit Kennzeichnung, von welchem Konto eine Mail kommt)? Bitte kurz in SYNC.md Vorschlag machen, bevor gebaut wird -- das ist eine groessere UX-Entscheidung, die Massimo/Web idealerweise noch bestaetigt.
+
+Kein Contract-Bruch bei mail_accounts selbst (existiert schon fuer genau diesen Zweck), aber POST /accounts/GET /accounts und der Sync-Mechanismus muessen fuer "mehrere aktive Konten gleichzeitig" statt "genau ein Konto" gedacht werden, falls das bisher implizit nur fuer eins ausgelegt war -- bitte pruefen und in SYNC.md dokumentieren.
+
+HOECHSTE PRIORITAET -- bitte vor allen anderen aktuell offenen Punkten (fehlender Compose-Button, 5 Wettbewerbs-Features, Malware-Scan) einordnen, da dies die Kernfunktion "wird ueberhaupt neue Mail angezeigt, von wie vielen Konten" direkt betrifft.
