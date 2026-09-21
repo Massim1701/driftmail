@@ -258,6 +258,72 @@ struct RemoteAPIClient: APIClient {
         return try await put("/settings", body: Body(accentTheme: accentTheme, strictUnknownSenders: strictUnknownSenders))
     }
 
+    /// `GET /absence-responder` (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+    /// Abwesenheitsassistent").
+    func fetchAbsenceResponder() async throws -> AbsenceResponder {
+        try await get("/absence-responder")
+    }
+
+    /// `PUT /absence-responder` -- eigener Request statt des generischen
+    /// `put()`-Helpers, weil 400 (fehlende Pflichtfelder bei `active: true`)
+    /// ein erwarteter, vom generischen Netzwerkfehler verschiedener Ausgang
+    /// ist, analog `updateAiSettings`/`deleteAccount` oben. `nil`-Felder
+    /// werden vom synthetisierten `Encodable` automatisch weggelassen
+    /// (nicht als `null` gesendet, siehe `updateSettings`-Kommentar oben) --
+    /// AUSSER `endDate` bei `clearEndDate: true`, dort per eigenem
+    /// `encode(to:)` bewusst ein echtes `null` statt eines weggelassenen
+    /// Felds (siehe Protokoll-Kommentar in APIClient.swift).
+    func updateAbsenceResponder(active: Bool?, startDate: String?, endDate: String?, clearEndDate: Bool, subject: String?, body: String?) async throws -> AbsenceResponder {
+        struct Body: Encodable {
+            let active: Bool?
+            let startDate: String?
+            let endDate: String?
+            let clearEndDate: Bool
+            let subject: String?
+            let body: String?
+
+            private enum CodingKeys: String, CodingKey { case active, startDate, endDate, subject, body }
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encodeIfPresent(active, forKey: .active)
+                try container.encodeIfPresent(startDate, forKey: .startDate)
+                if clearEndDate {
+                    try container.encodeNil(forKey: .endDate)
+                } else {
+                    try container.encodeIfPresent(endDate, forKey: .endDate)
+                }
+                try container.encodeIfPresent(subject, forKey: .subject)
+                try container.encodeIfPresent(body, forKey: .body)
+            }
+        }
+        struct ErrorResponse: Decodable { let error: String? }
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("/absence-responder"))
+        request.httpMethod = "PUT"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        authorize(&request)
+        request.httpBody = try JSONEncoder().encode(Body(active: active, startDate: startDate, endDate: endDate, clearEndDate: clearEndDate, subject: subject, body: body))
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.network(error)
+        }
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 200
+        if statusCode == 400 {
+            let decoded = try? decoder.decode(ErrorResponse.self, from: data)
+            throw APIError.badRequest(message: decoded?.error)
+        }
+        do {
+            return try decoder.decode(AbsenceResponder.self, from: data)
+        } catch let error as DecodingError {
+            throw APIError.decodingFailed(error)
+        }
+    }
+
     /// `GET /contacts` (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"
     /// Punkt 2).
     func fetchContacts() async throws -> [String] {

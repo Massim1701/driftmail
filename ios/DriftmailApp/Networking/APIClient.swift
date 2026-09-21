@@ -170,6 +170,24 @@ protocol APIClient {
     func fetchContracts() async throws -> [Contract]
     func confirmContract(_ contract: Contract) async throws
     func reportCapabilityCheck(_ capability: UserAiCapability) async throws
+
+    /// `GET /absence-responder` (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+    /// Abwesenheitsassistent"). Default-Antwort `{active: false, ...nil}`,
+    /// solange der User noch nichts gespeichert hat.
+    func fetchAbsenceResponder() async throws -> AbsenceResponder
+    /// `PUT /absence-responder`. `active`/`startDate`/`subject`/`body` sind
+    /// `nil` = serverseitig unangetastet (COALESCE-artig, analog zu
+    /// `updateSettings(accentTheme:strictUnknownSenders:)`) -- so kann die
+    /// "Jetzt beenden"-Schnellaktion nur `active: false` senden, ohne die
+    /// anderen Felder zu löschen. `endDate` braucht zusätzlich einen
+    /// expliziten Lösch-Weg (ein zuvor gesetztes Enddatum wieder entfernen,
+    /// ohne den ganzen Assistenten zu deaktivieren) -- dafür `clearEndDate:
+    /// true` setzen (sendet ein echtes JSON `null` statt das Feld
+    /// wegzulassen); `endDate` selbst wird dann ignoriert. Wirft
+    /// `APIError.badRequest`, wenn `active: true` gesendet wird (oder
+    /// bereits aktiv war) ohne gültiges `startDate`+`subject`+`body` (siehe
+    /// backend/src/routes/absenceResponder.ts).
+    func updateAbsenceResponder(active: Bool?, startDate: String?, endDate: String?, clearEndDate: Bool, subject: String?, body: String?) async throws -> AbsenceResponder
 }
 
 enum APIError: Error {

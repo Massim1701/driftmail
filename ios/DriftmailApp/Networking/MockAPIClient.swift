@@ -52,6 +52,12 @@ actor MockAPIClient: APIClient {
     /// analog zu `aiSettings` oben.
     private var userSettings = UserSettings(accentTheme: .teal, strictUnknownSenders: true)
 
+    /// `GET`/`PUT /absence-responder` (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+    /// Abwesenheitsassistent") -- rein In-Memory, kein Contract-Pendant in
+    /// MockDatabase.json noetig, analog zu `aiSettings`/`userSettings` oben.
+    /// Startet inaktiv/leer, exakt wie die echte Backend-Default-Antwort.
+    private var absenceResponder = AbsenceResponder(active: false, startDate: nil, endDate: nil, subject: nil, body: nil)
+
     private var drafts: [Draft] = [
         Draft(
             id: "draft-001",
@@ -375,6 +381,42 @@ actor MockAPIClient: APIClient {
             strictUnknownSenders: strictUnknownSenders ?? userSettings.strictUnknownSenders
         )
         return userSettings
+    }
+
+    /// `GET /absence-responder`, Mock: liefert den In-Memory-Zustand.
+    func fetchAbsenceResponder() async throws -> AbsenceResponder {
+        await delay()
+        return absenceResponder
+    }
+
+    /// `PUT /absence-responder`, Mock: dieselbe Pflichtfeld-Validierung wie
+    /// das echte Backend (`routes/absenceResponder.ts`), damit die
+    /// Settings-UI auch ohne `RemoteAPIClient` sinnvoll durchtestbar ist.
+    /// `nil`-Parameter lassen das jeweilige Feld unangetastet (COALESCE-
+    /// artig), analog zu `updateSettings(accentTheme:strictUnknownSenders:)`;
+    /// `clearEndDate: true` entfernt ein zuvor gesetztes Enddatum explizit
+    /// (siehe Protokoll-Kommentar in APIClient.swift).
+    func updateAbsenceResponder(active: Bool?, startDate: String?, endDate: String?, clearEndDate: Bool, subject: String?, body: String?) async throws -> AbsenceResponder {
+        await delay()
+        let resultingActive = active ?? absenceResponder.active
+        let resultingStartDate = startDate ?? absenceResponder.startDate
+        let resultingEndDate = clearEndDate ? nil : (endDate ?? absenceResponder.endDate)
+        let resultingSubject = subject ?? absenceResponder.subject
+        let resultingBody = body ?? absenceResponder.body
+        if resultingActive {
+            guard let resultingStartDate, let resultingSubject, !resultingSubject.trimmingCharacters(in: .whitespaces).isEmpty,
+                  let resultingBody, !resultingBody.trimmingCharacters(in: .whitespaces).isEmpty else {
+                throw APIError.badRequest(message: "active=true verlangt startDate, subject und body")
+            }
+        }
+        absenceResponder = AbsenceResponder(
+            active: resultingActive,
+            startDate: resultingStartDate,
+            endDate: resultingEndDate,
+            subject: resultingSubject,
+            body: resultingBody
+        )
+        return absenceResponder
     }
 
     /// `GET /contacts` (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"

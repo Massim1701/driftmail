@@ -44,6 +44,8 @@
 		56AC218751824B9F83E4422F /* AiSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2037AFF4FE348ACBC8DDF99 /* AiSettings.swift */; };
 		BAE621DDA45815CE8CBDBF7B /* UserSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF1ECAD23A8D8A74E0F0A6A /* UserSettings.swift */; };
 		FA08E2D0BE28462C9F2CF1A1 /* AiSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53514C334BC04B918574560A /* AiSettingsView.swift */; };
+		D568B17A146E4F78BB0B9F52 /* AbsenceResponder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D59FA89FF414770BAC7D876 /* AbsenceResponder.swift */; };
+		6F0A7EF3F11249959B6CDEB3 /* AbsenceResponderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A0E0445B8D4857BFB972D3 /* AbsenceResponderView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -85,6 +87,8 @@
 		F2037AFF4FE348ACBC8DDF99 /* AiSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AiSettings.swift; sourceTree = "<group>"; };
 		2FF1ECAD23A8D8A74E0F0A6A /* UserSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UserSettings.swift; sourceTree = "<group>"; };
 		53514C334BC04B918574560A /* AiSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AiSettingsView.swift; sourceTree = "<group>"; };
+		6D59FA89FF414770BAC7D876 /* AbsenceResponder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AbsenceResponder.swift; sourceTree = "<group>"; };
+		44A0E0445B8D4857BFB972D3 /* AbsenceResponderView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AbsenceResponderView.swift; sourceTree = "<group>"; };
 		D3A1F4C6E0904A2F8C7B1E5A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -143,6 +147,7 @@
 				C9FCDE9892BAE90D849D0DD8 /* TrustedSender.swift */,
 				F2037AFF4FE348ACBC8DDF99 /* AiSettings.swift */,
 				2FF1ECAD23A8D8A74E0F0A6A /* UserSettings.swift */,
+				6D59FA89FF414770BAC7D876 /* AbsenceResponder.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -236,6 +241,7 @@
 				B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */,
 				2F6A0A6DD232DDE1F2F93EBE /* ComposeView.swift */,
 				53514C334BC04B918574560A /* AiSettingsView.swift */,
+				44A0E0445B8D4857BFB972D3 /* AbsenceResponderView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -353,6 +359,8 @@
 				56AC218751824B9F83E4422F /* AiSettings.swift in Sources */,
 				BAE621DDA45815CE8CBDBF7B /* UserSettings.swift in Sources */,
 				FA08E2D0BE28462C9F2CF1A1 /* AiSettingsView.swift in Sources */,
+				D568B17A146E4F78BB0B9F52 /* AbsenceResponder.swift in Sources */,
+				6F0A7EF3F11249959B6CDEB3 /* AbsenceResponderView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

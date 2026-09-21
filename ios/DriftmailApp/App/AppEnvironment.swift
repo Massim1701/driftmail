@@ -325,4 +325,29 @@ final class AppEnvironment: ObservableObject {
             trustedSenderAddresses = []
         }
     }
+
+    /// [2026-09-21] WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+    /// Abwesenheitsassistent": gespiegelt von `GET /absence-responder`,
+    /// `nil` bis zum ersten `loadAbsenceResponder()`-Aufruf (analog
+    /// `aiSettings`). `@Published`, damit `FolderListView`s aktiver
+    /// Banner sofort verschwindet/erscheint, sobald sich der Zustand
+    /// ändert -- auch aus `AbsenceResponderView` heraus, die auf demselben
+    /// `AppEnvironment` sitzt.
+    @Published private(set) var absenceResponder: AbsenceResponder?
+
+    func loadAbsenceResponder() async {
+        absenceResponder = try? await apiClient.fetchAbsenceResponder()
+    }
+
+    /// `PUT /absence-responder`. Aktualisiert `absenceResponder` bei Erfolg
+    /// direkt aus der Server-Antwort (Quelle der Wahrheit), kein
+    /// optimistisches Update -- analog `updateAiSettings`/`updateSettings`.
+    /// `clearEndDate` defaultet auf `false`, damit die "Jetzt beenden"-
+    /// Schnellaktion (`FolderListView`) es nicht extra angeben muss.
+    @discardableResult
+    func updateAbsenceResponder(active: Bool?, startDate: String?, endDate: String?, clearEndDate: Bool = false, subject: String?, body: String?) async throws -> AbsenceResponder {
+        let updated = try await apiClient.updateAbsenceResponder(active: active, startDate: startDate, endDate: endDate, clearEndDate: clearEndDate, subject: subject, body: body)
+        absenceResponder = updated
+        return updated
+    }
 }

@@ -47,6 +47,15 @@ struct FolderListView: View {
                         .listRowBackground(Color.clear)
                 }
 
+                // [2026-09-21] WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+                // Abwesenheitsassistent": aktiver Hinweis mit direkter
+                // "Jetzt beenden"-Schnellaktion, solange der Assistent
+                // läuft -- nicht während einer aktiven Suche, um die
+                // Trefferliste nicht zu verdrängen.
+                if !isSearchActive, environment.absenceResponder?.active == true {
+                    absenceResponderBanner
+                }
+
                 if isSearchActive {
                     if searchResults.isEmpty && !isSearching {
                         ContentUnavailableCompat(title: "Keine Treffer", systemImage: "magnifyingglass")
@@ -163,14 +172,21 @@ struct FolderListView: View {
                 // an sichtbar ist, nicht erst nach dem ersten Öffnen der
                 // Einstellungen.
                 await environment.loadSettings()
+                // Abwesenheitsassistent-Zustand für den Banner oben.
+                await environment.loadAbsenceResponder()
             }
             .onChange(of: isShowingSettings) { _, isShowing in
                 // Nach dem Schließen der Einstellungen neu laden -- ein
                 // Konto könnte entfernt worden sein (Ordner/Zähler dieses
                 // Kontos wären sonst bis zum nächsten Pull-to-Refresh
-                // veraltet).
+                // veraltet). Ebenso den Abwesenheitsassistenten-Zustand, da
+                // er ueber AbsenceResponderView (in diesem Sheet) geändert
+                // werden konnte.
                 guard !isShowing else { return }
-                Task { await loadFoldersAndCounts(forceRefresh: true) }
+                Task {
+                    await loadFoldersAndCounts(forceRefresh: true)
+                    await environment.loadAbsenceResponder()
+                }
             }
             .refreshable {
                 // Pull-to-Refresh (WEB_INBOX.md 21.09. "SEHR WICHTIGE
@@ -221,6 +237,38 @@ struct FolderListView: View {
 
     private func accountMenuLabel(_ account: MailAccount) -> String {
         account.id == environment.activeAccountId ? "✓ \(account.emailAddress)" : account.emailAddress
+    }
+
+    /// [2026-09-21] WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+    /// Abwesenheitsassistent": "Jetzt beenden" setzt nur `active: false`
+    /// (Start-/End-Datum, Betreff und Text bleiben gespeichert, siehe
+    /// `AppEnvironment.updateAbsenceResponder(...)`-Kommentar) -- ein
+    /// erneutes Aktivieren in `AbsenceResponderView` findet die vorherige
+    /// Konfiguration unverändert vor.
+    private var absenceResponderBanner: some View {
+        HStack(spacing: DesignTokens.Spacing.md) {
+            Image(systemName: "airplane")
+                .foregroundStyle(DesignTokens.Color.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Abwesenheitsassistent aktiv")
+                    .font(.system(size: DesignTokens.Typography.Size.bodyLarge, weight: .medium))
+                if let endDate = environment.absenceResponder?.endDate {
+                    Text("Bis \(endDate)")
+                        .font(.system(size: DesignTokens.Typography.Size.small))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                }
+            }
+            Spacer()
+            Button("Jetzt beenden") {
+                Task { await endAbsenceResponderNow() }
+            }
+            .font(.system(size: DesignTokens.Typography.Size.small, weight: .semibold))
+        }
+        .listRowBackground(DesignTokens.Color.surfaceCard)
+    }
+
+    private func endAbsenceResponderNow() async {
+        _ = try? await environment.updateAbsenceResponder(active: false, startDate: nil, endDate: nil, subject: nil, body: nil)
     }
 
     private func loadFoldersAndCounts(forceRefresh: Bool = false) async {
@@ -443,6 +491,16 @@ private struct SettingsView: View {
                     }
                 } footer: {
                     Text("Geräte-eigene KI läuft immer zuerst. Hier optional einen eigenen Cloud-Zugang hinterlegen.")
+                }
+
+                // [2026-09-21] WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+                // Abwesenheitsassistent".
+                Section {
+                    NavigationLink("Abwesenheitsassistent") {
+                        AbsenceResponderView()
+                    }
+                } footer: {
+                    Text("Antwortet automatisch auf eingehende Mails, solange du abwesend bist.")
                 }
 
                 // Einfache, nicht-technische Übersicht der aktiven

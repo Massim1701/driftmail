@@ -1093,6 +1093,71 @@ interaktiv durchklicken -- kein Weg am Onboarding-Gate vorbei ohne echte
 Test-Mailbox, kein Auth-Bypass versucht. **Offener Punkt für eine
 spätere Session:** einmal mit echter Test-Mailbox live durchklicken.
 
+## [2026-09-21] Nachtrag: Abwesenheitsassistent
+
+WEB_INBOX.md 21.09. "NEUER AUFTRAG - Abwesenheitsassistent". Backend
+(`GET`/`PUT /absence-responder`, Sicherheitslogik im Sync-Pfad, echte
+`/signatures`-Implementierung) kam aus einem früheren Schritt dieser
+Session (Commits `fc4e287`/`7215149`). Dieser Nachtrag ist die iOS-UI dazu.
+
+**Einstellungsbildschirm.** Neuer eigener Screen `AbsenceResponderView`
+(gleicher Aufbau wie `AiSettingsView`: der Ein/Aus-Toggle steuert nur
+lokalen Zustand, "Speichern" löst erst den echten `PUT`-Aufruf aus),
+erreichbar über einen neuen `NavigationLink("Abwesenheitsassistent")` in
+`FolderListView.SettingsView`, direkt unter "KI-Anbindung". Enthält Start-
+`DatePicker` (Pflicht bei aktivem Assistenten), einen "Enddatum
+festlegen"-Toggle mit optionalem End-`DatePicker`, sowie Betreff-
+`TextField` und Text-`TextEditor`.
+
+**Aktiver Banner.** `FolderListView` zeigt oben in der Ordnerliste (nicht
+während einer aktiven Suche) einen Hinweis mit Flugzeug-Icon, solange
+`AppEnvironment.absenceResponder?.active == true`, inkl. Enddatum falls
+gesetzt und einer direkten "Jetzt beenden"-Schnellaktion. Diese setzt
+NUR `active: false` -- Start-/Enddatum, Betreff und Text bleiben
+gespeichert, ein erneutes Aktivieren im Einstellungsbildschirm findet die
+vorherige Konfiguration unverändert vor (siehe COALESCE-Semantik unten).
+Zustand wird beim App-Start und nach jedem Schließen des
+Einstellungs-Sheets neu geladen (analog zu `loadFolders(forceRefresh:)`).
+
+**Neues Modell `AbsenceResponder`** (`active`, `startDate`, `endDate`,
+`subject`, `body`). `startDate`/`endDate` bewusst als rohe `String?`
+("yyyy-MM-dd") statt `Date` -- es gab in diesem Scaffold noch keine
+etablierte Konvention, ein `Date`-Feld bei einem AUSGEHENDEN `PUT`-Request
+wieder korrekt als Datums-String zu kodieren (der generische
+`JSONEncoder()` würde ohne eigene `dateEncodingStrategy` sonst einen
+Unix-Timestamp senden, siehe bisherige `Date`-Felder wie
+`Contract.contractEnd` -- die kommen nur EINGEHEND vor). Umwandlung
+zu/von `Date` für die `DatePicker`-Bindings passiert lokal in der View
+über den bereits vorhandenen `DriftmailDateDecoding.dateOnly`-Formatter.
+
+**Neu in `APIClient`/`RemoteAPIClient`/`MockAPIClient`:**
+`fetchAbsenceResponder()` und
+`updateAbsenceResponder(active:startDate:endDate:clearEndDate:subject:body:)`.
+`nil`-Parameter lassen das jeweilige Feld serverseitig unangetastet
+(COALESCE-artig, exakt wie `updateSettings(accentTheme:strictUnknownSenders:)`
+aus dem vorherigen Nachtrag) -- Swifts synthetisiertes `Encodable` lässt
+`nil`-Optionals beim Encoding komplett weg statt sie als `null` zu senden.
+**Eine Besonderheit:** `endDate` braucht zusätzlich einen expliziten
+Lösch-Weg (ein zuvor gesetztes Enddatum wieder entfernen, ohne den ganzen
+Assistenten zu deaktivieren) -- normales `nil` kann das nicht ausdrücken
+(bedeutet ja "unangetastet lassen"), deshalb ein eigener `clearEndDate:
+Bool`-Parameter, der in `RemoteAPIClient` über ein manuelles `encode(to:)`
+(statt des generischen synthetisierten) ein echtes JSON-`null` statt eines
+weggelassenen Felds sendet.
+
+**Tests:** `xcodebuild -scheme DriftmailApp -destination 'platform=iOS
+Simulator,name=iPhone 17' build` → BUILD SUCCEEDED (neue Dateien manuell
+in `DriftmailApp.xcodeproj/project.pbxproj` eingetragen, da dieses Projekt
+keine Ordner-Referenzen nutzt, siehe Kopfkommentar der Datei). Sauberer
+Uninstall/Install/Launch auf einem gebooteten Simulator, `log show` auf
+Crash/Fatal/DecodingError geprüft -- keine Treffer. Screenshot bestätigt
+unveränderten, korrekt gerenderten Onboarding-Screen. Wie bei allen
+vorherigen Nachträgen dieser Session ließ sich der neue Screen selbst
+NICHT interaktiv durchklicken -- kein Weg am Onboarding-Gate vorbei ohne
+echte Test-Mailbox, kein Auth-Bypass versucht. **Offener Punkt für eine
+spätere Session:** einmal mit echter Test-Mailbox live durchklicken
+(Toggle, Speichern, Banner, "Jetzt beenden").
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine
