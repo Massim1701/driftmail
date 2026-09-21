@@ -751,7 +751,7 @@ Mail voruebergehend aus dem Eingang ausblenden, taucht zum gewaehlten Zeitpunkt 
 Kein Blocker, bitte nach der aktuell laufenden UI-Arbeit (Onboarding-Provider-Auswahl, Sicherheits-Badges) einordnen. Alle fuenf Punkte unabhaengig voneinander umsetzbar.
 
 
-[2026-09-21] [offen] [WICHTIGE LUECKE ENTDECKT - echter Malware-Scan] [contracts + Track A/B] [hohe Prioritaet, nach der aktuell laufenden UI-Arbeit] — Massimo hat nachgefragt, wie mit potenziell schadhaften Mail-Anhaengen/Fotos umgegangen wird. Geprueft (SYNC.md-Volltextsuche): Anhang-Scan existiert BISHER NUR beim SENDEN (POST /attachments), und selbst dort ist es laut eigener Dokumentation nur ein MOCK (attachmentScanMock.ts: Dateiendungs-Blockliste + ein deterministischer Test-Ausloeser, kein echter Virenscan). Fuer EINGEHENDE Mail-Anhaenge gibt es aktuell UEBERHAUPT KEINEN Scan -- eine Mail mit bösartigem Anhang landet ungeprueft im Postfach.
+[2026-09-21] [erledigt: f570a7b] [WICHTIGE LUECKE ENTDECKT - echter Malware-Scan] [contracts + Track A/B] [hohe Prioritaet, nach der aktuell laufenden UI-Arbeit] — Massimo hat nachgefragt, wie mit potenziell schadhaften Mail-Anhaengen/Fotos umgegangen wird. Geprueft (SYNC.md-Volltextsuche): Anhang-Scan existiert BISHER NUR beim SENDEN (POST /attachments), und selbst dort ist es laut eigener Dokumentation nur ein MOCK (attachmentScanMock.ts: Dateiendungs-Blockliste + ein deterministischer Test-Ausloeser, kein echter Virenscan). Fuer EINGEHENDE Mail-Anhaenge gibt es aktuell UEBERHAUPT KEINEN Scan -- eine Mail mit bösartigem Anhang landet ungeprueft im Postfach.
 
 **Bestaetigter Ansatz von Massimo:**
 

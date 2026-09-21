@@ -1017,3 +1017,18 @@ Cmd/Ctrl+K: echter globaler `keydown`-Listener in `App.tsx` fokussiert das beste
 **Tests:** `tsc -b`/`vite build`/`oxlint` gruen (bestehende 6er-Warnungs-Baseline, keine neuen). Per Browser-Automation gegen den Mock-Server verifiziert: Sidebar sichtbar schmaler, Quarantaene-Ordner zeigt drei Mails mit dem "Phishing-Verdacht"-Badge als einzigem farbigen Element in der Zeile, ausgewaehlte Zeile mit schlankem Akzent-Balken statt Vollrahmen, Cmd+K fokussiert das Suchfeld und liefert ein echtes Suchergebnis, Detailansicht einer Quarantaene-Mail zeigt vier Sicherheits-Badges klar farbig neben durchgehend neutralen Aktions-Buttons. Konsole in allen Schritten ohne Fehler.
 
 **Kein Blocker.** Damit sind beide Clients (iOS + Web) fuer diesen Auftrag fertig.
+
+
+[2026-09-21] [terminal] [A] — WEB_INBOX.md 21.09. "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan" (hohe Prioritaet), fertig (Commit `f570a7b`).
+
+**Vorgefundene Luecke, wie von Massimo vermutet:** Anhang-Scan existierte nur beim SENDEN (`POST /attachments`), und selbst dort war es laut eigener Dokumentation nur ein Mock (`attachmentScanMock.ts`: Dateiendungs-Blockliste + ein deterministischer Dateiname-Trigger fuer "malicious", kein echter Signatur-Scan). Fuer EINGEHENDE Mail-Anhaenge gab es ueberhaupt keinen Scan.
+
+**Drei Ebenen wie im Auftrag:** Dateiendungs-Blockliste, Magic-Bytes-Pruefung (neu, `lookups/magicBytes.ts` -- erkennt eine als harmlos getarnte, tatsaechlich ausfuehrbare Datei anhand der ersten Bytes, nicht nur der Endung), echter ClamAV-Signaturabgleich ueber einen lokalen `clamd`-Daemon (`clamscan`-npm-Package). Kein stillschweigender Fallback auf "clean", wenn `clamd` nicht erreichbar ist -- liefert ehrlich `scan_failed` (bereits im Contract vorgesehen), echt gegengetestet (Daemon kurz gestoppt, `scan_failed` bestaetigt, danach wieder gestartet).
+
+**Beide Richtungen:** Senden lief bereits echt gegen die tatsaechlichen Bytes um (vorher nur Metadaten). NEU: Empfangen -- alle drei Mail-Adapter (Gmail/IMAP/Fixture) liefern Anhaenge jetzt mit (`FetchedMail.attachments`, neues Feld in `mail/types.ts`; Gmail braucht dafuer einen zusaetzlichen `attachments.get`-Aufruf pro Anhang, IMAP bekommt sie von `mailparser` direkt mit). `mail/sync.ts` scannt jeden eingehenden Anhang direkt nach dem Import. Wichtige Verhaltens-Entscheidung: ein als `malicious` erkannter Anhang loescht NICHT die ganze Mail (anders als der bestehende spam/gambling-Auto-Delete-Pfad) -- ein legitimer Absender koennte versehentlich einen infizierten Anhang mitschicken, nur der Anhang selbst bleibt gesperrt.
+
+**Neue API-Flaeche:** `GET /messages/{id}` liefert jetzt `attachments[]` (neues `MessageAttachment`-Schema) -- vorher gab es dafuer ueberhaupt keine Exposition, auch nicht fuer beim Senden hochgeladene Anhaenge.
+
+**Tests:** echte EICAR-Test-Signatur (offizieller, ungefaehrlicher AV-Test-String) fuer den `malicious`-Fall, echter PE-Header in einer als `.jpg`/`.pdf` getarnten Datei fuer den Magic-Bytes-Fall -- beide Richtungen (Senden per Upload-Test, Empfangen per zwei neuen Fixture-Anhaengen). Gruen in-memory + gegen frisches Postgres, gegen einen echten lokalen `clamd`-Daemon (Setup-Anleitung in `backend/README.md` "Malware-Scan").
+
+**Kein Blocker.**
