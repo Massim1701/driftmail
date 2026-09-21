@@ -2185,6 +2185,86 @@ komplett client-seitig, Punkt 2 dezenter Listen-Hinweis + Einstellungs-
 Schalter, Punkt 3 Compose-Option + automatischer Vorschlag bei erkannten
 sensiblen Daten + Anzeige des Ablaufzustands in der Detailansicht).
 
+## Zwei Enterprise-Sicherheits-Features -- [2026-09-21] Nachtrag
+(WEB_INBOX.md 21.09. "ZWEI ENTERPRISE-SICHERHEITS-FEATURES - echtes Alleinstellungsmerkmal")
+
+### 1) "Quishing"-Schutz -- Phishing-Links in QR-Codes/Bildern
+
+Angreifer verstecken zunehmend boesartige Links in QR-Codes oder als reines
+Bild statt als klickbaren Text, um klassische Link-Erkennung zu umgehen.
+`attachments/imageLinkScan.ts` (`detectQuishingInImage()`) prueft Bild-
+Anhaenge auf zwei Quellen:
+1. **QR-Code-Decoder** (`jsqr` + `jimp`): `jimp` dekodiert die Bilddatei
+   (JPEG/PNG) in rohe RGBA-Pixel, `jsqr` selbst kann kein JPEG/PNG lesen,
+   nur `Uint8ClampedArray`-Pixeldaten.
+2. **OCR-erkannter Text** -- Wiederverwendung des bestehenden `OcrAdapter`
+   aus der Sensible-Dokument-Erkennung (`tesseract.js`, kein zweiter
+   OCR-Pfad), URLs per Regex aus dem erkannten Text extrahiert.
+
+Gefundene URLs werden NICHT neu bewertet (kein eigenes Phishing-Modell) --
+sie durchlaufen `extractDomains()`/`isHomoglyphDomain()` aus
+`@driftmail/security-classification`, DIESELBE Pruefung wie normale
+Text-Links im Mail-Koerper (Wiederverwendung statt Neubau, wie im Auftrag
+verlangt). Ein Treffer escaliert `security.homoglyphDetected` und
+klassifiziert die Nachricht neu ueber dieselbe `classify()`-Funktion, die
+auch `analyzeMail()` intern benutzt (keine zweite, abweichende
+Klassifikationslogik) -- eingebaut in `mail/sync.ts` als
+Nachbearbeitungsschritt, analog zu den externen Lookups (WHOIS/IBAN/IP-
+Reputation).
+
+Test-Fixtures (`test-fixtures/qr-code-phishing.png`/`qr-code-clean.png`,
+per `qrcode`-Devdependency generiert) sowie Fixture 10 (`fixtureAdapter.ts`
+-- sonst technisch "saubere" Mail, deren einziger Phishing-Hinweis im
+QR-Code-Bildanhang steckt, nicht im Mail-Text) verifizieren das end-to-end.
+
+### 2) Klick-Zeit-Link-Pruefung
+
+`GET /link-check?url=...` (`routes/linkCheck.ts`): bisherige Link-
+Sicherheitspruefung laeuft nur EINMAL beim Empfang der Mail. Enterprise-
+Loesungen (Proofpoint/Mimecast) pruefen zusaetzlich im Moment des
+tatsaechlichen Klicks erneut, da Angreifer eine zunaechst harmlose
+Zielseite registrieren, die erste Pruefung bestehen, und die Seite danach
+gegen eine boesartige tauschen ("time-of-click"-Angriff). Prueft erneut
+per `isHomoglyphDomain()` + `domainReputationLookup` (dieselbe Mock-
+Reputationspruefung, die auch beim Empfang laeuft) -- bei Unauffaelligkeit
+302-Weiterleitung zur echten Zielseite, bei Verdacht eine selbststaendige
+Warn-Seite (200, `text/html`, XSS-sicher escaped) mit "Trotzdem oeffnen"-
+Option statt automatischer Weiterleitung.
+
+**Bewusst `security: []` (unauthentifiziert):** wird durch eine ECHTE
+Browser-Navigation aufgerufen (Klick auf einen Link in einer Mail), ein
+Browser haengt beim Navigieren keinen Authorization-Header an -- gleiches
+Prinzip wie `GET /mail-providers`. Die Pruefung selbst ist ausserdem
+nutzerunabhaengig. Ein offener Redirect zu einer beliebigen (vom
+Mail-Absender vorgegebenen) URL ist hier ABSICHTLICHES Design, kein
+Versehen -- genau das ist der Zweck von URL-Rewriting-Loesungen wie
+Proofpoint URL Defense.
+
+**Realistische Aufwands-Einschaetzung (wie im Auftrag ausdruecklich
+verlangt, da dies laut Auftragstext "die aufwendigere der beiden
+Ergaenzungen" ist):** dieser Endpunkt ist die vollstaendige, eigenstaendig
+testbare BACKEND-Haelfte. Fuer die VOLLE Funktion im echten Klick-Fluss
+fehlt noch eine groessere, bewusst NICHT Teil dieses Schritts gewordene
+Client-Aenderung: driftmail zeigt Mail-Text aktuell durchgaengig als
+reinen Klartext an (siehe Abschnitt "5 Wettbewerbs-Luecken" Punkt 1
+weiter unten -- kein HTML-Rendering) -- URLs im Nachrichtentext sind
+dadurch aktuell gar nicht klickbar/verlinkt, weder in Web noch iOS. Damit
+dieser Endpunkt im echten Klick-Fluss ueberhaupt erreicht wird, muesste
+die Client-UI zusaetzlich (a) URLs im Klartext erkennen/verlinken
+(Auto-Linkify) und (b) deren `href` auf
+`${API_BASE}/link-check?url=<encodeURIComponent(url)>` statt direkt auf
+die Original-URL umschreiben -- ein eigener, groesserer, noch offener
+UI-Auftrag (siehe SYNC.md).
+
+**Tests:** `smoketest.ts` ruft `GET /link-check` direkt per unauthentifiziertem
+`fetch` auf (kein Bearer-Token, wie ein echter Browser-Klick) -- eine
+unauffaellige URL liefert 302 + korrekten `Location`-Header, eine
+verdaechtige URL (Homoglyph ODER niedrige Domain-Reputation) liefert 200
+mit einer Warn-Seite, ein fehlender `url`-Parameter liefert 400. Gruen
+in-memory + gegen frisches Postgres (kein Contract-/Schema-Aenderungsbedarf
+bei beiden Features -- reine neue Route + ein neues Feld, keine neue
+Tabelle/Spalte).
+
 ## 5 Wettbewerbs-Luecken (Proton/Hey/Superhuman-Vergleich) -- [2026-09-21] Nachtrag
 (WEB_INBOX.md 21.09. "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken")
 

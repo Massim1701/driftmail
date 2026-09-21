@@ -12,3 +12,9 @@ gängige, öffentlich bekannte Testwerte).
   (zwei Zeilen, nicht prüfzifferngültig, siehe `mrzDetection.ts`).
 - `innocuous-photo.png` — unauffälliges Foto ohne jedes Muster, für den
   Negativ-Fall (`containsSensitiveDocument: 'none'`).
+- `qr-code-phishing.png` / `qr-code-clean.png` — echte QR-Codes für den
+  "Quishing"-Schutz (siehe `backend/README.md` "Quishing-Schutz"), generiert
+  per `qrcode`-Devdependency (`npx tsx -e "..."`, kein Foto). Der
+  Phishing-Code kodiert `http://аpple.com/verify` (kyrillisches "а" statt
+  "a", derselbe Homoglyph-Trick wie bei Fixture 6 im Mail-Text), der clean-Code
+  `https://driftware.online/`.

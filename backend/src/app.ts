@@ -17,6 +17,7 @@ import { signaturesRouter } from "./routes/signatures";
 import { absenceResponderRouter } from "./routes/absenceResponder";
 import { privacySettingsRouter } from "./routes/privacySettings";
 import { breachesRouter } from "./routes/breaches";
+import { linkCheckRouter } from "./routes/linkCheck";
 import { internalRouter } from "./routes/internal";
 import { requireAuth } from "./middleware/auth";
 
@@ -40,6 +41,11 @@ export function createApp() {
   // GET /mail-providers (WEB_INBOX.md 15.09.): laeuft VOR dem Login (Onboarding-
   // Provider-Auswahl), deshalb wie authRouter vor requireAuth gemountet.
   v1.use(mailProvidersRouter);
+  // GET /link-check (WEB_INBOX.md 21.09. "ZWEI ENTERPRISE-SICHERHEITS-
+  // FEATURES" Punkt 2): wird durch eine echte Browser-Navigation (Mail-
+  // Link-Klick) aufgerufen, kein Bearer-Token vorhanden -- siehe
+  // routes/linkCheck.ts Datei-Kopfkommentar.
+  v1.use(linkCheckRouter);
   v1.use(requireAuth);
   v1.use(accountsRouter);
   v1.use(foldersRouter);

@@ -29,6 +29,8 @@ import {
   ibanThreadCheck,
   ipReputationLookup,
 } from "../lookups";
+import { ocrAdapter, detectQuishingInImage } from "../attachments";
+import { classify } from "@driftmail/security-classification";
 
 /** Wählt den passenden Adapter für ein Konto.
  *
@@ -222,6 +224,41 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
       // analog zu den vier bestehenden externen Lookups, siehe
       // lookups/ibanThreadCheck.ts.
       security.ibanChangedInThread = await ibanThreadCheck.checkChanged(inReplyToMessageId, ibanCandidates);
+
+      // "Quishing"-Schutz (WEB_INBOX.md 21.09. "ZWEI ENTERPRISE-SICHERHEITS-
+      // FEATURES", Punkt 1): Bild-Anhaenge auf boesartige Links pruefen, BEVOR
+      // die Klassifikations-Entscheidung (Quarantaene/Auto-Delete) unten
+      // faellt -- ein Homoglyph-Treffer im QR-Code/Bildtext escaliert
+      // security.homoglyphDetected + klassifiziert neu ueber dieselbe
+      // classify()-Funktion, die auch analyzeMail() oben schon benutzt hat
+      // (keine eigene, zweite Klassifikationslogik). Nachbearbeitungsschritt
+      // wie die externen Lookups oben, nicht Teil von security-classification/
+      // selbst (das bleibt zustandslos + bekommt keine Bild-/OCR-Faehigkeit).
+      if (!security.homoglyphDetected && mail.attachments.length > 0) {
+        for (const attachment of mail.attachments) {
+          const quishingDetected = await detectQuishingInImage(
+            { buffer: attachment.content, mimeType: attachment.mimeType },
+            ocrAdapter,
+          );
+          if (quishingDetected) {
+            security.homoglyphDetected = true;
+            const escalated = classify({
+              spfStatus: security.spfStatus,
+              dkimStatus: security.dkimStatus,
+              dmarcStatus: security.dmarcStatus,
+              homoglyphDetected: true,
+              linkMismatchDetected: security.linkMismatchDetected,
+              displayNameSpoofingDetected: security.displayNameSpoofingDetected,
+              replyToMismatchDetected: security.replyToMismatchDetected,
+              urgencyLanguageScore: security.urgencyLanguageScore ?? 0,
+              containsNewIban: security.containsNewIban,
+            });
+            security.classification = escalated.classification;
+            security.confidenceScore = escalated.confidenceScore;
+            break; // ein Treffer reicht, weitere Anhaenge muessen nicht mehr geprueft werden
+          }
+        }
+      }
 
       // Auto-Delete-Pfad (WEB_INBOX.md 08.09., siehe SYNC.md): eindeutiger
       // Erotik-/Glücksspiel-Spam wird NIE persistiert -- weder als

@@ -99,6 +99,39 @@ paths:
                 items:
                   $ref: "#/components/schemas/MailProvider"
 
+  /link-check:
+    get:
+      summary: >
+        [2026-09-21] "ZWEI ENTERPRISE-SICHERHEITS-FEATURES - echtes
+        Alleinstellungsmerkmal" Punkt 2, "Klick-Zeit-Link-Pruefung": prueft
+        eine Ziel-URL erneut im Moment des Klicks (Homoglyph-Erkennung +
+        Domain-Reputation), nicht nur einmalig beim Empfang der Mail --
+        schuetzt vor "time-of-click"-Angriffen (eine zunaechst harmlose
+        Zielseite wird nach der Zustellung gegen eine boesartige
+        getauscht). `security: []` -- wird durch eine echte Browser-
+        Navigation aufgerufen (Klick auf einen Link in einer Mail), kein
+        Bearer-Token vorhanden. Leitet bei einer als sicher eingestuften
+        URL per 302 direkt weiter; bei einer verdaechtigen URL liefert der
+        Endpunkt stattdessen eine Warn-Seite (200, text/html) mit der
+        Moeglichkeit, trotzdem fortzufahren -- siehe backend/README.md
+        "Klick-Zeit-Link-Pruefung" fuer die Aufwands-Einschaetzung
+        (Backend-Teil vollstaendig, Client-seitiges Auto-Linkify der
+        Klartext-Mail-Koerper ist ein separater, noch offener Schritt).
+      security: []
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: URL als sicher eingestuft, Weiterleitung zur Zielseite
+        "200":
+          description: URL als verdächtig eingestuft, Warn-Seite (text/html)
+        "400":
+          description: Fehlender oder ungültiger url-Parameter
+
   /accounts:
     get:
       summary: Verbundene Mail-Konten des angemeldeten Users auflisten

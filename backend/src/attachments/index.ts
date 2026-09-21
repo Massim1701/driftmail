@@ -8,4 +8,6 @@ import type { OcrAdapter } from "./types";
 export const ocrAdapter: OcrAdapter = new TesseractOcrAdapter();
 
 export { scanForSensitiveDocument } from "./sensitiveDocumentScan";
+// [2026-09-21] "ZWEI ENTERPRISE-SICHERHEITS-FEATURES" Punkt 1 ("Quishing"-Schutz).
+export { detectQuishingInImage } from "./imageLinkScan";
 export type { OcrAdapter } from "./types";

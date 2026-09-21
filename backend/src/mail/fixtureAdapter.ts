@@ -6,7 +6,17 @@
 // end-to-end sichtbar.
 
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
+
+// [2026-09-21] "ZWEI ENTERPRISE-SICHERHEITS-FEATURES" Punkt 1 ("Quishing"-
+// Schutz): echtes QR-Code-Bild (generiert per `qrcode`-Devdependency, siehe
+// test-fixtures/README.md), enthaelt denselben Homoglyph-Trick wie Fixture 6
+// (kyrillisches "а" statt "a" in "apple.com"), aber NUR im QR-Code kodiert
+// -- kein Klartext-Link in der Mail selbst, genau der Umgehungsversuch, den
+// dieses Feature abdecken soll.
+const QR_CODE_PHISHING_PNG = readFileSync(join(__dirname, "..", "..", "test-fixtures", "qr-code-phishing.png"));
 
 const now = () => new Date();
 const daysAgo = (n: number) => new Date(now().getTime() - n * 24 * 3600 * 1000).toISOString();
@@ -292,6 +302,33 @@ const FIXTURES: FetchedMail[] = [
         filename: "rechnung.pdf",
         mimeType: "application/pdf",
         content: Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]),
+      },
+    ],
+  },
+  {
+    // "Quishing"-Schutz (WEB_INBOX.md 21.09. "ZWEI ENTERPRISE-SICHERHEITS-
+    // FEATURES", Punkt 1): sonst technisch "saubere" Mail (SPF pass, keine
+    // Dringlichkeitssprache, kein Klartext-Link) -- der einzige Phishing-
+    // Hinweis steckt im QR-Code-Bild-Anhang. Ohne die Quishing-Pruefung
+    // wuerde diese Mail als "safe"/"unclear" klassifiziert.
+    messageIdHeader: "<fixture-10@paket-lieferung.example>",
+    providerMessageId: null,
+    fromAddress: "versand@paket-lieferung.example",
+    fromDisplayName: "Paketdienst",
+    replyToAddress: null,
+    subject: "Ihr Paket wartet -- QR-Code scannen zur Abholung",
+    bodyText: "Bitte scannen Sie den beigefuegten QR-Code, um Ihre Sendung zur Abholung freizugeben.",
+    receivedAt: daysAgo(0),
+    rawHeaders: {
+      From: "Paketdienst <versand@paket-lieferung.example>",
+      "Received-SPF": "pass",
+      "Content-Type": "multipart/mixed",
+    },
+    attachments: [
+      {
+        filename: "abholcode.png",
+        mimeType: "image/png",
+        content: QR_CODE_PHISHING_PNG,
       },
     ],
   },

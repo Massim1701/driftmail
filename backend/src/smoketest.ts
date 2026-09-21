@@ -1920,6 +1920,54 @@ async function main() {
     const acknowledged = (await acknowledgeRes.json()) as Record<string, unknown>;
     assert(acknowledged.acknowledged === true, "PATCH sollte acknowledged=true setzen");
 
+    // ----- "ZWEI ENTERPRISE-SICHERHEITS-FEATURES" (WEB_INBOX.md 21.09.) -----
+
+    // Punkt 1 ("Quishing"-Schutz): Fixture 10 hat einen QR-Code-Bildanhang
+    // mit einem Homoglyph-Phishing-Link -- der Mail-TEXT selbst enthaelt
+    // KEINEN Link, sonst waere die Mail technisch "sauber" (SPF pass, keine
+    // Dringlichkeitssprache).
+    const fixture10 = await store.findMessageByHeader(account.id, "<fixture-10@paket-lieferung.example>");
+    assert(fixture10 !== undefined, "Fixture 10 sollte importiert worden sein");
+    const fixture10Detail = (await (await fetch(`${base}/v1/messages/${fixture10!.id}`)).json()) as Record<string, unknown>;
+    const fixture10Security = fixture10Detail.security as Record<string, unknown>;
+    assert(
+      fixture10Security.homoglyphDetected === true,
+      "QR-Code mit Homoglyph-Phishing-Link sollte homoglyphDetected=true auslösen, obwohl der Mail-Text selbst keinen Link enthält",
+    );
+    assert(
+      fixture10Detail.classification === "spam" || fixture10Detail.classification === "phishing",
+      `Quishing-Escalation sollte die Klassifikation auf mind. 'spam' anheben, war '${fixture10Detail.classification}'`,
+    );
+
+    // Punkt 2 ("Klick-Zeit-Link-Pruefung"): GET /link-check, bewusst
+    // UNAUTHENTIFIZIERT getestet (globalThis.fetch statt der lokal
+    // geshadowten fetch() mit Auto-Bearer-Token) -- ein echter Browser-Klick
+    // haengt keinen Authorization-Header an.
+    const safeUrl = "https://driftware.online/";
+    const safeLinkCheckRes = await globalThis.fetch(`${base}/v1/link-check?url=${encodeURIComponent(safeUrl)}`, {
+      redirect: "manual",
+    });
+    assert(safeLinkCheckRes.status === 302, "GET /v1/link-check mit unauffälliger URL sollte 302 (Weiterleitung) liefern");
+    assert(
+      safeLinkCheckRes.headers.get("location") === safeUrl,
+      "GET /v1/link-check sollte per Location-Header zur echten Zielseite weiterleiten",
+    );
+
+    const suspiciousUrl = "http://apple-login-verify-account.tk/secure";
+    const suspiciousLinkCheckRes = await globalThis.fetch(`${base}/v1/link-check?url=${encodeURIComponent(suspiciousUrl)}`, {
+      redirect: "manual",
+    });
+    assert(
+      suspiciousLinkCheckRes.status === 200,
+      "GET /v1/link-check mit verdächtiger URL sollte 200 (Warn-Seite) liefern, KEINE Weiterleitung",
+    );
+    const suspiciousBody = await suspiciousLinkCheckRes.text();
+    assert(suspiciousBody.includes("verdächtig"), "Warn-Seite sollte einen erklärenden Hinweistext enthalten");
+    assert(suspiciousBody.includes(suspiciousUrl), "Warn-Seite sollte die Ziel-URL anzeigen (für 'trotzdem öffnen')");
+
+    const missingUrlRes = await globalThis.fetch(`${base}/v1/link-check`);
+    assert(missingUrlRes.status === 400, "GET /v1/link-check ohne url-Parameter sollte 400 liefern");
+
     // ----- Autorisierung (echte Auth, [2026-09-10]): ein zweiter, echter
     // User darf NICHT auf die Nachrichten/Ordner des ersten zugreifen, nur
     // weil er selbst eingeloggt ist (Authentifizierung allein reicht nicht,
@@ -2143,7 +2191,7 @@ async function main() {
     // Massimo müsste den kompletten Weg einmal mit einem echten GMX-/
     // web.de-/iCloud-Konto gegentesten.
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent -> Nudge -> Vertraulicher Modus -> Echter Malware-Scan -> Tracking-Schutz-Einstellungen -> Snooze -> Schedule Send -> Darkweb-Ueberwachung) end-to-end grün.");
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent -> Nudge -> Vertraulicher Modus -> Echter Malware-Scan -> Tracking-Schutz-Einstellungen -> Snooze -> Schedule Send -> Darkweb-Ueberwachung -> Quishing-Schutz -> Klick-Zeit-Link-Pruefung) end-to-end grün.");
   } finally {
     server.close();
     // Ohne das haelt der tesseract.js-Worker (worker_threads) den Prozess
