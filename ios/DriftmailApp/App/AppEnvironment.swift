@@ -139,6 +139,7 @@ final class AppEnvironment: ObservableObject {
         activeAccountId = nil
         folders = []
         trustedSenderAddresses = []
+        contacts = []
     }
 
     /// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): Geraete-eigene KI
@@ -247,6 +248,18 @@ final class AppEnvironment: ObservableObject {
         trustedSenderAddresses.insert(address)
     }
 
+    /// [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt
+    /// 2 ("Kontakt-Autovervollstaendigung"): bekannte Adressen fuer An/CC/
+    /// BCC-Vorschlaege in `ComposeView`, gecacht wie `trustedSenderAddresses`
+    /// -- geladen einmal beim Oeffnen des Compose-Screens (siehe dort), kein
+    /// erneuter Server-Roundtrip pro Tastendruck.
+    @Published var contacts: [String] = []
+
+    func loadContacts() async {
+        if !contacts.isEmpty { return }
+        contacts = (try? await apiClient.fetchContacts()) ?? []
+    }
+
     /// Overwrites the live `DesignTokens.Color.accent` AND bumps
     /// `accentTheme` (`@Published`) in one place -- every caller (load and
     /// save alike) goes through this, so the two never drift apart.
@@ -255,22 +268,42 @@ final class AppEnvironment: ObservableObject {
         accentTheme = theme
     }
 
+    /// [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 1: gespiegelt von
+    /// `GET /settings` wie `accentTheme` -- Default `true`, bis
+    /// `loadSettings()` den echten Wert geladen hat.
+    @Published private(set) var strictUnknownSenders = true
+
     /// `GET /settings` (WEB_INBOX.md 21.09. "Einstellungsbereich", Ansicht:
-    /// Akzentfarben-Auswahl) -- lädt einmal beim App-Start (siehe
+    /// Akzentfarben-Auswahl; erweitert um `strictUnknownSenders` in "FUENF
+    /// NEUE KOMFORT-FEATURES" Punkt 1) -- lädt einmal beim App-Start (siehe
     /// `FolderListView.task`), analog zu `loadTrustedSenders()`. Stiller
-    /// Fehlschlag lässt den Default (`teal`) stehen.
+    /// Fehlschlag lässt die Defaults stehen.
     func loadSettings() async {
         guard let settings = try? await apiClient.fetchSettings() else { return }
         applyAccentTheme(settings.accentTheme)
+        strictUnknownSenders = settings.strictUnknownSenders
     }
 
-    /// `PUT /settings`. Aktualisiert `accentTheme`/die Live-Farbe erst NACH
-    /// erfolgreicher Server-Antwort (Quelle der Wahrheit), kein
-    /// optimistisches Umfärben.
+    /// `PUT /settings`. Aktualisiert `accentTheme`/die Live-Farbe und
+    /// `strictUnknownSenders` erst NACH erfolgreicher Server-Antwort
+    /// (Quelle der Wahrheit), kein optimistisches Umfärben/Umschalten.
     @discardableResult
     func updateAccentTheme(_ theme: AccentTheme) async throws -> UserSettings {
-        let updated = try await apiClient.updateSettings(accentTheme: theme)
+        let updated = try await apiClient.updateSettings(accentTheme: theme, strictUnknownSenders: nil)
         applyAccentTheme(updated.accentTheme)
+        strictUnknownSenders = updated.strictUnknownSenders
+        return updated
+    }
+
+    /// `PUT /settings` fuer den `strictUnknownSenders`-Toggle in
+    /// `SettingsView` -- eigene Methode statt eines gemeinsamen Parameters
+    /// im Aufrufer, damit jede Einstellung fuer sich unabhaengig speicherbar
+    /// bleibt (mirrors `updateAccentTheme(_:)` oben).
+    @discardableResult
+    func updateStrictUnknownSenders(_ enabled: Bool) async throws -> UserSettings {
+        let updated = try await apiClient.updateSettings(accentTheme: nil, strictUnknownSenders: enabled)
+        applyAccentTheme(updated.accentTheme)
+        strictUnknownSenders = updated.strictUnknownSenders
         return updated
     }
 

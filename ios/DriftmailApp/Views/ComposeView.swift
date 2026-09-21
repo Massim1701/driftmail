@@ -39,6 +39,20 @@ struct ComposeView: View {
     @State private var showAiOverwriteConfirm = false
     @State private var isSending = false
     @State private var sendBlockedReason: String?
+
+    /// [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt
+    /// 2 ("Kontakt-Autovervollstaendigung"): welches Feld gerade fokussiert
+    /// ist, steuert wo die Vorschlagsliste erscheint.
+    private enum ComposeField { case to, cc, bcc }
+    @FocusState private var focusedField: ComposeField?
+
+    /// [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 3 ("Entwuerfe
+    /// automatisch speichern"): `nil`, bis der erste Autosave gelaufen ist
+    /// -- danach `PATCH` statt `POST` fuer alle Folge-Speicherungen. Beim
+    /// erfolgreichen Senden wird die ID durchgereicht, damit der Server den
+    /// Entwurf automatisch verwirft (siehe `send()` unten).
+    @State private var draftId: String?
+    @State private var autosaveTask: Task<Void, Never>?
     @State private var errorMessage: String?
 
     private var original: MessageDetail? {
@@ -104,21 +118,30 @@ struct ComposeView: View {
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                        .focused($focusedField, equals: .to)
+                        .onChange(of: to) { scheduleAutosave() }
+                    contactSuggestions(for: .to, text: $to)
 
                     if showCcBcc {
                         TextField("CC", text: $cc)
                             .keyboardType(.emailAddress)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                            .focused($focusedField, equals: .cc)
+                            .onChange(of: cc) { scheduleAutosave() }
+                        contactSuggestions(for: .cc, text: $cc)
                         TextField("BCC", text: $bcc)
                             .keyboardType(.emailAddress)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                            .focused($focusedField, equals: .bcc)
+                        contactSuggestions(for: .bcc, text: $bcc)
                     } else {
                         Button("CC/BCC hinzufügen") { showCcBcc = true }
                     }
 
                     TextField("Betreff", text: $subject)
+                        .onChange(of: subject) { scheduleAutosave() }
                 } footer: {
                     Text("Mehrere Adressen durch Komma trennen.")
                 }
@@ -126,6 +149,7 @@ struct ComposeView: View {
                 Section {
                     TextEditor(text: $bodyText)
                         .frame(minHeight: 180)
+                        .onChange(of: bodyText) { scheduleAutosave() }
                 }
 
                 if !composeAttachments.isEmpty {
@@ -203,6 +227,20 @@ struct ComposeView: View {
                 }
             }
             .onAppear(perform: setUpPrefill)
+            .task { await environment.loadContacts() }
+            .onDisappear {
+                // "...oder beim Verlassen des Compose-Screens" (siehe PATCH
+                // /drafts/{draftId}-Summary im Contract) -- letzter,
+                // sofortiger Speicherversuch statt auf den Debounce zu
+                // warten, falls der User direkt nach dem letzten
+                // Tastendruck wegnavigiert. Kein Effekt, wenn schon
+                // gesendet wurde (dann ist der Entwurf serverseitig bereits
+                // verworfen, ein 404 beim Update wird still verschluckt).
+                autosaveTask?.cancel()
+                if hasUnsavedContent {
+                    Task { await performAutosave() }
+                }
+            }
             .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
                 if case .success(let urls) = result {
                     for url in urls { Task { await uploadAttachment(from: url) } }
@@ -354,14 +392,109 @@ struct ComposeView: View {
                 subject: subject,
                 bodyText: bodyText,
                 attachmentIds: composeAttachments.compactMap(\.attachmentId),
-                draftId: nil
+                // [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 3: falls
+                // ein Autosave-Entwurf angelegt wurde, verwirft der Server
+                // ihn nach erfolgreichem Versand automatisch.
+                draftId: draftId
             )
+            autosaveTask?.cancel()
             onSent()
             dismiss()
         } catch APIError.blocked(let reason) {
             sendBlockedReason = reason ?? "Versand wurde aus Sicherheitsgründen blockiert."
         } catch {
             errorMessage = "Versand fehlgeschlagen. Bitte später erneut versuchen."
+        }
+    }
+
+    // MARK: - Kontakt-Autovervollständigung (WEB_INBOX.md 21.09. "FUENF
+    // NEUE KOMFORT-FEATURES" Punkt 2)
+
+    /// Fragment nach dem letzten Komma/Semikolon des übergebenen Textes --
+    /// derselbe Trennzeichen-Satz wie `addressList(from:)`.
+    private static func lastFragment(of raw: String) -> String {
+        raw.split(whereSeparator: { $0 == "," || $0 == ";" }).last
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) } ?? raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func suggestions(for field: ComposeField, text: String) -> [String] {
+        guard focusedField == field else { return [] }
+        let fragment = Self.lastFragment(of: text).lowercased()
+        guard !fragment.isEmpty else { return [] }
+        return environment.contacts
+            .filter { $0.contains(fragment) && $0 != fragment }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    /// Ersetzt nur das Fragment NACH dem letzten Komma durch die gewählte
+    /// Adresse (Rest des Feldes bleibt unangetastet) -- analog zu einer
+    /// nativen `<datalist>`-Auswahl auf Web.
+    private func applySuggestion(_ address: String, to text: Binding<String>) {
+        if let lastSeparator = text.wrappedValue.lastIndex(where: { $0 == "," || $0 == ";" }) {
+            text.wrappedValue = String(text.wrappedValue[...lastSeparator]) + " " + address + ", "
+        } else {
+            text.wrappedValue = address + ", "
+        }
+    }
+
+    @ViewBuilder
+    private func contactSuggestions(for field: ComposeField, text: Binding<String>) -> some View {
+        let matches = suggestions(for: field, text: text.wrappedValue)
+        if !matches.isEmpty {
+            ForEach(matches, id: \.self) { address in
+                Button(address) {
+                    applySuggestion(address, to: text)
+                }
+                .font(.system(size: DesignTokens.Typography.Size.small))
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+            }
+        }
+    }
+
+    // MARK: - Entwürfe automatisch speichern (WEB_INBOX.md 21.09. "FUENF
+    // NEUE KOMFORT-FEATURES" Punkt 3)
+
+    /// Nur relevant für `mode != .reply` -- Antworten haben laut Contract
+    /// kein eigenes Entwurfs-Konzept über diesen Screen (kein
+    /// `inReplyToMessageId`-loser Fall), aber technisch spricht nichts
+    /// dagegen, auch Antwort-Entwürfe zu sichern -- daher bewusst NICHT
+    /// eingeschränkt, `createDraft` akzeptiert `inReplyToMessageId` ohnehin.
+    private var hasUnsavedContent: Bool {
+        !toList.isEmpty || !subject.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Debounced um ~3 Sekunden nach dem letzten Tastendruck, wie im
+    /// Contract-Kommentar für `PATCH /drafts/{draftId}` beschrieben
+    /// ("Laufendes Speichern waehrend des Tippens").
+    private func scheduleAutosave() {
+        autosaveTask?.cancel()
+        autosaveTask = Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            await performAutosave()
+        }
+    }
+
+    private func performAutosave() async {
+        guard hasUnsavedContent else { return }
+        do {
+            if let draftId {
+                _ = try await environment.apiClient.updateDraft(
+                    id: draftId, to: toList, cc: Self.addressList(from: cc), subject: subject, bodyText: bodyText
+                )
+            } else {
+                let created = try await environment.apiClient.createDraft(
+                    inReplyToMessageId: isReply ? original?.id : nil,
+                    to: toList, cc: Self.addressList(from: cc), subject: subject, bodyText: bodyText
+                )
+                draftId = created.id
+            }
+        } catch {
+            // Stiller Fehlschlag -- Autosave ist eine Komfortfunktion, kein
+            // Blocker für das eigentliche Verfassen/Senden. Der nächste
+            // Tastendruck löst ohnehin einen neuen Versuch aus.
         }
     }
 }

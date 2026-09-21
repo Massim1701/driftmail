@@ -6,6 +6,49 @@ import SwiftUI
 /// [2026-09-08] Contract-Änderung: `folder` ist jetzt das `Folder`-Objekt
 /// statt eines Enum-Falls; Vergleich gegen "die Quarantäne" läuft über
 /// `folder.systemKey` statt `folder == .quarantaene`.
+/// [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 4
+/// "Threaded Ansicht": ein Thread ist eine Gruppe von Nachrichten, die
+/// innerhalb der GERADE GELADENEN Liste über `inReplyToMessageId`
+/// zusammenhängen (siehe `groupIntoThreads(_:)` unten für die bewusste
+/// Grenze -- ein Elternteil in einem anderen Ordner bleibt unverknüpft).
+/// `newest` ist die sichtbare Zeile, `older` klappt über "+N ältere" auf.
+private struct MessageThread: Identifiable {
+    let newest: Message
+    let older: [Message]
+    var id: String { newest.id }
+}
+
+/// Gruppiert `messages` nach dem am weitesten zurückverfolgbaren Elternteil
+/// INNERHALB von `messages` selbst (kein Nachladen aus anderen Ordnern) --
+/// alle Nachrichten mit demselben Wurzel-Vorfahren bilden einen Thread,
+/// die neueste davon ist die sichtbare Zeile. Threads sind nach ihrer
+/// neuesten Nachricht sortiert, genau wie die flache Liste zuvor.
+private func groupIntoThreads(_ messages: [Message]) -> [MessageThread] {
+    let byId = Dictionary(uniqueKeysWithValues: messages.map { ($0.id, $0) })
+
+    func rootId(for message: Message) -> String {
+        var current = message
+        var visited: Set<String> = []
+        while let parentId = current.inReplyToMessageId, let parent = byId[parentId], !visited.contains(parentId) {
+            visited.insert(parentId)
+            current = parent
+        }
+        return current.id
+    }
+
+    var groups: [String: [Message]] = [:]
+    for message in messages {
+        groups[rootId(for: message), default: []].append(message)
+    }
+
+    return groups.values
+        .map { group -> MessageThread in
+            let sorted = group.sorted { $0.receivedAt > $1.receivedAt }
+            return MessageThread(newest: sorted[0], older: Array(sorted.dropFirst()))
+        }
+        .sorted { $0.newest.receivedAt > $1.newest.receivedAt }
+}
+
 struct InboxListView: View {
     let folder: Folder
 
@@ -13,6 +56,11 @@ struct InboxListView: View {
     @State private var messages: [Message] = []
     @State private var isLoading = true
     @State private var messagePendingPermanentDelete: Message?
+    /// Thread-IDs (= `MessageThread.id`, die ID der neuesten Nachricht),
+    /// deren "+N ältere" gerade aufgeklappt ist.
+    @State private var expandedThreadIds: Set<String> = []
+
+    private var threads: [MessageThread] { groupIntoThreads(messages) }
 
     var body: some View {
         List {
@@ -32,29 +80,30 @@ struct InboxListView: View {
                 .listRowSeparator(.hidden)
             }
 
-            ForEach(messages) { message in
-                NavigationLink(value: message) {
-                    MessageRowView(message: message)
-                }
-                .listRowBackground(DesignTokens.Color.surfaceCard)
-                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    // [2026-09-08] Löschen per Swipe, analog zum
-                    // "Verschieben nach…"-Menü in der Detailansicht — im
-                    // Papierkorb selbst ist der Swipe "Endgültig löschen"
-                    // statt nochmal "in den Papierkorb verschieben", siehe
-                    // WEB_INBOX.md "Fehlende Basis-Funktion entdeckt".
-                    if folder.isTrash {
-                        Button(role: .destructive) {
-                            messagePendingPermanentDelete = message
-                        } label: {
-                            Label("Endgültig löschen", systemImage: "trash.slash")
+            ForEach(threads) { thread in
+                messageRow(thread.newest)
+
+                if !thread.older.isEmpty {
+                    if expandedThreadIds.contains(thread.id) {
+                        ForEach(thread.older) { older in
+                            messageRow(older)
                         }
+                        Button {
+                            expandedThreadIds.remove(thread.id)
+                        } label: {
+                            Label("Weniger anzeigen", systemImage: "chevron.up")
+                                .font(.system(size: DesignTokens.Typography.Size.small))
+                        }
+                        .listRowBackground(DesignTokens.Color.surfaceCard)
                     } else {
-                        Button(role: .destructive) {
-                            Task { await delete(message) }
+                        Button {
+                            expandedThreadIds.insert(thread.id)
                         } label: {
-                            Label("Löschen", systemImage: "trash")
+                            Label("+\(thread.older.count) ältere", systemImage: "chevron.down")
+                                .font(.system(size: DesignTokens.Typography.Size.small))
+                                .foregroundStyle(DesignTokens.Color.textSecondary)
                         }
+                        .listRowBackground(DesignTokens.Color.surfaceCard)
                     }
                 }
             }
@@ -95,6 +144,38 @@ struct InboxListView: View {
             }
         } message: {
             Text("Diese Nachricht wird unwiderruflich gelöscht und kann nicht wiederhergestellt werden.")
+        }
+    }
+
+    /// Extracted from the former single `ForEach(messages)` body so both
+    /// the visible (newest) row AND expanded "+N ältere" rows share
+    /// identical rendering/swipe-actions -- no behavior change for the
+    /// common case (a thread of size 1 looks exactly like before).
+    @ViewBuilder
+    private func messageRow(_ message: Message) -> some View {
+        NavigationLink(value: message) {
+            MessageRowView(message: message)
+        }
+        .listRowBackground(DesignTokens.Color.surfaceCard)
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            // [2026-09-08] Löschen per Swipe, analog zum
+            // "Verschieben nach…"-Menü in der Detailansicht — im
+            // Papierkorb selbst ist der Swipe "Endgültig löschen"
+            // statt nochmal "in den Papierkorb verschieben", siehe
+            // WEB_INBOX.md "Fehlende Basis-Funktion entdeckt".
+            if folder.isTrash {
+                Button(role: .destructive) {
+                    messagePendingPermanentDelete = message
+                } label: {
+                    Label("Endgültig löschen", systemImage: "trash.slash")
+                }
+            } else {
+                Button(role: .destructive) {
+                    Task { await delete(message) }
+                } label: {
+                    Label("Löschen", systemImage: "trash")
+                }
+            }
         }
     }
 

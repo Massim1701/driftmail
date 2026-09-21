@@ -420,6 +420,20 @@ private struct SettingsView: View {
                     Text("Schützt deinen lokalen Mail-Cache zusätzlich zum Mail-Konto-Login, falls dein Gerät verloren geht oder gestohlen wird.")
                 }
 
+                // [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-
+                // FEATURES" Punkt 1 ("Unbekannte Absender streng
+                // behandeln"): reine Client-Darstellungsentscheidung, steuert
+                // nur, ob MessageDetailView eine staerkere Hervorhebung als
+                // das bestehende dezente "Neuer Absender"-Flag zeigt.
+                Section {
+                    Toggle("Unbekannte Absender streng behandeln", isOn: Binding(
+                        get: { environment.strictUnknownSenders },
+                        set: { newValue in Task { try? await environment.updateStrictUnknownSenders(newValue) } }
+                    ))
+                } footer: {
+                    Text("Hebt Nachrichten von Absendern, die noch nicht auf deiner Whitelist stehen, deutlicher hervor.")
+                }
+
                 // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): BYOK-
                 // Einstellung fuer den optionalen Cloud-KI-Fallback, siehe
                 // AiSettingsView.swift.

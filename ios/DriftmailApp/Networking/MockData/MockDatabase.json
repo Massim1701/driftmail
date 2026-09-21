@@ -101,6 +101,7 @@
       "classification": "safe",
       "canUnsubscribe": false,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Hallo, bitte schick mir bis Freitag ein kurzes Update zum Projektstand. Danke!",
       "security": {
         "spfStatus": "pass",
@@ -129,6 +130,7 @@
       "classification": "safe",
       "canUnsubscribe": false,
       "isNewSender": true,
+      "inReplyToMessageId": null,
       "bodyText": "Guten Tag, bitte reichen Sie die fehlenden Belege bis zum 30.09. nach.",
       "security": {
         "spfStatus": "pass",
@@ -157,6 +159,7 @@
       "classification": "safe",
       "canUnsubscribe": true,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Nur diese Woche: 20% Rabatt auf das gesamte Sortiment. Jetzt shoppen!",
       "security": {
         "spfStatus": "pass",
@@ -185,6 +188,7 @@
       "classification": "safe",
       "canUnsubscribe": false,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Wir laden alle Mitglieder herzlich zur Jahreshauptversammlung am 20.09. ein.",
       "security": {
         "spfStatus": "pass",
@@ -213,6 +217,7 @@
       "classification": "safe",
       "canUnsubscribe": false,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Anbei Ihre Jahresrechnung. Ihr Vertrag läuft bis 31.12.2026, Kündigungsfrist 6 Wochen zum Vertragsende.",
       "security": {
         "spfStatus": "pass",
@@ -241,6 +246,7 @@
       "classification": "safe",
       "canUnsubscribe": false,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Ihr Streaming+-Abo wurde verlängert. Laufzeit bis 15.03.2027, jederzeit kündbar mit 30 Tagen Frist.",
       "security": {
         "spfStatus": "pass",
@@ -269,6 +275,7 @@
       "classification": "phishing",
       "canUnsubscribe": false,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Dringend: Ihr Konto wurde gesperrt. Bestätigen Sie Ihre Daten innerhalb von 24 Stunden, sonst wird das Konto endgültig gelöscht. Neue IBAN zur Verifizierung erforderlich.",
       "security": {
         "spfStatus": "fail",
@@ -297,6 +304,7 @@
       "classification": "phishing",
       "canUnsubscribe": false,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Letzte Warnung: Ihre Apple-ID wird gesperrt. Bitte loggen Sie sich sofort über den folgenden Link ein, um dies zu verhindern.",
       "security": {
         "spfStatus": "fail",
@@ -325,6 +333,7 @@
       "classification": "spam",
       "canUnsubscribe": true,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Herzlichen Glückwunsch! Sie haben 10.000 EUR gewonnen. Klicken Sie hier, um Ihren Gewinn abzuholen.",
       "security": {
         "spfStatus": "none",
@@ -353,6 +362,7 @@
       "classification": "spam",
       "canUnsubscribe": true,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Riesenrabatt nur heute! Jetzt bestellen und sparen.",
       "security": {
         "spfStatus": "none",
@@ -381,6 +391,7 @@
       "classification": "safe",
       "canUnsubscribe": false,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Kommt ihr am Sonntag zum Essen vorbei? Es gibt Braten. Meld dich kurz.",
       "security": {
         "spfStatus": "pass",
@@ -409,6 +420,7 @@
       "classification": "safe",
       "canUnsubscribe": false,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Hiermit bestätigen wir die Kündigung deiner Mitgliedschaft zum Monatsende. Schade, dass du gehst!",
       "security": {
         "spfStatus": "pass",
@@ -437,6 +449,7 @@
       "classification": "safe",
       "canUnsubscribe": true,
       "isNewSender": false,
+      "inReplyToMessageId": null,
       "bodyText": "Die wichtigsten Nachrichten der Woche kompakt zusammengefasst.",
       "security": {
         "spfStatus": "pass",
@@ -453,6 +466,35 @@
         "ibanChangedInThread": false,
         "classification": "safe",
         "confidenceScore": 0.75
+      }
+    },
+    {
+      "id": "msg-014",
+      "fromAddress": "chef@firma.example",
+      "fromDisplayName": "Anna Weber",
+      "subject": "Re: Projektupdate bis Freitag benötigt",
+      "receivedAt": "2026-09-08T15:40:00Z",
+      "folderId": "folder-eingang",
+      "classification": "safe",
+      "canUnsubscribe": false,
+      "isNewSender": false,
+      "inReplyToMessageId": "msg-001",
+      "bodyText": "Danke für die schnelle Rückmeldung, klingt gut. Bis Freitag!",
+      "security": {
+        "spfStatus": "pass",
+        "dkimStatus": "pass",
+        "dmarcStatus": "pass",
+        "senderDomainAgeDays": 3650,
+        "domainReputationScore": 0.95,
+        "homoglyphDetected": false,
+        "linkMismatchDetected": false,
+        "displayNameSpoofingDetected": false,
+        "replyToMismatchDetected": false,
+        "urgencyLanguageScore": 0.0,
+        "containsNewIban": false,
+        "ibanChangedInThread": false,
+        "classification": "safe",
+        "confidenceScore": 0.97
       }
     }
   ],

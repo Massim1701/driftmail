@@ -11,6 +11,13 @@ struct Message: Codable, Identifiable, Hashable {
     let receivedAt: Date
     let folderId: String
     let classification: Classification
+    /// [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 4
+    /// "Threaded Ansicht" -- vorher nur auf `MessageDetail`. Grundlage für
+    /// client-seitiges Gruppieren in `InboxListView` (nur innerhalb der
+    /// gerade geladenen Ordner-Liste auflösbar, siehe backend/README.md
+    /// "Fuenf Komfort-Features" für die bewusste Grenze). `Optional`, damit
+    /// ein fehlender Schlüssel in älteren Mock-Daten nicht crasht.
+    let inReplyToMessageId: String?
 }
 
 /// Mirrors `components/schemas/SecurityResult` in contracts/api-spec.yaml
@@ -60,6 +67,10 @@ struct MessageDetail: Codable, Identifiable, Hashable {
     /// Badge nur zeigen, wenn `isNewSender=true` UND Absender nicht auf der
     /// Whitelist, siehe api-spec.yaml und `MessageDetailView`.
     let isNewSender: Bool
+    /// [2026-09-21] siehe `Message.inReplyToMessageId`-Kommentar -- hier
+    /// war das Feld schon vorher vorhanden (nur `Message`, die Listenform,
+    /// hatte es bisher nicht).
+    let inReplyToMessageId: String?
 
     var asMessage: Message {
         Message(
@@ -69,7 +80,8 @@ struct MessageDetail: Codable, Identifiable, Hashable {
             subject: subject,
             receivedAt: receivedAt,
             folderId: folderId,
-            classification: classification
+            classification: classification,
+            inReplyToMessageId: inReplyToMessageId
         )
     }
 
@@ -88,7 +100,8 @@ struct MessageDetail: Codable, Identifiable, Hashable {
             bodyText: bodyText,
             security: security,
             canUnsubscribe: canUnsubscribe,
-            isNewSender: isNewSender
+            isNewSender: isNewSender,
+            inReplyToMessageId: inReplyToMessageId
         )
     }
 }

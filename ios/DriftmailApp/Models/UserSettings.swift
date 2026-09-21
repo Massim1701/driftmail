@@ -48,4 +48,10 @@ enum AccentTheme: String, Codable, CaseIterable, Identifiable {
 
 struct UserSettings: Codable, Hashable {
     var accentTheme: AccentTheme
+    /// [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt
+    /// 1 ("Unbekannte Absender streng behandeln"), Default `true`. Reine
+    /// Client-Darstellungsentscheidung -- steuert nur, ob `MessageDetailView`
+    /// eine Nachricht von einem unbekannten Absender staerker hervorhebt
+    /// als das bestehende dezente "Neuer Absender"-Flag allein.
+    var strictUnknownSenders: Bool
 }

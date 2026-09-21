@@ -106,11 +106,34 @@ protocol APIClient {
     /// (400), wenn es das letzte Konto des Users waere.
     func deleteAccount(id: String) async throws
     /// `GET /settings` (WEB_INBOX.md 21.09. "Einstellungsbereich", Ansicht:
-    /// Akzentfarben-Auswahl) -- allgemeine UI-Praeferenzen des Users,
-    /// aktuell nur `accentTheme`.
+    /// Akzentfarben-Auswahl; erweitert um `strictUnknownSenders` in
+    /// "FUENF NEUE KOMFORT-FEATURES" Punkt 1) -- allgemeine UI-Praeferenzen
+    /// des Users.
     func fetchSettings() async throws -> UserSettings
-    /// `PUT /settings`.
-    func updateSettings(accentTheme: AccentTheme) async throws -> UserSettings
+    /// `PUT /settings`. Beide Parameter `nil` lassen das jeweilige Feld
+    /// serverseitig unangetastet (siehe backend/README.md -- `PUT` nutzt
+    /// `COALESCE`).
+    func updateSettings(accentTheme: AccentTheme?, strictUnknownSenders: Bool?) async throws -> UserSettings
+
+    /// `GET /contacts` (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"
+    /// Punkt 2 "Kontakt-Autovervollstaendigung") -- bekannte Adressen fuer
+    /// An/CC/BCC-Vorschlaege im Compose-Screen, dedupliziert und
+    /// alphabetisch sortiert.
+    func fetchContacts() async throws -> [String]
+
+    /// `POST /drafts` (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"
+    /// Punkt 3 "Entwuerfe automatisch speichern"): legt den ERSTEN Entwurf
+    /// beim Compose-Vorgang an, sobald der User etwas Sinnvolles getippt
+    /// hat (nicht beim blossen Oeffnen des Compose-Screens). `bcc` ist
+    /// bewusst NICHT Teil dieser Methode -- der Contract kennt `bcc` weder
+    /// bei `POST` noch bei `PATCH /drafts/{id}` (nur bei `POST
+    /// /messages/send` selbst), ein vorhandener BCC-Empfaenger bleibt beim
+    /// Autosave also client-seitig, geht aber beim tatsaechlichen Versand
+    /// ganz normal mit -- dokumentierte Contract-Luecke, kein Bug hier.
+    func createDraft(inReplyToMessageId: String?, to: [String], cc: [String], subject: String?, bodyText: String?) async throws -> Draft
+    /// `PATCH /drafts/{draftId}` -- Folge-Speicherungen waehrend des
+    /// Tippens.
+    func updateDraft(id: String, to: [String], cc: [String], subject: String?, bodyText: String?) async throws -> Draft
 
     /// `POST /messages/send` — sendet eine Antwort auf `inReplyToMessageId`
     /// (das Konto wird backend-seitig aus der Ursprungsnachricht

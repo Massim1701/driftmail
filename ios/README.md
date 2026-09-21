@@ -1006,6 +1006,93 @@ durchklicken (Konto entfernen inkl. Fehlerfall bei nur einem Konto,
 Akzentfarbe wechseln und live sehen, dass sich z.B. `FolderListView`s
 aktives Konto/die Buttons tatsächlich umfärben).
 
+## [2026-09-21] Nachtrag: Fünf Komfort-Features
+
+WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES". Backend-Grundlage
+(Settings-Feld `strictUnknownSenders`, `GET /contacts`, `inReplyToMessageId`
+jetzt auch auf `Message` statt nur `MessageDetail`, `POST`/`PATCH /drafts`)
+kam bereits aus einem früheren Schritt dieser Session (Commit `571ee2c`).
+Dieser Nachtrag ist die iOS-UI dazu, Punkte 1–4. Punkt 5 (manueller
+Abmelden-Button) war schon vollständig vorhanden -- `MessageDetailView`s
+"Abmelden"-Button hängt nicht an der Spam-Klassifikation, sondern rein an
+`detail.canUnsubscribe`, geprüft und bestätigt, keine Änderung nötig.
+
+**1. Unbekannte Absender streng behandeln.** Neuer Toggle in
+`FolderListView.SettingsView` ("Unbekannte Absender streng behandeln"),
+Default an (`AppEnvironment.strictUnknownSenders`, aus `UserSettings`
+geladen). Wirkt sich nur auf `MessageDetailView` aus, nicht auf die
+Listenansicht -- `isNewSender` existiert im Contract nur auf
+`MessageDetail`, nicht auf dem schlankeren `Message`-Shape der Liste, also
+gibt es dort schlicht kein Signal, das man stärker hervorheben könnte.
+`MessageDetailView.isStrictlyFlagged(_:)` prüft
+`strictUnknownSenders && detail.isNewSender && !trustedSenderAddresses.contains(...)`
+und hebt den Header-Block bei Treffer mit `warning`-Hintergrund/-Rahmen
+hervor (gleiche Farbrolle wie die bestehende Quarantäne-Warnung, nur
+dezenter).
+
+**2. Kontakt-Autovervollständigung beim Verfassen.** `ComposeView` hat
+jetzt `@FocusState private var focusedField: ComposeField?` (to/cc/bcc)
+und zeigt unter dem jeweils fokussierten Feld bis zu 5 Vorschläge aus
+`AppEnvironment.contacts` (`GET /contacts`, serverseitig aus
+Nachrichten-Historie + Sendeprotokoll dedupliziert -- keine neue
+Kontakte-Tabelle, wie im Auftrag vorgegeben). Der Vorschlag matcht gegen
+das letzte, noch unfertige Adress-Fragment nach dem letzten Komma, damit
+Mehrfachadressen im selben Feld funktionieren.
+
+**3. Entwürfe automatisch speichern während des Tippens.** Neuer
+Debounce (3s Stille nach der letzten Änderung an To/CC/Betreff/Body) über
+`scheduleAutosave()`/`performAutosave()`, plus ein sofortiger Flush in
+`.onDisappear`, falls noch ungesicherter Inhalt da ist. Der erste
+Autosave legt via `POST /drafts` einen neuen Entwurf an und merkt sich
+dessen `id` (`@State private var draftId`); jeder weitere Autosave ist ein
+`PATCH /drafts/{id}`. Fehler dabei sind bewusst still (best-effort,
+kein Retry, kein User-Feedback) -- ein fehlgeschlagener Autosave darf das
+Tippen nicht unterbrechen. **Bekannte Lücke, ehrlich benannt:** der
+Contract von `POST`/`PATCH /drafts` hat kein `bcc`-Feld (nur `to`, `cc`,
+`subject`, `bodyText`), anders als `POST /messages/send`. Ein getipptes
+BCC wird also während des Autosaves NICHT mitgespeichert -- es geht beim
+eigentlichen Senden nicht verloren (das unterstützt `bcc` sehr wohl), aber
+würde man denselben ungesendeten Entwurf später erneut öffnen, wäre ein
+zuvor nur autogespeichertes BCC weg. Für dieses Nachtrag out of scope
+(Contract-Änderung wäre ein Web+Backend+iOS-übergreifender Schritt).
+
+**4. Threaded Ansicht.** `InboxListView` gruppiert die geladenen
+Nachrichten jetzt über `groupIntoThreads(_:)`: jede Nachricht wird bis zum
+am weitesten zurückverfolgbaren Elternteil verfolgt (`inReplyToMessageId`),
+Nachrichten mit demselben Wurzel-Vorfahren bilden einen Thread. Es wird
+immer nur die neueste Nachricht eines Threads direkt angezeigt, mit einem
+"+N ältere"-Button zum Aufklappen. **Bewusste Grenze:** die Auflösung
+läuft ausschließlich innerhalb der gerade geladenen Ordner-Liste -- ein
+Elternteil in einem anderen Ordner (z.B. eine eigene gesendete Antwort im
+"Gesendet"-Ordner, während man im "Posteingang" browst) wird nicht
+nachgeladen und bleibt daher unverknüpft. Gleiche Grenze wie in
+`backend/README.md` für die Server-Seite dokumentiert. Für realistische
+Test-Daten wurde `MockDatabase.json` um `msg-014` erweitert, eine echte
+Antwort auf `msg-001` ("Re: Projektupdate bis Freitag benötigt"), plus
+`inReplyToMessageId: null` auf allen 13 vorherigen Nachrichten (Feld war
+vorher nur auf `MessageDetail`, jetzt auch auf `Message`).
+
+**Neu in `APIClient`/`MockAPIClient`/`RemoteAPIClient`:**
+`updateSettings(accentTheme:strictUnknownSenders:)` (beide Parameter
+optional, unabhängig voneinander setzbar -- Swifts synthetisiertes
+`Encodable` lässt `nil`-Optionals beim Encoding komplett weg statt sie
+als `null` zu senden, also überschreibt ein `nil` das jeweils andere Feld
+nicht; gleiches Muster wie das schon bestehende `updateFolder`),
+`fetchContacts() -> [String]`, `createDraft(inReplyToMessageId:to:cc:subject:bodyText:)`
+und `updateDraft(id:to:cc:subject:bodyText:)`.
+
+**Tests:** `xcodebuild -scheme DriftmailApp -destination 'platform=iOS
+Simulator,name=iPhone 17 Pro' build` → BUILD SUCCEEDED. Sauberer
+Uninstall/Install/Launch, `log show` auf Crash/Fatal/DecodingError
+geprüft -- keine Treffer (bestätigt u.a., dass die `MockDatabase.json`-
+Erweiterung beim kalten Start nicht crasht). Screenshot bestätigt
+unveränderten, korrekt gerenderten Onboarding-Screen. Wie bei allen
+vorherigen Nachträgen dieser Session ließen sich die neuen Screens selbst
+(Settings-Toggle, Compose-Autocomplete, Thread-Aufklappen) NICHT
+interaktiv durchklicken -- kein Weg am Onboarding-Gate vorbei ohne echte
+Test-Mailbox, kein Auth-Bypass versucht. **Offener Punkt für eine
+spätere Session:** einmal mit echter Test-Mailbox live durchklicken.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

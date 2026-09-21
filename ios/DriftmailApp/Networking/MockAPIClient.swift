@@ -46,10 +46,11 @@ actor MockAPIClient: APIClient {
     /// Zustand ("aus", kein driftmail-finanzierter Cloud-Zugang).
     private var aiSettings = AiSettings(mode: .off, byokProvider: nil, hasApiKey: false, cloudConsentGiven: false)
 
-    /// `GET`/`PUT /settings` (WEB_INBOX.md 21.09. "Einstellungsbereich") --
+    /// `GET`/`PUT /settings` (WEB_INBOX.md 21.09. "Einstellungsbereich",
+    /// `strictUnknownSenders` in "FUENF NEUE KOMFORT-FEATURES" Punkt 1) --
     /// rein In-Memory, kein Contract-Pendant in MockDatabase.json noetig,
     /// analog zu `aiSettings` oben.
-    private var userSettings = UserSettings(accentTheme: .teal)
+    private var userSettings = UserSettings(accentTheme: .teal, strictUnknownSenders: true)
 
     private var drafts: [Draft] = [
         Draft(
@@ -365,11 +366,25 @@ actor MockAPIClient: APIClient {
         return userSettings
     }
 
-    /// `PUT /settings`.
-    func updateSettings(accentTheme: AccentTheme) async throws -> UserSettings {
+    /// `PUT /settings`. `nil`-Parameter lassen das jeweilige Feld
+    /// unangetastet, analog zum echten Backend (`COALESCE`).
+    func updateSettings(accentTheme: AccentTheme?, strictUnknownSenders: Bool?) async throws -> UserSettings {
         await delay()
-        userSettings = UserSettings(accentTheme: accentTheme)
+        userSettings = UserSettings(
+            accentTheme: accentTheme ?? userSettings.accentTheme,
+            strictUnknownSenders: strictUnknownSenders ?? userSettings.strictUnknownSenders
+        )
         return userSettings
+    }
+
+    /// `GET /contacts` (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"
+    /// Punkt 2) -- einfache Ableitung aus den Absenderadressen der
+    /// Mock-Nachrichten, analog zur echten Backend-Logik (dort zusaetzlich
+    /// `outgoing_send_log`, das dieser Mock-Client nicht fuehrt).
+    func fetchContacts() async throws -> [String] {
+        await delay()
+        let addresses = Set(db.messages.map { $0.fromAddress.lowercased() })
+        return addresses.sorted()
     }
 
     /// `POST /messages/send`, Mock: kein echter Provider-Versand, kein
@@ -415,7 +430,8 @@ actor MockAPIClient: APIClient {
                 bodyText: bodyText,
                 security: nil,
                 canUnsubscribe: false,
-                isNewSender: false
+                isNewSender: false,
+                inReplyToMessageId: inReplyToMessageId
             )
             db.messages.append(sent)
         }
@@ -452,6 +468,41 @@ actor MockAPIClient: APIClient {
     func fetchDrafts() async throws -> [Draft] {
         await delay()
         return drafts.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    /// `POST /drafts` (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"
+    /// Punkt 3 "Entwuerfe automatisch speichern") -- Mock legt einen echten
+    /// neuen Eintrag im `drafts`-Array an, analog zum echten Backend.
+    func createDraft(inReplyToMessageId: String?, to: [String], cc: [String], subject: String?, bodyText: String?) async throws -> Draft {
+        await delay()
+        let draft = Draft(
+            id: UUID().uuidString,
+            inReplyToMessageId: inReplyToMessageId,
+            to: to,
+            cc: cc,
+            subject: subject,
+            bodyText: bodyText,
+            updatedAt: Date()
+        )
+        drafts.append(draft)
+        return draft
+    }
+
+    /// `PATCH /drafts/{draftId}`.
+    func updateDraft(id: String, to: [String], cc: [String], subject: String?, bodyText: String?) async throws -> Draft {
+        await delay()
+        guard let index = drafts.firstIndex(where: { $0.id == id }) else { throw APIError.notFound }
+        let updated = Draft(
+            id: id,
+            inReplyToMessageId: drafts[index].inReplyToMessageId,
+            to: to,
+            cc: cc,
+            subject: subject,
+            bodyText: bodyText,
+            updatedAt: Date()
+        )
+        drafts[index] = updated
+        return updated
     }
 
     /// `DELETE /drafts/{draftId}`.

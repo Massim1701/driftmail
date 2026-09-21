@@ -119,6 +119,15 @@ struct MessageDetailView: View {
 
     // MARK: - Sections
 
+    /// [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt
+    /// 1 ("Unbekannte Absender streng behandeln"): true, wenn der Schalter
+    /// in den Einstellungen an ist UND die Nachricht von einem unbekannten,
+    /// nicht auf der Whitelist stehenden Absender kommt -- mirrors web's
+    /// `.detail-header-unknown-sender` condition.
+    private func isStrictlyFlagged(_ detail: MessageDetail) -> Bool {
+        environment.strictUnknownSenders && detail.isNewSender && !environment.trustedSenderAddresses.contains(detail.fromAddress)
+    }
+
     private func header(for detail: MessageDetail) -> some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
             Text(detail.subject ?? "(kein Betreff)")
@@ -130,6 +139,16 @@ struct MessageDetailView: View {
                 .font(.system(size: DesignTokens.Typography.Size.caption))
                 .foregroundStyle(DesignTokens.Color.textMuted)
         }
+        .padding(isStrictlyFlagged(detail) ? DesignTokens.Spacing.md : 0)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
+                .fill(isStrictlyFlagged(detail) ? DesignTokens.Color.warning.opacity(0.08) : .clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
+                .stroke(isStrictlyFlagged(detail) ? DesignTokens.Color.warning.opacity(0.45) : .clear, lineWidth: 1)
+        )
     }
 
     private func actions(for detail: MessageDetail) -> some View {

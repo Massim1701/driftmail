@@ -52,7 +52,7 @@ struct MessageRowView: View {
         MessageRowView(message: Message(
             id: "1", fromAddress: "a@b.com", fromDisplayName: "Anna Weber",
             subject: "Projektupdate bis Freitag benötigt", receivedAt: .now,
-            folderId: "folder-wichtig", classification: .safe
+            folderId: "folder-wichtig", classification: .safe, inReplyToMessageId: nil
         ))
     }
 }

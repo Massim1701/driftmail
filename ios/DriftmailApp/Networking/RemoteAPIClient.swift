@@ -249,10 +249,37 @@ struct RemoteAPIClient: APIClient {
         try await get("/settings")
     }
 
-    /// `PUT /settings`.
-    func updateSettings(accentTheme: AccentTheme) async throws -> UserSettings {
-        struct Body: Encodable { let accentTheme: AccentTheme }
-        return try await put("/settings", body: Body(accentTheme: accentTheme))
+    /// `PUT /settings`. `nil`-Felder werden vom synthetisierten `Encodable`
+    /// automatisch weggelassen (nicht als `null` gesendet) -- Backend nutzt
+    /// `COALESCE` und laesst ein weggelassenes Feld unangetastet, exakt wie
+    /// bei `updateFolder(id:name:icon:sortOrder:)` oben mit demselben Muster.
+    func updateSettings(accentTheme: AccentTheme?, strictUnknownSenders: Bool?) async throws -> UserSettings {
+        struct Body: Encodable { let accentTheme: AccentTheme?; let strictUnknownSenders: Bool? }
+        return try await put("/settings", body: Body(accentTheme: accentTheme, strictUnknownSenders: strictUnknownSenders))
+    }
+
+    /// `GET /contacts` (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"
+    /// Punkt 2).
+    func fetchContacts() async throws -> [String] {
+        try await get("/contacts")
+    }
+
+    /// `POST /drafts`.
+    func createDraft(inReplyToMessageId: String?, to: [String], cc: [String], subject: String?, bodyText: String?) async throws -> Draft {
+        struct Body: Encodable {
+            let inReplyToMessageId: String?
+            let to: [String]
+            let cc: [String]
+            let subject: String?
+            let bodyText: String?
+        }
+        return try await post("/drafts", body: Body(inReplyToMessageId: inReplyToMessageId, to: to, cc: cc, subject: subject, bodyText: bodyText))
+    }
+
+    /// `PATCH /drafts/{draftId}`.
+    func updateDraft(id: String, to: [String], cc: [String], subject: String?, bodyText: String?) async throws -> Draft {
+        struct Body: Encodable { let to: [String]; let cc: [String]; let subject: String?; let bodyText: String? }
+        return try await patch("/drafts/\(id)", body: Body(to: to, cc: cc, subject: subject, bodyText: bodyText))
     }
 
     /// `POST /messages/send` — anders als die übrigen `post()`-Aufrufe
