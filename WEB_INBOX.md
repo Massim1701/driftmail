@@ -1116,3 +1116,12 @@ Bitte diesen Zusatz-Abschnitt gut sichtbar platzieren (z.B. direkt nach der Funk
 Bitte die Kachel mit der tatsaechlichen driftmail-Info-Seite/Kachel verlinken (siehe die beiden vorherigen Auftraege "Einstellungsbereich + Info-Seite" und "Inhalts-Paket fuer driftware.online-Kachel" -- die Inhalte/Struktur stehen dort bereits vollstaendig). Falls die Info-Seite noch nicht eigenstaendig erreichbar ist (z.B. weil sie erst mit der laufenden Web-App zusammen deployed wird): Status-Badge entsprechend anpassen (z.B. "In Kuerze" bleibt korrekt so lange, bis die Seite wirklich existiert -- aber sobald sie existiert, muss der Href aktualisiert werden, nicht vergessen).
 
 Hohe Prioritaet -- ohne funktionierenden Link ist das gesamte Inhalts-Paket von eben fuer niemanden erreichbar.
+
+
+[2026-09-21] [offen] [KLARSTELLUNG - Missverstaendnis aufgeklaert] [Track C/F] [hohe Prioritaet] — Gefunden in SYNC.md: ein frueherer Terminal-Eintrag geht davon aus, dass die oeffentliche Info-Seite/Kachel (Punkt 2 aus "Einstellungsbereich + Info-Seite") "bereits ueber Web-Claude laeuft" und deshalb bewusst nicht angefasst wurde. Das ist ein Missverstaendnis -- bitte richtigstellen: Web-Claude (dieser Kanal) baut NICHTS direkt im Repo oder auf driftware.online, sondern schreibt ausschliesslich Auftraege/Inhalte hier in WEB_INBOX.md. Die tatsaechliche Umsetzung (Seiten-Komponenten bauen, Kachel-Link auf driftware.online reparieren) muss IMMER von Claude Code im Terminal gemacht werden, genau wie alle anderen Punkte.
+
+Betrifft zwei noch unbearbeitete Eintraege, die dadurch faelschlich liegen geblieben sind, BITTE JETZT ALS NAECHSTES (vor dem Rest der Warteschlange, Massimo hat das mehrfach als dringend gemeldet):
+1. "BUG - Kachel auf driftware.online oeffnet nicht" (Link zeigt auf "#", muss auf die echte Info-Seite zeigen).
+2. "INHALTS-PAKET fuer driftware.online-Kachel" (kompletter Text fuer Produktseite, Bedienungsanleitung, Haftungsausschluss, AGB, Datenschutzerklaerung, Impressum-Platzhalter, plus die Ergaenzung "So schuetzt du dich zusaetzlich" -- alles bereits vollstaendig in WEB_INBOX.md ausformuliert, muss nur noch in echte Seiten-Komponenten umgesetzt werden).
+
+Ausserdem offene Rueckfrage von Massimo: der iOS-Abschlussbericht von vorhin erwaehnte "30 neue Diagnose-Probleme in 3 Dateien" -- wurden die behoben, oder sind das bekannte/unkritische Warnungen? Bitte kurz einordnen.
