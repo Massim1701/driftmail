@@ -879,3 +879,19 @@ Kein Contract-Bruch (additive Erweiterung von design-tokens.json + ein neues Use
 3. Danach die 5 Wettbewerbs-Features (Tracking-Pixel, Undo-Send, Darkweb-Monitoring, Schedule-Send, Snooze) und der Malware-Scan-Auftrag (ClamAV, beide Richtungen).
 
 Keine weitere Design- oder Prioritaets-Rueckfrage mehr noetig -- alle offenen Entscheidungen sind getroffen. Bitte durcharbeiten und wie gewohnt in SYNC.md/TERMINAL_INBOX.md dokumentieren.
+
+
+[2026-09-21] [offen] [ECHTE KI-ANBINDUNG - letzter Punkt der urspruenglichen Prioritaetenliste] [contracts/ai-adapter-interface.ts + Track A/D/E] [nach den aktuell laufenden Grundfunktionen] — Massimo: jetzt einreihen. Aktuell laufen extractContract/summarize/draftReply nur regelbasiert (Mustererkennung, Konfidenz bis max. 0.95, Code markiert mit "AI EXTRACTION HOOK"-Kommentaren) -- keine echte KI-Anbindung, kein API-Key konfiguriert.
+
+**Anbieter-Entscheidung:** Anthropic-API (Claude) als Cloud-Fallback -- passt organisch, da driftmail ueber Claude entwickelt wird, keine weitere Anbieter-Recherche noetig. API-Key server-seitig per Umgebungsvariable (ANTHROPIC_API_KEY, .env.example ergaenzen), NICHT pro User -- User bringt keinen eigenen Key mit, driftmail traegt die Kosten.
+
+**On-Device-Anteil:** Die bestehende On-Device/Cloud-Fallback-Philosophie (ai-adapter-interface.ts, LOW_CONFIDENCE_THRESHOLD=0.6) bleibt bestehen. Fuer iOS pruefen, ob Apples On-Device-Modell-Framework (Apple Intelligence / Foundation Models, je nach iOS-Version verfuegbar) fuer einfache Faelle nutzbar ist -- falls das zu aufwendig/neu ist fuer diesen Schritt, ist ein dokumentierter Verzicht darauf in Ordnung (dann laeuft vorerst alles ueber den Cloud-Fallback, echte On-Device-Integration als spaetere Ausbaustufe). Web hat ohnehin keine On-Device-Option, laeuft immer ueber Cloud-Fallback.
+
+**Wichtig -- Consent nicht vergessen:** Es existiert laut frueherer Notiz schon ein Onboarding-Mockup mit einem "KI-Capability-Check/Zustimmung"-Schritt (Willkommen -> Mail-Konto verbinden -> KI-Zustimmung -> Signatur -> Fertig). Bitte sicherstellen, dass dieser Zustimmungsschritt tatsaechlich VOR dem ersten echten Versand von Mail-Inhalten an die Cloud-API greift -- kein Mail-Inhalt geht an Anthropic, ohne dass der User dem im Onboarding zugestimmt hat. Falls dieser Schritt in der Web/iOS-UI noch nicht real verdrahtet ist (nur Mockup), bitte das im gleichen Zug nachziehen.
+
+**Umfang der drei Funktionen:**
+1. extractContract: Mail-Text an Claude, Extraktion von Vertragsdetails/Terminen als strukturierte Antwort (JSON-Schema vorgeben), ersetzt die regelbasierte Erkennung fuer Faelle unterhalb der 0.95-Konfidenzschwelle.
+2. summarize: kurze Zusammenfassung des Mail-Inhalts fuer die "Inhalt"-Anzeige (siehe fruehere Label-Umbenennung).
+3. draftReply: KI-Entwurf fuer Antworten, bleibt bewusst NUR Vorschlag (bestehendes Prinzip: Compose-Text vollstaendig editierbar, kein Auto-Send).
+
+Kein Contract-Bruch (ai-adapter-interface.ts sieht genau diese Funktionen bereits vor, nur die Implementierung dahinter wird jetzt real statt Mock). Bitte nach den aktuell laufenden Grundfunktionen (Sync/Mehrfach-Konten/iOS-Nachzug) einordnen, Details/Grenzen wie gewohnt in SYNC.md dokumentieren.
