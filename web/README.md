@@ -492,6 +492,95 @@ vorausgefüllten "Fwd:"-Betreff + zitierten Text, Antworten auf eine echte
 Eingangs-Mail inkl. KI-Entwurf-Button funktioniert und sendet erfolgreich
 (Gesendet-Zähler erhöht sich entsprechend).
 
+## KI-Anbindung (BYOK) + On-Device-KI-Versuch — [2026-09-21] Nachtrag
+(TERMINAL_INBOX.md 21.09. "KORREKTUR", ersetzt WEB_INBOX.md 21.09. "ECHTE
+KI-ANBINDUNG" Commit c3ec563 vollständig -- Backend-Gegenstück in
+`backend/README.md` Abschnitt "KI-Anbindung (BYOK)", dort auch die volle
+Begründung der Architekturentscheidung, hier nur die Web-spezifischen
+Details.)
+
+**Kein driftmail-finanzierter Cloud-Key.** Geräte-eigene KI ist die primäre
+Quelle, Cloud-KI läuft nur mit einem vom User selbst hinterlegten eigenen
+API-Key ("BYOK"), auf dessen eigene Kosten, nur mit explizitem Consent.
+
+### On-Device-Versuch (`src/onDeviceAi.ts`)
+
+Vor jedem Aufruf von `GET /messages/{id}/summary` bzw.
+`POST /messages/{id}/reply-draft` versucht der Client zuerst Chromes
+"Prompt API" (globales `LanguageModel`), feature-detected -- kein Fehler in
+Browsern ohne diese API.
+
+**Real verifiziert in dieser Umgebung** (Chrome 153, per Browser-Tool):
+`typeof LanguageModel === "function"` ist wahr, `LanguageModel.
+availability()` liefert real `"downloadable"` (Modell hier nicht
+vorinstalliert). Chrome bietet daneben auch eine dedizierte
+`Summarizer`-API (ebenfalls vorhanden) -- bewusst nicht genutzt, ihr Output
+ist eine feste Zusammenfassungsform ohne die hier gebrauchten strukturierten
+Felder (`actionRequired`/`actionDescription`/`deadline`).
+
+**Bewusste Entscheidung gegen einen automatischen Download:** `.create()`
+wird nur versucht, wenn `availability()` bereits `"available"` liefert
+(Modell schon vorhanden). Ein stiller Mehrere-GB-Download beim ersten Klick
+auf "Inhalt"/"KI-Entwurf vorschlagen" wäre schlechtes Verhalten für eine
+Aktion, die als schnell/lokal erwartet wird. Der Code aktiviert sich
+automatisch, sobald ein Nutzer-Browser das Modell bereits geladen hat, ohne
+dass driftmail selbst einen Download anstößt -- **in dieser Umgebung war
+das Modell nicht geladen, ein tatsächlicher erfolgreicher On-Device-Aufruf
+konnte deshalb nicht verifiziert werden** (nur der Feature-Detection- und
+Fallback-Pfad, siehe Tests unten). Massimo hat das explizit als
+akzeptabel benannt ("falls das zu aufwendig/neu ist ... ist ein
+dokumentierter Verzicht darauf in Ordnung").
+
+Bei Nichtverfügbarkeit/Fehlschlag: sauberer Fallback auf den bisherigen
+Backend-Aufruf, `source: "on_device"` wird nur gesetzt, wenn der Versuch
+tatsächlich erfolgreich lief.
+
+### Drei Quellen, ehrlich unterschieden
+
+`AiSource` (`src/types.ts`) hat jetzt drei statt zwei Werte -- `heuristic`
+ist neu (kein KI-Modell, kein externer Anbieter, vorher fälschlich immer
+als `cloud_fallback` gelabelt). `MessageDetailPane.tsx`s Zusammenfassungs-
+Label und `ComposeModal.tsx`s KI-Entwurf-Quellenhinweis zeigen jetzt alle
+drei Werte (On-Device / Cloud (eigener Zugang) / Regelbasiert).
+
+### KI-Einstellungen (`src/components/AiSettingsModal.tsx`)
+
+Neuer Dialog, erreichbar über einen "KI-Einstellungen"-Link unten in der
+`FolderSidebar.tsx` (neben App-Sperre). An/Aus-Schalter (`mode`),
+Anbieter-Auswahl (**bewusst nur `anthropic`/`openai`** -- nur diese beiden
+sind serverseitig wirklich angebunden, `google`/`other` würden nur zu
+einem 400 beim Speichern führen, siehe backend/README.md), Passwort-Feld
+für den API-Key (wird nie zurückgegeben/angezeigt), Consent-Checkbox.
+"Speichern" bleibt deaktiviert, solange Cloud-KI aktiviert, aber kein
+Consent gesetzt ist -- verhindert den unklaren Zwischenzustand "BYOK an,
+aber kein Consent". Neue `api.ts`-Methoden `getAiSettings()`/
+`setAiSettings()` gegen `GET`/`PUT /ai-settings`.
+
+**Echter Fund beim Testen:** `PUT /ai-settings` schlug im Browser mit
+"Speichern fehlgeschlagen" fehl, obwohl derselbe Request per `curl` sauber
+durchging -- der Mock-Server-CORS-`Access-Control-Allow-Methods`-Header
+enthielt kein `PUT` (nur `GET,POST,PATCH,DELETE,OPTIONS`), der Browser
+verwarf die Antwort nach dem Preflight. Im Mock-Server behoben (gleiche
+Fehlerklasse wie der frühere Authorization-Header-Fund dort). **Das ECHTE
+Backend (`backend/src/middleware/cors.ts`) hat dieselbe Lücke** -- dort
+bewusst NICHT angefasst (Web-Track-Scope dieses Schritts) -- `PUT` muss
+dort noch zu `Access-Control-Allow-Methods` ergänzt werden, sonst schlägt
+`PUT /ai-settings` aus einem echten Browser heraus gegen das echte Backend
+fehl, obwohl es laut `curl`/Smoketest funktioniert. Bitte bei Gelegenheit
+nachziehen (ein Wort in einer bestehenden Zeile).
+
+**Tests:** `tsc -b`/`vite build`/`oxlint` grün (keine neuen Warnungen
+gegenüber dem Bestand). Kompletter Flow per Browser-Automation gegen den
+erweiterten Mock-Server verifiziert: KI-Einstellungen öffnen, Cloud-KI
+aktivieren, Anbieter wählen, Key eingeben (maskiert), Consent setzen,
+speichern (inkl. des oben beschriebenen CORS-Fixes), Reload + erneutes
+Öffnen bestätigt Persistenz (Key-Feld zeigt "Bereits hinterlegt" statt
+leer), Ausschalten setzt serverseitig nachweislich alles zurück (per
+`curl` gegen den Mock-Server verifiziert). "Inhalt" auf einer echten
+Nachricht zeigt danach korrekt "Zusammenfassung (Regelbasiert)" -- der
+On-Device-Versuch lief durch (kein Fehler in der Konsole), fiel mangels
+geladenem Modell sauber auf den Backend-Weg zurück.
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AttachmentScanStatus, MailAccount, MessageDetail } from "../types";
+import type { AiSource, AttachmentScanStatus, MailAccount, MessageDetail } from "../types";
 import { api, ApiError } from "../api";
+import { tryDraftReplyOnDevice } from "../onDeviceAi";
 import "./ComposeModal.css";
 
 // [2026-09-21] Compose-Screen (WEB_INBOX.md 21.09. "BUG - Massimo beim
@@ -124,11 +125,14 @@ export function ComposeModal({
   const [draftLoading, setDraftLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [draftSource, setDraftSource] = useState<AiSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reply/Forward auf Klick eines KI-Entwurfs (nur bei "reply" sinnvoll --
   // createReplyDraft() beantwortet die Ursprungsnachricht, kein Äquivalent
-  // für "neue Mail"/"weiterleiten").
+  // für "neue Mail"/"weiterleiten"). [2026-09-21] KORREKTUR
+  // (TERMINAL_INBOX.md 21.09.): On-Device zuerst versuchen (Inhalt verlässt
+  // dann nie das Gerät), Backend-Aufruf nur als Fallback.
   async function requestAiDraft() {
     if (!original) return;
     if (bodyText.trim() && !window.confirm("Vorhandenen Text durch einen KI-Entwurf ersetzen?")) {
@@ -136,8 +140,15 @@ export function ComposeModal({
     }
     setDraftLoading(true);
     try {
-      const res = await api.createReplyDraft(original.id);
-      setBodyText(res.draftText);
+      const onDevice = await tryDraftReplyOnDevice(original);
+      if (onDevice) {
+        setBodyText(onDevice);
+        setDraftSource("on_device");
+      } else {
+        const res = await api.createReplyDraft(original.id);
+        setBodyText(res.draftText);
+        setDraftSource(res.source);
+      }
       setSendError(null);
     } finally {
       setDraftLoading(false);
@@ -322,6 +333,11 @@ export function ComposeModal({
             <button type="button" className="btn btn-secondary" onClick={requestAiDraft} disabled={draftLoading}>
               {draftLoading ? "Erstelle Entwurf…" : "KI-Entwurf vorschlagen"}
             </button>
+          )}
+          {isReply && draftSource && (
+            <span className="compose-draft-source">
+              {draftSource === "on_device" ? "On-Device" : draftSource === "cloud_fallback" ? "Cloud (eigener Zugang)" : "Regelbasiert"}
+            </span>
           )}
           <div className="compose-modal-actions-spacer" />
           <button type="button" className="btn btn-secondary" onClick={onClose}>

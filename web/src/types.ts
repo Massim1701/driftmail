@@ -29,7 +29,27 @@ export interface Folder {
 
 export type Classification = "safe" | "spam" | "phishing" | "unclear";
 
-export type AiSource = "on_device" | "cloud_fallback";
+// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09., ersetzt WEB_INBOX.md
+// "ECHTE KI-ANBINDUNG" c3ec563): "heuristic" neu -- kein KI-Modell
+// beteiligt, deterministische Mustererkennung ohne externen Anbieter.
+// Vorher fälschlich immer als "cloud_fallback" gelabelt, obwohl der
+// Backend-Mock nie einen echten Cloud-Aufruf machte. Siehe
+// backend/README.md "KI-Anbindung (BYOK)".
+export type AiSource = "on_device" | "cloud_fallback" | "heuristic";
+
+// GET/PUT /ai-settings (TERMINAL_INBOX.md 21.09. KORREKTUR): eigene
+// Cloud-KI-Zugangsdaten des Users (BYOK) -- kein driftmail-finanzierter
+// Cloud-Key. apiKey selbst ist nie Teil dieses Typs (wird nie
+// zurückgegeben).
+export type AiPreferenceMode = "off" | "byok";
+export type AiProvider = "anthropic" | "openai" | "google" | "other";
+
+export interface AiSettings {
+  mode: AiPreferenceMode;
+  byokProvider: AiProvider | null;
+  hasApiKey: boolean;
+  cloudConsentGiven: boolean;
+}
 
 export interface MailAccount {
   id: string;

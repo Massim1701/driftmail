@@ -8,6 +8,7 @@ import { MessageDetailPane } from "./components/MessageDetailPane";
 import { OnboardingScreen } from "./components/OnboardingScreen";
 import { AppLockGate } from "./components/AppLockGate";
 import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
+import { AiSettingsModal } from "./components/AiSettingsModal";
 import { useTheme } from "./useTheme";
 import { useAppLock } from "./useAppLock";
 import "./App.css";
@@ -75,6 +76,10 @@ export default function App() {
   // entdeckt" + "DREI WEITERE GRUNDFUNKTIONEN"): ein gemeinsamer Dialog für
   // neue Mail/Antworten/Weiterleiten, siehe ComposeModal.tsx.
   const [compose, setCompose] = useState<{ mode: ComposeMode; original: MessageDetail | null } | null>(null);
+
+  // KI-Einstellungen (TERMINAL_INBOX.md 21.09. KORREKTUR): eigener Dialog,
+  // siehe AiSettingsModal.tsx.
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false);
 
   // Suche (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN", Punkt 2):
   // solange searchQuery gesetzt ist, ersetzt die Ergebnisliste die normale
@@ -479,6 +484,7 @@ export default function App() {
           onCreateFolder={handleCreateFolder}
           onRenameFolder={handleRenameFolder}
           onDeleteFolder={handleDeleteFolder}
+          onOpenAiSettings={() => setAiSettingsOpen(true)}
         />
 
         <div className="message-column">
@@ -555,6 +561,8 @@ export default function App() {
           onSent={handleSent}
         />
       )}
+
+      {aiSettingsOpen && <AiSettingsModal onClose={() => setAiSettingsOpen(false)} />}
     </AppLockGate>
   );
 }

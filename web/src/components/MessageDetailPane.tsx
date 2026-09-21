@@ -1,8 +1,22 @@
 import { useEffect, useState } from "react";
 import type { Folder, MailSummary, MessageDetail } from "../types";
 import { api } from "../api";
+import { trySummarizeOnDevice } from "../onDeviceAi";
 import { SecurityBadge, SecurityDetails, SecuritySignalBadges } from "./SecurityBadge";
 import "./MessageDetailPane.css";
+
+// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): drei statt zwei
+// Quellen, siehe backend/README.md "KI-Anbindung (BYOK)".
+function aiSourceLabel(source: MailSummary["source"]): string {
+  switch (source) {
+    case "on_device":
+      return "On-Device";
+    case "cloud_fallback":
+      return "Cloud (eigener Zugang)";
+    case "heuristic":
+      return "Regelbasiert";
+  }
+}
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("de-DE", {
@@ -88,7 +102,15 @@ export function MessageDetailPane({
     if (!message) return;
     setSummaryLoading(true);
     try {
-      setSummary(await api.getSummary(message.id));
+      // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): On-Device zuerst
+      // versuchen (Inhalt verlässt dann nie das Gerät), Backend nur als
+      // Fallback (siehe onDeviceAi.ts-Kopfkommentar für Details/Grenzen).
+      const onDevice = await trySummarizeOnDevice(message.bodyText);
+      if (onDevice) {
+        setSummary({ ...onDevice, source: "on_device" });
+      } else {
+        setSummary(await api.getSummary(message.id));
+      }
     } finally {
       setSummaryLoading(false);
     }
@@ -276,7 +298,7 @@ export function MessageDetailPane({
 
       {summary && (
         <section className="detail-card">
-          <div className="detail-card-title">Zusammenfassung ({summary.source === "cloud_fallback" ? "Cloud-Fallback" : "On-Device"})</div>
+          <div className="detail-card-title">Zusammenfassung ({aiSourceLabel(summary.source)})</div>
           <p>{summary.summaryText}</p>
           {summary.actionRequired && (
             <p className="summary-action">

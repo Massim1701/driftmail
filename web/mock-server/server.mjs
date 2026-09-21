@@ -45,6 +45,12 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_URL ?? "http://localhost:5173";
 // In-Memory-Mutationen (gehen beim Neustart verloren, das reicht für den Skeleton-Zweck)
 const quarantineLog = [];
 const capabilityLog = [];
+// GET/PUT /ai-settings (TERMINAL_INBOX.md 21.09. KORREKTUR): BYOK-
+// Einstellung, spiegelt user_ai_preference (siehe backend/README.md
+// "KI-Anbindung (BYOK)"). apiKey wird hier absichtlich genauso wenig wie
+// im echten Backend zurückgegeben -- nur ob einer gesetzt ist.
+let aiSettings = { mode: "off", byokProvider: null, apiKey: null, cloudConsentGiven: false };
+const AI_IMPLEMENTED_PROVIDERS = ["anthropic", "openai"];
 // POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
 // Eintrags von eben") -- nur Metadaten, kein Dateiinhalt (siehe
 // backend/README.md "Anhänge", gleiche Grenze wie im echten Backend).
@@ -70,7 +76,15 @@ function send(res, status, body) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
+    // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): "PUT" ergänzt --
+    // PUT /ai-settings wurde sonst vom Browser-CORS-Preflight blockiert
+    // (Anfrage kam serverseitig laut curl korrekt an, aber der Browser
+    // verwarf die Antwort, weil PUT nicht in der erlaubten Methodenliste
+    // stand -- gleicher Fehlerklasse wie der frühere Authorization-Header-
+    // Fund oben). Das ECHTE Backend (backend/src/middleware/cors.ts) hat
+    // dieselbe Lücke -- dort bewusst NICHT angefasst (Web-Track-Scope),
+    // siehe web/README.md "KI-Anbindung (BYOK)".
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     // [2026-09-10] echte Auth: "Authorization" ergänzt -- web/src/api.ts
     // schickt seitdem einen Authorization-Header mit, den der Browser sonst
     // per CORS-Preflight blockiert (die eigentliche Anfrage nach der
@@ -84,7 +98,7 @@ function send(res, status, body) {
 function sendNoContent(res) {
   res.writeHead(204, {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
     // [2026-09-10] echte Auth: "Authorization" ergänzt -- web/src/api.ts
     // schickt seitdem einen Authorization-Header mit, den der Browser sonst
     // per CORS-Preflight blockiert (die eigentliche Anfrage nach der
@@ -580,7 +594,9 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && parts.length === 3 && parts[2] === "reply-draft") {
       if (!msg) return notFound(res);
       const draftText = buildDraft(msg);
-      return send(res, 200, { draftText });
+      // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): source war hier
+      // vorher komplett abwesend (Contract-Lücke, siehe api-spec.yaml).
+      return send(res, 200, { draftText, source: "heuristic" });
     }
   }
 
@@ -605,6 +621,50 @@ const server = createServer(async (req, res) => {
     const body = await readJsonBody(req);
     capabilityLog.push({ ...body, checkedAt: new Date().toISOString() });
     return send(res, 200, { saved: true });
+  }
+
+  // GET/PUT /ai-settings (TERMINAL_INBOX.md 21.09. KORREKTUR) -- gleiche
+  // Validierung wie backend/src/routes/aiSettings.ts, damit die Web-UI auch
+  // ohne echtes Backend end-to-end testbar ist.
+  if (parts.length === 1 && parts[0] === "ai-settings") {
+    if (req.method === "GET") {
+      return send(res, 200, {
+        mode: aiSettings.mode,
+        byokProvider: aiSettings.byokProvider,
+        hasApiKey: !!aiSettings.apiKey,
+        cloudConsentGiven: aiSettings.cloudConsentGiven,
+      });
+    }
+    if (req.method === "PUT") {
+      const body = (await readJsonBody(req)) ?? {};
+      const targetMode = body.mode ?? aiSettings.mode;
+
+      if (targetMode === "off") {
+        aiSettings = { mode: "off", byokProvider: null, apiKey: null, cloudConsentGiven: false };
+      } else if (targetMode === "byok") {
+        const provider = body.byokProvider ?? aiSettings.byokProvider;
+        if (!provider) return badRequest(res, "byokProvider ist erforderlich, wenn mode=byok gesetzt wird");
+        if (!AI_IMPLEMENTED_PROVIDERS.includes(provider)) {
+          return badRequest(res, `Anbieter '${provider}' ist noch nicht implementiert. Aktuell unterstuetzt: ${AI_IMPLEMENTED_PROVIDERS.join(", ")}.`);
+        }
+        if (!body.apiKey && !aiSettings.apiKey) return badRequest(res, "apiKey ist erforderlich, wenn noch kein Key hinterlegt ist");
+        aiSettings = {
+          mode: "byok",
+          byokProvider: provider,
+          apiKey: body.apiKey || aiSettings.apiKey,
+          cloudConsentGiven: body.cloudConsent !== undefined ? !!body.cloudConsent : aiSettings.cloudConsentGiven,
+        };
+      } else {
+        return badRequest(res, "mode muss 'off' oder 'byok' sein");
+      }
+
+      return send(res, 200, {
+        mode: aiSettings.mode,
+        byokProvider: aiSettings.byokProvider,
+        hasApiKey: !!aiSettings.apiKey,
+        cloudConsentGiven: aiSettings.cloudConsentGiven,
+      });
+    }
   }
 
   return notFound(res);

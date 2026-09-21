@@ -345,3 +345,18 @@
   font-size: var(--font-size-caption);
   color: var(--color-danger-text);
 }
+
+.ai-settings-link {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0 var(--space-sm);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  font-family: var(--font-family);
+  cursor: pointer;
+}
+
+.ai-settings-link:hover {
+  color: var(--color-accent);
+}

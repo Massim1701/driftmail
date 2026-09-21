@@ -41,6 +41,7 @@ export function FolderSidebar({
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
+  onOpenAiSettings,
 }: {
   folders: Folder[];
   active: string | null;
@@ -73,6 +74,9 @@ export function FolderSidebar({
   onCreateFolder: (name: string) => void;
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteFolder: (folderId: string) => void;
+  /** KI-Einstellungen (TERMINAL_INBOX.md 21.09. KORREKTUR): öffnet
+   * AiSettingsModal in App.tsx. */
+  onOpenAiSettings: () => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -305,6 +309,12 @@ export function FolderSidebar({
           {appLockError && <span className="app-lock-toggle-error">Einrichtung fehlgeschlagen.</span>}
         </div>
       )}
+
+      {/* [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): eigene
+          Cloud-KI-Zugangsdaten (BYOK) -- siehe AiSettingsModal.tsx. */}
+      <button type="button" className="ai-settings-link" onClick={onOpenAiSettings}>
+        KI-Einstellungen
+      </button>
     </nav>
   );
 }

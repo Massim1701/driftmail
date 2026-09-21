@@ -1,10 +1,17 @@
 // driftmail — schlanker API-Client gegen den Mock-Server
 //
-// Web nutzt immer Cloud-Fallback-KI (kein On-Device im Browser möglich),
-// daher ist AiAdapterResult.source hier stets "cloud_fallback" — der
-// Mock-Server liefert diesen Wert bereits in MailSummary.source mit.
+// [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): der bisherige Kommentar
+// hier ("Web nutzt immer Cloud-Fallback-KI") ist überholt -- Web versucht
+// jetzt VOR jedem Backend-Aufruf für summarize/draftReply zuerst eine
+// browser-eigene On-Device-KI (siehe onDeviceAi.ts), source ist nur noch
+// "cloud_fallback"/"heuristic", wenn dieser Versuch nicht verfügbar war
+// oder fehlschlägt. Kein driftmail-finanzierter Cloud-Key mehr -- Cloud-KI
+// läuft nur mit vom User selbst hinterlegtem BYOK-Key (siehe
+// getAiSettings/setAiSettings unten).
 
 import type {
+  AiSettings,
+  AiSource,
   AttachmentScanStatus,
   Contract,
   Draft,
@@ -216,8 +223,19 @@ export const api = {
 
   getSummary: (id: string) => request<MailSummary>(`/messages/${id}/summary`),
 
+  // [2026-09-21] KORREKTUR: source war hier vorher komplett abwesend
+  // (Contract-Lücke, jetzt behoben, siehe backend/README.md "KI-Anbindung
+  // (BYOK)").
   createReplyDraft: (id: string) =>
-    request<{ draftText: string }>(`/messages/${id}/reply-draft`, { method: "POST" }),
+    request<{ draftText: string; source: AiSource }>(`/messages/${id}/reply-draft`, { method: "POST" }),
+
+  // GET/PUT /ai-settings (TERMINAL_INBOX.md 21.09. KORREKTUR): eigene
+  // Cloud-KI-Zugangsdaten (BYOK) lesen/setzen. apiKey wird nie
+  // zurückgegeben, nur ob einer hinterlegt ist (hasApiKey).
+  getAiSettings: () => request<AiSettings>("/ai-settings"),
+
+  setAiSettings: (data: { mode: "off" | "byok"; byokProvider?: "anthropic" | "openai"; apiKey?: string; cloudConsent?: boolean }) =>
+    request<AiSettings>("/ai-settings", { method: "PUT", body: JSON.stringify(data) }),
 
   // POST /messages/send (WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt").
   // Genau eines von accountId/inReplyToMessageId ist erforderlich (siehe

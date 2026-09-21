@@ -1,0 +1,28 @@
+.ai-settings-modal {
+  max-width: 480px;
+}
+
+.ai-settings-intro {
+  margin: 0 0 var(--space-sm);
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.ai-settings-toggle input[type="checkbox"] {
+  flex: 0 0 auto;
+}
+
+.ai-settings-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  font-size: var(--font-size-small);
+  color: var(--color-text-secondary);
+  padding: var(--space-sm) 0;
+}
+
+.ai-settings-consent input {
+  margin-top: 2px;
+  flex: 0 0 auto;
+}

@@ -100,3 +100,8 @@
 .compose-modal-actions-spacer {
   flex: 1;
 }
+
+.compose-draft-source {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}

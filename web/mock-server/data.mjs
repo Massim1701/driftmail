@@ -547,7 +547,11 @@ export function summaryFor(msg) {
       ? "Prüfen, ob eine Kündigungsfrist läuft oder eine Zahlung fällig ist."
       : null,
     deadline: isRechnung ? "2026-09-15" : null,
-    source: "cloud_fallback",
+    // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): "heuristic" statt
+    // "cloud_fallback" -- dieser Mock ruft nie einen externen KI-Anbieter
+    // auf, genau wie das echte Backend ohne BYOK-Konfiguration (siehe
+    // backend/README.md "KI-Anbindung (BYOK)").
+    source: "heuristic",
   };
 }
 
