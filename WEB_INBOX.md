@@ -768,7 +768,7 @@ Kein Blocker, bitte nach der aktuell laufenden UI-Arbeit (Onboarding-Provider-Au
 Kein Contract-Bruch bei der Logik selbst (scan_status-Enum bleibt), aber die bisher dokumentierte Grenze "kein echter Virenscan" wird damit aufgehoben -- bitte SYNC.md entsprechend aktualisieren, sobald umgesetzt, nicht nur den Code-Kommentar. Hohe Prioritaet, da dies eine der zentralen Sicherheitsversprechen von driftmail direkt betrifft -- bitte zeitnah nach der aktuell laufenden UI-Arbeit einordnen, eher frueher als die 5 Wettbewerbs-Feature-Luecken von eben.
 
 
-[2026-09-21] [offen] [BUG - Massimo beim manuellen Test gefunden] [Track A oder F] [hohe Prioritaet - blockiert den laufenden IMAP-Verifikationstest] — Massimo hat den lokalen Test (Backend localhost:3000 + Web localhost:5173) gestartet, um den IMAP-Login-Weg mit einem echten web.de-Konto zu pruefen (letzter offener Punkt aus dem 19.09.-Auftrag).
+[2026-09-21] [erledigt: 3032b0d] [BUG - Massimo beim manuellen Test gefunden] [Track A oder F] [hohe Prioritaet - blockiert den laufenden IMAP-Verifikationstest] — Massimo hat den lokalen Test (Backend localhost:3000 + Web localhost:5173) gestartet, um den IMAP-Login-Weg mit einem echten web.de-Konto zu pruefen (letzter offener Punkt aus dem 19.09.-Auftrag).
 
 **Fehlerbild:** Im Onboarding erscheint nur "Gmail" als Option, mit Hinweistext "Anbieterliste konnte nicht geladen werden — Gmail ist trotzdem nutzbar". Web.de, GMX, iCloud etc. fehlen komplett aus der Auswahl.
 

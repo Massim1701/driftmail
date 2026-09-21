@@ -678,3 +678,10 @@ Mock-Server (`mock-server/server.mjs`/`data.mjs`): `GET /mail-providers` liefert
 **Übergabe:** Track C (iOS) hat denselben Auftrag noch offen (Punkt 1+2 -- Punkt 3 ist für iOS bereits erledigt, siehe Status-Tabelle oben). Die 5 neuen Wettbewerbs-Feature-Anfragen von heute (WEB_INBOX.md 21.09., Tracking-Pixel/Undo-Send/Darkweb-Monitoring/Schedule-Send/Snooze) sind explizit "nach der aktuell laufenden UI-Arbeit" eingeordnet, hier bewusst nicht angefasst.
 
 **Kein Blocker, keine offene Frage.**
+
+
+[2026-09-21] [terminal] [A] — WEB_INBOX.md 21.09. "BUG - Massimo beim manuellen Test gefunden" behoben (Commit `3032b0d`): backend/ hatte gar keine CORS-Middleware, deshalb blockte der Browser jede fetch()-Antwort vom lokalen Zwei-Server-Testbetrieb (web/ auf Port 5173, backend/ auf Port 3000 -- unterschiedliche Origins), obwohl derselbe Endpunkt per curl/direktem Browser-Aufruf normal antwortete. Neue Middleware `backend/src/middleware/cors.ts`, ganz vorne in `app.ts` (vor `express.json()`) eingehängt, kein neuer Dependency. Origin-Allowlist per `CORS_ALLOWED_ORIGINS`-Env-Var (kommagetrennt, exakter Match, kein Wildcard) -- ohne gesetzte Variable nur der Vite-Dev-Default `http://localhost:5173`, damit lokale Zwei-Server-Entwicklung ohne weitere Konfiguration funktioniert. MUSS vor einem oeffentlich erreichbaren Deploy um die echte Web-Client-Domain ergaenzt werden, siehe `.env.example`.
+
+**Verifiziert:** `curl` gegen `OPTIONS`/`GET /v1/mail-providers` mit `Origin: http://localhost:5173` liefert jetzt die richtigen Header; Web-Onboarding zeigt gegen das echte Backend alle Provider (iCloud/GMX/web.de/generisch) statt der Gmail-only-Fallback-Liste (Browser-Screenshot verifiziert). Backend-Smoketest weiterhin gruen.
+
+Massimo kann den web.de-IMAP-Test jetzt fortsetzen (siehe WEB_INBOX.md 19.09., letzter offener Punkt). Kein Blocker mehr.
