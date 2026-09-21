@@ -49,6 +49,7 @@
 		91EFC54BBDCB42A799845471 /* DataBreachListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F1780201DD34B85882371D3 /* DataBreachListView.swift */; };
 		E831B7B2484D4EE59407024E /* PrivacySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45D800E8526A4AD0AECB29EE /* PrivacySettings.swift */; };
 		1ED0D9965DC14E6B8F2954BA /* DataBreachFinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62F08AA9F2544D128C66844B /* DataBreachFinding.swift */; };
+		D9C9CA7F7E4770B1F06C3FA7 /* MailBodyWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43E82043DA950D8E4FD9B238 /* MailBodyWebView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -96,6 +97,7 @@
 		D3A1F4C6E0904A2F8C7B1E5A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		45D800E8526A4AD0AECB29EE /* PrivacySettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PrivacySettings.swift; sourceTree = "<group>"; };
 		62F08AA9F2544D128C66844B /* DataBreachFinding.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DataBreachFinding.swift; sourceTree = "<group>"; };
+		43E82043DA950D8E4FD9B238 /* MailBodyWebView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MailBodyWebView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -251,6 +253,7 @@
 				53514C334BC04B918574560A /* AiSettingsView.swift */,
 				44A0E0445B8D4857BFB972D3 /* AbsenceResponderView.swift */,
 				6F1780201DD34B85882371D3 /* DataBreachListView.swift */,
+				43E82043DA950D8E4FD9B238 /* MailBodyWebView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -373,6 +376,7 @@
 				91EFC54BBDCB42A799845471 /* DataBreachListView.swift in Sources */,
 				E831B7B2484D4EE59407024E /* PrivacySettings.swift in Sources */,
 				1ED0D9965DC14E6B8F2954BA /* DataBreachFinding.swift in Sources */,
+				D9C9CA7F7E4770B1F06C3FA7 /* MailBodyWebView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -95,6 +95,24 @@ struct SecurityResult: Codable, Hashable {
     let confidenceScore: Double
 }
 
+/// Mirrors `components/schemas/MessageLink` in contracts/api-spec.yaml.
+/// [2026-09-22] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": echte
+/// `<a href>`-Links, extrahiert aus dem HTML-Koerper beim Sync
+/// (`message_links`-Tabelle), siehe `MessageDetail.links`-Kommentar.
+struct MessageLink: Codable, Identifiable, Hashable {
+    let id: String
+    let displayText: String?
+    let actualUrl: String
+    /// false = klassischer Phishing-Indikator (Anzeigetext behauptet eine
+    /// Domain, das tatsaechliche href-Ziel zeigt auf eine andere). Nur
+    /// ausgewertet, wenn der Anzeigetext selbst wie eine Domain/URL aussieht.
+    let domainMatchesDisplay: Bool
+    /// Immer `false` -- kein externer Blocklist-Abgleich angebunden (siehe
+    /// api-spec.yaml-Kommentar, gleiches Grenzen-Muster wie
+    /// `ipReputationFlag`/`domainReputationScore`).
+    let isKnownMalicious: Bool
+}
+
 /// Mirrors `components/schemas/MessageDetail` in contracts/api-spec.yaml
 /// (Message + bodyText + security, via allOf).
 struct MessageDetail: Codable, Identifiable, Hashable {
@@ -106,6 +124,19 @@ struct MessageDetail: Codable, Identifiable, Hashable {
     let folderId: String
     let classification: Classification
     let bodyText: String?
+    /// [2026-09-22] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies":
+    /// bereits serverseitig sanitisiert (kein `<script>`/`<style>`/
+    /// `<iframe>`/`<form>`, keine Event-Handler-Attribute), Links bereits
+    /// auf `/link-check` umgeschrieben, Remote-Bild-`src` bereits entfernt
+    /// falls `blockRemoteImages` aktiv ist (siehe backend/README.md
+    /// "HTML-Rendering des Mail-Bodies"). `nil` bei reinen Text-Mails ODER
+    /// wenn der Vertrauliche-Modus-Ablauf den Inhalt bereits geloescht hat
+    /// (gleiche Bedingung wie bei `bodyText` oben). Wird AUSSCHLIESSLICH per
+    /// `WKWebView` mit deaktiviertem JavaScript gerendert
+    /// (`Views/MailBodyWebView.swift`) -- niemals als vertrauenswürdiger
+    /// nativer `Text`/AttributedString, siehe dort (nicht-verhandelbare
+    /// Sicherheitsanforderung, WEB_INBOX.md 22.09.).
+    let bodyHtml: String?
     let security: SecurityResult?
     /// Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.): true, wenn die
     /// Nachricht einen syntaktisch gültigen List-Unsubscribe-Header hat
@@ -136,13 +167,21 @@ struct MessageDetail: Codable, Identifiable, Hashable {
     /// Prüfung) BEVOR sie hier sichtbar werden. Ein nicht-`clean` Anhang
     /// darf clientseitig NICHT zum Öffnen angeboten werden.
     let attachments: [MessageAttachment]
+    /// [2026-09-22] siehe `bodyHtml`-Kommentar -- echte `<a href>`-Links aus
+    /// dem HTML-Koerper. Leeres Array bei reinen Text-Mails oder wenn der
+    /// HTML-Koerper keine `<a href>`-Tags enthaelt. Aktuell nur als
+    /// Datenquelle mitgefuehrt (kein eigenes UI-Element in
+    /// `MessageDetailView` -- laut Auftrag "optional/nice-to-have", der
+    /// Haupt-Fokus ist sicheres Rendern von `bodyHtml`).
+    let links: [MessageLink]
 
     init(
         id: String, fromAddress: String, fromDisplayName: String?, subject: String?, receivedAt: Date,
-        folderId: String, classification: Classification, bodyText: String?, security: SecurityResult?,
+        folderId: String, classification: Classification, bodyText: String?, bodyHtml: String? = nil,
+        security: SecurityResult?,
         canUnsubscribe: Bool, isNewSender: Bool, inReplyToMessageId: String?,
         awaitingReply: Bool = false, confidentialUntil: Date? = nil, snoozedUntil: Date? = nil,
-        attachments: [MessageAttachment] = []
+        attachments: [MessageAttachment] = [], links: [MessageLink] = []
     ) {
         self.id = id
         self.fromAddress = fromAddress
@@ -152,6 +191,7 @@ struct MessageDetail: Codable, Identifiable, Hashable {
         self.folderId = folderId
         self.classification = classification
         self.bodyText = bodyText
+        self.bodyHtml = bodyHtml
         self.security = security
         self.canUnsubscribe = canUnsubscribe
         self.isNewSender = isNewSender
@@ -160,6 +200,7 @@ struct MessageDetail: Codable, Identifiable, Hashable {
         self.confidentialUntil = confidentialUntil
         self.snoozedUntil = snoozedUntil
         self.attachments = attachments
+        self.links = links
     }
 
     init(from decoder: Decoder) throws {
@@ -172,6 +213,7 @@ struct MessageDetail: Codable, Identifiable, Hashable {
         folderId = try container.decode(String.self, forKey: .folderId)
         classification = try container.decode(Classification.self, forKey: .classification)
         bodyText = try container.decodeIfPresent(String.self, forKey: .bodyText)
+        bodyHtml = try container.decodeIfPresent(String.self, forKey: .bodyHtml)
         security = try container.decodeIfPresent(SecurityResult.self, forKey: .security)
         canUnsubscribe = try container.decode(Bool.self, forKey: .canUnsubscribe)
         isNewSender = try container.decode(Bool.self, forKey: .isNewSender)
@@ -180,6 +222,7 @@ struct MessageDetail: Codable, Identifiable, Hashable {
         confidentialUntil = try container.decodeIfPresent(Date.self, forKey: .confidentialUntil)
         snoozedUntil = try container.decodeIfPresent(Date.self, forKey: .snoozedUntil)
         attachments = try container.decodeIfPresent([MessageAttachment].self, forKey: .attachments) ?? []
+        links = try container.decodeIfPresent([MessageLink].self, forKey: .links) ?? []
     }
 
     var asMessage: Message {
@@ -211,6 +254,7 @@ struct MessageDetail: Codable, Identifiable, Hashable {
             folderId: newFolderId,
             classification: classification,
             bodyText: bodyText,
+            bodyHtml: bodyHtml,
             security: security,
             canUnsubscribe: canUnsubscribe,
             isNewSender: isNewSender,
@@ -218,7 +262,8 @@ struct MessageDetail: Codable, Identifiable, Hashable {
             awaitingReply: awaitingReply,
             confidentialUntil: confidentialUntil,
             snoozedUntil: snoozedUntil,
-            attachments: attachments
+            attachments: attachments,
+            links: links
         )
     }
 
@@ -228,9 +273,10 @@ struct MessageDetail: Codable, Identifiable, Hashable {
         MessageDetail(
             id: id, fromAddress: fromAddress, fromDisplayName: fromDisplayName, subject: subject,
             receivedAt: receivedAt, folderId: folderId, classification: classification, bodyText: bodyText,
+            bodyHtml: bodyHtml,
             security: security, canUnsubscribe: canUnsubscribe, isNewSender: isNewSender,
             inReplyToMessageId: inReplyToMessageId, awaitingReply: awaitingReply,
-            confidentialUntil: confidentialUntil, snoozedUntil: until, attachments: attachments
+            confidentialUntil: confidentialUntil, snoozedUntil: until, attachments: attachments, links: links
         )
     }
 }

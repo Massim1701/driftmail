@@ -68,15 +68,27 @@ struct MessageDetailView: View {
                         snoozedBanner(until: snoozedUntil)
                     }
 
-                    Text(detail.bodyText ?? "")
-                        .font(.system(size: DesignTokens.Typography.Size.body))
-                        .foregroundStyle(DesignTokens.Color.textPrimary)
-                        .padding(DesignTokens.Spacing.lg)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
-                                .fill(DesignTokens.Color.surfaceCard)
-                        )
+                    // [2026-09-22] "NEUE GRUNDLAGE - HTML-Rendering des
+                    // Mail-Bodies": `bodyHtml` (bereits serverseitig
+                    // sanitisiert) wird AUSSCHLIESSLICH über die sandboxed
+                    // `MailBodyWebView` (WKWebView, JS deaktiviert,
+                    // eingeschränkte Navigation) gerendert -- niemals als
+                    // nativer `Text`/AttributedString aus rohem HTML, siehe
+                    // dort. Reine Text-Mails (`bodyHtml == nil`) verhalten
+                    // sich unverändert wie vorher.
+                    if let bodyHtml = detail.bodyHtml {
+                        MailBodyHtmlCard(html: bodyHtml)
+                    } else {
+                        Text(detail.bodyText ?? "")
+                            .font(.system(size: DesignTokens.Typography.Size.body))
+                            .foregroundStyle(DesignTokens.Color.textPrimary)
+                            .padding(DesignTokens.Spacing.lg)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
+                                    .fill(DesignTokens.Color.surfaceCard)
+                            )
+                    }
 
                     if !detail.attachments.isEmpty {
                         attachmentsCard(detail.attachments)
@@ -605,6 +617,26 @@ private enum DetailSnoozeOption: CaseIterable, Identifiable {
         case .nextWeek:
             return calendar.nextDate(after: now, matching: DateComponents(hour: 8, minute: 0, weekday: 2), matchingPolicy: .nextTime) ?? calendar.date(byAdding: .day, value: 7, to: now) ?? now
         }
+    }
+}
+
+/// Card wrapper around `MailBodyWebView` -- owns the `@State height` that
+/// the webview measures its rendered content into after load (see
+/// `MailBodyWebView.Coordinator.webView(_:didFinish:)`), matching the same
+/// card styling `bodyText` used before this feature.
+private struct MailBodyHtmlCard: View {
+    let html: String
+    @State private var height: CGFloat = 200
+
+    var body: some View {
+        MailBodyWebView(html: html, height: $height)
+            .frame(height: height)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
+                    .fill(DesignTokens.Color.surfaceCard)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.card))
     }
 }
 

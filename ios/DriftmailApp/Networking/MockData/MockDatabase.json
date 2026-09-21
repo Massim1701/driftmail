@@ -292,7 +292,17 @@
         "ibanChangedInThread": true,
         "classification": "phishing",
         "confidenceScore": 0.98
-      }
+      },
+      "bodyHtml": "<html><body><p>Dringend: Ihr Konto wurde gesperrt. Bitte bestaetigen Sie sofort Ihre Daten, sonst wird Ihr Konto endgueltig geloescht.</p><p><a href=\"http://localhost:3000/v1/link-check?url=http%3A%2F%2Fpaypal-verifizierung.example-fake.ru%2Flogin\">https://www.paypal.com/de/verifizierung</a></p><img src=\"\" alt=\"Bild blockiert (Tracking-Schutz)\" data-blocked-src=\"https://track.paypaI-verifizierung.example/pixel.gif?x=msg007\" width=\"1\" height=\"1\"></body></html>",
+      "links": [
+        {
+          "id": "link-msg-007-1",
+          "displayText": "https://www.paypal.com/de/verifizierung",
+          "actualUrl": "http://paypal-verifizierung.example-fake.ru/login",
+          "domainMatchesDisplay": false,
+          "isKnownMalicious": false
+        }
+      ]
     },
     {
       "id": "msg-008",

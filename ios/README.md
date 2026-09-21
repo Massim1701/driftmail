@@ -1337,6 +1337,143 @@ Taps durch die neuen Screens (Compose-Toggles, Snooze-Menü, Darkweb-Liste)
 verifiziert, dieselbe dokumentierte Grenze wie bei jedem vorherigen
 Nachtrag dieser Session ohne echte Test-Mailbox.
 
+## [2026-09-22] Nachtrag: HTML-Rendering des Mail-Bodies (WKWebView, sandboxed)
+
+WEB_INBOX.md 22.09. "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies" --
+iOS-Teil, nachdem Track A (Backend) bereits fertig und gepusht war
+(Commit `6236f36`/`c0f39bc`, siehe backend/README.md "HTML-Rendering des
+Mail-Bodies"). Der Backend-Teil liefert `MessageDetail.bodyHtml` (bereits
+serverseitig sanitisiert, Links auf `/link-check` umgeschrieben,
+Remote-Bild-`src` bereits entfernt bei aktivem `blockRemoteImages`) und
+`MessageDetail.links` -- dieser Nachtrag ist die iOS-UI, die `bodyHtml`
+tatsächlich sicher anzeigt (Web-Gegenstück läuft parallel, eigener
+Sync.md-Eintrag).
+
+**Non-verhandelbare Sicherheitsanforderung (Massimo, WEB_INBOX.md 22.09.,
+wörtlich):** "iOS: WKWebView mit deaktiviertem JavaScript und
+eingeschraenkter Navigation. Kein direktes Einbetten von Absender-HTML in
+den normalen DOM/normale View-Hierarchie." Umgesetzt in der neuen
+`Views/MailBodyWebView.swift`:
+- **JavaScript deaktiviert:** `WKWebpagePreferences.allowsContentJavaScript
+  = false`, gesetzt auf `WKWebViewConfiguration.defaultWebpagePreferences`
+  vor `WKWebView`-Erzeugung -- die moderne, seit iOS 15 verfügbare API
+  (Deployment-Target dieses Projekts ist iOS 17, siehe
+  `project.pbxproj` `IPHONEOS_DEPLOYMENT_TARGET`), kein Bedarf für den
+  älteren `WKPreferences.javaScriptEnabled`-Fallback.
+- **Eingeschränkte Navigation:** `WKNavigationDelegate.webView(_:
+  decidePolicyFor:decisionHandler:)` erlaubt ausschließlich die EINE
+  initiale `loadHTMLString`-Ladung (Flag `didFinishInitialLoad`, vor
+  `didFinish` immer `false`). Jede Navigation danach -- praktisch immer
+  ein Link-Tap, da JS deaktiviert ist und es keine anderen
+  Navigationsquellen gibt -- wird abgebrochen (`.cancel`) und stattdessen
+  per `UIApplication.shared.open(url)` im System-Browser geöffnet. Da das
+  Backend jeden `http(s)`-Link bereits auf
+  `${PUBLIC_API_BASE_URL}/link-check?url=...` umschreibt, landet die
+  Klick-Zeit-Link-Prüfung dadurch zuverlässig im echten Klick-Fluss, exakt
+  wie im Auftrag verlangt ("das ist die fehlende Verbindung, die der
+  Klick-Zeit-Pruefung aktuell fehlt").
+- **Kein direktes Einbetten in die normale View-Hierarchie:** `bodyHtml`
+  geht ausschließlich über `webView.loadHTMLString(_:baseURL: nil)` in die
+  isolierte WKWebView-Sandbox -- nirgends wird rohes/sanitisiertes HTML in
+  einen nativen `Text`/`AttributedString` konvertiert und direkt in den
+  SwiftUI-View-Baum gerendert (siehe `MessageDetail.bodyHtml`-Kommentar in
+  `Models/Message.swift`).
+- Die vom Backend bereits fertig sanitisierte Server-Antwort wird hier
+  NICHT erneut client-seitig gesäubert -- reine Verteidigung durch
+  Isolation (Sandbox + kein JS), kein zweiter Sanitizer nötig, analog zur
+  Architekturentscheidung in backend/README.md ("Sanitisierung erst beim
+  Ausliefern").
+
+**Auto-Sizing ohne JavaScript:** `evaluateJavaScript`-basierte
+Höhenmessung scheidet aus (JS ist deaktiviert), aber WKWebView führt auch
+mit deaktiviertem JS natives HTML/CSS-Layout durch -- nach
+`WKNavigationDelegate.webView(_:didFinish:)` liefert
+`webView.scrollView.contentSize.height` bereits die echte gerenderte
+Höhe. Diese wird über ein `@Binding<CGFloat>` (gesetzt via
+`Coordinator`) an die aufrufende `MailBodyHtmlCard` (private Hilfsview in
+`MessageDetailView.swift`) zurückgereicht, die ihre `.frame(height:)`
+entsprechend setzt. **Pragmatischer Fallback statt Perfektion** (wie im
+Auftrag als akzeptable Vereinfachung genannt): die gemessene Höhe wird auf
+120–600pt geklemmt, `webView.scrollView.isScrollEnabled` bleibt dauerhaft
+`true` -- falls die Messung zu niedrig ausfällt oder eine Mail ungewöhnlich
+lang ist, bleibt der Inhalt über internes Scrollen trotzdem vollständig
+erreichbar, statt abgeschnitten zu werden.
+
+**Bewusst NICHT Teil dieses Nachtrags** (wie im Auftrag als "explizit
+out of scope" markiert): per-Mail "Bilder trotzdem laden" --
+`blockRemoteImages` entfernt blockierte `<img src>` bereits serverseitig,
+bevor `MailBodyWebView` das HTML überhaupt sieht; ein blockiertes Bild
+zeigt nur noch `alt="Bild blockiert (Tracking-Schutz)"` (kein sichtbares
+Retry-UI, kein Endpunkt dafür vorhanden). `MessageDetail.links` wird im
+Modell mitgeführt (`Models/Message.swift`, neue `MessageLink`-Struct,
+gleiches `Codable`/`decodeIfPresent`-Muster wie `attachments`), aber
+bewusst noch OHNE eigenes UI-Element in `MessageDetailView` -- laut
+Auftrag "optional/nice-to-have", der Haupt-Fokus war sicheres Rendern von
+`bodyHtml`. Reine Text-Mails (`bodyHtml == nil`, unverändert über
+`bodyText`) verhalten sich exakt wie vorher, keine Verhaltensänderung.
+
+**Modell-/Mock-Änderungen:**
+- `Models/Message.swift`: `MessageDetail.bodyHtml: String?` und
+  `MessageDetail.links: [MessageLink]` ergänzt (neue `MessageLink`-Struct:
+  `id`, `displayText: String?`, `actualUrl`, `domainMatchesDisplay`,
+  `isKnownMalicious`, 1:1 zu `components/schemas/MessageLink` in
+  `contracts/api-spec.yaml`). Beide Felder mit Default (`nil`/`[]`) im
+  Memberwise-Init und `decodeIfPresent` im `Decodable`-Init, exakt das
+  gleiche Muster wie bei `attachments` -- ältere/kleinere JSON-Antworten
+  (z.B. `MockAPIClient`s eigener `sendMessage`-Pfad, der weiterhin reinen
+  Klartext verschickt) crashen dadurch nicht. `movedTo(folderId:)`/
+  `snoozed(until:)` (Copy-Helfer für `MockAPIClient`) geben beide neuen
+  Felder unverändert weiter.
+- `Networking/MockData/MockDatabase.json`: `msg-007` (die bereits
+  existierende PayPal-Phishing-Mock-Mail, auch das `#Preview` in
+  `MessageDetailView.swift`) hat jetzt echtes `bodyHtml` (Text-Absatz +
+  ein Link, dessen `href` bereits wie vom Backend erwartet auf
+  `http://localhost:3000/v1/link-check?url=...` zeigt, Anzeigetext
+  `https://www.paypal.com/de/verifizierung` vs. echtes Ziel
+  `paypal-verifizierung.example-fake.ru` -- Link-Mismatch analog zu
+  Fixture 11 im Backend) sowie ein `<img>` mit leerem `src` +
+  `data-blocked-src` (simuliert das Ergebnis der serverseitigen
+  Tracking-Pixel-Blockierung) und ein passendes `links`-Array. Alle
+  anderen 13 Mock-Nachrichten bleiben reine Text-Mails (`bodyHtml`
+  fehlt im JSON, `decodeIfPresent` liefert `nil`).
+- `RemoteAPIClient.swift`: keine Änderung nötig -- `fetchMessageDetail`
+  dekodiert bereits generisch über `Codable`, die neuen Felder kommen
+  automatisch mit durch.
+
+**Xcode-Projekt:** `Views/MailBodyWebView.swift` manuell in
+`DriftmailApp.xcodeproj/project.pbxproj` registriert (kein Xcode-GUI in
+dieser Umgebung, gleiches Vorgehen wie bei jedem vorherigen Nachtrag
+dieser Session mit neuen Dateien -- `PBXBuildFile`/`PBXFileReference`/
+`PBXGroup`(Views)/`PBXSourcesBuildPhase` ergänzt, gleiches ID-Schema wie
+bestehende Einträge).
+
+**Tests:** `xcodebuild -scheme DriftmailApp -destination 'platform=iOS
+Simulator,name=iPhone 17' build` → **BUILD SUCCEEDED**, keine neuen
+Compiler-Warnungen (einzige Warnung im Build-Log ist die vorbestehende,
+unabhängige `appintentsmetadataprocessor`-Meldung "Metadata extraction
+skipped, no AppIntents.framework dependency found"). Verifikation im
+Simulator nach dem üblichen Muster dieser Session: sauberer
+`simctl uninstall`/`simctl install`/`simctl launch` auf einem gebooteten
+Simulator (iPhone 17 Pro), `log show` auf Crash/Fatal/Exception geprüft
+-- keine Treffer. Zusätzlich, um das WKWebView-Rendering selbst visuell zu
+bestätigen (kein XCUITest-Target vorhanden, siehe unten): `DriftmailApp.swift`
+wurde EINMALIG temporär so geändert, dass die App direkt
+`NavigationStack { MessageDetailView(messageId: "msg-007") }` mit
+`AppEnvironment(previewClient: MockAPIClient(), authenticated: true)`
+zeigt (Onboarding-Gate umgangen, gleiches Prinzip wie beim
+`AppEnvironment.init()`-Hack im "Neun neue Features"-Nachtrag oben), neu
+gebaut, installiert, gestartet und per Screenshot bestätigt: die
+sandboxed `MailBodyWebView` rendert den sanitisierten HTML-Body (Text +
+den umgeschriebenen, tappable `/link-check`-Link, in eigener weißer
+Karte) korrekt und crash-frei -- danach sofort wieder auf den
+Original-Code zurückgesetzt (`git diff` vor dem Commit zeigt keine Spur
+dieser Änderung, exakt wie beim Vorbild-Nachtrag). Kein XCUITest-Target
+vorhanden, daher kein automatisierter Tap auf den Link selbst (dass
+`UIApplication.shared.open(url)` bei einem echten Tap greift statt einer
+WKWebView-eigenen Navigation, ist damit nur per Code-Review verifiziert,
+nicht per Klick-Test) -- dieselbe dokumentierte Grenze wie bei jedem
+vorherigen Nachtrag dieser Session ohne UI-Automatisierung.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine
