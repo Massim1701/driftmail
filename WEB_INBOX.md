@@ -898,3 +898,20 @@ Kein Contract-Bruch (ai-adapter-interface.ts sieht genau diese Funktionen bereit
 
 
 [2026-09-21] [offen] [KLEINE LABEL-AENDERUNG] [Track C/F] — Massimo: das Label "Inhalt" (KI-generierte Zusammenfassung des Mail-Inhalts, siehe fruehere Umbenennung von "Was wollen die von mir?" -> "Inhalt", WEB_INBOX.md 09.09.) soll umbenannt werden zu "Check Mail". Ausdruecklich von Massimo so entschieden (Alternative "Zusammenfassung" wurde vorgeschlagen und von ihm bewusst abgelehnt). Bitte ueberall dort aendern, wo "Inhalt" fuer dieses Feature in der UI angezeigt wird (Web + iOS, beide hatten die frueher Umbenennung uebernommen). Reine Text-Aenderung, kein Contract-Bruch, kein Blocker.
+
+
+[2026-09-21] [offen] [NEUER AUFTRAG - Einstellungsbereich + Info-Seite] [Track C/F] [gehoert zum driftmail-Repo] — Massimo: es fehlt ein richtiger, gebuendelter Einstellungsbereich. Bisher sind mehrere Einstellungs-Bausteine einzeln entstanden (AiSettingsView/KI-Einstellungen, Akzentfarben-Theme, App-Sperre-Toggle), aber nie an einem Ort zusammengefuehrt. Ausserdem soll es eine oeffentliche Info-Seite/Kachel auf driftware.online geben (Teil desselben Repos).
+
+**1) In-App-Einstellungsbereich (Web + iOS), buendelt was schon existiert PLUS Neues:**
+- Konten-Verwaltung: Liste der verbundenen Konten, "Weiteres Konto hinzufuegen" (siehe Mehrfach-Konten-Auftrag von heute), einzelnes Konto entfernen.
+- Ansicht: die bereits gebaute Akzentfarben-Auswahl (5 Themes) hier einhaengen, falls noch nicht geschehen.
+- Sicherheit: App-Sperre-Toggle (existiert schon), KI-Einstellungen/BYOK (existiert schon als AiSettingsView), PLUS neu: kurze, verstaendliche Uebersicht der aktiven Sicherheits-Features (Whitelist, Vorschussbetrug-Filter, die 6 neuen Erkennungssignale, Malware-Scan sobald fertig) -- keine technischen Details, sondern in einfachen Worten, was driftmail fuer den User im Hintergrund tut. Baut auf dem frueher zurueckgestellten "Darkweb-Monitoring o.ae." Gedanken auf, aber als einfache Text-Uebersicht, kein neues Feature.
+- Ein Link zu einer Anleitung, wie man driftmail installiert/einrichtet (zeigt auf die Info-Seite von Punkt 2 oder eine eigene Kurzanleitung).
+
+**2) Oeffentliche Info-Seite/Kachel auf driftware.online (Teil des driftmail-Repos, vermutlich im web/-Ordner als separate oeffentliche Route/Seite, nicht hinter Login):**
+- Kurze Vorstellung von driftmail (was es ist, fuer wen).
+- Installationsanleitung (wie verbindet man ein Mail-Konto, welche Anbieter werden unterstuetzt).
+- Sicherheitshinweise/Vertrauensbildung (welche Sicherheitsfunktionen driftmail bietet, in einfachen Worten -- Whitelist, Betrugserkennung, Malware-Scan, On-Device-KI statt Cloud-Standard, etc.).
+- Bitte grobe Struktur/Umfang selbst vorschlagen und in SYNC.md kurz skizzieren, bevor viel Zeit reingesteckt wird -- Massimo will das noch nicht bis ins Detail vorgeben ("alles das was die anderen auch haben" als grobe Richtung), aber grobe Gliederung vorher kurz zeigen.
+
+Kein Contract-Bruch, reine UI-/Content-Arbeit. Bitte NACH dem laufenden Testen (Web/iOS mit dem echten Konto) einordnen, kein Blocker fuer das aktuelle Testen selbst.
