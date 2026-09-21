@@ -928,3 +928,20 @@ Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
 **Tests:** `xcodebuild` BUILD SUCCEEDED (neue Dateien manuell in `project.pbxproj` eingetragen, keine Ordner-Referenzen in diesem Projekt). Sauberer Uninstall/Install/Launch, `log show` auf Crash/Fatal/DecodingError geprueft -- keine Treffer. Screenshot bestaetigt unveraenderten Onboarding-Screen. Wie bei allen vorherigen iOS-Schritten dieser Session liess sich der neue Screen selbst NICHT interaktiv durchklicken (kein Weg am Onboarding-Gate vorbei ohne echte Test-Mailbox).
 
 **Kein Blocker.** Web-Teil folgt separat.
+
+
+[2026-09-21] [terminal] [F] — WEB_INBOX.md 21.09. "NEUER AUFTRAG - Abwesenheitsassistent", Web-UI fertig (Commit `9a9714b`), aufbauend auf dem Backend (`fc4e287`/`7215149`). iOS-Teil war bereits fertig (`cf20a24`/`94f28af`, siehe SYNC.md-Eintrag von Track C oben). Damit sind alle drei Tracks für diesen Auftrag fertig.
+
+**Formular:** neuer Abschnitt "Abwesenheitsassistent" in `SettingsModal.tsx` -- Ein/Aus-Checkbox, Start-/End-Datumsfelder, Betreff/Text, ein einzelner "Speichern"-Button für das ganze Formular (die Felder gehören inhaltlich zusammen, ein Aktivieren ohne Betreff wäre sonst sofort ein serverseitiger 400). Validierung läuft bewusst nur einmal serverseitig -- die 400-Antwort wird direkt im Formular angezeigt statt dieselbe Regel zusätzlich im Client zu pflegen.
+
+**Banner:** neue `AbsenceResponderBanner.tsx`, sichtbar solange aktiv (mit Enddatum falls gesetzt), "Jetzt beenden" setzt per `PUT` ausschließlich `active: false` -- restliche Felder bleiben gespeichert, damit ein erneutes Aktivieren das zuletzt eingetragene Formular wiederfindet. Zustand lebt zusätzlich in `App.tsx` (eigener `GET /absence-responder` nach Login, unabhängig vom Einstellungsdialog), `SettingsModal.tsx` meldet ein erfolgreiches Speichern per Callback-Prop dorthin zurück.
+
+**Layout-Fund:** `.app-shell` hat festes `height: 100vh` -- mit Banner oben würde das zusammen mehr als einen Viewport beanspruchen. Neuer `.app-viewport`-Flex-Wrapper (nur vorhanden, wenn der Banner gerendert wird) löst das, `.app-shell` bekommt darin `flex: 1` statt seiner eigenen Höhe.
+
+**Technischer Fund:** eine Prop-Synchronisation des Formular-Zustands aus App.tsx (statt eines eigenen Ladevorgangs) hätte einen `react(set-state-in-effect)`-Lint-Befund erzeugt -- stattdessen lädt `SettingsModal.tsx` seinen Anfangszustand über einen eigenen `GET`-Aufruf beim Öffnen, gleiches Prinzip wie das bestehende `accentTheme`-Laden in derselben Datei.
+
+**Mock-Server:** `GET`/`PUT /absence-responder` in `mock-server/server.mjs`, gleiche Pflichtfeld-Validierung wie das Backend.
+
+**Tests:** `tsc -b`/`vite build`/`oxlint` grün (keine neuen Warnungen über die bestehende Baseline hinaus). Per Browser-Automation gegen den Mock-Server durchgeklickt: Aktivieren ohne Pflichtfelder zeigt die 400-Fehlermeldung; vollständiges Ausfüllen + Speichern zeigt den Banner sofort; "Jetzt beenden" lässt ihn verschwinden UND per direktem `curl GET /absence-responder` bestätigt, dass `active: false` server-seitig gesetzt ist, während Start/Betreff/Text erhalten blieben; erneutes Öffnen der Einstellungen zeigt das Formular korrekt vorausgefüllt. Konsole ohne Fehler.
+
+**Kein Blocker.** Damit ist der Abwesenheitsassistent (Backend + iOS + Web) komplett fertig.
