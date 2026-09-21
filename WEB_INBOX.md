@@ -915,3 +915,6 @@ Kein Contract-Bruch (ai-adapter-interface.ts sieht genau diese Funktionen bereit
 - Bitte grobe Struktur/Umfang selbst vorschlagen und in SYNC.md kurz skizzieren, bevor viel Zeit reingesteckt wird -- Massimo will das noch nicht bis ins Detail vorgeben ("alles das was die anderen auch haben" als grobe Richtung), aber grobe Gliederung vorher kurz zeigen.
 
 Kein Contract-Bruch, reine UI-/Content-Arbeit. Bitte NACH dem laufenden Testen (Web/iOS mit dem echten Konto) einordnen, kein Blocker fuer das aktuelle Testen selbst.
+
+
+[2026-09-21] [offen] [KLEINE VERKNUEPFUNG - Neuer-Absender-Badge mit Whitelist verbinden] [Track C/F] — Massimo: wenn eine Mail das "Neuer Absender"-Kennzeichen zeigt (isNewSender, siehe fruehere Sicherheits-Ergaenzung), soll der User direkt an dieser Stelle die Moeglichkeit haben, den Absender zur Whitelist (trusted_senders, POST /trusted-senders existiert bereits) hinzuzufuegen -- z.B. ein kleiner Button/Link direkt neben oder unter dem Badge ("Absender vertrauen"), nicht erst ueber die Einstellungen suchen muessen. Nach Klick verschwindet das Neuer-Absender-Kennzeichen fuer kuenftige Mails von dieser Adresse (Whitelist greift wie bereits spezifiziert). Kein Contract-Bruch (Endpunkt existiert), reine UI-Verknuepfung zweier bereits bestehender Features. Kein Blocker, kleine Ergaenzung.
