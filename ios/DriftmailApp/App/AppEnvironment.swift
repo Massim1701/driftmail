@@ -273,6 +273,11 @@ final class AppEnvironment: ObservableObject {
     /// `loadSettings()` den echten Wert geladen hat.
     @Published private(set) var strictUnknownSenders = true
 
+    /// [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
+    /// ("Nudge"), gespiegelt von `GET /settings`. Default `true` wie das
+    /// Backend, bis `loadSettings()` den echten Wert geladen hat.
+    @Published private(set) var nudgeUnansweredEnabled = true
+
     /// `GET /settings` (WEB_INBOX.md 21.09. "Einstellungsbereich", Ansicht:
     /// Akzentfarben-Auswahl; erweitert um `strictUnknownSenders` in "FUENF
     /// NEUE KOMFORT-FEATURES" Punkt 1) -- lädt einmal beim App-Start (siehe
@@ -282,6 +287,7 @@ final class AppEnvironment: ObservableObject {
         guard let settings = try? await apiClient.fetchSettings() else { return }
         applyAccentTheme(settings.accentTheme)
         strictUnknownSenders = settings.strictUnknownSenders
+        nudgeUnansweredEnabled = settings.nudgeUnansweredEnabled
     }
 
     /// `PUT /settings`. Aktualisiert `accentTheme`/die Live-Farbe und
@@ -289,9 +295,10 @@ final class AppEnvironment: ObservableObject {
     /// (Quelle der Wahrheit), kein optimistisches Umfärben/Umschalten.
     @discardableResult
     func updateAccentTheme(_ theme: AccentTheme) async throws -> UserSettings {
-        let updated = try await apiClient.updateSettings(accentTheme: theme, strictUnknownSenders: nil)
+        let updated = try await apiClient.updateSettings(accentTheme: theme, strictUnknownSenders: nil, nudgeUnansweredEnabled: nil)
         applyAccentTheme(updated.accentTheme)
         strictUnknownSenders = updated.strictUnknownSenders
+        nudgeUnansweredEnabled = updated.nudgeUnansweredEnabled
         return updated
     }
 
@@ -301,9 +308,66 @@ final class AppEnvironment: ObservableObject {
     /// bleibt (mirrors `updateAccentTheme(_:)` oben).
     @discardableResult
     func updateStrictUnknownSenders(_ enabled: Bool) async throws -> UserSettings {
-        let updated = try await apiClient.updateSettings(accentTheme: nil, strictUnknownSenders: enabled)
+        let updated = try await apiClient.updateSettings(accentTheme: nil, strictUnknownSenders: enabled, nudgeUnansweredEnabled: nil)
         applyAccentTheme(updated.accentTheme)
         strictUnknownSenders = updated.strictUnknownSenders
+        nudgeUnansweredEnabled = updated.nudgeUnansweredEnabled
+        return updated
+    }
+
+    /// `PUT /settings` fuer den Nudge-Toggle (WEB_INBOX.md 21.09. "DREI
+    /// WEITERE FEATURES - Gmail-Recherche" Punkt 2) -- mirrors
+    /// `updateStrictUnknownSenders(_:)`.
+    @discardableResult
+    func updateNudgeUnansweredEnabled(_ enabled: Bool) async throws -> UserSettings {
+        let updated = try await apiClient.updateSettings(accentTheme: nil, strictUnknownSenders: nil, nudgeUnansweredEnabled: enabled)
+        applyAccentTheme(updated.accentTheme)
+        strictUnknownSenders = updated.strictUnknownSenders
+        nudgeUnansweredEnabled = updated.nudgeUnansweredEnabled
+        return updated
+    }
+
+    /// [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 1 ("Tracking-Pixel-
+    /// Blockierung"), gespiegelt von `GET /privacy-settings`. `nil` bis zum
+    /// ersten `loadPrivacySettings()`-Aufruf (analog `absenceResponder`).
+    @Published private(set) var privacySettings: PrivacySettings?
+
+    func loadPrivacySettings() async {
+        privacySettings = try? await apiClient.fetchPrivacySettings()
+    }
+
+    /// `PUT /privacy-settings`. Aktualisiert `privacySettings` erst NACH
+    /// erfolgreicher Server-Antwort, analog `updateStrictUnknownSenders(_:)`.
+    @discardableResult
+    func updatePrivacySettings(blockRemoteImages: Bool? = nil, blockTrackingLinks: Bool? = nil) async throws -> PrivacySettings {
+        let updated = try await apiClient.updatePrivacySettings(blockRemoteImages: blockRemoteImages, blockTrackingLinks: blockTrackingLinks)
+        privacySettings = updated
+        return updated
+    }
+
+    /// [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 3 ("Darkweb-/Datenleck-
+    /// Ueberwachung"), gespiegelt von `GET /security/breaches`. Leer bis
+    /// zum ersten `loadBreaches()`-Aufruf.
+    @Published private(set) var breaches: [DataBreachFinding] = []
+
+    /// Anzahl noch nicht bestaetigter Funde -- treibt ein Badge in
+    /// `FolderListView`, analog zum Abwesenheits-Banner dort.
+    var unacknowledgedBreachCount: Int {
+        breaches.filter { !$0.acknowledged }.count
+    }
+
+    func loadBreaches() async {
+        breaches = (try? await apiClient.fetchBreaches()) ?? []
+    }
+
+    /// `PATCH /security/breaches/{breachId}`. Aktualisiert den betroffenen
+    /// Eintrag in `breaches` direkt aus der Server-Antwort.
+    @discardableResult
+    func acknowledgeBreach(id: String, acknowledged: Bool) async throws -> DataBreachFinding {
+        let updated = try await apiClient.acknowledgeBreach(id: id, acknowledged: acknowledged)
+        if let index = breaches.firstIndex(where: { $0.id == id }) {
+            breaches[index] = updated
+        }
         return updated
     }
 

@@ -29,6 +29,8 @@ struct MessageDetailView: View {
     // 21.09. "DREI WEITERE GRUNDFUNKTIONEN" Punkt 3) und Weiterleiten
     // (Punkt 1) auch hier zur Verfügung, nicht nur bei neuen Mails.
     @State private var composeMode: ComposeMode?
+    /// [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze").
+    @State private var isSnoozing = false
 
     /// The folder the message currently sits in, looked up from
     /// `environment.folders` via `detail.folderId`. `nil` while folders or
@@ -58,6 +60,14 @@ struct MessageDetailView: View {
                         )
                     }
 
+                    if let confidentialUntil = detail.confidentialUntil {
+                        confidentialBanner(until: confidentialUntil, bodyGone: detail.bodyText == nil)
+                    }
+
+                    if let snoozedUntil = detail.snoozedUntil, snoozedUntil > Date() {
+                        snoozedBanner(until: snoozedUntil)
+                    }
+
                     Text(detail.bodyText ?? "")
                         .font(.system(size: DesignTokens.Typography.Size.body))
                         .foregroundStyle(DesignTokens.Color.textPrimary)
@@ -67,6 +77,10 @@ struct MessageDetailView: View {
                             RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
                                 .fill(DesignTokens.Color.surfaceCard)
                         )
+
+                    if !detail.attachments.isEmpty {
+                        attachmentsCard(detail.attachments)
+                    }
 
                     actions(for: detail)
 
@@ -250,6 +264,26 @@ struct MessageDetailView: View {
                 .disabled(isMoving)
             }
 
+            // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze") --
+            // dieselben festen Zeitpunkte wie der Swipe in `InboxListView`
+            // (dupliziert statt geteilt, kleine eigenstaendige Enums pro
+            // View, analog zum Muster bei anderen Konstanten in dieser App).
+            if currentFolder?.isTrash != true && currentFolder?.systemKey != .quarantaene {
+                Menu {
+                    ForEach(DetailSnoozeOption.allCases) { option in
+                        Button(option.label) {
+                            Task { await snooze(until: option.date()) }
+                        }
+                    }
+                } label: {
+                    Label("Später", systemImage: "clock")
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .disabled(isSnoozing)
+            }
+
             if currentFolder?.systemKey != .quarantaene {
                 Button(role: .destructive) {
                     Task { await quarantine() }
@@ -315,6 +349,84 @@ struct MessageDetailView: View {
         .background(
             RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
                 .fill(DesignTokens.Color.accent.opacity(0.08))
+        )
+    }
+
+    /// [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
+    /// ("Vertraulicher Modus"): `bodyGone == true` bedeutet, der
+    /// Ablaufzeitpunkt liegt in der Vergangenheit UND der Server hat
+    /// `bodyText` bereits gelöscht (siehe `MessageDetail.confidentialUntil`-
+    /// Kommentar) -- eigener Hinweistext statt eines leeren Bodys ohne
+    /// Erklärung.
+    private func confidentialBanner(until: Date, bodyGone: Bool) -> some View {
+        HStack(spacing: DesignTokens.Spacing.sm) {
+            Image(systemName: bodyGone ? "lock.slash" : "lock.fill")
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+            Text(bodyGone
+                 ? "Vertraulich -- der Inhalt wurde am \(until.formatted(date: .abbreviated, time: .shortened)) automatisch gelöscht."
+                 : "Vertraulich bis \(until.formatted(date: .abbreviated, time: .shortened)).")
+                .font(.system(size: DesignTokens.Typography.Size.small))
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+        }
+        .padding(DesignTokens.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
+                .fill(DesignTokens.Color.surfaceCard)
+        )
+    }
+
+    private func snoozedBanner(until: Date) -> some View {
+        HStack(spacing: DesignTokens.Spacing.sm) {
+            Image(systemName: "clock.fill")
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+            Text("Zurückgestellt bis \(until.formatted(date: .abbreviated, time: .shortened)).")
+                .font(.system(size: DesignTokens.Typography.Size.small))
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+            Spacer()
+            Button("Jetzt zeigen") {
+                Task { await unsnooze() }
+            }
+            .font(.system(size: DesignTokens.Typography.Size.small))
+        }
+        .padding(DesignTokens.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
+                .fill(DesignTokens.Color.surfaceCard)
+        )
+    }
+
+    /// [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan":
+    /// zeigt den ECHTEN ClamAV-Scan-Status pro Anhang -- ein nicht-`clean`
+    /// Anhang bekommt bewusst keine Öffnen-Aktion (die App hat ohnehin
+    /// keinen eigenen Dateibetrachter, dieser Screen ist reine Information/
+    /// Warnung, kein Download).
+    private func attachmentsCard(_ attachments: [MessageAttachment]) -> some View {
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
+            Text("Anhänge")
+                .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+            ForEach(attachments) { attachment in
+                HStack(spacing: DesignTokens.Spacing.sm) {
+                    Image(systemName: attachment.scanStatus == .clean ? "paperclip" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(attachment.scanStatus == .clean ? DesignTokens.Color.textMuted : DesignTokens.Color.danger)
+                    Text(attachment.filename)
+                        .font(.system(size: DesignTokens.Typography.Size.small))
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                        .lineLimit(1)
+                    Spacer()
+                    Text(attachment.scanStatus.label)
+                        .font(.system(size: DesignTokens.Typography.Size.caption, weight: .medium))
+                        .foregroundStyle(attachment.scanStatus == .clean ? DesignTokens.Color.success : DesignTokens.Color.dangerText)
+                }
+            }
+        }
+        .padding(DesignTokens.Spacing.lg)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
+                .fill(DesignTokens.Color.surfaceCard)
         )
     }
 
@@ -393,6 +505,34 @@ struct MessageDetailView: View {
         }
     }
 
+    /// `POST /messages/{messageId}/snooze`. Verlaesst die Detailansicht
+    /// danach (die Nachricht taucht bis zum Ablauf nicht mehr in
+    /// `GET /messages` auf, ein Zurueckbleiben auf ihrer eigenen -- dann
+    /// unsichtbaren -- Detailseite waere verwirrend).
+    private func snooze(until: Date) async {
+        isSnoozing = true
+        defer { isSnoozing = false }
+        do {
+            _ = try await environment.apiClient.snoozeMessage(id: messageId, until: until)
+            dismiss()
+        } catch {
+            errorMessage = "Zurückstellen fehlgeschlagen."
+        }
+    }
+
+    /// Hebt ein bestehendes Snooze sofort auf (`until: nil`), z.B. per
+    /// "Jetzt zeigen" im `snoozedBanner(until:)`.
+    private func unsnooze() async {
+        isSnoozing = true
+        defer { isSnoozing = false }
+        do {
+            _ = try await environment.apiClient.snoozeMessage(id: messageId, until: nil)
+            await loadDetail()
+        } catch {
+            errorMessage = "Zurückstellen aufheben fehlgeschlagen."
+        }
+    }
+
     /// `DELETE /messages/{messageId}/permanent` — endgültiges Löschen,
     /// nur aus dem Papierkorb heraus angeboten (siehe `currentFolder?.isTrash`
     /// in `actions(for:)`). Die Nachricht existiert danach nicht mehr, also
@@ -421,11 +561,8 @@ enum ComposeAttachmentUiStatus: Equatable {
         switch self {
         case .uploading: return "Wird hochgeladen…"
         case .error: return "Hochladen fehlgeschlagen"
-        case .scanned(.pending): return "Wird geprüft…"
-        case .scanned(.clean): return "Geprüft"
         case .scanned(.malicious): return "Gefährlich — wird nicht gesendet"
-        case .scanned(.blockedType): return "Dateityp nicht erlaubt"
-        case .scanned(.scanFailed): return "Prüfung fehlgeschlagen"
+        case .scanned(let status): return status.label
         }
     }
 
@@ -440,6 +577,35 @@ struct ComposeAttachment: Identifiable {
     let filename: String
     var attachmentId: String?
     var status: ComposeAttachmentUiStatus
+}
+
+/// See `InboxListView.SnoozeOption` -- identische Zeitpunkte, dupliziert
+/// statt geteilt (siehe Kommentar am Aufrufer oben).
+private enum DetailSnoozeOption: CaseIterable, Identifiable {
+    case laterToday, tomorrowMorning, nextWeek
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .laterToday: return "Heute Abend (18 Uhr)"
+        case .tomorrowMorning: return "Morgen früh (8 Uhr)"
+        case .nextWeek: return "Nächste Woche (Montag, 8 Uhr)"
+        }
+    }
+
+    func date(calendar: Calendar = .current, now: Date = Date()) -> Date {
+        switch self {
+        case .laterToday:
+            let candidate = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: now) ?? now
+            return candidate > now ? candidate : calendar.date(byAdding: .day, value: 1, to: candidate) ?? candidate
+        case .tomorrowMorning:
+            let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
+            return calendar.date(bySettingHour: 8, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+        case .nextWeek:
+            return calendar.nextDate(after: now, matching: DateComponents(hour: 8, minute: 0, weekday: 2), matchingPolicy: .nextTime) ?? calendar.date(byAdding: .day, value: 7, to: now) ?? now
+        }
+    }
 }
 
 private struct SourceTag: View {

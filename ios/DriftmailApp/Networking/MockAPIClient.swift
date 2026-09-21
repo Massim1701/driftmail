@@ -52,6 +52,36 @@ actor MockAPIClient: APIClient {
     /// analog zu `aiSettings` oben.
     private var userSettings = UserSettings(accentTheme: .teal, strictUnknownSenders: true)
 
+    /// `GET`/`PUT /privacy-settings` (WEB_INBOX.md 21.09. "5
+    /// Wettbewerbs-Luecken" Punkt 1) -- rein In-Memory, analog zu
+    /// `userSettings`. Beide Schalter starten aktiviert, wie beim echten
+    /// Backend-Default.
+    private var privacySettings = PrivacySettings(blockRemoteImages: true, blockTrackingLinks: true)
+
+    /// `GET`/`PATCH /security/breaches` (WEB_INBOX.md 21.09. "5
+    /// Wettbewerbs-Luecken" Punkt 3, "Darkweb-/Datenleck-Ueberwachung") --
+    /// zwei feste Beispiel-Funde, analog zum `leaktest@example.com`-Muster
+    /// des echten (gemockten) Backends, damit die UI auch im Mock-Betrieb
+    /// etwas zum Anzeigen/Bestaetigen hat.
+    private var breaches: [DataBreachFinding] = [
+        DataBreachFinding(
+            id: "breach-mock-001",
+            accountId: "mock-account",
+            breachName: "ExampleForum-Leak-2024",
+            breachDate: Calendar.current.date(byAdding: .month, value: -8, to: Date()),
+            discoveredAt: Date(timeIntervalSinceNow: -86_400),
+            acknowledged: false
+        ),
+        DataBreachFinding(
+            id: "breach-mock-002",
+            accountId: "mock-account",
+            breachName: "SocialApp-Datenpanne-2023",
+            breachDate: Calendar.current.date(byAdding: .month, value: -20, to: Date()),
+            discoveredAt: Date(timeIntervalSinceNow: -86_400),
+            acknowledged: false
+        ),
+    ]
+
     /// `GET`/`PUT /absence-responder` (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
     /// Abwesenheitsassistent") -- rein In-Memory, kein Contract-Pendant in
     /// MockDatabase.json noetig, analog zu `aiSettings`/`userSettings` oben.
@@ -204,8 +234,16 @@ actor MockAPIClient: APIClient {
     func fetchMessages(folderId: String?, accountId: String?, query: String?) async throws -> [Message] {
         await delay()
         let needle = query?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let now = Date()
         return db.messages
             .filter { folderId == nil || $0.folderId == folderId }
+            // Snooze (WEB_INBOX.md 21.09. "5 Wettbewerbs-Luecken" Punkt 5):
+            // eine noch in der Zukunft snoozte Nachricht ist hier unsichtbar,
+            // genau wie beim echten Backend (`store.listMessages()`).
+            .filter { message in
+                guard let snoozedUntil = message.snoozedUntil else { return true }
+                return snoozedUntil <= now
+            }
             .filter { message in
                 guard let needle, !needle.isEmpty else { return true }
                 return (message.subject?.lowercased().contains(needle) ?? false)
@@ -246,6 +284,17 @@ actor MockAPIClient: APIClient {
             throw APIError.forbidden
         }
         return .confirmed
+    }
+
+    /// `POST /messages/{messageId}/snooze` (WEB_INBOX.md 21.09. "5
+    /// Wettbewerbs-Luecken" Punkt 5). `until: nil` hebt ein bestehendes
+    /// Snooze sofort wieder auf.
+    func snoozeMessage(id: String, until: Date?) async throws -> Message {
+        await delay()
+        guard let index = db.messages.firstIndex(where: { $0.id == id }) else { throw APIError.notFound }
+        let updated = db.messages[index].snoozed(until: until)
+        db.messages[index] = updated
+        return updated.asMessage
     }
 
     func moveMessage(id: String, toFolderId: String) async throws -> Message {
@@ -374,13 +423,44 @@ actor MockAPIClient: APIClient {
 
     /// `PUT /settings`. `nil`-Parameter lassen das jeweilige Feld
     /// unangetastet, analog zum echten Backend (`COALESCE`).
-    func updateSettings(accentTheme: AccentTheme?, strictUnknownSenders: Bool?) async throws -> UserSettings {
+    func updateSettings(accentTheme: AccentTheme?, strictUnknownSenders: Bool?, nudgeUnansweredEnabled: Bool?) async throws -> UserSettings {
         await delay()
         userSettings = UserSettings(
             accentTheme: accentTheme ?? userSettings.accentTheme,
-            strictUnknownSenders: strictUnknownSenders ?? userSettings.strictUnknownSenders
+            strictUnknownSenders: strictUnknownSenders ?? userSettings.strictUnknownSenders,
+            nudgeUnansweredEnabled: nudgeUnansweredEnabled ?? userSettings.nudgeUnansweredEnabled
         )
         return userSettings
+    }
+
+    /// `GET /privacy-settings`, Mock: liefert den In-Memory-Zustand.
+    func fetchPrivacySettings() async throws -> PrivacySettings {
+        await delay()
+        return privacySettings
+    }
+
+    /// `PUT /privacy-settings`. `nil`-Parameter unangetastet, analog `updateSettings(...)`.
+    func updatePrivacySettings(blockRemoteImages: Bool?, blockTrackingLinks: Bool?) async throws -> PrivacySettings {
+        await delay()
+        privacySettings = PrivacySettings(
+            blockRemoteImages: blockRemoteImages ?? privacySettings.blockRemoteImages,
+            blockTrackingLinks: blockTrackingLinks ?? privacySettings.blockTrackingLinks
+        )
+        return privacySettings
+    }
+
+    /// `GET /security/breaches`, Mock: liefert den In-Memory-Zustand.
+    func fetchBreaches() async throws -> [DataBreachFinding] {
+        await delay()
+        return breaches
+    }
+
+    /// `PATCH /security/breaches/{breachId}`.
+    func acknowledgeBreach(id: String, acknowledged: Bool) async throws -> DataBreachFinding {
+        await delay()
+        guard let index = breaches.firstIndex(where: { $0.id == id }) else { throw APIError.notFound }
+        breaches[index].acknowledged = acknowledged
+        return breaches[index]
     }
 
     /// `GET /absence-responder`, Mock: liefert den In-Memory-Zustand.
@@ -442,7 +522,11 @@ actor MockAPIClient: APIClient {
     /// Backend -- `cc`/`bcc` werden vom Mock entgegengenommen, aber (wie
     /// beim echten Versand ohnehin nicht sichtbar) nirgends weiter
     /// ausgewertet.
-    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String {
+    /// `confidentialUntil` (WEB_INBOX.md 21.09. "Vertraulicher Modus"): Mock
+    /// speichert es unveraendert auf der "gesendet"-Kopie, loescht aber
+    /// (anders als das echte Backend) `bodyText` nie automatisch nach Ablauf
+    /// -- kein periodischer Job im Mock-Client, dokumentierte Vereinfachung.
+    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?, confidentialUntil: Date?) async throws -> String {
         await delay()
         if let inReplyToMessageId {
             guard db.messages.contains(where: { $0.id == inReplyToMessageId }) else {
@@ -473,7 +557,8 @@ actor MockAPIClient: APIClient {
                 security: nil,
                 canUnsubscribe: false,
                 isNewSender: false,
-                inReplyToMessageId: inReplyToMessageId
+                inReplyToMessageId: inReplyToMessageId,
+                confidentialUntil: confidentialUntil
             )
             db.messages.append(sent)
         }
@@ -541,6 +626,56 @@ actor MockAPIClient: APIClient {
             cc: cc,
             subject: subject,
             bodyText: bodyText,
+            updatedAt: Date()
+        )
+        drafts[index] = updated
+        return updated
+    }
+
+    /// `POST /drafts` mit gesetztem `scheduledFor` (WEB_INBOX.md 21.09. "5
+    /// Wettbewerbs-Luecken" Punkt 4, "Schedule Send"). Mock: gleiche
+    /// Pflichtfeld-Validierung wie das echte Backend (`to`+`bodyText` nicht
+    /// leer), `scheduledFor` muss in der Zukunft liegen -- kein
+    /// periodischer Versand-Job im Mock-Client (dokumentierte
+    /// Vereinfachung, siehe `sendMessage`-Kommentar).
+    func scheduleDraft(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String?, scheduledFor: Date) async throws -> Draft {
+        await delay()
+        guard !to.isEmpty, let bodyText, !bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw APIError.badRequest(message: "to und bodyText sind fuer Schedule Send erforderlich")
+        }
+        guard scheduledFor > Date() else {
+            throw APIError.badRequest(message: "scheduledFor muss in der Zukunft liegen")
+        }
+        let draft = Draft(
+            id: UUID().uuidString,
+            inReplyToMessageId: inReplyToMessageId,
+            to: to,
+            cc: cc,
+            bcc: bcc,
+            subject: subject,
+            bodyText: bodyText,
+            scheduledFor: scheduledFor,
+            updatedAt: Date()
+        )
+        drafts.append(draft)
+        return draft
+    }
+
+    /// `PATCH /drafts/{draftId}` mit `scheduledFor: null` -- hebt die
+    /// Planung auf, der Entwurf selbst bleibt erhalten.
+    func cancelScheduledDraft(id: String) async throws -> Draft {
+        await delay()
+        guard let index = drafts.firstIndex(where: { $0.id == id }) else { throw APIError.notFound }
+        let existing = drafts[index]
+        let updated = Draft(
+            id: existing.id,
+            inReplyToMessageId: existing.inReplyToMessageId,
+            to: existing.to,
+            cc: existing.cc,
+            bcc: existing.bcc,
+            subject: existing.subject,
+            bodyText: existing.bodyText,
+            scheduledFor: nil,
             updatedAt: Date()
         )
         drafts[index] = updated

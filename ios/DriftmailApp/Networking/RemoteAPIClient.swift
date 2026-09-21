@@ -253,9 +253,31 @@ struct RemoteAPIClient: APIClient {
     /// automatisch weggelassen (nicht als `null` gesendet) -- Backend nutzt
     /// `COALESCE` und laesst ein weggelassenes Feld unangetastet, exakt wie
     /// bei `updateFolder(id:name:icon:sortOrder:)` oben mit demselben Muster.
-    func updateSettings(accentTheme: AccentTheme?, strictUnknownSenders: Bool?) async throws -> UserSettings {
-        struct Body: Encodable { let accentTheme: AccentTheme?; let strictUnknownSenders: Bool? }
-        return try await put("/settings", body: Body(accentTheme: accentTheme, strictUnknownSenders: strictUnknownSenders))
+    func updateSettings(accentTheme: AccentTheme?, strictUnknownSenders: Bool?, nudgeUnansweredEnabled: Bool?) async throws -> UserSettings {
+        struct Body: Encodable { let accentTheme: AccentTheme?; let strictUnknownSenders: Bool?; let nudgeUnansweredEnabled: Bool? }
+        return try await put("/settings", body: Body(accentTheme: accentTheme, strictUnknownSenders: strictUnknownSenders, nudgeUnansweredEnabled: nudgeUnansweredEnabled))
+    }
+
+    /// `GET /privacy-settings`.
+    func fetchPrivacySettings() async throws -> PrivacySettings {
+        try await get("/privacy-settings")
+    }
+
+    /// `PUT /privacy-settings`. `nil`-Felder unangetastet, analog `updateSettings(...)`.
+    func updatePrivacySettings(blockRemoteImages: Bool?, blockTrackingLinks: Bool?) async throws -> PrivacySettings {
+        struct Body: Encodable { let blockRemoteImages: Bool?; let blockTrackingLinks: Bool? }
+        return try await put("/privacy-settings", body: Body(blockRemoteImages: blockRemoteImages, blockTrackingLinks: blockTrackingLinks))
+    }
+
+    /// `GET /security/breaches`.
+    func fetchBreaches() async throws -> [DataBreachFinding] {
+        try await get("/security/breaches")
+    }
+
+    /// `PATCH /security/breaches/{breachId}`.
+    func acknowledgeBreach(id: String, acknowledged: Bool) async throws -> DataBreachFinding {
+        struct Body: Encodable { let acknowledged: Bool }
+        return try await patch("/security/breaches/\(id)", body: Body(acknowledged: acknowledged))
     }
 
     /// `GET /absence-responder` (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
@@ -348,12 +370,66 @@ struct RemoteAPIClient: APIClient {
         return try await patch("/drafts/\(id)", body: Body(to: to, cc: cc, subject: subject, bodyText: bodyText))
     }
 
+    /// `POST /drafts` mit gesetztem `scheduledFor` -- `Date` wird analog zu
+    /// `startDate`/`endDate` bei `updateAbsenceResponder(...)` als
+    /// ISO8601-String uebertragen (`RemoteAPIClient` hat sonst keine
+    /// zentrale `JSONEncoder.dateEncodingStrategy`, alle bestehenden
+    /// Date-Felder im Contract sind schon client-seitig `String`; neue
+    /// `Date`-Parameter dieser Datei folgen demselben Muster statt einen
+    /// globalen Encoder einzufuehren).
+    func scheduleDraft(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String?, scheduledFor: Date) async throws -> Draft {
+        struct Body: Encodable {
+            let accountId: String?
+            let inReplyToMessageId: String?
+            let to: [String]
+            let cc: [String]
+            let bcc: [String]
+            let subject: String?
+            let bodyText: String?
+            let scheduledFor: String
+        }
+        return try await post("/drafts", body: Body(accountId: accountId, inReplyToMessageId: inReplyToMessageId, to: to, cc: cc, bcc: bcc, subject: subject, bodyText: bodyText, scheduledFor: Self.iso8601String(scheduledFor)))
+    }
+
+    /// `PATCH /drafts/{draftId}` mit echtem JSON `null` fuer `scheduledFor`
+    /// -- eigenes `encode(to:)` analog zu `updateAbsenceResponder`s
+    /// `clearEndDate`-Pfad, weil ein weggelassenes Feld dort "unveraendert
+    /// lassen" bedeutet, hier aber "Planung aufheben" gemeint ist.
+    func cancelScheduledDraft(id: String) async throws -> Draft {
+        struct Body: Encodable {
+            private enum CodingKeys: String, CodingKey { case scheduledFor }
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encodeNil(forKey: .scheduledFor)
+            }
+        }
+        return try await patch("/drafts/\(id)", body: Body())
+    }
+
+    /// `POST /messages/{messageId}/snooze`. `until: nil` sendet ein echtes
+    /// JSON `null` (Snooze aufheben), analog `cancelScheduledDraft` oben.
+    func snoozeMessage(id: String, until: Date?) async throws -> Message {
+        struct Body: Encodable {
+            let until: String?
+            private enum CodingKeys: String, CodingKey { case until }
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                if let until {
+                    try container.encode(until, forKey: .until)
+                } else {
+                    try container.encodeNil(forKey: .until)
+                }
+            }
+        }
+        return try await post("/messages/\(id)/snooze", body: Body(until: until.map(Self.iso8601String)))
+    }
+
     /// `POST /messages/send` — anders als die übrigen `post()`-Aufrufe
     /// hier muss der HTTP-Status geprüft werden, weil 422 (`blocked:
     /// true`) ein erwarteter, vom Erfolgsfall inhaltlich verschiedener
     /// Ausgang ist (siehe `APIError.blocked`), keine generische
     /// Netzwerk-/Decoding-Fehlerbedingung.
-    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String {
+    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?, confidentialUntil: Date?) async throws -> String {
         struct Body: Encodable {
             let accountId: String?
             let inReplyToMessageId: String?
@@ -364,6 +440,7 @@ struct RemoteAPIClient: APIClient {
             let bodyText: String
             let attachmentIds: [String]
             let draftId: String?
+            let confidentialUntil: String?
         }
         struct SendResponse: Decodable { let sentMessageId: String }
         struct BlockedResponse: Decodable { let blocked: Bool; let reason: String? }
@@ -372,7 +449,7 @@ struct RemoteAPIClient: APIClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         authorize(&request)
-        request.httpBody = try JSONEncoder().encode(Body(accountId: accountId, inReplyToMessageId: inReplyToMessageId, to: to, cc: cc, bcc: bcc, subject: subject, bodyText: bodyText, attachmentIds: attachmentIds, draftId: draftId))
+        request.httpBody = try JSONEncoder().encode(Body(accountId: accountId, inReplyToMessageId: inReplyToMessageId, to: to, cc: cc, bcc: bcc, subject: subject, bodyText: bodyText, attachmentIds: attachmentIds, draftId: draftId, confidentialUntil: confidentialUntil.map(Self.iso8601String)))
 
         let data: Data
         let response: URLResponse
@@ -446,6 +523,15 @@ struct RemoteAPIClient: APIClient {
     // MARK: - Plumbing
 
     private struct EmptyResponse: Decodable {}
+
+    /// `Date` -> ISO8601-String fuer ausgehende Request-Bodies (siehe
+    /// Kommentar bei `scheduleDraft(...)`). `withInternetDateTime` reicht
+    /// fuer `date-time`-Felder laut Contract; kein Bedarf an
+    /// Sekundenbruchteilen bisher (Snooze/Schedule-Send/Vertraulicher-Modus
+    /// sind minuten-/stundengranular in der UI).
+    private static func iso8601String(_ date: Date) -> String {
+        ISO8601DateFormatter().string(from: date)
+    }
 
     /// Attaches `Authorization: Bearer <token>` when a token is set (i.e.
     /// for every real endpoint once an account is connected). No-op for the

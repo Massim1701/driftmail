@@ -56,6 +56,9 @@ struct InboxListView: View {
     @State private var messages: [Message] = []
     @State private var isLoading = true
     @State private var messagePendingPermanentDelete: Message?
+    /// [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"): Nachricht,
+    /// fuer die gerade der Zeitpunkt-Auswahl-Dialog offen ist.
+    @State private var messagePendingSnooze: Message?
     /// Thread-IDs (= `MessageThread.id`, die ID der neuesten Nachricht),
     /// deren "+N ältere" gerade aufgeklappt ist.
     @State private var expandedThreadIds: Set<String> = []
@@ -145,6 +148,25 @@ struct InboxListView: View {
         } message: {
             Text("Diese Nachricht wird unwiderruflich gelöscht und kann nicht wiederhergestellt werden.")
         }
+        .confirmationDialog(
+            "Wann soll die Nachricht wieder erscheinen?",
+            isPresented: Binding(
+                get: { messagePendingSnooze != nil },
+                set: { if !$0 { messagePendingSnooze = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            ForEach(SnoozeOption.allCases) { option in
+                Button(option.label) {
+                    if let message = messagePendingSnooze {
+                        Task { await snooze(message, until: option.date()) }
+                    }
+                }
+            }
+            Button("Abbrechen", role: .cancel) {
+                messagePendingSnooze = nil
+            }
+        }
     }
 
     /// Extracted from the former single `ForEach(messages)` body so both
@@ -176,6 +198,65 @@ struct InboxListView: View {
                     Label("Löschen", systemImage: "trash")
                 }
             }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze") --
+            // Papierkorb/Quarantäne bewusst ausgenommen, dort ergibt ein
+            // "spaeter wieder vorlegen" keinen Sinn (Nachricht ist bereits
+            // aussortiert).
+            if !folder.isTrash && folder.systemKey != .quarantaene {
+                Button {
+                    messagePendingSnooze = message
+                } label: {
+                    Label("Später", systemImage: "clock")
+                }
+                .tint(DesignTokens.Color.textSecondary)
+            }
+        }
+    }
+
+    /// [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5: feste Zeitpunkte statt
+    /// eines freien Datumspickers -- analog zum ueblichen Snooze-Angebot
+    /// bekannter Mail-Clients, weniger Taps als eine volle Datumsauswahl.
+    private enum SnoozeOption: CaseIterable, Identifiable {
+        case laterToday, tomorrowMorning, nextWeek
+
+        var id: Self { self }
+
+        var label: String {
+            switch self {
+            case .laterToday: return "Heute Abend (18 Uhr)"
+            case .tomorrowMorning: return "Morgen früh (8 Uhr)"
+            case .nextWeek: return "Nächste Woche (Montag, 8 Uhr)"
+            }
+        }
+
+        func date(calendar: Calendar = .current, now: Date = Date()) -> Date {
+            switch self {
+            case .laterToday:
+                let candidate = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: now) ?? now
+                return candidate > now ? candidate : calendar.date(byAdding: .day, value: 1, to: candidate) ?? candidate
+            case .tomorrowMorning:
+                let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
+                return calendar.date(bySettingHour: 8, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+            case .nextWeek:
+                let nextMonday = calendar.nextDate(after: now, matching: DateComponents(hour: 8, minute: 0, weekday: 2), matchingPolicy: .nextTime) ?? calendar.date(byAdding: .day, value: 7, to: now) ?? now
+                return nextMonday
+            }
+        }
+    }
+
+    /// `POST /messages/{messageId}/snooze`. Entfernt die Nachricht sofort
+    /// aus der Liste (der Server zeigt sie bis zum Ablauf ohnehin nicht
+    /// mehr bei `GET /messages`), analog zum optimistischen Entfernen bei
+    /// `delete(_:)`.
+    private func snooze(_ message: Message, until: Date) async {
+        messagePendingSnooze = nil
+        do {
+            _ = try await environment.apiClient.snoozeMessage(id: message.id, until: until)
+            messages.removeAll { $0.id == message.id }
+        } catch {
+            await load()
         }
     }
 

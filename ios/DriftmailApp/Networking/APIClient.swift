@@ -110,10 +110,26 @@ protocol APIClient {
     /// "FUENF NEUE KOMFORT-FEATURES" Punkt 1) -- allgemeine UI-Praeferenzen
     /// des Users.
     func fetchSettings() async throws -> UserSettings
-    /// `PUT /settings`. Beide Parameter `nil` lassen das jeweilige Feld
+    /// `PUT /settings`. Alle drei Parameter `nil` lassen das jeweilige Feld
     /// serverseitig unangetastet (siehe backend/README.md -- `PUT` nutzt
-    /// `COALESCE`).
-    func updateSettings(accentTheme: AccentTheme?, strictUnknownSenders: Bool?) async throws -> UserSettings
+    /// `COALESCE`). `nudgeUnansweredEnabled` (WEB_INBOX.md 21.09. "DREI
+    /// WEITERE FEATURES - Gmail-Recherche" Punkt 2, "Nudge") neu.
+    func updateSettings(accentTheme: AccentTheme?, strictUnknownSenders: Bool?, nudgeUnansweredEnabled: Bool?) async throws -> UserSettings
+
+    /// `GET`/`PUT /privacy-settings` (WEB_INBOX.md 21.09. "NEUE AUFTRAEGE -
+    /// 5 Wettbewerbs-Luecken" Punkt 1, "Tracking-Pixel-Blockierung"). Siehe
+    /// `PrivacySettings`-Kommentar für die wichtige Einordnung, dass
+    /// `blockRemoteImages` aktuell ohne technische Wirkung ist.
+    func fetchPrivacySettings() async throws -> PrivacySettings
+    /// `nil`-Parameter lassen das jeweilige Feld unangetastet, analog zu
+    /// `updateSettings(...)` oben.
+    func updatePrivacySettings(blockRemoteImages: Bool?, blockTrackingLinks: Bool?) async throws -> PrivacySettings
+
+    /// `GET /security/breaches` (WEB_INBOX.md 21.09. "NEUE AUFTRAEGE - 5
+    /// Wettbewerbs-Luecken" Punkt 3, "Darkweb-/Datenleck-Ueberwachung").
+    func fetchBreaches() async throws -> [DataBreachFinding]
+    /// `PATCH /security/breaches/{breachId}`.
+    func acknowledgeBreach(id: String, acknowledged: Bool) async throws -> DataBreachFinding
 
     /// `GET /contacts` (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"
     /// Punkt 2 "Kontakt-Autovervollstaendigung") -- bekannte Adressen fuer
@@ -134,6 +150,24 @@ protocol APIClient {
     /// `PATCH /drafts/{draftId}` -- Folge-Speicherungen waehrend des
     /// Tippens.
     func updateDraft(id: String, to: [String], cc: [String], subject: String?, bodyText: String?) async throws -> Draft
+
+    /// `POST /drafts` mit `scheduledFor` gesetzt (WEB_INBOX.md 21.09. "NEUE
+    /// AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 4, "Schedule Send") -- ein
+    /// eigener Methodenname statt eines optionalen Parameters an
+    /// `createDraft(...)` oben, weil Schedule Send zusätzlich `bcc` braucht
+    /// (das normale Autosave-`createDraft` bewusst nicht, siehe dortigen
+    /// Kommentar) und serverseitig andere Pflichtfeld-Validierung hat
+    /// (`to`+`bodyText` nicht leer, sonst 400). `scheduledFor` muss ein
+    /// gültiger, in der Zukunft liegender Zeitpunkt sein.
+    func scheduleDraft(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String?, scheduledFor: Date) async throws -> Draft
+    /// `PATCH /drafts/{draftId}` mit `scheduledFor: null` -- hebt eine
+    /// bestehende Planung wieder auf, der Entwurf selbst bleibt erhalten.
+    func cancelScheduledDraft(id: String) async throws -> Draft
+
+    /// `POST /messages/{messageId}/snooze` (WEB_INBOX.md 21.09. "NEUE
+    /// AUFTRAEGE - 5 Wettbewerbs-Luecken" Punkt 5, "Snooze"). `until: nil`
+    /// hebt ein bestehendes Snooze sofort wieder auf.
+    func snoozeMessage(id: String, until: Date?) async throws -> Message
 
     /// `POST /messages/send` — sendet eine Antwort auf `inReplyToMessageId`
     /// (das Konto wird backend-seitig aus der Ursprungsnachricht
@@ -157,7 +191,11 @@ protocol APIClient {
     /// `accountId`/`inReplyToMessageId` ist erforderlich (siehe
     /// backend/README.md "Versand") -- bei einer Antwort reicht
     /// `inReplyToMessageId`, das Backend leitet das Konto daraus ab.
-    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?) async throws -> String
+    /// `confidentialUntil` (WEB_INBOX.md 21.09. "DREI WEITERE FEATURES -
+    /// Gmail-Recherche" Punkt 3, "Vertraulicher Modus"): muss, falls
+    /// gesetzt, in der Zukunft liegen (sonst 400) -- nach Ablauf löscht der
+    /// Server `bodyText` der eigenen "gesendet"-Kopie serverseitig.
+    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?, confidentialUntil: Date?) async throws -> String
     /// `POST /attachments` — lädt eine Datei hoch und lässt sie sofort
     /// scannen (siehe backend/README.md "Anhänge").
     func uploadAttachment(filename: String, mimeType: String, data: Data) async throws -> AttachmentUploadResult

@@ -13,10 +13,21 @@ struct MessageRowView: View {
                     .foregroundStyle(DesignTokens.Color.textPrimary)
                     .lineLimit(1)
 
-                Text(message.subject ?? "(kein Betreff)")
-                    .font(.system(size: DesignTokens.Typography.Size.body))
-                    .foregroundStyle(DesignTokens.Color.textSecondary)
-                    .lineLimit(1)
+                HStack(spacing: DesignTokens.Spacing.xs) {
+                    Text(message.subject ?? "(kein Betreff)")
+                        .font(.system(size: DesignTokens.Typography.Size.body))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                        .lineLimit(1)
+                    // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche"
+                    // Punkt 2 ("Nudge"): dezentes Uhr-Symbol statt Text, damit
+                    // die Zeile nicht ueberladen wirkt -- neutral eingefaerbt
+                    // (kein zusaetzlicher Akzent, siehe Design-Richtung).
+                    if message.awaitingReply {
+                        Image(systemName: "clock.badge.exclamationmark")
+                            .font(.system(size: DesignTokens.Typography.Size.caption))
+                            .foregroundStyle(DesignTokens.Color.textMuted)
+                    }
+                }
             }
 
             Spacer()

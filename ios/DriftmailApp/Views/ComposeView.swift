@@ -40,6 +40,38 @@ struct ComposeView: View {
     @State private var isSending = false
     @State private var sendBlockedReason: String?
 
+    /// [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
+    /// ("Vertraulicher Modus") -- rein manueller Schalter, KEIN
+    /// automatischer Vorschlag (der braeuchte `POST
+    /// /messages/draft/phishing-check`s `containsSensitiveData`, das dieser
+    /// Screen bisher nirgends aufruft -- bewusst ausgeklammerte
+    /// Vereinfachung, siehe ios/README.md). Default-Ablaufzeit 7 Tage,
+    /// analog zu gaengigen "verschwindende Nachricht"-Implementierungen.
+    @State private var confidentialModeEnabled = false
+    @State private var confidentialUntilDate = Date(timeIntervalSinceNow: 7 * 24 * 3600)
+
+    /// [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4 ("Schedule Send").
+    /// Default-Zeitpunkt: naechste volle Stunde ab jetzt + 1h.
+    @State private var scheduleSendEnabled = false
+    @State private var scheduledDate = Date(timeIntervalSinceNow: 3600)
+
+    /// [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 6 ("Undo Send"): reiner
+    /// Client-Mechanismus -- `send()` loest KEINEN sofortigen
+    /// `apiClient.sendMessage(...)`-Aufruf mehr aus, sondern startet einen
+    /// Countdown; erst wenn der ablaeuft (und nicht per "Rückgängig"
+    /// abgebrochen wurde), geht die Anfrage tatsaechlich raus. Kein
+    /// Server-Pendant (der Contract kennt kein "Senden zurückziehen"),
+    /// funktioniert also NUR solange der User innerhalb des Zeitfensters
+    /// in dieser Ansicht bleibt (dokumentierte Grenze, siehe ios/README.md).
+    @State private var undoSendTask: Task<Void, Never>?
+    @State private var undoSendSecondsRemaining: Int?
+    private let undoSendWindowSeconds = 6
+
+    /// [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 1
+    /// ("Vergessener-Anhang-Erkennung"), rein client-seitige Heuristik --
+    /// kein Contract-/Backend-Bezug.
+    @State private var showForgottenAttachmentConfirm = false
+
     /// [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt
     /// 2 ("Kontakt-Autovervollstaendigung"): welches Feld gerade fokussiert
     /// ist, steuert wo die Vorschlagsliste erscheint.
@@ -174,6 +206,28 @@ struct ComposeView: View {
                     }
                 }
 
+                Section {
+                    Toggle("Vertraulich senden", isOn: $confidentialModeEnabled)
+                    if confidentialModeEnabled {
+                        DatePicker("Läuft ab", selection: $confidentialUntilDate, in: Date()..., displayedComponents: [.date, .hourAndMinute])
+                    }
+                } footer: {
+                    if confidentialModeEnabled {
+                        Text("Der Nachrichtentext wird nach Ablauf automatisch aus deiner \"gesendet\"-Kopie gelöscht.")
+                    }
+                }
+
+                Section {
+                    Toggle("Für später planen", isOn: $scheduleSendEnabled)
+                    if scheduleSendEnabled {
+                        DatePicker("Senden am", selection: $scheduledDate, in: Date()..., displayedComponents: [.date, .hourAndMinute])
+                    }
+                } footer: {
+                    if scheduleSendEnabled {
+                        Text("Die Nachricht wird automatisch zum gewählten Zeitpunkt verschickt (in \"Entwürfe\" einsehbar/abbrechbar).")
+                    }
+                }
+
                 if let sendBlockedReason {
                     Section {
                         Text(sendBlockedReason)
@@ -193,13 +247,20 @@ struct ComposeView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Verwerfen") { dismiss() }
+                    Button("Verwerfen") {
+                        // Bricht ein laufendes Undo-Send-Zeitfenster mit ab --
+                        // ohne das würde die Nachricht trotz "Verwerfen" nach
+                        // Ablauf des Countdowns noch rausgehen (siehe
+                        // `dispatchSend()`-Kommentar).
+                        cancelUndoSend()
+                        dismiss()
+                    }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button(isSending ? "Sende…" : "Senden") {
+                    Button(primaryActionLabel) {
                         Task { await send() }
                     }
-                    .disabled(isSending || !canSend)
+                    .disabled(isSending || !canSend || undoSendSecondsRemaining != nil)
                 }
                 ToolbarItemGroup(placement: .bottomBar) {
                     Button {
@@ -237,6 +298,9 @@ struct ComposeView: View {
                 // gesendet wurde (dann ist der Entwurf serverseitig bereits
                 // verworfen, ein 404 beim Update wird still verschluckt).
                 autosaveTask?.cancel()
+                // Siehe "Verwerfen"-Button-Kommentar oben -- greift auch bei
+                // Wegwischen des Sheets waehrend des Undo-Send-Countdowns.
+                cancelUndoSend()
                 if hasUnsavedContent {
                     Task { await performAutosave() }
                 }
@@ -256,7 +320,45 @@ struct ComposeView: View {
                 }
                 Button("Abbrechen", role: .cancel) {}
             }
+            .confirmationDialog(
+                "Anhang vergessen?",
+                isPresented: $showForgottenAttachmentConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Trotzdem senden") {
+                    Task { await proceedAfterForgottenAttachmentCheck() }
+                }
+                Button("Abbrechen", role: .cancel) {}
+            } message: {
+                Text("Der Text erwähnt einen Anhang, aber es ist keiner angefügt.")
+            }
+            .safeAreaInset(edge: .bottom) {
+                if let undoSendSecondsRemaining {
+                    undoSendBanner(secondsRemaining: undoSendSecondsRemaining)
+                }
+            }
         }
+    }
+
+    private var primaryActionLabel: String {
+        if isSending { return "Sende…" }
+        if scheduleSendEnabled { return "Planen" }
+        return "Senden"
+    }
+
+    private func undoSendBanner(secondsRemaining: Int) -> some View {
+        HStack(spacing: DesignTokens.Spacing.md) {
+            Text("Wird in \(secondsRemaining)s gesendet…")
+                .font(.system(size: DesignTokens.Typography.Size.body))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            Spacer()
+            Button("Rückgängig") {
+                cancelUndoSend()
+            }
+            .font(.system(size: DesignTokens.Typography.Size.body, weight: .medium))
+        }
+        .padding(DesignTokens.Spacing.lg)
+        .background(DesignTokens.Color.surfaceCard)
     }
 
     // MARK: - Prefill
@@ -376,12 +478,111 @@ struct ComposeView: View {
         }
     }
 
+    /// [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 1
+    /// ("Vergessener-Anhang-Erkennung"): einfache Substring-Heuristik --
+    /// kein NLP, keine Server-Anfrage, bewusst simpel (analog zu Gmails
+    /// eigener Heuristik, die ebenfalls nur auf Schluesselwoertern beruht).
+    private static let attachmentMentionKeywords = [
+        "anhang", "anhänge", "anhaenge", "angehängt", "angehaengt", "anbei", "beigefügt", "beigefuegt",
+        "attached", "attachment", "enclosed",
+    ]
+
+    private var seemsToForgetAttachment: Bool {
+        guard composeAttachments.isEmpty else { return false }
+        let needle = bodyText.lowercased()
+        return Self.attachmentMentionKeywords.contains { needle.contains($0) }
+    }
+
     private func send() async {
         guard canSend else { return }
-        isSending = true
+        if seemsToForgetAttachment {
+            showForgottenAttachmentConfirm = true
+            return
+        }
+        await proceedAfterForgottenAttachmentCheck()
+    }
+
+    private func proceedAfterForgottenAttachmentCheck() async {
         sendBlockedReason = nil
         errorMessage = nil
+        if scheduleSendEnabled {
+            await scheduleSend()
+        } else {
+            beginUndoSendCountdown()
+        }
+    }
+
+    /// `POST /drafts` mit `scheduledFor` (Schedule Send) -- anders als der
+    /// sofortige Versand unten OHNE Undo-Send-Fenster: es gibt noch keinen
+    /// tatsaechlichen Netzwerk-Seiteneffekt gegenueber dem Empfaenger, den
+    /// man "rueckgaengig" machen muesste (die Planung selbst kann jederzeit
+    /// in "Entwürfe" abgebrochen werden, siehe `DraftListView`).
+    private func scheduleSend() async {
+        isSending = true
         defer { isSending = false }
+        do {
+            _ = try await environment.apiClient.scheduleDraft(
+                accountId: isReply ? nil : accountId,
+                inReplyToMessageId: isReply ? original?.id : nil,
+                to: toList,
+                cc: Self.addressList(from: cc),
+                bcc: Self.addressList(from: bcc),
+                subject: subject,
+                bodyText: bodyText,
+                scheduledFor: scheduledDate
+            )
+            autosaveTask?.cancel()
+            // Ein bereits per Autosave angelegter Entwurf wird NICHT
+            // verworfen (anders als beim echten Versand) -- `scheduleDraft`
+            // legt einen ZWEITEN, eigenen Entwurf mit `scheduledFor` an
+            // (Contract kennt kein "bestehenden Entwurf nachtraeglich
+            // planen"). Dokumentierte Grenze: bei aktivem Autosave-Entwurf
+            // bleibt ein doppelter, ungeplanter Entwurf in "Entwürfe" zurueck.
+            onSent()
+            dismiss()
+        } catch APIError.badRequest(let message) {
+            errorMessage = message ?? "Planen fehlgeschlagen."
+        } catch {
+            errorMessage = "Planen fehlgeschlagen. Bitte später erneut versuchen."
+        }
+    }
+
+    /// "5 Wettbewerbs-Luecken" Punkt 6 ("Undo Send"): startet den
+    /// Countdown, der Bildschirm bleibt offen (Felder bleiben editierbar
+    /// gesperrt ueber `disabled(isSending || ...)` am Senden-Button, siehe
+    /// oben) bis entweder die Zeit ablaeuft (-> `dispatchSend()`) oder
+    /// `cancelUndoSend()` den Task abbricht.
+    private func beginUndoSendCountdown() {
+        undoSendSecondsRemaining = undoSendWindowSeconds
+        undoSendTask = Task {
+            var remaining = undoSendWindowSeconds
+            while remaining > 0 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                if Task.isCancelled { return }
+                remaining -= 1
+                undoSendSecondsRemaining = remaining
+            }
+            guard !Task.isCancelled else { return }
+            await dispatchSend()
+        }
+    }
+
+    private func cancelUndoSend() {
+        undoSendTask?.cancel()
+        undoSendTask = nil
+        undoSendSecondsRemaining = nil
+    }
+
+    /// Der tatsächliche `POST /messages/send`-Aufruf, ausgelagert aus
+    /// `send()`, weil er jetzt erst NACH dem Undo-Send-Countdown läuft
+    /// (siehe `beginUndoSendCountdown()`).
+    private func dispatchSend() async {
+        isSending = true
+        defer {
+            isSending = false
+            undoSendSecondsRemaining = nil
+            undoSendTask = nil
+        }
         do {
             _ = try await environment.apiClient.sendMessage(
                 accountId: isReply ? nil : accountId,
@@ -395,7 +596,8 @@ struct ComposeView: View {
                 // [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 3: falls
                 // ein Autosave-Entwurf angelegt wurde, verwirft der Server
                 // ihn nach erfolgreichem Versand automatisch.
-                draftId: draftId
+                draftId: draftId,
+                confidentialUntil: confidentialModeEnabled ? confidentialUntilDate : nil
             )
             autosaveTask?.cancel()
             onSent()

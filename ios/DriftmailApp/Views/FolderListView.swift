@@ -174,6 +174,11 @@ struct FolderListView: View {
                 await environment.loadSettings()
                 // Abwesenheitsassistent-Zustand für den Banner oben.
                 await environment.loadAbsenceResponder()
+                // Privacy-Settings + Darkweb-Funde für die Settings-Ansicht
+                // (Badge-Zähler oben braucht `environment.breaches` schon
+                // VOR dem ersten Öffnen der Einstellungen).
+                await environment.loadPrivacySettings()
+                await environment.loadBreaches()
             }
             .onChange(of: isShowingSettings) { _, isShowing in
                 // Nach dem Schließen der Einstellungen neu laden -- ein
@@ -384,9 +389,11 @@ private struct SettingsView: View {
 
     /// Plain-language overview of what driftmail actively protects
     /// against -- non-technical on purpose (WEB_INBOX.md 21.09.
-    /// "Einstellungsbereich", Sicherheit-Sektion). Malware scan is
-    /// honestly marked "in Vorbereitung": it's still a mock
-    /// (`backend/src/lookups/attachmentScanMock.ts`), not real yet.
+    /// "Einstellungsbereich", Sicherheit-Sektion).
+    /// [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan":
+    /// Malware-Scan ist jetzt echt (ClamAV, siehe backend/README.md) --
+    /// die vorherige "in Vorbereitung"-Zeile war ab diesem Nachtrag nicht
+    /// mehr korrekt, jetzt nachgezogen.
     private static let securityOverviewText = """
     driftmail schützt dich automatisch im Hintergrund:
     – Erkennt Spam, Phishing und klassischen Vorschussbetrug automatisch
@@ -394,7 +401,7 @@ private struct SettingsView: View {
     – Kennzeichnet neue, unbekannte Absender
     – Whitelist: du entscheidest, wem du vertraust
     – Warnt vor dem Versand sensibler Daten (IBAN, Kreditkartennummern)
-    – Malware-Scan für Anhänge: in Vorbereitung
+    – Echter Malware-Scan für Anhänge (ClamAV)
     – KI-Funktionen laufen wo möglich direkt auf deinem Gerät – keine Kosten, keine Cloud-Übertragung, außer du richtest ausdrücklich einen eigenen KI-Zugang ein
     """
 
@@ -486,6 +493,60 @@ private struct SettingsView: View {
                     ))
                 } footer: {
                     Text("Hebt Nachrichten von Absendern, die noch nicht auf deiner Whitelist stehen, deutlicher hervor.")
+                }
+
+                // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche"
+                // Punkt 2 ("Nudge").
+                Section {
+                    Toggle("An unbeantwortete Mails erinnern", isOn: Binding(
+                        get: { environment.nudgeUnansweredEnabled },
+                        set: { newValue in Task { try? await environment.updateNudgeUnansweredEnabled(newValue) } }
+                    ))
+                } footer: {
+                    Text("Kennzeichnet Nachrichten, die seit mindestens 3 Tagen unbeantwortet sind.")
+                }
+
+                // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 1
+                // ("Tracking-Pixel-Blockierung"). Siehe
+                // `PrivacySettings`-Kommentar: `blockRemoteImages` hat aktuell
+                // keine technische Wirkung, ehrlich in der Footer erklärt
+                // statt einen Schutz vorzutäuschen, den es noch nicht gibt.
+                Section {
+                    Toggle("Externe Bilder blockieren", isOn: Binding(
+                        get: { environment.privacySettings?.blockRemoteImages ?? true },
+                        set: { newValue in Task { try? await environment.updatePrivacySettings(blockRemoteImages: newValue) } }
+                    ))
+                    Toggle("Tracking-Links blockieren", isOn: Binding(
+                        get: { environment.privacySettings?.blockTrackingLinks ?? true },
+                        set: { newValue in Task { try? await environment.updatePrivacySettings(blockTrackingLinks: newValue) } }
+                    ))
+                } header: {
+                    Text("Tracking-Schutz")
+                } footer: {
+                    Text("driftmail zeigt Mail-Inhalte ohnehin nur als Klartext an, daher hat \"Externe Bilder blockieren\" aktuell keine zusätzliche technische Wirkung. Der Schalter wird für zukünftige HTML-Ansichten gespeichert.")
+                }
+
+                // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 3 ("Darkweb-/
+                // Datenleck-Ueberwachung").
+                Section {
+                    NavigationLink {
+                        DataBreachListView()
+                    } label: {
+                        HStack {
+                            Text("Darkweb-Überwachung")
+                            if environment.unacknowledgedBreachCount > 0 {
+                                Spacer()
+                                Text("\(environment.unacknowledgedBreachCount)")
+                                    .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, DesignTokens.Spacing.sm)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(DesignTokens.Color.warning))
+                            }
+                        }
+                    }
+                } footer: {
+                    Text("Prüft regelmäßig, ob deine E-Mail-Adresse in bekannten Datenlecks auftaucht.")
                 }
 
                 // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): BYOK-

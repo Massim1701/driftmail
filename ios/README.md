@@ -1221,6 +1221,122 @@ vorbei ohne echte Test-Mailbox, die eigentliche Ordner-/Nachrichtenliste
 liess sich deshalb nicht live gegenpruefen, nur durch Code-Review +
 erfolgreichen Build verifiziert).
 
+## [2026-09-21] Nachtrag: Neun neue Features (Nudge, Vertraulicher Modus,
+Vergessener-Anhang, Malware-Scan-Anzeige, Tracking-Schutz-Einstellung,
+Undo Send, Darkweb-Ueberwachung, Schedule Send, Snooze)
+
+WEB_INBOX.md 21.09.: iOS-UI fuer neun Features, deren Backend-Seite (Track
+A) bereits fertig und gepusht war (Contract-Erweiterungen + `sendMessage`/
+`schedule`/`snooze`-Endpunkte, echter ClamAV-Scan, Darkweb-Mock). Priorität
+laut Auftrag "lieber alle 9 sauber mit klar benannten Luecken dokumentiert,
+als 5 perfekt und 4 komplett fehlend ohne Erklaerung" -- alle 9 sind
+umgesetzt, mit den unten einzeln genannten bewussten Vereinfachungen.
+
+1. **Nudge** (`Message.awaitingReply`): dezentes Uhr-Symbol neben dem
+   Betreff in `MessageRowView`, Einstellungs-Toggle
+   "An unbeantwortete Mails erinnern" in `SettingsView`
+   (`AppEnvironment.updateNudgeUnansweredEnabled(_:)`).
+2. **Vertraulicher Modus** (`sendMessage(...confidentialUntil:)`):
+   Toggle + Ablauf-`DatePicker` in `ComposeView`. **Bewusst rein manuell**
+   -- kein automatischer Vorschlag, der bräuchte `POST
+   /messages/draft/phishing-check`s `containsSensitiveData`, das im
+   Compose-Screen bisher nirgends aufgerufen wird (per Grep bestaetigt:
+   kein einziger Aufruf dieses Endpunkts im iOS-Code). `MessageDetailView`
+   zeigt den Ablaufzeitpunkt bzw. nach Ablauf einen ehrlichen
+   "Inhalt wurde geloescht"-Hinweis (`confidentialBanner(until:bodyGone:)`).
+3. **Vergessener-Anhang-Erkennung**: rein client-seitige Substring-
+   Heuristik (`ComposeView.attachmentMentionKeywords`) -- wenn der
+   Nachrichtentext ein Wort wie "Anhang"/"anbei"/"attached" enthaelt,
+   aber kein Anhang angefuegt ist, fragt ein `confirmationDialog` vor dem
+   Senden nach. Kein NLP, kein Server-Aufruf.
+4. **Malware-Scan-Anzeige** (`MessageDetail.attachments`, echter ClamAV-
+   Scan serverseitig): `attachmentsCard(_:)` in `MessageDetailView` zeigt
+   jeden Anhang mit seinem `scanStatus` (`AttachmentScanStatus.label`,
+   jetzt zentral im Modell statt dupliziert -- `ComposeAttachmentUiStatus.
+   label` delegiert seit diesem Nachtrag an dieselbe Property). Kein
+   Datei-Oeffnen-Weg (die App hat ohnehin keinen Dateibetrachter), reine
+   Information/Warnung.
+5. **Tracking-Schutz-Einstellung** (`GET`/`PUT /privacy-settings`): zwei
+   Toggles in `SettingsView` ("Externe Bilder blockieren"/"Tracking-Links
+   blockieren"). Footer erklaert ehrlich, dass "Externe Bilder
+   blockieren" aktuell keine technische Wirkung hat, weil driftmail
+   Mail-Inhalte nur als Klartext zeigt (siehe `PrivacySettings.swift`-
+   Kommentar) -- kein vorgetaeuschter Schutz.
+6. **Undo Send**: rein client-seitiger Mechanismus, KEIN Server-Pendant
+   (der Contract kennt kein "Senden zurueckziehen"). `ComposeView.send()`
+   loest keinen sofortigen `sendMessage`-Aufruf mehr aus, sondern startet
+   einen 6-Sekunden-Countdown (`beginUndoSendCountdown()`) mit einer
+   Banner-Leiste ("Wird in Xs gesendet… [Rueckgaengig]"); erst danach
+   feuert `dispatchSend()`. Sowohl "Verwerfen" als auch das Wegwischen des
+   Compose-Sheets brechen einen laufenden Countdown mit ab (`cancelUndoSend()`
+   in beiden Pfaden verdrahtet) -- ohne das wuerde die Nachricht trotz
+   "Verwerfen" nach Ablauf noch rausgehen. **Dokumentierte Grenze:**
+   funktioniert nur, solange der Compose-Screen offen bleibt; ein
+   Force-Quit der App waehrend des Countdowns sendet die Nachricht NICHT
+   (kein Hintergrund-Task), anders als ein serverseitiges Undo-Send.
+7. **Darkweb-/Datenleck-Ueberwachung** (`GET`/`PATCH /security/breaches`,
+   backend-seitig gemockt): neuer `DataBreachListView.swift`-Screen,
+   verlinkt aus `SettingsView` mit einem Zaehler-Badge fuer noch nicht
+   bestaetigte Funde (`AppEnvironment.unacknowledgedBreachCount`).
+8. **Schedule Send** (`POST /drafts` mit `scheduledFor`, `PATCH
+   /drafts/{id}` mit `scheduledFor: null`): Toggle + `DatePicker` in
+   `ComposeView`, Senden-Button wird zu "Planen". `DraftListView` zeigt
+   geplante Entwuerfe mit Zeitpunkt-Label und einer "Planung aufheben"-
+   Swipe-Aktion (`cancelScheduledDraft`). **Dokumentierte Grenze:** falls
+   bereits ein Autosave-Entwurf existiert, legt "Planen" einen ZWEITEN,
+   eigenen Entwurf an (der Contract kennt kein "bestehenden Entwurf
+   nachtraeglich planen") -- der ungeplante Autosave-Entwurf bleibt dann
+   zusaetzlich in "Entwürfe" zurueck.
+9. **Snooze** (`POST /messages/{id}/snooze`): Swipe-Aktion "Später" in
+   `InboxListView` (3 feste Zeitpunkte: heute Abend, morgen frueh,
+   naechste Woche Montag) sowie ein gleichwertiges Menü in
+   `MessageDetailView`. `MessageDetailView` zeigt zusaetzlich einen
+   Banner mit "Jetzt zeigen"-Sofort-Aufhebung, falls eine bereits
+   zurueckgestellte Nachricht direkt (z. B. über einen alten Link) erneut
+   geoeffnet wird.
+
+**Uebergreifende Aenderungen:**
+- `Networking/RemoteAPIClient.swift`: Date-Felder in ausgehenden
+  Request-Bodies (`confidentialUntil`, `scheduledFor`, `until`) werden
+  als ISO-8601-`String` codiert (`Self.iso8601String(_:)`) statt als
+  rohe `Date` -- die Datei hatte bisher (7 bestehende Call-Sites geprueft
+  per Grep) NIRGENDS eine `JSONEncoder.dateEncodingStrategy` gesetzt,
+  Swifts Default waere eine `timeIntervalSinceReferenceDate`-Zahl gewesen,
+  die das Backend nicht verstanden haette. Bewusst pro Call-Site als
+  `String` konvertiert statt eines globalen Encoders, analog zum
+  bestehenden Muster bei `updateAbsenceResponder`s `startDate`/`endDate`
+  (dort ebenfalls plain `String`, nicht `Date`, end-to-end).
+- Alle neuen/gewachsenen `APIClient`-Methoden (`updateSettings(...
+  nudgeUnansweredEnabled:)`, `fetchPrivacySettings`/
+  `updatePrivacySettings`, `fetchBreaches`/`acknowledgeBreach`,
+  `scheduleDraft`/`cancelScheduledDraft`, `snoozeMessage`, `sendMessage(...
+  confidentialUntil:)`) sind in `MockAPIClient` vollstaendig nachgebaut
+  (inkl. Pflichtfeld-/Zukunfts-Validierung fuer Schedule Send, analog zum
+  echten Backend), nicht nur in `RemoteAPIClient`.
+- Zwei neue Modelldateien (`Models/PrivacySettings.swift`,
+  `Models/DataBreachFinding.swift`) sowie `DataBreachListView.swift`
+  wurden manuell in `DriftmailApp.xcodeproj/project.pbxproj` registriert
+  (kein Xcode-GUI in dieser Umgebung verfuegbar -- direkt per Skript in
+  den `PBXBuildFile`/`PBXFileReference`/`PBXGroup`/`PBXSourcesBuildPhase`-
+  Sektionen ergaenzt, nach demselben ID-Schema wie bestehende Eintraege).
+
+**Tests:** `xcodebuild -scheme DriftmailApp -destination 'platform=iOS
+Simulator,name=iPhone 17' build` → BUILD SUCCEEDED. Uninstall/Install/
+Launch auf einem gebooteten Simulator, `log show` auf Crash/Fatal geprueft
+-- keine Treffer. Zusaetzlich zur ueblichen Verifikation dieser Session:
+`AppEnvironment.init()` wurde EINMALIG temporaer so geaendert, dass sie
+immer `MockAPIClient`+`isAuthenticated: true` liefert (Onboarding-Gate
+umgangen), neu gebaut, installiert und gestartet, um zu bestaetigen, dass
+die App ueber das Onboarding-Gate hinaus startet, ohne abzustuerzen (der
+Capability-Check-Screen erschien korrekt, "On-Device-KI verfuegbar"
+erkannt) -- danach sofort wieder auf den Original-Code zurueckgesetzt
+(siehe `git diff` vor dem Commit, keine Spur dieser Aenderung im
+Endergebnis). Kein XCUITest-Target vorhanden, daher keine automatisierten
+Taps durch die neuen Screens (Compose-Toggles, Snooze-Menü, Darkweb-Liste)
+-- nur per Code-Review + erfolgreichem Build + Crash-freiem Start
+verifiziert, dieselbe dokumentierte Grenze wie bei jedem vorherigen
+Nachtrag dieser Session ohne echte Test-Mailbox.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

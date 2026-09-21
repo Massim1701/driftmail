@@ -31,6 +31,18 @@ struct DraftListView: View {
                         } label: {
                             Label("Löschen", systemImage: "trash")
                         }
+                        // [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 4
+                        // ("Schedule Send"): Planung aufheben, Entwurf
+                        // selbst bleibt erhalten (siehe
+                        // `APIClient.cancelScheduledDraft(id:)`-Kommentar).
+                        if draft.scheduledFor != nil {
+                            Button {
+                                Task { await cancelSchedule(draft) }
+                            } label: {
+                                Label("Planung aufheben", systemImage: "clock.badge.xmark")
+                            }
+                            .tint(DesignTokens.Color.textSecondary)
+                        }
                     }
             }
         }
@@ -69,6 +81,17 @@ struct DraftListView: View {
             await load()
         }
     }
+
+    private func cancelSchedule(_ draft: Draft) async {
+        do {
+            let updated = try await environment.apiClient.cancelScheduledDraft(id: draft.id)
+            if let index = drafts.firstIndex(where: { $0.id == draft.id }) {
+                drafts[index] = updated
+            }
+        } catch {
+            await load()
+        }
+    }
 }
 
 private struct DraftRowView: View {
@@ -84,6 +107,11 @@ private struct DraftRowView: View {
                 .font(.system(size: DesignTokens.Typography.Size.small))
                 .foregroundStyle(DesignTokens.Color.textSecondary)
                 .lineLimit(1)
+            if let scheduledFor = draft.scheduledFor {
+                Label("Geplant für \(scheduledFor.formatted(date: .abbreviated, time: .shortened))", systemImage: "clock")
+                    .font(.system(size: DesignTokens.Typography.Size.caption, weight: .medium))
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+            }
             if let bodyText = draft.bodyText, !bodyText.isEmpty {
                 Text(bodyText)
                     .font(.system(size: DesignTokens.Typography.Size.small))

@@ -54,4 +54,21 @@ struct UserSettings: Codable, Hashable {
     /// eine Nachricht von einem unbekannten Absender staerker hervorhebt
     /// als das bestehende dezente "Neuer Absender"-Flag allein.
     var strictUnknownSenders: Bool
+    /// [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
+    /// ("Nudge"), Default `true` (wie Gmail). Steuert `Message.awaitingReply`
+    /// serverseitig -- bei `false` liefert das Backend nie `true`.
+    var nudgeUnansweredEnabled: Bool
+
+    init(accentTheme: AccentTheme, strictUnknownSenders: Bool, nudgeUnansweredEnabled: Bool = true) {
+        self.accentTheme = accentTheme
+        self.strictUnknownSenders = strictUnknownSenders
+        self.nudgeUnansweredEnabled = nudgeUnansweredEnabled
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        accentTheme = try container.decode(AccentTheme.self, forKey: .accentTheme)
+        strictUnknownSenders = try container.decode(Bool.self, forKey: .strictUnknownSenders)
+        nudgeUnansweredEnabled = try container.decodeIfPresent(Bool.self, forKey: .nudgeUnansweredEnabled) ?? true
+    }
 }

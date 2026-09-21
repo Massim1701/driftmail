@@ -18,6 +18,57 @@ struct Message: Codable, Identifiable, Hashable {
     /// "Fuenf Komfort-Features" für die bewusste Grenze). `Optional`, damit
     /// ein fehlender Schlüssel in älteren Mock-Daten nicht crasht.
     let inReplyToMessageId: String?
+    /// [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
+    /// ("Nudge"): true, wenn diese Nachricht seit mindestens 3 Tagen
+    /// unbeantwortet ist UND der User die Erinnerung nicht deaktiviert hat.
+    /// Zur Laufzeit vom Backend abgeleitet, kein eigenes Feld. `Optional`
+    /// mit Default `false`, damit ältere Mock-Daten ohne dieses Feld nicht
+    /// crashen (siehe `inReplyToMessageId`-Kommentar oben für dasselbe Muster).
+    let awaitingReply: Bool
+    /// [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
+    /// ("Vertraulicher Modus"): nur bei selbst gesendeten Nachrichten
+    /// setzbar. Nach Ablauf wird `MessageDetail.bodyText` serverseitig
+    /// gelöscht -- dieses Feld bleibt erhalten, damit die UI "war
+    /// vertraulich, seit X abgelaufen" anzeigen kann.
+    let confidentialUntil: Date?
+    /// [2026-09-21] "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze"): solange
+    /// dieser Zeitpunkt in der Zukunft liegt, taucht die Nachricht in
+    /// `GET /messages` nicht auf -- dieses Feld ist deshalb praktisch nur
+    /// über `GET /messages/{id}` direkt sichtbar (siehe api-spec.yaml).
+    let snoozedUntil: Date?
+
+    init(
+        id: String, fromAddress: String, fromDisplayName: String?, subject: String?, receivedAt: Date,
+        folderId: String, classification: Classification, inReplyToMessageId: String?,
+        awaitingReply: Bool = false, confidentialUntil: Date? = nil, snoozedUntil: Date? = nil
+    ) {
+        self.id = id
+        self.fromAddress = fromAddress
+        self.fromDisplayName = fromDisplayName
+        self.subject = subject
+        self.receivedAt = receivedAt
+        self.folderId = folderId
+        self.classification = classification
+        self.inReplyToMessageId = inReplyToMessageId
+        self.awaitingReply = awaitingReply
+        self.confidentialUntil = confidentialUntil
+        self.snoozedUntil = snoozedUntil
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        fromAddress = try container.decode(String.self, forKey: .fromAddress)
+        fromDisplayName = try container.decodeIfPresent(String.self, forKey: .fromDisplayName)
+        subject = try container.decodeIfPresent(String.self, forKey: .subject)
+        receivedAt = try container.decode(Date.self, forKey: .receivedAt)
+        folderId = try container.decode(String.self, forKey: .folderId)
+        classification = try container.decode(Classification.self, forKey: .classification)
+        inReplyToMessageId = try container.decodeIfPresent(String.self, forKey: .inReplyToMessageId)
+        awaitingReply = try container.decodeIfPresent(Bool.self, forKey: .awaitingReply) ?? false
+        confidentialUntil = try container.decodeIfPresent(Date.self, forKey: .confidentialUntil)
+        snoozedUntil = try container.decodeIfPresent(Date.self, forKey: .snoozedUntil)
+    }
 }
 
 /// Mirrors `components/schemas/SecurityResult` in contracts/api-spec.yaml
@@ -71,6 +122,65 @@ struct MessageDetail: Codable, Identifiable, Hashable {
     /// war das Feld schon vorher vorhanden (nur `Message`, die Listenform,
     /// hatte es bisher nicht).
     let inReplyToMessageId: String?
+    /// [2026-09-21] siehe `Message.awaitingReply`-Kommentar.
+    let awaitingReply: Bool
+    /// [2026-09-21] siehe `Message.confidentialUntil`-Kommentar. `nil` bei
+    /// `bodyText`, obwohl `confidentialUntil` gesetzt UND in der
+    /// Vergangenheit liegt, bedeutet: die Mail war vertraulich und ist
+    /// jetzt abgelaufen -- Text wurde serverseitig gelöscht.
+    let confidentialUntil: Date?
+    /// [2026-09-21] siehe `Message.snoozedUntil`-Kommentar.
+    let snoozedUntil: Date?
+    /// [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan":
+    /// Anhänge dieser Nachricht, bereits gescannt (ClamAV + Magic-Bytes-
+    /// Prüfung) BEVOR sie hier sichtbar werden. Ein nicht-`clean` Anhang
+    /// darf clientseitig NICHT zum Öffnen angeboten werden.
+    let attachments: [MessageAttachment]
+
+    init(
+        id: String, fromAddress: String, fromDisplayName: String?, subject: String?, receivedAt: Date,
+        folderId: String, classification: Classification, bodyText: String?, security: SecurityResult?,
+        canUnsubscribe: Bool, isNewSender: Bool, inReplyToMessageId: String?,
+        awaitingReply: Bool = false, confidentialUntil: Date? = nil, snoozedUntil: Date? = nil,
+        attachments: [MessageAttachment] = []
+    ) {
+        self.id = id
+        self.fromAddress = fromAddress
+        self.fromDisplayName = fromDisplayName
+        self.subject = subject
+        self.receivedAt = receivedAt
+        self.folderId = folderId
+        self.classification = classification
+        self.bodyText = bodyText
+        self.security = security
+        self.canUnsubscribe = canUnsubscribe
+        self.isNewSender = isNewSender
+        self.inReplyToMessageId = inReplyToMessageId
+        self.awaitingReply = awaitingReply
+        self.confidentialUntil = confidentialUntil
+        self.snoozedUntil = snoozedUntil
+        self.attachments = attachments
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        fromAddress = try container.decode(String.self, forKey: .fromAddress)
+        fromDisplayName = try container.decodeIfPresent(String.self, forKey: .fromDisplayName)
+        subject = try container.decodeIfPresent(String.self, forKey: .subject)
+        receivedAt = try container.decode(Date.self, forKey: .receivedAt)
+        folderId = try container.decode(String.self, forKey: .folderId)
+        classification = try container.decode(Classification.self, forKey: .classification)
+        bodyText = try container.decodeIfPresent(String.self, forKey: .bodyText)
+        security = try container.decodeIfPresent(SecurityResult.self, forKey: .security)
+        canUnsubscribe = try container.decode(Bool.self, forKey: .canUnsubscribe)
+        isNewSender = try container.decode(Bool.self, forKey: .isNewSender)
+        inReplyToMessageId = try container.decodeIfPresent(String.self, forKey: .inReplyToMessageId)
+        awaitingReply = try container.decodeIfPresent(Bool.self, forKey: .awaitingReply) ?? false
+        confidentialUntil = try container.decodeIfPresent(Date.self, forKey: .confidentialUntil)
+        snoozedUntil = try container.decodeIfPresent(Date.self, forKey: .snoozedUntil)
+        attachments = try container.decodeIfPresent([MessageAttachment].self, forKey: .attachments) ?? []
+    }
 
     var asMessage: Message {
         Message(
@@ -81,7 +191,10 @@ struct MessageDetail: Codable, Identifiable, Hashable {
             receivedAt: receivedAt,
             folderId: folderId,
             classification: classification,
-            inReplyToMessageId: inReplyToMessageId
+            inReplyToMessageId: inReplyToMessageId,
+            awaitingReply: awaitingReply,
+            confidentialUntil: confidentialUntil,
+            snoozedUntil: snoozedUntil
         )
     }
 
@@ -101,7 +214,23 @@ struct MessageDetail: Codable, Identifiable, Hashable {
             security: security,
             canUnsubscribe: canUnsubscribe,
             isNewSender: isNewSender,
-            inReplyToMessageId: inReplyToMessageId
+            inReplyToMessageId: inReplyToMessageId,
+            awaitingReply: awaitingReply,
+            confidentialUntil: confidentialUntil,
+            snoozedUntil: snoozedUntil,
+            attachments: attachments
+        )
+    }
+
+    /// `POST /messages/{messageId}/snooze` — copy with an updated
+    /// `snoozedUntil` (used by `MockAPIClient`, mirrors `movedTo(folderId:)`).
+    func snoozed(until: Date?) -> MessageDetail {
+        MessageDetail(
+            id: id, fromAddress: fromAddress, fromDisplayName: fromDisplayName, subject: subject,
+            receivedAt: receivedAt, folderId: folderId, classification: classification, bodyText: bodyText,
+            security: security, canUnsubscribe: canUnsubscribe, isNewSender: isNewSender,
+            inReplyToMessageId: inReplyToMessageId, awaitingReply: awaitingReply,
+            confidentialUntil: confidentialUntil, snoozedUntil: until, attachments: attachments
         )
     }
 }
