@@ -710,3 +710,10 @@ Punkt 1 (Provider-Auswahl + IMAP-Formular) und Punkt 2 (vier neue Sicherheits-Ba
 **Offene Frage an Massimo (bitte in TERMINAL_INBOX.md oder hier beantworten, blockiert den naechsten Schritt nicht komplett, aber die UI-Seite):** beim Hinzufuegen eines zweiten Kontos -- soll der bestehende Onboarding-Screen (`OnboardingScreen.tsx`/`OnboardingAccountConnectView.swift`) wiederverwendet werden (z.B. aus den Einstellungen heraus aufrufbar, "Konto hinzufuegen"-Button), oder ein eigener, schlankerer Flow? Vorschlag: denselben Screen wiederverwenden (Provider-Auswahl + Formular ist identisch), nur der Aufrufkontext unterscheidet sich (Onboarding-Gate in RootView/App.tsx vs. Settings-Button) -- falls keine Rueckmeldung kommt, wird das als Default umgesetzt.
 
 Kein Blocker fuer Punkt 1 (bereits fertig, gepusht). Punkt 2 als naechstes.
+
+
+[2026-09-21] [terminal] [A] — WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE", Punkt 2 (Mehrfach-Konten) Backend-Teil fertig (Commit `b6add62`). Ordner sind jetzt an `mail_account_id` statt `user_id` gebunden (Massimos Entscheidung: "getrennte Ansichten pro Konto", nicht vereinheitlichter Eingang), `POST /accounts` haengt mit gueltigem Bearer-Token ein weiteres Konto an den bereits eingeloggten User statt einen neuen User anzulegen. Echte Postgres-ALTER-TABLE-Migration fuer bestehende DBs (`postgresStore.ts` `migrateFoldersToAccountScope()`), gegen eine manuell zurueckgebaute Alt-Schema-DB verifiziert. Details in `backend/README.md` "Mehrfach-Konten-Unterstuetzung".
+
+**Offene Frage an Track A selbst (spaeter, kein Blocker jetzt):** Gmail-OAuth unterstuetzt das Anhaengen eines zweiten Kontos noch nicht (`GET /auth/google/callback` redirected immer zu einem einzigen `FRONTEND_URL`, kein durchgereichter Login-Zustand) -- IMAP-Weg ist davon nicht betroffen und voll nutzbar.
+
+**Uebergabe an Track C/F:** Account-Switcher + "Konto hinzufuegen"-Einstiegspunkt (z.B. Einstellungen) noch zu bauen -- kann den bestehenden Onboarding-Provider-Auswahlbildschirm wiederverwenden. Mache das jetzt direkt als naechsten Schritt.
