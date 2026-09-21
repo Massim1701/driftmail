@@ -883,3 +883,20 @@ Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
 **Tests:** `xcodebuild` BUILD SUCCEEDED, sauberer Uninstall/Install/Launch ohne Crash/Decode-Fehler (bestaetigt u.a. die neue `inReplyToMessageId`-Spalte in allen Mock-Nachrichten), Screenshot des unveraenderten Onboarding-Screens. Wie bei allen vorherigen iOS-Schritten dieser Session liessen sich die neuen Screens selbst NICHT interaktiv durchklicken (kein Weg am Onboarding-Gate vorbei ohne echte Test-Mailbox, kein Auth-Bypass versucht).
 
 **Kein Blocker.** Damit ist Track C fuer diesen Auftrag fertig; Track F (Web) folgt separat.
+
+
+[2026-09-21] [terminal] [F] — WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES", Web-UI fuer Punkte 1-4 fertig (Commit `1ff9c5e`), aufbauend auf der Backend-Grundlage (`571ee2c`). iOS-Teil war bereits fertig (`cbfbeec`, siehe SYNC.md-Eintrag von Track C oben).
+
+**1) Unbekannte Absender streng behandeln:** neuer Toggle im Sicherheit-Abschnitt von `SettingsModal.tsx` (Default an, `PUT /settings`). Bei aktivem Toggle bekommt der Nachrichten-Header in `MessageDetailPane.tsx` fuer neue, nicht vertraute Absender zusaetzlich zum bestehenden dezenten "Neuer Absender"-Badge einen warnfarbenen Rahmen/Hintergrund. **Bekannte Grenze:** `MessageList.tsx`-Zeilen nutzen den schlankeren `Message`-Typ ohne `isNewSender` -- die verstaerkte Darstellung ist deshalb nur in der Detailansicht moeglich, nicht schon in der Ordner-Listenzeile.
+
+**2) Kontakt-Autovervollstaendigung:** natives `<datalist>` an To/CC/BCC in `ComposeModal.tsx`, gespeist aus neuem `api.listContacts()` (`GET /contacts`).
+
+**3) Entwuerfe automatisch speichern:** 3s-Debounce nach Tipp-Stille (`POST` dann `PATCH /drafts`), nur bei Neu/Weiterleiten mit echtem Inhalt, Draft-Id in einem `useRef` (nicht `useState`, wegen einer echten `oxlint`-`exhaustive-deps`-Warnung). Die entstandene `draftId` geht als Parameter in `sendMessage`, damit das Backend den Entwurf beim Versand loescht. Schliessen/Verwerfen laesst den zuletzt gespeicherten Entwurf unangetastet.
+
+**4) Threaded Ansicht:** `MessageList.tsx` gruppiert clientseitig ueber `inReplyToMessageId`-Ketten, aber nur innerhalb der aktuell geladenen Liste (gleiche bewusste Grenze wie iOS und Backend). Nur die neueste Nachricht je Gruppe ist sichtbar, "+N aeltere" klappt den Rest auf; Gruppen mit genau einer Nachricht sehen unveraendert aus.
+
+**Echter Fund im Mock-Server:** `PUT /settings` hat `userSettings` bisher komplett ersetzt statt zu mergen -- ein Update mit nur `strictUnknownSenders` haette `accentTheme` stillschweigend zurueckgesetzt. Behoben.
+
+**Tests:** `tsc -b`/`vite build`/`oxlint` gruen (keine neuen Warnungen). Per Browser-Automation gegen den Mock-Server durchgeklickt: Toggle an/aus mit sichtbarem Unterschied am Header (Badge bleibt in beiden Zustaenden), Autocomplete-Vorschlag ueber die `<datalist>`-Optionen im DOM bestaetigt (18 Kontakte aus `GET /contacts`), Autosave ueber sichtbaren "Entwurf gespeichert"-Hinweis UND direkt per `GET /drafts` gegen den Mock-Server bestaetigt, Thread-Gruppierung im "Eingang"-Ordner (eine Zeile + "+1 aeltere", Aufklappen zeigt die aeltere Nachricht, beide Zeilen oeffnen die richtige Nachricht). Konsole ohne Fehler.
+
+**Kein Blocker.** Damit sind beide Clients (iOS + Web) fuer diesen Auftrag fertig.
