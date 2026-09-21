@@ -30,6 +30,11 @@ export interface FetchedMail {
 export interface SendMailInput {
   to: string[];
   cc: string[];
+  // [2026-09-21] WEB_INBOX.md 21.09. "3) CC/BCC beim Verfassen" -- bcc wird
+  // NUR an die tatsaechliche Provider-API/den SMTP-Envelope gegeben, nie in
+  // einen sichtbaren Mail-Header geschrieben (das waere keine Blindkopie
+  // mehr), siehe gmailAdapter.ts/imapAdapter.ts.
+  bcc: string[];
   subject: string;
   bodyText: string;
   // RFC822 Message-ID-Header der Ursprungsnachricht (nicht providerMessageId)

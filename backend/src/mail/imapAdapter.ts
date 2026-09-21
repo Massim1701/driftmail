@@ -140,6 +140,10 @@ export class ImapAdapter implements MailAdapter {
       from: this.creds.user,
       to: input.to,
       cc: input.cc.length > 0 ? input.cc : undefined,
+      // nodemailer setzt bcc korrekt nur im SMTP-Envelope (RCPT TO), nie in
+      // einen sichtbaren Header -- genau das Verhalten, das eine Blindkopie
+      // braucht.
+      bcc: input.bcc.length > 0 ? input.bcc : undefined,
       subject: input.subject,
       text: input.bodyText,
       inReplyTo: input.inReplyToMessageIdHeader ?? undefined,

@@ -122,6 +122,10 @@ messagesRouter.post("/messages/send", async (req, res) => {
   const cc: string[] = Array.isArray(body.cc)
     ? body.cc.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0)
     : [];
+  // [2026-09-21] WEB_INBOX.md 21.09. "3) CC/BCC beim Verfassen".
+  const bcc: string[] = Array.isArray(body.bcc)
+    ? body.bcc.filter((x: unknown): x is string => typeof x === "string" && x.trim().length > 0)
+    : [];
   const subject = typeof body.subject === "string" ? body.subject : "";
   const inReplyToMessageId = typeof body.inReplyToMessageId === "string" ? body.inReplyToMessageId : null;
 
@@ -193,7 +197,7 @@ messagesRouter.post("/messages/send", async (req, res) => {
   const adapter = adapterForAccount(account);
   let sentMessageId: string;
   try {
-    const result = await adapter.sendMail({ to, cc, subject, bodyText, inReplyToMessageIdHeader: inReplyToHeader });
+    const result = await adapter.sendMail({ to, cc, bcc, subject, bodyText, inReplyToMessageIdHeader: inReplyToHeader });
     sentMessageId = result.providerMessageId;
   } catch (err) {
     console.error("Versand beim Mail-Provider fehlgeschlagen:", err);
@@ -241,11 +245,13 @@ messagesRouter.post("/messages/send", async (req, res) => {
   const draftId = typeof body.draftId === "string" ? body.draftId : null;
   if (draftId) await store.deleteDraft(draftId);
 
-  // outgoing_send_log-Eintrag je Empfänger (to + cc) -- Grundlage für
+  // outgoing_send_log-Eintrag je Empfänger (to + cc + bcc) -- Grundlage für
   // recipientReputation (store.hasSentTo) und eine künftige Bot/Human-
   // Missbrauchserkennung (send_abuse_flags-Tabelle existiert bereits im
-  // Schema, Logik dafür ist noch nicht umgesetzt, siehe WEB_INBOX.md).
-  const recipients = Array.from(new Set([...to, ...cc].map((a) => a.toLowerCase())));
+  // Schema, Logik dafür ist noch nicht umgesetzt, siehe WEB_INBOX.md). bcc
+  // zählt hier bewusst mit -- ein echter Empfänger für die Missbrauchs-
+  // erkennung, nur eben nicht sichtbar für die anderen Empfänger.
+  const recipients = Array.from(new Set([...to, ...cc, ...bcc].map((a) => a.toLowerCase())));
   for (const recipientAddress of recipients) {
     await store.recordOutgoingSend({ userId: account.userId, recipientAddress });
   }
@@ -259,6 +265,11 @@ messagesRouter.post("/messages/send", async (req, res) => {
 messagesRouter.get("/messages", async (req, res) => {
   const folderId = typeof req.query.folderId === "string" ? req.query.folderId : undefined;
   let accountId = typeof req.query.accountId === "string" ? req.query.accountId : undefined;
+  // [2026-09-21] WEB_INBOX.md 21.09. "2) Suche ueber Mails" -- kombinierbar
+  // mit folderId/accountId (z.B. "nur in diesem Ordner suchen"), aber der
+  // naheliegendere Client-Weg ist q + accountId OHNE folderId, damit ueber
+  // alle Ordner des Kontos gesucht wird (siehe store.listMessages()).
+  const q = typeof req.query.q === "string" ? req.query.q : undefined;
 
   if (folderId) {
     const folder = await store.getFolder(folderId);
@@ -287,7 +298,7 @@ messagesRouter.get("/messages", async (req, res) => {
     accountId = (await store.getMailAccountByUserId(req.userId))?.id;
   }
 
-  const messages = await store.listMessages({ folderId, accountId });
+  const messages = await store.listMessages({ folderId, accountId, q });
   res.json(await Promise.all(messages.map(async (m) => toApiMessage(m, await store.getMessageSecurity(m.id)))));
 });
 

@@ -486,6 +486,27 @@ async function main() {
       "outgoing_send_log sollte den Empfänger nach dem Versand kennen",
     );
 
+    // Fall 1b: BCC (WEB_INBOX.md 21.09. "CC/BCC beim Verfassen") -- die
+    // bcc-Adresse landet im outgoing_send_log, ist aber kein sichtbarer
+    // Header (siehe Kommentar in gmailAdapter.ts/imapAdapter.ts).
+    const sendBccRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accountId: account.id,
+        to: ["kollegin@example.com"],
+        cc: ["cc-empfaenger@example.com"],
+        bcc: ["bcc-empfaenger@example.com"],
+        subject: "Testmail mit BCC",
+        bodyText: "Hallo, das ist eine Testmail mit BCC.",
+      }),
+    });
+    assert(sendBccRes.status === 200, "POST /v1/messages/send mit bcc sollte 200 liefern");
+    assert(
+      await store.hasSentTo(account.userId, "bcc-empfaenger@example.com"),
+      "outgoing_send_log sollte den bcc-Empfänger nach dem Versand kennen",
+    );
+
     // Fall 2: weder accountId noch inReplyToMessageId angegeben -> 400
     // (Edge Case, siehe Kommentar in routes/messages.ts).
     const sendMissingAccountRes = await fetch(`${base}/v1/messages/send`, {
@@ -686,6 +707,34 @@ async function main() {
     const gesendetMessagesRes = await fetch(`${base}/v1/messages?folderId=${gesendetFolder.id}`);
     const gesendetMessages = (await gesendetMessagesRes.json()) as Array<Record<string, unknown>>;
     assert(gesendetMessages.length >= 3, "mindestens 3 lokale Nachrichten im 'gesendet'-Ordner erwartet (3 erfolgreiche Sends oben)");
+
+    // ----- Suche (WEB_INBOX.md 21.09. "Suche ueber Mails", GET
+    // /messages?q=...) -- ILIKE/`.includes()`-Substring-Suche über subject,
+    // from_address, from_display_name, body_text (siehe Kommentar in
+    // postgresStore.ts/store.ts). Treffer über den Betreff des gerade
+    // gesendeten sendBccRes oben ("Testmail mit BCC").
+    const searchBySubjectRes = await fetch(`${base}/v1/messages?accountId=${account.id}&q=${encodeURIComponent("mit BCC")}`);
+    assert(searchBySubjectRes.status === 200, "GET /v1/messages?q= sollte 200 liefern");
+    const searchBySubject = (await searchBySubjectRes.json()) as Array<Record<string, unknown>>;
+    assert(
+      searchBySubject.some((m) => m.subject === "Testmail mit BCC"),
+      "Suche nach Betreff-Substring 'mit BCC' sollte die eben gesendete Testmail finden",
+    );
+
+    // Treffer über den Absender einer Fixture-Mail (siehe fixtures oben,
+    // kollegin@example.com ist Absender von Fixture 4).
+    const searchByFromRes = await fetch(`${base}/v1/messages?accountId=${account.id}&q=${encodeURIComponent("kollegin@example")}`);
+    const searchByFrom = (await searchByFromRes.json()) as Array<Record<string, unknown>>;
+    assert(
+      searchByFrom.some((m) => typeof m.fromAddress === "string" && (m.fromAddress as string).includes("kollegin@example")),
+      "Suche nach Absender-Substring sollte mindestens eine Nachricht von kollegin@example.com finden",
+    );
+
+    // Kein Treffer -> leeres Array, kein Fehler.
+    const searchNoMatchRes = await fetch(`${base}/v1/messages?accountId=${account.id}&q=${encodeURIComponent("xyz-kein-treffer-xyz")}`);
+    assert(searchNoMatchRes.status === 200, "GET /v1/messages?q= ohne Treffer sollte trotzdem 200 liefern");
+    const searchNoMatch = (await searchNoMatchRes.json()) as Array<Record<string, unknown>>;
+    assert(searchNoMatch.length === 0, "Suche ohne Treffer sollte ein leeres Array liefern");
 
     // ----- Entwürfe (POST/GET /drafts, PATCH/DELETE /drafts/{id}, WEB_INBOX.md
     // 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags") -----

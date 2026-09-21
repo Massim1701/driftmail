@@ -552,7 +552,7 @@ export class PostgresStore implements Store {
     return rowToMessage(rows[0]);
   }
 
-  async listMessages(filter: { folderId?: string; accountId?: string }): Promise<MessageRecord[]> {
+  async listMessages(filter: { folderId?: string; accountId?: string; q?: string }): Promise<MessageRecord[]> {
     const conditions: string[] = [];
     const params: unknown[] = [];
     if (filter.folderId) {
@@ -562,6 +562,19 @@ export class PostgresStore implements Store {
     if (filter.accountId) {
       params.push(filter.accountId);
       conditions.push(`mail_account_id = $${params.length}`);
+    }
+    // [2026-09-21] WEB_INBOX.md 21.09. "2) Suche ueber Mails" -- einfache
+    // ILIKE-Substring-Suche ueber Betreff/Absender(-Adresse+Anzeigename)/
+    // Volltext, kein eigener Such-Index (tsvector/GIN) fuer diesen ersten
+    // Schritt. Reicht fuer die Nachrichtenmengen dieses Entwicklungsstands;
+    // bei echtem Wachstum waere ein `tsvector`-Spalte+GIN-Index die naechste
+    // Ausbaustufe, ohne dass sich die Store-Schnittstelle aendern muesste.
+    if (filter.q && filter.q.trim()) {
+      params.push(`%${filter.q.trim()}%`);
+      const p = `$${params.length}`;
+      conditions.push(
+        `(subject ILIKE ${p} OR from_address ILIKE ${p} OR from_display_name ILIKE ${p} OR body_text ILIKE ${p})`,
+      );
     }
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const { rows } = await this.pool.query(`SELECT * FROM messages ${where} ORDER BY received_at DESC`, params);

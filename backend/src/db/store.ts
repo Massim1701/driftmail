@@ -95,7 +95,10 @@ export interface Store {
   wasAutoDeleted(mailAccountId: string, messageIdHeader: string): Promise<boolean>;
   markAutoDeleted(mailAccountId: string, messageIdHeader: string): Promise<void>;
   insertMessage(input: Omit<MessageRecord, "id">): Promise<MessageRecord>;
-  listMessages(filter: { folderId?: string; accountId?: string }): Promise<MessageRecord[]>;
+  /** `q` (WEB_INBOX.md 21.09. "2) Suche ueber Mails"): einfache Substring-
+   * Suche ueber subject/fromAddress/fromDisplayName/bodyText, case-
+   * insensitive. Kombinierbar mit folderId/accountId. */
+  listMessages(filter: { folderId?: string; accountId?: string; q?: string }): Promise<MessageRecord[]>;
   getMessage(id: string): Promise<MessageRecord | undefined>;
   moveMessage(id: string, folderId: string): Promise<MessageRecord | undefined>;
   deleteMessage(id: string): Promise<boolean>;
@@ -373,10 +376,19 @@ export class InMemoryStore implements Store {
     return record;
   }
 
-  async listMessages(filter: { folderId?: string; accountId?: string }): Promise<MessageRecord[]> {
+  async listMessages(filter: { folderId?: string; accountId?: string; q?: string }): Promise<MessageRecord[]> {
+    const q = filter.q?.trim().toLowerCase();
     return this.messages
       .filter((m) => (filter.folderId ? m.folderId === filter.folderId : true))
       .filter((m) => (filter.accountId ? m.mailAccountId === filter.accountId : true))
+      .filter((m) =>
+        !q
+          ? true
+          : (m.subject ?? "").toLowerCase().includes(q) ||
+            m.fromAddress.toLowerCase().includes(q) ||
+            (m.fromDisplayName ?? "").toLowerCase().includes(q) ||
+            (m.bodyText ?? "").toLowerCase().includes(q),
+      )
       .sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
   }
 

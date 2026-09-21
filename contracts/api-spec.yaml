@@ -364,7 +364,14 @@ paths:
 
   /messages:
     get:
-      summary: Nachrichten eines Ordners abrufen
+      summary: >
+        Nachrichten eines Ordners abrufen, optional gefiltert per `q`
+        (WEB_INBOX.md 21.09. "2) Suche ueber Mails"): einfache, case-
+        insensitive Substring-Suche ueber Betreff/Absenderadresse/
+        Absender-Anzeigename/Nachrichtentext. Kombinierbar mit folderId
+        (nur in diesem Ordner suchen) -- ueblicher Client-Weg ist `q` +
+        `accountId` OHNE `folderId`, um ueber alle Ordner des Kontos zu
+        suchen.
       parameters:
         - name: folderId
           in: query
@@ -376,6 +383,10 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: q
+          in: query
+          schema:
+            type: string
       responses:
         "200":
           description: Liste der Nachrichten
@@ -641,6 +652,15 @@ paths:
                 cc:
                   type: array
                   items: { type: string }
+                bcc:
+                  type: array
+                  items: { type: string }
+                  description: >
+                    [2026-09-21] WEB_INBOX.md 21.09. "3) CC/BCC beim
+                    Verfassen". Landet nie in einem sichtbaren Header/im
+                    lokalen "gesendet"-Ordner-Eintrag, nur im tatsaechlichen
+                    Provider-Versand (SMTP-Envelope bzw. Gmail-Bcc-Header,
+                    von beiden Providern vor Auslieferung an to/cc entfernt).
                 subject: { type: string }
                 bodyText: { type: string }
                 attachmentIds:

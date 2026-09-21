@@ -753,7 +753,7 @@ wie beim Lesen — siehe "Was ist echt, was ist Mock/Stub" unten).
    "Mail aus der eigenen Ansicht entfernen", wo die lokale Sicht bereits die
    Quelle der Wahrheit ist).
 4. Nach erfolgreichem Versand: ein `outgoing_send_log`-Eintrag je Empfänger
-   (`to` + `cc`, dedupliziert) über `store.recordOutgoingSend()` — die
+   (`to` + `cc` + `bcc`, dedupliziert) über `store.recordOutgoingSend()` — die
    Infrastruktur dafür (Tabelle + Store-Methode) existierte bereits seit
    Commit `a5432e6`, wurde aber nie von einem echten Endpunkt aufgerufen.
    Grundlage für `recipientReputation` (`hasSentTo`, siehe oben) und eine
@@ -785,6 +785,27 @@ Anhänge: siehe eigener Abschnitt "Anhänge" unten.
 ohne `inReplyToMessageId` (400), unbekannte `inReplyToMessageId` (404) sowie
 den serverseitigen Phishing-Block (Dringlichkeit + Zugangsdaten-Anfrage, 422,
 kein `outgoing_send_log`-Eintrag) ab.
+
+### [2026-09-21] Nachtrag: CC/BCC (WEB_INBOX.md 21.09. "CC/BCC beim Verfassen")
+
+`POST /messages/send` akzeptiert jetzt ein optionales `bcc`-Feld (Array von
+Adressen, wie `cc`). Anders als `cc` taucht `bcc` in keinem sichtbaren Header
+der versendeten Mail auf:
+
+- **Gmail:** die rohe RFC822-Mail bekommt intern trotzdem einen `Bcc:`-Header
+  gesetzt — genau das macht auch Gmails eigener Web-Compose-Pfad. Gmails
+  ausgehende Zustellung entfernt diesen Header vor der Auslieferung an die
+  `To`/`Cc`-Empfänger (Standard-Verhalten jedes Mailservers), die
+  Bcc-Adresse bekommt die Mail trotzdem zugestellt. Ein separater
+  API-Parameter dafür existiert bei der Gmail-API nicht.
+- **IMAP/SMTP:** `nodemailer` unterstützt `bcc` nativ über den SMTP-Envelope
+  (`RCPT TO`) — dort ist die Trennung von Header und Umschlag ohnehin die
+  normale Funktionsweise, kein Sonderfall nötig.
+
+`bcc`-Empfänger fließen wie `to`/`cc` in den `outgoing_send_log` ein (Grundlage
+für `recipientReputation`). **Tests:** `src/smoketest.ts` prüft einen Versand
+mit gesetztem `cc` + `bcc` (200) und dass der `bcc`-Empfänger anschließend über
+`store.hasSentTo()` bekannt ist.
 
 ## Entwürfe (`GET`/`POST /drafts`, `PATCH`/`DELETE /drafts/{draftId}`)
 
@@ -1584,6 +1605,40 @@ des Erst-Onboardings (z.B. in den Einstellungen) -- beide können den
 bereits bestehenden Onboarding-Provider-Auswahlbildschirm wiederverwenden
 (Provider-Liste + IMAP-Formular sind identisch, nur der Aufrufkontext
 unterscheidet sich).
+
+## Suche über Mails (WEB_INBOX.md 21.09. "Suche ueber Mails")
+
+`GET /messages` akzeptiert jetzt einen optionalen Query-Parameter `q`
+(zusätzlich zu `folderId`/`accountId`, mit diesen kombinierbar). Findet
+Treffer per Substring-Suche (case-insensitive) über `subject`,
+`from_address`, `from_display_name` und `body_text` — ein Treffer in
+irgendeinem dieser vier Felder genügt (OR-Verknüpfung).
+
+**Implementierung:** Postgres per `ILIKE '%q%'` (ein `OR`-Block über die vier
+Spalten), In-Memory-Store per `.toLowerCase().includes()` auf denselben vier
+Feldern — beide Store-Implementierungen bewusst mit identischer Semantik
+gehalten (siehe "Was ist echt, was ist Mock/Stub").
+
+**Grenze (bewusst, kein Versehen):** das ist eine einfache
+Substring-/`ILIKE`-Suche, **kein** Volltextindex (`tsvector`/`GIN`,
+Ranking, Stemming, Tippfehlertoleranz). Bei kleinen bis mittleren
+Postfächern (der hier realistische Rahmen) ist das schnell genug ohne
+zusätzliche Infrastruktur. Falls die Mailbox-Größe das später zum Problem
+macht: Migration auf einen `tsvector`-Spalten-Index ist ein reiner
+Backend-/DB-Schritt, der Contract (`q`-Parameter, Response-Form) müsste
+sich dafür nicht ändern — bewusst als Upgrade-Pfad offengelassen, nicht
+jetzt schon gebaut, weil noch keine reale Notwendigkeit dafür erkennbar
+ist.
+
+**Tests:** `smoketest.ts` prüft einen Treffer über einen Betreff-Substring,
+einen Treffer über einen Absender-Adress-Substring sowie eine Suche ohne
+Treffer (leeres Array, 200 statt Fehler). Grün ohne UND mit `DATABASE_URL`
+gegen frisches Postgres.
+
+**Übergabe:** Track C/F müssen ein Such-UI-Element bauen (Eingabefeld +
+`q`-Parameter an `GET /messages` anhängen, idealerweise mit der aktuell
+aktiven `accountId`/`folderId` kombiniert, damit die Suche im Kontext der
+gerade sichtbaren Ansicht bleibt).
 
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 

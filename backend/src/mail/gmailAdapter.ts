@@ -102,6 +102,12 @@ export class GmailAdapter implements MailAdapter {
   async sendMail(input: SendMailInput): Promise<SendMailResult> {
     const headers = [`To: ${input.to.join(", ")}`];
     if (input.cc.length > 0) headers.push(`Cc: ${input.cc.join(", ")}`);
+    // Gmails eigener Versandpfad (auch das Web-Compose-Fenster) baut intern
+    // dieselbe Art rohe MIME-Nachricht mit einem Bcc-Header -- Gmails
+    // ausgehende Zustellung entfernt ihn vor der Auslieferung an
+    // To/Cc-Empfaenger (Standard-Mailserver-Verhalten), die Bcc-Adresse
+    // bekommt die Mail trotzdem. Kein separater API-Parameter dafuer.
+    if (input.bcc.length > 0) headers.push(`Bcc: ${input.bcc.join(", ")}`);
     headers.push(`Subject: ${input.subject}`);
     if (input.inReplyToMessageIdHeader) {
       headers.push(`In-Reply-To: ${input.inReplyToMessageIdHeader}`);
