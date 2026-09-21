@@ -60,6 +60,11 @@ export type AccentTheme = "teal" | "ocean_blue" | "violett" | "koralle" | "ocean
 
 export interface UserSettings {
   accentTheme: AccentTheme;
+  // [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 1
+  // ("Unbekannte Absender streng behandeln"), Default true. Reine Client-
+  // Darstellungsentscheidung -- steuert nur, ob isNewSender-Nachrichten
+  // staerker hervorgehoben werden, das Backend-Signal selbst ist unverändert.
+  strictUnknownSenders: boolean;
 }
 
 export interface MailAccount {
@@ -77,6 +82,10 @@ export interface Message {
   receivedAt: string;
   folderId: string;
   classification: Classification;
+  // [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 4
+  // ("Threaded Ansicht") -- vorher nur auf MessageDetail. Zeigt nur den
+  // DIREKTEN Elternteil, kein volles Thread-Konzept (siehe backend/README.md).
+  inReplyToMessageId: string | null;
 }
 
 export interface SecurityResult {

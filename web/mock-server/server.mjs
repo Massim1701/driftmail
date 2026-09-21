@@ -52,9 +52,11 @@ const capabilityLog = [];
 let aiSettings = { mode: "off", byokProvider: null, apiKey: null, cloudConsentGiven: false };
 const AI_IMPLEMENTED_PROVIDERS = ["anthropic", "openai"];
 // GET/PUT /settings (WEB_INBOX.md 21.09. "Einstellungsbereich", Ansicht:
-// Akzentfarben-Auswahl) -- spiegelt users.accent_theme (siehe
-// backend/README.md "Einstellungsbereich").
-let userSettings = { accentTheme: "teal" };
+// Akzentfarben-Auswahl; strictUnknownSenders ergaenzt in "FUENF NEUE
+// KOMFORT-FEATURES" Punkt 1) -- spiegelt users.accent_theme/
+// strict_unknown_senders (siehe backend/README.md "Einstellungsbereich" /
+// "Fuenf Komfort-Features").
+let userSettings = { accentTheme: "teal", strictUnknownSenders: true };
 const ACCENT_THEME_VALUES = ["teal", "ocean_blue", "violett", "koralle", "ocean_verlauf"];
 // POST /attachments (WEB_INBOX.md 09.09. "Erweiterung des Send-Endpunkt-
 // Eintrags von eben") -- nur Metadaten, kein Dateiinhalt (siehe
@@ -691,7 +693,8 @@ const server = createServer(async (req, res) => {
   }
 
   // GET/PUT /settings (WEB_INBOX.md 21.09. "Einstellungsbereich", Ansicht:
-  // Akzentfarben-Auswahl) -- gleiche Validierung wie
+  // Akzentfarben-Auswahl; strictUnknownSenders ergaenzt in "FUENF NEUE
+  // KOMFORT-FEATURES" Punkt 1) -- gleiche Validierung wie
   // backend/src/routes/settings.ts.
   if (parts.length === 1 && parts[0] === "settings") {
     if (req.method === "GET") {
@@ -702,9 +705,28 @@ const server = createServer(async (req, res) => {
       if (body.accentTheme !== undefined && !ACCENT_THEME_VALUES.includes(body.accentTheme)) {
         return badRequest(res, `accentTheme muss eines von ${ACCENT_THEME_VALUES.join(", ")} sein`);
       }
-      if (body.accentTheme !== undefined) userSettings = { accentTheme: body.accentTheme };
+      // Fund beim Testen: vorher wurde hier das ganze userSettings-Objekt
+      // ERSETZT statt gemerged -- ein reines strictUnknownSenders-Update
+      // (ohne accentTheme im Body) haette die gespeicherte Akzentfarbe
+      // stillschweigend auf undefined zurueckgesetzt. Jetzt echtes Merge,
+      // gleiches Prinzip wie backend/src/db/store.ts updateUserSettings().
+      userSettings = {
+        accentTheme: body.accentTheme !== undefined ? body.accentTheme : userSettings.accentTheme,
+        strictUnknownSenders:
+          body.strictUnknownSenders !== undefined ? body.strictUnknownSenders : userSettings.strictUnknownSenders,
+      };
       return send(res, 200, userSettings);
     }
+  }
+
+  // GET /contacts (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 2
+  // "Kontakt-Autovervollstaendigung") -- vereinfachter Mock: bekannte
+  // Adressen direkt aus den Beispiel-Nachrichten (from_address), dedupliziert
+  // + sortiert, gleiche Semantik wie backend/src/routes/contacts.ts (dort
+  // zusaetzlich outgoing_send_log, das dieser Mock-Server nicht nachbildet).
+  if (req.method === "GET" && parts.length === 1 && parts[0] === "contacts") {
+    const unique = [...new Set(messages.map((m) => m.fromAddress.toLowerCase()))].sort();
+    return send(res, 200, unique);
   }
 
   return notFound(res);

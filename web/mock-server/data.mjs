@@ -271,6 +271,23 @@ export const messages = [
     bodyText:
       "Sehr geehrter Herr Manca,\n\ndie besprochenen Unterlagen liegen zur Unterschrift bereit. Bitte vereinbaren Sie einen Termin in unserer Kanzlei.\n\nMit freundlichen Grüßen\nNotariat Weber",
   },
+  {
+    // [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 4
+    // ("Threaded Ansicht"): einzige Fixture mit gesetztem
+    // inReplyToMessageId, damit die client-seitige Gruppierung im Mock-
+    // Betrieb ueberhaupt sichtbar/testbar ist -- eine zweite, neuere
+    // Nachricht von Notariat Weber im selben Gespraech wie oben.
+    id: "b1000000-0000-0000-0000-000000000004",
+    fromAddress: "notar.weber@notariat-weber.de",
+    fromDisplayName: "Notariat Weber",
+    subject: "Re: Unterlagen zur Unterschrift bereit",
+    receivedAt: "2026-09-07T10:15:00Z",
+    folderId: EINGANG,
+    security: securityOk(),
+    inReplyToMessageId: "b1000000-0000-0000-0000-000000000003",
+    bodyText:
+      "Sehr geehrter Herr Manca,\n\nkurze Erinnerung: der Termin sollte idealerweise bis Ende der Woche stattfinden.\n\nMit freundlichen Grüßen\nNotariat Weber",
+  },
 
   // ---- sonstiges ----
   {
@@ -462,6 +479,9 @@ export function messageSummary(msg) {
     receivedAt: msg.receivedAt,
     folderId: msg.folderId,
     classification: classificationOf(msg),
+    // WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 4 ("Threaded
+    // Ansicht") -- vorher nur in messageDetail() gespiegelt.
+    inReplyToMessageId: msg.inReplyToMessageId ?? null,
   };
 }
 

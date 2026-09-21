@@ -128,6 +128,51 @@ export function ComposeModal({
   const [draftSource, setDraftSource] = useState<AiSource | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Kontakt-Autovervollstaendigung (WEB_INBOX.md 21.09. "FUENF NEUE
+  // KOMFORT-FEATURES" Punkt 2) -- einmal beim Oeffnen geladen, native
+  // <datalist> uebernimmt das Filtern-waehrend-des-Tippens, keine eigene
+  // JS-Logik noetig.
+  const [contacts, setContacts] = useState<string[]>([]);
+  useEffect(() => {
+    api.listContacts().then(setContacts).catch(() => {});
+  }, []);
+
+  // Entwuerfe automatisch speichern (WEB_INBOX.md 21.09. "FUENF NEUE
+  // KOMFORT-FEATURES" Punkt 3) -- 3s nach der letzten Aenderung, nur bei
+  // "new"/"forward" (nicht "reply": ein Antwortentwurf braucht
+  // inReplyToMessageId + eine eigene Wiederherstellungs-UI in der
+  // Entwuerfe-Liste, die es fuer Antworten noch nicht gibt -- bewusst nicht
+  // Teil dieses Schritts). Erster Speicherversuch legt den Entwurf an
+  // (POST /drafts), alle weiteren aktualisieren ihn (PATCH /drafts/{id}).
+  // Kein leerer Entwurf beim reinen Oeffnen des Dialogs. `draftId` als Ref
+  // statt State: soll GELESEN/geschrieben werden, ohne den Debounce-Effekt
+  // erneut auszuloesen (ein Speichern wuerde sonst sich selbst unterbrechen).
+  const draftIdRef = useRef<string | null>(null);
+  const [draftSaveStatus, setDraftSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  useEffect(() => {
+    if (isReply) return;
+    const toListForSave = parseAddressList(to);
+    const hasContent = toListForSave.length > 0 || subject.trim().length > 0 || bodyText.trim().length > 0;
+    if (!hasContent) return;
+
+    const timeout = setTimeout(async () => {
+      setDraftSaveStatus("saving");
+      try {
+        const data = { to: toListForSave, cc: parseAddressList(cc), subject, bodyText };
+        if (draftIdRef.current) {
+          await api.updateDraft(draftIdRef.current, data);
+        } else {
+          const created = await api.createDraft(data);
+          draftIdRef.current = created.id;
+        }
+        setDraftSaveStatus("saved");
+      } catch {
+        setDraftSaveStatus("idle");
+      }
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }, [to, cc, subject, bodyText, isReply]);
+
   // Reply/Forward auf Klick eines KI-Entwurfs (nur bei "reply" sinnvoll --
   // createReplyDraft() beantwortet die Ursprungsnachricht, kein Äquivalent
   // für "neue Mail"/"weiterleiten"). [2026-09-21] KORREKTUR
@@ -199,6 +244,10 @@ export function ComposeModal({
         subject,
         bodyText,
         attachmentIds: attachments.map((a) => a.attachmentId).filter((id): id is string => id !== null),
+        // Autosave (Punkt 3): falls waehrend des Tippens ein Entwurf
+        // angelegt wurde, raeumt das Backend ihn nach erfolgreichem Versand
+        // automatisch auf (siehe backend/README.md "Versand", draftId-Feld).
+        draftId: draftIdRef.current ?? undefined,
       });
       onSent();
       onClose();
@@ -247,6 +296,15 @@ export function ComposeModal({
               </select>
             </label>
           )}
+          {/* Kontakt-Autovervollstaendigung (Punkt 2): ein gemeinsames
+              <datalist>, native Browser-Filterung beim Tippen, kein
+              eigener Dropdown-Code noetig. */}
+          <datalist id="known-contacts">
+            {contacts.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+
           <label className="compose-field">
             <span>An</span>
             <input
@@ -255,6 +313,7 @@ export function ComposeModal({
               onChange={(e) => setTo(e.target.value)}
               placeholder="empfaenger@example.com, weitere@example.com"
               autoFocus={!isReply}
+              list="known-contacts"
             />
           </label>
 
@@ -266,11 +325,11 @@ export function ComposeModal({
             <>
               <label className="compose-field">
                 <span>CC</span>
-                <input type="text" value={cc} onChange={(e) => setCc(e.target.value)} placeholder="cc@example.com" />
+                <input type="text" value={cc} onChange={(e) => setCc(e.target.value)} placeholder="cc@example.com" list="known-contacts" />
               </label>
               <label className="compose-field">
                 <span>BCC</span>
-                <input type="text" value={bcc} onChange={(e) => setBcc(e.target.value)} placeholder="bcc@example.com" />
+                <input type="text" value={bcc} onChange={(e) => setBcc(e.target.value)} placeholder="bcc@example.com" list="known-contacts" />
               </label>
             </>
           )}
@@ -338,6 +397,9 @@ export function ComposeModal({
             <span className="compose-draft-source">
               {draftSource === "on_device" ? "On-Device" : draftSource === "cloud_fallback" ? "Cloud (eigener Zugang)" : "Regelbasiert"}
             </span>
+          )}
+          {!isReply && draftSaveStatus !== "idle" && (
+            <span className="compose-draft-source">{draftSaveStatus === "saving" ? "Speichere Entwurf…" : "Entwurf gespeichert"}</span>
           )}
           <div className="compose-modal-actions-spacer" />
           <button type="button" className="btn btn-secondary" onClick={onClose}>

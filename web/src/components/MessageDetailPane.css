@@ -22,6 +22,19 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/* [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 1
+   ("Unbekannte Absender streng behandeln"): staerkere Hervorhebung als das
+   bestehende dezente "Neuer Absender"-Badge allein, nur wenn der Schalter
+   in den Einstellungen an ist (Default an). */
+.detail-header-unknown-sender {
+  padding: var(--space-md);
+  margin: calc(-1 * var(--space-md));
+  margin-bottom: calc(var(--space-lg) - var(--space-md));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+}
+
 .detail-subject-row {
   display: flex;
   align-items: center;

@@ -72,3 +72,28 @@
   white-space: nowrap;
   width: 100%;
 }
+
+/* Threaded Ansicht (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"
+   Punkt 4) -- nur sichtbar, wenn eine Gruppe mehr als eine Nachricht hat. */
+.message-thread-toggle {
+  margin: 0 var(--space-md) 0 calc(var(--space-md) + var(--space-lg));
+  padding: 2px var(--space-sm);
+  border: none;
+  background: none;
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-accent);
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.message-thread-older {
+  list-style: none;
+  margin: 0 0 0 var(--space-lg);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  border-left: 2px solid var(--color-border);
+}

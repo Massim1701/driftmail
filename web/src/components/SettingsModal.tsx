@@ -19,6 +19,8 @@ export function SettingsModal({
   appLockSupported,
   appLockEnabled,
   onAppLockChange,
+  strictUnknownSenders,
+  onStrictUnknownSendersChange,
   onOpenAiSettings,
   onClose,
 }: {
@@ -35,6 +37,13 @@ export function SettingsModal({
   appLockSupported: boolean;
   appLockEnabled: boolean;
   onAppLockChange: (enabled: boolean) => Promise<boolean>;
+  /** [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 1
+   * ("Unbekannte Absender streng behandeln") -- lebt in App.tsx (analog
+   * trustedSenderAddresses), weil MessageDetailPane/MessageList den Wert
+   * für die Badge-Darstellung ebenfalls brauchen, nicht nur dieser Dialog
+   * hier. Gleiches Prop-Muster wie appLockEnabled/onAppLockChange oben. */
+  strictUnknownSenders: boolean;
+  onStrictUnknownSendersChange: (enabled: boolean) => Promise<boolean>;
   onOpenAiSettings: () => void;
   onClose: () => void;
 }) {
@@ -42,6 +51,9 @@ export function SettingsModal({
   const [accentLoading, setAccentLoading] = useState(true);
   const [accentSaving, setAccentSaving] = useState<AccentTheme | null>(null);
   const [accentError, setAccentError] = useState<string | null>(null);
+
+  const [strictSaving, setStrictSaving] = useState(false);
+  const [strictError, setStrictError] = useState<string | null>(null);
 
   const [appLockPending, setAppLockPending] = useState(false);
   const [appLockError, setAppLockError] = useState(false);
@@ -81,6 +93,18 @@ export function SettingsModal({
       setAccentError("Akzentfarbe konnte nicht gespeichert werden.");
     } finally {
       setAccentSaving(null);
+    }
+  }
+
+  async function handleToggleStrictUnknownSenders() {
+    if (strictSaving) return;
+    setStrictSaving(true);
+    setStrictError(null);
+    try {
+      const ok = await onStrictUnknownSendersChange(!strictUnknownSenders);
+      if (!ok) setStrictError("Einstellung konnte nicht gespeichert werden.");
+    } finally {
+      setStrictSaving(false);
     }
   }
 
@@ -214,6 +238,23 @@ export function SettingsModal({
                 KI-Einstellungen
               </button>
             </div>
+
+            {/* [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-
+                FEATURES" Punkt 1: steuert nur die Client-Darstellung von
+                isNewSender-Nachrichten (siehe MessageDetailPane.tsx/
+                MessageList.tsx), das Backend-Signal selbst bleibt
+                unverändert -- Default an, wie im Auftrag vorgegeben. */}
+            <div className="settings-row">
+              <button
+                type="button"
+                className={`btn btn-secondary${strictUnknownSenders ? " active" : ""}`}
+                onClick={handleToggleStrictUnknownSenders}
+                disabled={strictSaving}
+              >
+                {strictSaving ? "…" : strictUnknownSenders ? "Unbekannte Absender streng behandeln: an" : "Unbekannte Absender streng behandeln: aus"}
+              </button>
+            </div>
+            {strictError && <p className="send-error">{strictError}</p>}
 
             {/* Plain-language Sicherheits-Übersicht (WEB_INBOX.md 21.09.,
                 "kurze, verstaendliche Uebersicht der aktiven Sicherheits-

@@ -36,6 +36,7 @@ export function MessageDetailPane({
   papierkorbFolderId,
   spamFolderId,
   trustedSenderAddresses,
+  strictUnknownSenders,
   onTrustSender,
   onQuarantined,
   onMoved,
@@ -59,6 +60,13 @@ export function MessageDetailPane({
    * unterdrückt, wenn die Adresse hier drin ist -- siehe api-spec.yaml
    * isNewSender-Beschreibung. */
   trustedSenderAddresses: Set<string>;
+  /** [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 1
+   * ("Unbekannte Absender streng behandeln", Default true): wenn true UND
+   * die Nachricht von einem unbekannten Absender stammt, wird der Header
+   * zusätzlich zum bestehenden dezenten Badge stärker hervorgehoben (siehe
+   * `detail-header-unknown-sender`-Klasse unten) -- reine Darstellungs-
+   * intensität, kein neues Signal. */
+  strictUnknownSenders: boolean;
   onQuarantined: (id: string) => void;
   onMoved: (id: string, folderId: string) => void;
   onDeleted: (id: string) => void;
@@ -106,6 +114,7 @@ export function MessageDetailPane({
   const isQuarantined = quarantaeneFolderId !== null && message.folderId === quarantaeneFolderId;
   const isInTrash = papierkorbFolderId !== null && message.folderId === papierkorbFolderId;
   const isInSpam = spamFolderId !== null && message.folderId === spamFolderId;
+  const isUnknownSender = message.isNewSender && !trustedSenderAddresses.has(message.fromAddress);
 
   async function loadSummary() {
     if (!message) return;
@@ -190,13 +199,13 @@ export function MessageDetailPane({
 
   return (
     <div className="detail-pane">
-      <header className="detail-header">
+      <header className={`detail-header${strictUnknownSenders && isUnknownSender ? " detail-header-unknown-sender" : ""}`}>
         <div className="detail-subject-row">
           <h1>{message.subject}</h1>
           <SecurityBadge classification={message.classification} />
           <SecuritySignalBadges
             security={message.security}
-            isNewSender={message.isNewSender && !trustedSenderAddresses.has(message.fromAddress)}
+            isNewSender={isUnknownSender}
             onTrustSender={() => onTrustSender(message.fromAddress)}
           />
         </div>

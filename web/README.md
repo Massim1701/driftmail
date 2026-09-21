@@ -676,6 +676,96 @@ aus geöffnet (nach dem oben beschriebenen Fix korrekt sichtbar),
 Onboarding-Overlay, "Abbrechen" dort kehrt sauber zurück ohne dass
 Settings sich unerwartet wieder öffnet. Konsole ohne Fehler.
 
+## [2026-09-21] Nachtrag: Fünf Komfort-Features
+(WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES", Web-UI zu den vier
+Punkten mit UI-Anteil, aufbauend auf der Backend-Grundlage aus
+`backend/README.md` "Fuenf Komfort-Features (Backend-Grundlage)". Punkt 3
+("Anhänge automatisch nach Öffnen scannen") und Punkt 5 brauchten laut
+Backend-README keine Web-Änderung.)
+
+**Punkt 1 -- Unbekannte Absender streng behandeln:** neuer Toggle
+"Unbekannte Absender streng behandeln" im "Sicherheit"-Abschnitt von
+`SettingsModal.tsx`, wie die anderen Settings-Felder optimistisch über
+`PUT /settings` gespeichert (mit Rollback bei Fehler, gleiches Muster wie
+der App-Sperre-Toggle). Ist der Toggle an UND eine Nachricht kommt von
+einem neuen, nicht vertrauten Absender, bekommt der Nachrichten-Header in
+`MessageDetailPane.tsx` zusätzlich zum bestehenden dezenten "Neuer
+Absender"-Badge einen warnfarbenen Rahmen/Hintergrund
+(`.detail-header-unknown-sender`, `--color-warning`-basiert) -- das
+bestehende Badge bleibt unverändert, es kommt nur eine stärkere
+Umrandung hinzu. **Bewusste Grenze:** `MessageList.tsx`-Zeilen nutzen den
+schlankeren `Message`-Typ (kein `isNewSender`-Feld, das existiert nur auf
+`MessageDetail`) -- die verstärkte Darstellung ist deshalb nur in der
+Detailansicht möglich, nicht schon in der Ordner-Listenzeile. Das wäre
+eine Erweiterung des `Message`-Contracts und damit außerhalb dieses
+Web-only-Auftrags.
+
+**Punkt 2 -- Kontakt-Autovervollständigung:** neue `api.listContacts()`
+(`GET /contacts`) plus natives HTML `<datalist id="known-contacts">` in
+`ComposeModal.tsx`, per `list="known-contacts"` an die An-/CC-/BCC-Felder
+gehängt -- bewusst kein eigenes JS-Dropdown, der Browser übernimmt
+Filterung/Rendering der Vorschläge selbst.
+
+**Punkt 4 -- Threaded Ansicht (gruppierte Liste):** `MessageList.tsx`
+gruppiert Nachrichten jetzt clientseitig über `inReplyToMessageId`-Ketten
+-- aber **nur innerhalb der aktuell geladenen Liste** (ein Ordner lädt
+weiterhin nur seine eigenen Nachrichten auf einen Schlag, siehe
+"Annahmen/offene Punkte" oben; ein Elternteil in einem anderen Ordner
+wird nicht aufgelöst). Pro Gruppe ist nur die neueste Nachricht als
+sichtbare Zeile zu sehen, mit einem "+N ältere"/"Ältere
+ausblenden"-Klapp-Link darunter; Gruppen mit genau einer Nachricht sehen
+optisch unverändert aus (kein Klapp-Link, keine Regression gegenüber
+vorher).
+
+**Punkt-3-Nachtrag (Entwurf-Autosave):** kein eigener Backend-Punkt aus
+der Fünf-Komfort-Liste, aber Teil desselben WEB_INBOX.md-Eintrags --
+`ComposeModal.tsx` speichert jetzt automatisch, 3 Sekunden nach der
+letzten Eingabe (feste, nicht konfigurierbare Debounce-Zeit, bewusst kurz
+gewählt für schnelles Feedback ohne bei jedem Tastendruck zu speichern),
+nur bei "Neue Nachricht"/"Weiterleiten" (nicht bei "Antworten") und nur,
+wenn wirklich Inhalt (Empfänger, Betreff oder Text) vorhanden ist. Erster
+Speicherversuch ruft `api.createDraft(...)`, jeder weitere
+`api.updateDraft(id, ...)` mit derselben Draft-Id (in einem `useRef`
+gehalten, nicht `useState` -- der Wert muss im debounced Effekt lesbar
+UND schreibbar sein, ohne den Effekt selbst erneut auszulösen; eine
+echte `react-hooks(exhaustive-deps)`-Warnung von `oxlint` hat auf dieses
+Muster hingewiesen). Die entstandene Draft-Id wird beim Senden als
+`draftId` an `api.sendMessage(...)` durchgereicht, sodass das Backend den
+Entwurf beim erfolgreichen Versand selbst löscht. Schließt/verwirft der
+Nutzer den Compose-Screen stattdessen, bleibt der zuletzt gespeicherte
+Entwurf unangetastet stehen (kein Lösch-Aufruf beim Schließen). Ein
+kleiner Status-Hinweis ("Entwurf gespeichert") erscheint neben dem
+bestehenden KI-Quelle-Hinweis in der Aktionsleiste.
+
+**Echter Fund im Mock-Server:** `PUT /settings` in
+`mock-server/server.mjs` hat `userSettings` bisher komplett ersetzt statt
+zu mergen -- ein Update mit nur `strictUnknownSenders` im Body hätte
+`accentTheme` stillschweigend auf den Default zurückgesetzt. Behoben,
+Felder werden jetzt einzeln gemergt (gleiches Prinzip wie bei den
+bestehenden Settings-Feldern).
+
+**Mock-Server:** `userSettings` um `strictUnknownSenders` (Default
+`true`) ergänzt; neuer `GET /contacts`-Handler (dedupliziert/sortiert aus
+den vorhandenen Nachrichtenabsendern); `data.mjs` bekommt eine zweite
+Notariat-Weber-Nachricht mit `inReplyToMessageId` auf die bestehende, um
+eine echte, testbare Zwei-Nachrichten-Kette im "Eingang"-Ordner zu haben.
+
+**Tests:** `tsc -b`/`vite build`/`oxlint` grün (keine neuen Warnungen
+über die bestehende Baseline hinaus). Per Browser-Automation gegen den
+Mock-Server durchgeklickt: Toggle "Unbekannte Absender streng behandeln"
+an/aus bestätigt sichtbaren Unterschied am Nachrichten-Header der
+Notariat-Weber-Testnachricht (Badge bleibt in beiden Zuständen, Rahmen/
+Hintergrund nur bei "an"); Eintippen von "notar" im An-Feld bestätigt
+über die `<datalist>`-Optionen im DOM (18 Einträge aus `GET /contacts`),
+dass `notar.weber@notariat-weber.de` korrekt vorgeschlagen wird; Tippen
+von Empfänger/Betreff/Text im Compose-Screen, 3 Sekunden warten,
+bestätigt sowohl den "Entwurf gespeichert"-Hinweis als auch direkt per
+`GET /drafts` gegen den Mock-Server, dass der Entwurf mit den korrekten
+Feldern serverseitig existiert; "Eingang" zeigt die Notariat-Weber-Kette
+korrekt als eine Zeile + "+1 ältere", Aufklappen zeigt die ältere
+Nachricht als Unterzeile, beide Zeilen öffnen die richtige Nachricht in
+der Detailansicht. Konsole ohne Fehler.
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge

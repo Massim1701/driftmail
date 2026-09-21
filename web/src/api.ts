@@ -314,6 +314,11 @@ export const api = {
   // backend/README.md "Einstellungsbereich".
   getSettings: () => request<UserSettings>("/settings"),
 
-  updateSettings: (data: { accentTheme: AccentTheme }) =>
+  updateSettings: (data: { accentTheme?: AccentTheme; strictUnknownSenders?: boolean }) =>
     request<UserSettings>("/settings", { method: "PUT", body: JSON.stringify(data) }),
+
+  // GET /contacts (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 2
+  // "Kontakt-Autovervollstaendigung") -- bekannte Adressen fuer An/CC/BCC-
+  // Vorschlaege im Compose-Screen, dedupliziert + sortiert vom Backend.
+  listContacts: () => request<string[]>("/contacts"),
 };

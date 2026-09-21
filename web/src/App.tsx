@@ -72,6 +72,13 @@ export default function App() {
   // MessageDetailPane/SecuritySignalBadges) -- als Set fuer O(1)-Lookup.
   const [trustedSenderAddresses, setTrustedSenderAddresses] = useState<Set<string>>(new Set());
 
+  // GET/PUT /settings (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"
+  // Punkt 1, "Unbekannte Absender streng behandeln") -- lebt hier (nicht nur
+  // in SettingsModal), weil MessageDetailPane/MessageList den Wert für die
+  // Badge-Darstellung brauchen. Default true (Server-Default), bis GET
+  // /settings zurückkommt.
+  const [strictUnknownSenders, setStrictUnknownSenders] = useState(true);
+
   const [error, setError] = useState<string | null>(null);
 
   // Compose (WEB_INBOX.md 21.09. "BUG - Massimo beim echten Live-Test
@@ -260,14 +267,35 @@ export default function App() {
   // Akzentfarbe einmal nach Login laden und anwenden (applyAccentTheme
   // setzt --color-accent inline auf <html>, siehe accentThemes.ts). Kein
   // harter Fehler bei 401/Netzwerkfehler -- Default-Teal aus tokens.css
-  // bleibt einfach stehen.
+  // bleibt einfach stehen. [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt
+  // 1: derselbe GET /settings-Aufruf liefert jetzt auch strictUnknownSenders
+  // mit -- kein zweiter Request nötig.
   useEffect(() => {
     if (!token) return;
     api
       .getSettings()
-      .then((s) => applyAccentTheme(s.accentTheme))
+      .then((s) => {
+        applyAccentTheme(s.accentTheme);
+        setStrictUnknownSenders(s.strictUnknownSenders);
+      })
       .catch(() => {});
   }, [token]);
+
+  // [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 1: gleiches
+  // optimistisch-mit-Rollback-Prinzip wie appLock.setEnabled (useAppLock.ts)
+  // -- SettingsModal.tsx ruft das über die onStrictUnknownSendersChange-Prop
+  // auf, kein zweiter Aufrufpfad.
+  async function handleStrictUnknownSendersChange(enabled: boolean): Promise<boolean> {
+    const previous = strictUnknownSenders;
+    setStrictUnknownSenders(enabled);
+    try {
+      await api.updateSettings({ strictUnknownSenders: enabled });
+      return true;
+    } catch {
+      setStrictUnknownSenders(previous);
+      return false;
+    }
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -572,6 +600,7 @@ export default function App() {
           papierkorbFolderId={papierkorbFolder?.id ?? null}
           spamFolderId={spamFolder?.id ?? null}
           trustedSenderAddresses={trustedSenderAddresses}
+          strictUnknownSenders={strictUnknownSenders}
           onTrustSender={handleTrustSender}
           onQuarantined={handleQuarantined}
           onMoved={handleMoved}
@@ -603,6 +632,8 @@ export default function App() {
           appLockSupported={appLock.supported}
           appLockEnabled={appLock.enabled}
           onAppLockChange={appLock.setEnabled}
+          strictUnknownSenders={strictUnknownSenders}
+          onStrictUnknownSendersChange={handleStrictUnknownSendersChange}
           onOpenAiSettings={() => setAiSettingsOpen(true)}
           onClose={() => setSettingsOpen(false)}
         />
