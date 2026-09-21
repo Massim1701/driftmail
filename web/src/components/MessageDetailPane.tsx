@@ -444,6 +444,38 @@ export function MessageDetailPane({
       <section className="detail-body">
         {message.bodyText === null ? (
           <p className="detail-body-empty">Kein Inhalt mehr verfügbar.</p>
+        ) : message.bodyHtml !== null ? (
+          <>
+            {message.links.length > 0 && (
+              <p className="detail-links-checked">{message.links.length} Link(s) geprüft</p>
+            )}
+            {/*
+              [2026-09-22] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies"
+              (WEB_INBOX.md, nicht verhandelbare Sicherheitsanforderung):
+              Absender-HTML wird NIE per dangerouslySetInnerHTML in den
+              normalen DOM injiziert, sondern ausschliesslich in einem
+              sandboxed <iframe> via srcdoc angezeigt. sandbox erlaubt
+              bewusst NUR "allow-popups" (damit die im HTML bereits auf
+              target="_blank" gesetzten Links tatsächlich ein neues Tab
+              öffnen können) + "allow-popups-to-escape-sandbox" (das neu
+              geöffnete Tab ist dadurch selbst NICHT sandboxed). Explizit
+              KEIN allow-scripts, KEIN allow-same-origin -- das serverseitig
+              bereits sanitisierte bodyHtml (kein <script>, keine
+              Event-Handler-Attribute, siehe backend/README.md) läuft damit
+              in einem opaken, skriptlosen, cross-origin Kontext.
+              Auto-Sizing-Einschränkung: weil kein allow-same-origin gesetzt
+              ist, kann diese Seite iframe.contentWindow NICHT lesen (wirft/
+              liefert nichts Nutzbares) -- daher feste max-height mit
+              eigenem Scrollen im iframe statt dynamischer Höhenberechnung,
+              siehe MessageDetailPane.css .detail-body-iframe.
+            */}
+            <iframe
+              className="detail-body-iframe"
+              sandbox="allow-popups allow-popups-to-escape-sandbox"
+              srcDoc={message.bodyHtml}
+              title="Nachrichteninhalt (HTML)"
+            />
+          </>
         ) : (
           message.bodyText.split("\n").map((line, i) => <p key={i}>{line || " "}</p>)
         )}

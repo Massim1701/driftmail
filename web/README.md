@@ -1045,6 +1045,87 @@ Session. Einzige Ausnahme: der `window.confirm()`-Dialog bei Punkt 3 kann
 aus Sicherheitsgruenden nicht per Browser-Automation ausgeloest werden
 (siehe dort).
 
+## HTML-Rendering des Mail-Bodies (Sandbox-iframe) — [2026-09-22] Nachtrag
+
+(WEB_INBOX.md, "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies", Web-Teil
+-- Backend-Grundlage war bereits fertig, siehe backend/README.md gleicher
+Abschnitt, Commit 6236f36. Dritter/letzter Teil dieses Auftrags neben
+iOS, siehe dortiger Stand in SYNC.md.)
+
+`MessageDetail` hat jetzt `bodyHtml: string | null` und
+`links: MessageLink[]` (`types.ts`), gespiegelt aus `contracts/api-spec.yaml`.
+Beides kommt vom Backend bereits fertig sanitisiert/umgeschrieben an (kein
+`<script>`/`<style>`/`<iframe>`/`<form>`, keine Event-Handler-Attribute,
+Remote-`<img src>` bereits entfernt bei `blockRemoteImages=true`, jeder
+`http(s)`-Link bereits auf `/link-check` umgeschrieben inkl.
+`target="_blank" rel="noopener noreferrer nofollow"`) -- der Web-Client
+sanitisiert hier absichtlich NICHTS nochmal selbst, sondern zeigt nur an.
+
+**Sicherheitsumsetzung (WEB_INBOX.md, nicht verhandelbare Anforderung):**
+`MessageDetailPane.tsx` rendert `bodyHtml` ausschliesslich in einem
+sandboxed `<iframe sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={...}>`
+-- explizit OHNE `allow-scripts` und OHNE `allow-same-origin`. Kein
+`dangerouslySetInnerHTML` auf einem normalen Element, Absender-HTML landet
+nie im normalen DOM/normalen React-Baum. `allow-popups` ist noetig, damit
+die bereits vom Backend gesetzten `target="_blank"`-Links tatsaechlich ein
+neues Tab oeffnen koennen; `allow-popups-to-escape-sandbox` sorgt dafuer,
+dass dieses neue Tab selbst NICHT sandboxed ist (sonst waere ein Klick auf
+einen Link im Prinzip funktionslos). Ist `bodyHtml === null` (reine
+Text-Mail ODER Vertraulicher-Modus-Ablauf), bleibt das bisherige
+`bodyText.split("\n")`-Rendering unveraendert.
+
+**Bekannte, akzeptierte Einschraenkung -- kein Auto-Sizing:** weil der
+iframe kein `allow-same-origin` hat, liegt sein Inhalt in einem opaken
+Cross-Origin-Kontext -- `iframe.contentWindow.document.body.scrollHeight`
+ist von der Elternseite aus nicht lesbar (liefert nichts Brauchbares/wirft),
+und da Skripte im iframe deaktiviert sind, kann auch kein `postMessage` aus
+dem Inneren kommen, um die Hoehe zu melden. Statt dynamischer Hoehen-
+messung hat der iframe eine feste `max-height: 60vh` mit nativem Scrollen
+darin (`MessageDetailPane.css` `.detail-body-iframe`) -- bewusste,
+dokumentierte Grenze, kein Bug.
+
+**Bewusst NICHT Teil dieses Schritts:** ein Pro-Mail-"Bilder trotzdem
+laden"-Button/genereller Schalter fuer bereits blockierte Remote-Bilder --
+explizit ausserhalb des Umfangs laut Auftrag, `data-blocked-src` wird
+aktuell nur informativ mitgeliefert, ohne eigene UI-Aktion darauf. Ein
+kleiner, optionaler "N Link(s) geprueft"-Hinweis oberhalb des iframes wird
+angezeigt, wenn `links.length > 0` -- keine weitergehende Link-Liste/
+-Detailansicht (war laut Auftrag nicht verpflichtend).
+
+**Styling:** der iframe bekommt bewusst einen hellen/weissen Hintergrund
+(`background: #fff; color-scheme: light;`) statt in den Dark Mode des
+restlichen Clients gezwungen zu werden -- realistisch, da die meisten
+echten Mail-Clients Absender-HTML nicht dark-moden (eigenes CSS des
+Absenders waere sonst oft unleserlich, z.B. dunkler Text auf dunklem
+Grund).
+
+**Mock-Server-Ergaenzung** (`mock-server/data.mjs`): `messageDetail()`
+liefert jetzt immer `bodyHtml`/`links` (null/[] als Default, damit die neu
+erforderlichen `types.ts`-Felder nie `undefined` sind), mit derselben
+Vertraulicher-Modus-Bedingung wie `bodyText`. Die Nachricht "Techblog
+Weekly" (Sonstiges-Ordner) hat jetzt echtes `bodyHtml` als Testfixture --
+angelehnt an Fixture 11 in `backend/src/mail/fixtureAdapter.ts`, aber
+bereits im POST-Sanitisierungs-Zustand geschrieben (so wie das echte
+Backend es ausliefern wuerde): ein normaler, funktionierender Link
+(bereits auf `/link-check` umgeschrieben) plus ein Tracking-Pixel-`<img>`
+ohne `src` (nur `data-blocked-src`, alt-Text "Bild blockiert
+(Tracking-Schutz)"). Der Mock-Server implementiert `/link-check` selbst
+nicht (reine Backend-Zustaendigkeit) -- fuer das Sandbox-Rendering
+irrelevant, das ist unabhaengig davon vollstaendig testbar.
+
+**Tests:** `tsc -b`/`vite build`/`oxlint` gruen, exakt die bestehende
+6-Warnungen-Baseline (keine neuen). Per echter Browser-Automation gegen
+den Mock-Server verifiziert: die Techblog-Weekly-Nachricht rendert ihr
+`bodyHtml` sichtbar im iframe (Link + Artikeltext), das blockierte
+Tracking-Pixel zeigt nur das native "kaputtes Bild"-Icon des Browsers ohne
+jeden Netzwerk-Request an die Tracking-Domain (per `read_network_requests`
+verifiziert -- kein Treffer fuer "track"), der Artikel-Link ist als
+klickbarer Link mit korrektem `target="_blank"` sichtbar, "1 Link(s)
+geprueft" wird angezeigt, und die Browser-Konsole blieb waehrend der
+gesamten Session fehlerfrei. Eine reine Text-Mail (Notariat Weber) wurde
+danach zum Vergleich geoeffnet und zeigt weiterhin unveraendert das alte
+`bodyText`-Rendering (keine Regression).
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge

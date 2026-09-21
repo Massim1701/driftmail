@@ -173,11 +173,41 @@ export interface SecurityResult {
   confidenceScore: number;
 }
 
+// [2026-09-22] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies"
+// (WEB_INBOX.md, contracts/api-spec.yaml MessageLink): echte <a href>-Links,
+// extrahiert aus MessageDetail.bodyHtml beim Sync.
+export interface MessageLink {
+  id: string;
+  displayText: string | null;
+  actualUrl: string;
+  // false = klassischer Phishing-Indikator (Anzeigetext behauptet eine
+  // Domain, das tatsaechliche href-Ziel zeigt auf eine andere).
+  domainMatchesDisplay: boolean;
+  // Immer false im Backend -- kein externer Blocklist-Abgleich angebunden.
+  isKnownMalicious: boolean;
+}
+
 export interface MessageDetail extends Message {
   // [2026-09-21] Vertraulicher Modus: kann null sein, wenn confidentialUntil
   // in der Vergangenheit liegt -- der Text wurde dann serverseitig geloescht.
   bodyText: string | null;
+  // [2026-09-22] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": bereits
+  // serverseitig SANITISIERT (kein <script>/<style>/<iframe>/<form>, keine
+  // Event-Handler-Attribute -- feste Allowlist, siehe backend/README.md).
+  // Jeder http(s)-Link ist bereits auf GET /link-check umgeschrieben, jedes
+  // <img src> zu einem Remote-Bild ist bereits entfernt, wenn
+  // PrivacySettings.blockRemoteImages aktiv ist (Default). null bei reinen
+  // Text-Mails oder wenn der Vertrauliche-Modus-Ablauf den Inhalt bereits
+  // geloescht hat (gleiche Bedingung wie bodyText oben). MUSS ausschliesslich
+  // in einem sandboxed <iframe sandbox="..."> (ohne allow-scripts/
+  // allow-same-origin) via srcdoc gerendert werden, NIE per
+  // dangerouslySetInnerHTML in den normalen DOM (siehe MessageDetailPane.tsx).
+  bodyHtml: string | null;
   security: SecurityResult;
+  // [2026-09-22] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": echte
+  // <a href>-Links aus bodyHtml, siehe MessageLink oben. Leeres Array bei
+  // reinen Text-Mails.
+  links: MessageLink[];
   // Automatische Abmeldung bei Spam (WEB_INBOX.md 09.09.): steuert, ob der
   // "Abmelden"-Button für POST /messages/{id}/unsubscribe angezeigt wird --
   // unabhängig von classification (siehe backend/README.md).

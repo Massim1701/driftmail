@@ -322,6 +322,33 @@ export const messages = [
     security: securityUnclear(),
     bodyText:
       "Diese Woche: neue Browser-APIs, ein Update zu WASM-GC und mehr. Viel Spaß beim Lesen!",
+    // [2026-09-22] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies"
+    // (WEB_INBOX.md, Web-Teil): einzige Mock-Nachricht mit echtem bodyHtml,
+    // damit die Sandbox-iframe-Anzeige (MessageDetailPane.tsx) end-to-end
+    // gegen den Mock-Server testbar ist. Steht bewusst schon so hier, wie
+    // das ECHTE Backend es nach der Sanitisierung ausliefern wuerde (siehe
+    // backend/README.md "HTML-Rendering des Mail-Bodies" + Fixture 11 in
+    // backend/src/mail/fixtureAdapter.ts als Vorbild): der Tracking-Pixel
+    // hat schon KEIN src mehr (nur noch data-blocked-src, so als waere
+    // PrivacySettings.blockRemoteImages=true), und der normale Artikel-Link
+    // ist schon auf einen /link-check-Endpunkt umgeschrieben inkl.
+    // target="_blank" rel="noopener noreferrer nofollow" -- der Mock-Server
+    // selbst implementiert /link-check NICHT (reine Backend-Zustaendigkeit,
+    // siehe backend/README.md), das Rendering/die Sandbox-Eigenschaften
+    // sind hier aber unabhaengig davon vollstaendig testbar.
+    bodyHtml:
+      "<p>Diese Woche: neue Browser-APIs, ein Update zu WASM-GC und mehr. Viel Spaß beim Lesen!</p>" +
+      '<p><a href="http://localhost:4000/link-check?url=https%3A%2F%2Ftechblog.io%2Fweekly%2F42" target="_blank" rel="noopener noreferrer nofollow">Zum vollständigen Artikel</a></p>' +
+      '<img alt="Bild blockiert (Tracking-Schutz)" data-blocked-src="https://track.techblog.io/pixel.gif?x=42" width="1" height="1">',
+    links: [
+      {
+        id: "l1000000-0000-0000-0000-000000000001",
+        displayText: "Zum vollständigen Artikel",
+        actualUrl: "https://techblog.io/weekly/42",
+        domainMatchesDisplay: true,
+        isKnownMalicious: false,
+      },
+    ],
   },
   {
     id: "b2000000-0000-0000-0000-000000000002",
@@ -592,6 +619,13 @@ export function messageDetail(msg, opts = {}) {
   return {
     ...messageSummary(msg, opts),
     bodyText: confidentialExpired ? null : msg.bodyText,
+    // [2026-09-22] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": immer
+    // vorhanden (null/[] bei reinen Text-Mails), damit types.ts' jetzt
+    // erforderliche Felder bodyHtml/links nie undefined sind, auch fuer
+    // Nachrichten ohne eigenes HTML. Gleiche Vertraulicher-Modus-Bedingung
+    // wie bodyText oben (siehe backend/README.md).
+    bodyHtml: confidentialExpired ? null : (msg.bodyHtml ?? null),
+    links: msg.links ?? [],
     security: msg.security,
     canUnsubscribe: msg.hasListUnsubscribe === true,
     isNewSender: msg.isNewSender === true,
