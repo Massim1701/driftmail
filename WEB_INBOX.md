@@ -938,3 +938,25 @@ Mails, die zum selben Gespraech gehoeren (ueber in_reply_to_message_id-Kette, wi
 Zusaetzlich zur bestehenden automatischen Spam-Abmeldung: ein sichtbarer "Abmelden"-Button auf JEDER Mail, die einen List-Unsubscribe-Header hat (RFC-8058), unabhaengig von der Spam-Klassifikation -- z.B. auch fuer legitime Newsletter, die der User einfach nicht mehr will. Nutzt denselben bestehenden Unsubscribe-Mechanismus, nur als manuell auffindbare UI-Aktion statt nur automatisch bei erkanntem Spam.
 
 Kein Contract-Bruch bei 1/2/5 (additive UI/Ableitung aus bestehenden Daten). Bei 3/4 bitte kurz Umfang/Grenzen in SYNC.md dokumentieren. Bitte nach dem aktuell laufenden Testen und dem Einstellungsbereich-Auftrag einordnen, kein Blocker.
+
+
+[2026-09-21] [offen] [NEUER AUFTRAG - Abwesenheitsassistent] [contracts + Track A + Track C/F] — Massimo: Abwesenheitsmelder einbauen, Vorbild Gmail/Outlook, aber mit einem echten Sicherheitsvorteil, den andere Clients nicht haben.
+
+**Standard-Umfang (wie Gmail "Vacation Responder"/Outlook "Automatische Antworten"):**
+- Zeitraum: Start-Datum Pflicht, End-Datum optional (automatisches Abschalten).
+- Betreff + Nachrichtentext, freier Text.
+- Bestehende User-Signatur (signatures-Tabelle) automatisch anhaengen.
+- Pro Absender maximal eine Antwort alle X Tage (Default 4, wie Gmail) -- verhindert Antwort-Schleifen bei wiederholten Mails derselben Person.
+- Keine Antwort an Mailinglisten (List-Unsubscribe-Header vorhanden = vermutlich Newsletter/Liste, nicht persoenliche Mail).
+- Banner/Hinweis in der UI waehrend aktiv, mit direktem "Jetzt beenden"-Schnellzugriff.
+
+**Sicherheits-Verbesserung ueber den Standard hinaus (Massimos Vorschlag):**
+KEINE automatische Antwort an Absender, die als spam/phishing/advance_fee_scam klassifiziert wurden ODER bereits in Quarantaene liegen -- verhindert, dass Betrueger per automatischer Abwesenheitsantwort erfahren, dass der User gerade nicht erreichbar ist (bekanntes Einfallstor fuer Social-Engineering-Trickbetrug waehrend der Abwesenheit). Andere Mail-Clients haben diese Einschraenkung nicht.
+
+**Technischer Ansatz:**
+- Neue Tabelle oder Erweiterung der bestehenden user_ai_preference/Settings-Struktur: absence_responder (user_id, active, start_date, end_date, subject, body, last_sent_at pro Absender -- z.B. eigene kleine Tabelle absence_responder_log fuer die Pro-Absender-Rate-Begrenzung).
+- Bestehende Scheduler-Infrastruktur (contracts-logic/src/scheduler.ts, aktuell fuer Reminder) als Vorbild/evtl. wiederverwendbar fuer die Start/End-Datum-Aktivierung.
+- Beim Mail-Sync: wenn absence_responder aktiv UND Mail nicht spam/phishing/scam/quarantaene UND kein Mailinglisten-Header UND letzte Antwort an diesen Absender laenger als X Tage her -> automatische Antwort ueber den bestehenden Sende-Mechanismus ausloesen.
+- Einstellungsbildschirm (Track C/F, gehoert in den neuen Einstellungsbereich-Auftrag von eben): Ein/Aus-Schalter, Datumsfelder, Betreff/Text-Eingabe.
+
+Kein Contract-Bruch (additive neue Tabelle/Erweiterung). Bitte nach dem aktuellen Testen und den bereits laufenden Auftraegen (Einstellungsbereich, 5 Komfort-Features) einordnen, kein Blocker.
