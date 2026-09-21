@@ -1095,3 +1095,16 @@ Cmd/Ctrl+K: echter globaler `keydown`-Listener in `App.tsx` fokussiert das beste
 **Tests:** `xcodebuild -scheme DriftmailApp -destination 'platform=iOS Simulator,name=iPhone 17' build` → BUILD SUCCEEDED. Uninstall/Install/Launch, `log show` auf Crash/Fatal geprueft -- keine Treffer. Einmalig temporaer `AppEnvironment.init()` auf immer-Mock+authenticated umgestellt (Onboarding-Gate umgangen), um zu bestaetigen, dass die App darueber hinaus startet -- danach sofort zurueckgesetzt (siehe `git diff` vor dem Commit). Kein XCUITest-Target, daher keine automatisierten Taps durch die neuen Screens -- Details siehe ios/README.md.
 
 **Kein Blocker.**
+
+
+[2026-09-21] [terminal] [F] — Web-UI fuer dieselben 9 Features aus WEB_INBOX.md 21.09. "DREI WEITERE FEATURES - Gmail-Recherche" + "NEUE AUFTRAEGE - 5 Wettbewerbs-Luecken" (Backend fertig, Commits `1a82351`/`f189450`), Commit `5d9bbe0` (Code + README-Nachtrag, Mock-Server-Routen fuer alle neun Punkte inklusive). Details je Feature siehe web/README.md "Nachtrag: Neun neue Features" -- hier nur die wichtigsten Abweichungen zu Track C/iOS:
+
+**Anders als iOS:** Punkt 3 (Vertraulicher Modus) hat auf Web den automatischen Vorschlag TATSAECHLICH gebaut (iOS hat ihn bewusst ausgelassen, siehe deren Eintrag oben) -- `POST /messages/draft/phishing-check` wird 1,5s nach Tippstopp im Compose-Screen aufgerufen, Treffer zeigen eine Hinweisleiste mit direktem "Vertraulich senden"-Button. Punkt 6 (Undo Send) ist auf Web bewusst OHNE eigene Undo-Banner-Leiste/App.tsx-State umgesetzt: der Compose-Dialog bleibt fuer die Countdown-Dauer (8s) einfach geoeffnet und eingefroren (`<fieldset disabled>`), das ist einfacher als eine zweite Kopie des Formularzustands durch die App-Komponente zu schleusen und der Text geht dabei garantiert nie verloren.
+
+**Bewusste Grenze (Punkt 8, Schedule Send):** der Mock-Server fuehrt geplante Entwuerfe nicht automatisch aus, wie bei iOS auch (in einem reinen Request/Response-Mock ohnehin nicht sinnvoll abbildbar) -- das Faelligwerden ist Aufgabe des echten Backends.
+
+**Nicht per Browser-Automation testbar:** Punkt 3 (Vergessener-Anhang-Erkennung) nutzt `window.confirm()` fuer den Warnhinweis -- native Dialoge duerfen von den Browser-Automatisierungs-Tools aus Sicherheitsgruenden nicht ausgeloest werden. Per Code-Review verifiziert statt per Klick-Test.
+
+**Tests:** `tsc -b`/`vite build`/`oxlint` gruen (bestehende 6-Warnungen-Baseline, keine neuen). Alle neun Punkte per echter Browser-Automation (`mcp__claude-in-chrome__*`) gegen den lokalen Mock-Server end-to-end durchgeklickt: Nudge-Hinweis in der Liste sichtbar, Vertraulicher Modus komplett (Auto-Vorschlag -> aktivieren -> senden -> Banner vor/nach Ablauf), Malware-Scan-Anzeige (malicious/clean/blocked_type je an einer Fixture), Privatsphaere-Toggles + ehrlicher Hinweistext, Undo Send (Countdown -> Rueckgaengig -> Inhalt erhalten -> erneut senden -> landet in Gesendet), Datenleck-Warnung -> "Verstanden" -> verschwindet, Snooze setzen -> Nachricht verschwindet aus der Liste (Zaehler sinkt), Snooze aufheben -> wieder da. Konsole waehrend der gesamten Session ohne Fehler. Schedule-Send-Validierung (Datum muss in der Zukunft liegen) zusaetzlich per `curl` gegen den Mock-Server verifiziert.
+
+**Kein Blocker.**
