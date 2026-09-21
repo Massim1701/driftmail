@@ -1158,6 +1158,69 @@ echte Test-Mailbox, kein Auth-Bypass versucht. **Offener Punkt für eine
 spätere Session:** einmal mit echter Test-Mailbox live durchklicken
 (Toggle, Speichern, Banner, "Jetzt beenden").
 
+## [2026-09-21] Nachtrag: Design-Richtung (Superhuman-Stil)
+
+WEB_INBOX.md 21.09. "DESIGN-RICHTUNG - von Massimo bestaetigt" -- naechster
+Punkt in Massimos festgelegter Reihenfolge (nach den Grundfunktions-
+Luecken, vor den 5 Wettbewerbs-Features). Kein Contract-Change, reine
+visuelle Ueberpruefung/Anpassung gegen die 5 bestaetigten Struktur-
+Prinzipien.
+
+**Ausgangslage:** die App war bereits sehr nah an der Zielrichtung (schlanke
+`.plain`-Listen ohne Karten/Schatten, kompakte Zeilen in `MessageRowView`,
+sichtbarer Compose-Button, keine `.shadow()`-Aufrufe irgendwo im Code) --
+das ist ueber die Session organisch so entstanden, kein grosser Umbau
+noetig. Systematisch gegen alle 5 Punkte geprueft:
+
+1. **Schmale, reduzierte Ordnerliste:** `FolderListView` nutzt bereits
+   `.listStyle(.plain)` mit kompakten Zeilen -- kein Aenderungsbedarf.
+2. **Kompakte Listenzeilen:** `MessageRowView` hatte bereits Absender/
+   Betreff/Zeitstempel-rechtsbuendig in einer einzeiligen, unaufdringlichen
+   Zeile ohne Karten-Optik. **Bewusste Grenze:** "Absender fett wenn
+   ungelesen" laesst sich NICHT umsetzen -- es gibt weder im Contract
+   (`ApiMessage`) noch irgendwo im iOS-Code ein Gelesen/Ungelesen-Konzept
+   fuer Nachrichten (Volltextsuche: keine Treffer fuer `isRead`/`unread`
+   ausserhalb eines Kommentars). Das waere ein echter Contract-Change,
+   der Auftrag verlangt ausdruecklich "Kein Contract-Change" -- absichtlich
+   nicht erfunden, hier als offene Luecke dokumentiert statt stillschweigend
+   uebergangen.
+3. **Genau EIN Akzent pro Ansicht -- der eigentliche Fund:**
+   `FolderListView.FolderRow` faerbte JEDES Ordner-Icon in der
+   User-Akzentfarbe ein (nur Quarantaene korrekt in `danger`), unabhaengig
+   vom Zustand -- eine 7-fach wiederholte Akzentfarbe in der Liste ist das
+   genaue Gegenteil von "ein Akzent pro Ansicht" und verwaesserte den
+   Kontrast zur echten Quarantaene-Warnung. Behoben: Ordner-Icons sind jetzt
+   neutral (`textSecondary`), nur die Quarantaene behaelt `danger`.
+   Alle uebrigen Akzent-Verwendungen im Code wurden einzeln gegengeprueft
+   (`grep DesignTokens.Color.accent`) und sind bereits korrekt: `.tint()`
+   auf Buttons/Controls, je ein Hero-Icon auf Onboarding-/Lock-Screens (ein
+   Screen, ein Akzent), die "Check Mail"-Zusammenfassungskarte in
+   `MessageDetailView` (eine Karte pro Nachrichtenansicht) und der aktive
+   Konto-Haken im Kontoumschalter -- keine weiteren Aenderungen noetig.
+   Alle bestehenden `danger`/`warning`-Sicherheitshinweise (Anzeigename-
+   Spoofing, IBAN-Wechsel, Quarantaene-Banner etc.) waren immer schon
+   korrekt auf diese beiden Farbrollen beschraenkt, nie auf die
+   User-Akzentfarbe -- unveraendert.
+4. **"Neue Nachricht"-Button:** existiert bereits sichtbar in der
+   Toolbar von `FolderListView` (Stift-Icon) -- kein Aenderungsbedarf.
+5. **Cmd/Ctrl+K-Hinweis:** laut Auftrag "kein Muss fuer den ersten
+   Entwurf" und ein reines Tastatur-/Desktop-Konzept -- fuer iOS/Touch
+   bewusst NICHT uebertragen (kein sinnvolles Aequivalent), Suche existiert
+   bereits ueber die native `.searchable()`-Leiste.
+
+**Geaenderte Datei:** `ios/DriftmailApp/Views/FolderListView.swift`
+(`FolderRow`, eine Zeile).
+
+**Tests:** `xcodebuild -scheme DriftmailApp -destination 'platform=iOS
+Simulator,name=iPhone 17' build` → BUILD SUCCEEDED. Sauberer Uninstall/
+Install/Launch auf einem gebooteten Simulator, `log show` auf Crash/Fatal
+geprueft -- keine Treffer. Screenshot bestaetigt unveraenderten,
+korrekt gerenderten Onboarding-Screen (gleiche bekannte Grenze wie bei
+jedem vorherigen Nachtrag dieser Session: kein Weg am Onboarding-Gate
+vorbei ohne echte Test-Mailbox, die eigentliche Ordner-/Nachrichtenliste
+liess sich deshalb nicht live gegenpruefen, nur durch Code-Review +
+erfolgreichen Build verifiziert).
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine

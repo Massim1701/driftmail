@@ -332,8 +332,14 @@ private struct FolderRow: View {
 
     var body: some View {
         HStack(spacing: DesignTokens.Spacing.md) {
+            // [2026-09-21] "DESIGN-RICHTUNG" (WEB_INBOX.md 21.09.): Ordner-
+            // Icons sind bewusst neutral, nicht durchgehend in der
+            // Akzentfarbe -- sonst verliert sich der eine echte
+            // Sicherheitshinweis (Quarantäne, danger) in siebenfach
+            // wiederholter Akzentfarbe. "Genau EIN Akzent pro Ansicht"
+            // bedeutet hier: kein Akzent auf jeder Zeile.
             Image(systemName: folder.systemImage)
-                .foregroundStyle(folder.usesDangerColor ? DesignTokens.Color.danger : DesignTokens.Color.accent)
+                .foregroundStyle(folder.usesDangerColor ? DesignTokens.Color.danger : DesignTokens.Color.textSecondary)
                 .frame(width: 24)
 
             Text(folder.name)
