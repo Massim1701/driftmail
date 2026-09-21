@@ -685,3 +685,6 @@ Mock-Server (`mock-server/server.mjs`/`data.mjs`): `GET /mail-providers` liefert
 **Verifiziert:** `curl` gegen `OPTIONS`/`GET /v1/mail-providers` mit `Origin: http://localhost:5173` liefert jetzt die richtigen Header; Web-Onboarding zeigt gegen das echte Backend alle Provider (iCloud/GMX/web.de/generisch) statt der Gmail-only-Fallback-Liste (Browser-Screenshot verifiziert). Backend-Smoketest weiterhin gruen.
 
 Massimo kann den web.de-IMAP-Test jetzt fortsetzen (siehe WEB_INBOX.md 19.09., letzter offener Punkt). Kein Blocker mehr.
+
+
+[2026-09-21] [web] [HOECHSTE PRIORITAET - Verweis] — Massimo hat beim ersten echten Live-Test (web.de) drei fundamentale Luecken gefunden, alle in WEB_INBOX.md 21.09. dokumentiert: (1) kein automatischer/manueller Mail-Abruf nach dem initialen Sync, (2) keine echte Mehrfach-Konten-Unterstuetzung in der UI, (3) kein Compose-Button fuer neue Mails (inkl. Absender-Auswahl bei mehreren Konten). Bitte VOR den 5 Wettbewerbs-Features und dem Malware-Scan-Auftrag einordnen -- Details/Umfang stehen vollstaendig in WEB_INBOX.md, hier nur der Verweis, damit es nicht uebersehen wird.
