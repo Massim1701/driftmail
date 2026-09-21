@@ -294,6 +294,11 @@ CREATE TABLE IF NOT EXISTS reminders (
 
 -- ===== Signaturen =====
 
+-- [2026-09-21] "Abwesenheitsassistent"-Auftrag (WEB_INBOX.md 21.09.): diese
+-- Tabelle existierte seit dem allerersten Durchstich im Contract, wurde
+-- aber NIE vom echten Backend implementiert (nur als eigenstaendiges,
+-- nie angebundenes `mail-actions`-Package) -- echte Luecke, hier
+-- nachgezogen, siehe backend/README.md.
 CREATE TABLE IF NOT EXISTS signatures (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     mail_account_id UUID NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
@@ -301,6 +306,33 @@ CREATE TABLE IF NOT EXISTS signatures (
     is_default BOOLEAN NOT NULL DEFAULT false,
     apply_to_new BOOLEAN NOT NULL DEFAULT true,
     apply_to_replies BOOLEAN NOT NULL DEFAULT false
+  );
+
+-- ===== Abwesenheitsassistent =====
+-- (WEB_INBOX.md 21.09. "NEUER AUFTRAG - Abwesenheitsassistent")
+
+-- Genau eine Zeile pro User (analog user_ai_preference) -- kein Eintrag,
+-- solange nie konfiguriert. start_date/subject/body sind NULL erlaubt auf
+-- DB-Ebene ("Pflicht, solange active=true" wird serverseitig bei PUT
+-- /absence-responder durchgesetzt, nicht per Constraint).
+CREATE TABLE IF NOT EXISTS absence_responder (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    active BOOLEAN NOT NULL DEFAULT false,
+    start_date DATE,
+    end_date DATE,
+    subject TEXT,
+    body TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+-- Grundlage fuer "pro Absender maximal eine Antwort alle X Tage" (Default
+-- 4, wie Gmail) -- verhindert Antwort-Schleifen bei wiederholten Mails
+-- derselben Person waehrend der Abwesenheit.
+CREATE TABLE IF NOT EXISTS absence_responder_log (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sender_address TEXT NOT NULL,
+    last_sent_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (user_id, sender_address)
   );
 
 -- ===== KI: Zusammenfassungen & Provider-Konfiguration =====

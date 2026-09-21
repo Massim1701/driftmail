@@ -13,6 +13,7 @@
     "test": "tsx src/smoketest.ts"
   },
   "dependencies": {
+    "@driftmail/mail-actions": "file:../mail-actions",
     "@driftmail/security-classification": "file:../security-classification",
     "express": "^4.19.2",
     "googleapis": "^144.0.0",

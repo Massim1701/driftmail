@@ -5,12 +5,12 @@
 // immer Review/Edit/Send durch den User. Das ist UI-seitig durchzusetzen
 // (nicht Teil dieses Moduls) — hier liefern wir nur den Text.
 
-import type { AiAdapterResult, MailThread } from "./types";
+import type { AiAdapterResult, MailThread } from "./types.js";
 import {
   appendSignature,
   selectSignatureForReply,
   type SignatureRecord,
-} from "./signatures";
+} from "./signatures.js";
 
 /** Letzte Nachricht eines Threads, chronologisch (Array ist aufsteigend sortiert angenommen). */
 function lastMessage(thread: MailThread): MailThread["messages"][number] | null {

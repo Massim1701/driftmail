@@ -1977,6 +1977,116 @@ gegen frisches Postgres.
 wirklich schon ueberall zeigen, nicht nur behaupten). Details siehe
 WEB_INBOX.md-Originaltext fuer die genauen UI-Vorschlaege pro Punkt.
 
+## Signaturen & Abwesenheitsassistent -- [2026-09-21] Nachtrag
+(WEB_INBOX.md 21.09. "NEUER AUFTRAG - Abwesenheitsassistent")
+
+**Vorgefundene Luecke:** `signatures` stand schon laenger als
+`CREATE TABLE` in `contracts/db-schema.sql` und `GET /signatures` schon
+laenger in `api-spec.yaml` -- aber es gab dafuer **keine einzige Zeile
+Backend-Code**. Kein Router, keine `Store`-Methoden, kein `types.ts`.
+Reine Vertrags-Leiche, siehe vorheriger Annahmen-Punkt weiter unten. Fuer
+diesen Auftrag ("Default-Signatur automatisch unter die
+Abwesenheitsantwort haengen") musste das jetzt sowieso nachgezogen werden.
+
+**Wiederverwendung statt Neubau:** die eigentliche Signatur-Auswahl-Logik
+(genau eine Default-Signatur pro Mail-Konto, automatische Neuvergabe beim
+Loeschen der aktuellen Default-Signatur, Anhaengen an Neu-/Antwort-Mails)
+existierte bereits fertig getestet in `mail-actions/src/signatures.ts` --
+einem eigenstaendigen Geschwister-Package (Track E), das aber selbst noch
+nie vom Backend importiert wurde. Statt das nochmal im Backend
+nachzubauen, jetzt echt verdrahtet: `backend/package.json` bekommt
+`"@driftmail/mail-actions": "file:../mail-actions"`.
+
+**Dabei gefundener und behobener Packaging-Fehler in `mail-actions`:**
+`mail-actions/src/types.ts` importierte Typen ueber die Package-Grenze
+hinweg direkt aus `../../contracts/ai-adapter-interface` (`export type
+{...} from ...`). Auch wenn `export type`-Re-Exports zur Laufzeit
+komplett wegfallen (kein JS-Output), berechnet `tsc` mit `declaration:
+true` trotzdem einen gemeinsamen `rootDir` ueber ALLE referenzierten
+Dateien -- inklusive der Datei ausserhalb des Package-Verzeichnisses --
+fuer die `.d.ts`-Generierung. Ergebnis: ein kaputter, verschachtelter
+`dist/`-Baum (`dist/mail-actions/src/...` + `dist/contracts/...`) statt
+des erwarteten flachen `dist/index.js`. Gefixt durch lokales Spiegeln der
+drei betroffenen Typen (`AiSource`, `MailThread`, `AiAdapterResult`)
+direkt in `mail-actions/src/types.ts`, mit Kommentar warum -- exakt die
+Konvention, die `backend/src/ai/types.ts` und
+`security-classification/src/types.ts` schon vorher befolgt hatten (dort
+steht es sogar explizit im Kommentar: "damit dieses Modul als
+eigenstaendiges npm-Package ohne Pfad-Abhaengigkeit ausserhalb seines
+eigenen Verzeichnisses baubar bleibt"). Zusaetzlich musste
+`mail-actions/tsconfig.json` von `module`/`moduleResolution: "ESNext"`/
+`"Bundler"` auf `"NodeNext"`/`"NodeNext"` umgestellt werden (plus
+explizite `.js`-Endungen an allen relativen Imports im Quellcode) --
+sonst behaelt der kompilierte Output endungslose relative Imports, die
+unter echtem Node-ESM zur Laufzeit mit `ERR_MODULE_NOT_FOUND` scheitern
+(vor dem Fix reproduziert, nach dem Fix per `node -e
+"import('./dist/index.js')..."` echt gegengetestet). Nebenbei
+`mail-actions/package.json` um `main`/`types`/`build`-Script ergaenzt --
+das Package hatte vorher gar keinen definierten Einstiegspunkt.
+
+**Echte neue Backend-Teile:**
+- `src/routes/signatures.ts`: echtes `GET`/`POST`/`PATCH`/`DELETE
+  /signatures` (mit `?accountId=`-Filter), Ownership-Pruefung nach
+  demselben Muster wie `requireOwnFolder` in `folders.ts`.
+- `Store`-Interface (`store.ts`/`postgresStore.ts`) bekommt
+  `listSignatures`/`getSignature`/`createSignature`/`updateSignature`/
+  `deleteSignature`, inklusive der Default-Invariante (erste Signatur
+  eines Kontos wird automatisch Default, Loeschen der Default-Signatur
+  befoerdert automatisch eine verbleibende).
+- `src/routes/absenceResponder.ts`: `GET`/`PUT /absence-responder`
+  (neuer Contract-Pfad + `AbsenceResponder`-Schema in `api-spec.yaml`).
+  `PUT` mit `active: true` verlangt `startDate`+`subject`+`body` (400
+  sonst), erlaubt aber partielle Updates (nur uebergebene Felder werden
+  geaendert, Rest bleibt wie zuvor gespeichert).
+- `src/mail/absenceResponder.ts` (`maybeSendAbsenceResponse()`): die
+  eigentliche Ausloese-Entscheidung, aufgerufen aus `mail/sync.ts` direkt
+  nach der Spam/Phishing-Klassifikation jeder neu eingegangenen Mail.
+
+**Sicherheits-Verbesserung ueber Gmail/Outlook hinaus (Massimos Vorschlag,
+explizit im Auftrag genannt):** KEINE automatische Antwort an Absender,
+die als `spam`/`phishing` klassifiziert wurden, und KEINE Antwort, wenn
+die Mail einen `List-Unsubscribe`-Header traegt (Newsletter/Mailingliste
+statt persoenlicher Mail). Verhindert, dass Betrueger per
+Abwesenheitsantwort erfahren, dass der User gerade nicht erreichbar ist --
+ein bekanntes Social-Engineering-Einfallstor. `advance_fee_scam` braucht
+keine eigene Pruefung: diese Mails landen auf dem Auto-Delete-Pfad in
+`mail/sync.ts` und erreichen `maybeSendAbsenceResponse()` strukturell nie
+(`continue` VOR dem Aufruf).
+
+**Pro-Absender-Cooldown:** `absence_responder_log` (`user_id` +
+`sender_address` als Composite-PK, gleiches Muster wie
+`outgoing_send_log`/`hasSentTo()`), Default 4 Tage (konfigurierbar ueber
+`ABSENCE_RESPONDER_COOLDOWN_DAYS`) -- verhindert Antwort-Schleifen bei
+mehreren Mails derselben Person waehrend der Abwesenheit.
+
+**Signatur-Anhang:** falls das Mail-Konto eine Default-Signatur hat, wird
+sie automatisch unter den Abwesenheitstext gehaengt (`appendSignature()`
+aus `@driftmail/mail-actions`) -- kein eigenes Signatur-Feld am
+Abwesenheitsassistenten selbst noetig.
+
+**Tests:** `smoketest.ts` deckt Signatur-CRUD (erste Signatur wird
+automatisch Default, zweite nicht, `PATCH isDefault` entzieht anderen
+Signaturen den Default-Status, `DELETE` der Default-Signatur befoerdert
+automatisch eine verbleibende) sowie den Abwesenheitsassistenten ab:
+`GET`-Default (`active: false`), `PUT active:true` ohne Pflichtfelder
+(400), `PUT` mit vollstaendiger Konfiguration, und ueber einen direkten
+Aufruf von `maybeSendAbsenceResponse()` (bewusst nicht ueber den vollen
+Sync-HTTP-Weg, da das Cooldown-Testen sonst die bestehende
+Fixture-Dedup-Logik umgehen muesste -- gleiches Vorgehen wie beim
+bestehenden `store.hasSentTo()`-Test): normaler Versand, Cooldown
+blockiert Wiederholung, Spam sendet nie, `List-Unsubscribe`-Header sendet
+nie, inaktiv sendet nie. Gruen in-memory + gegen frisches Postgres
+(`signatures`/`absence_responder`/`absence_responder_log` sind komplett
+neue Tabellen ohne bestehende Konsumenten, deshalb reines `CREATE TABLE
+IF NOT EXISTS` statt einer `ALTER TABLE`-Migration -- kein
+Alt-Schema-Fall zu simulieren).
+
+**Uebergabe an Track C/F:** Einstellungsbildschirm noch zu bauen (Ein/Aus-
+Schalter, Start-/End-Datumsfelder, Betreff-/Text-Eingabe, gebunden an
+`GET`/`PUT /absence-responder`) plus ein aktiver Banner mit
+"Jetzt beenden"-Schnellaktion, wie im WEB_INBOX.md-Originaltext
+vorgeschlagen.
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war
@@ -2004,10 +2114,17 @@ WEB_INBOX.md-Originaltext fuer die genauen UI-Vorschlaege pro Punkt.
   Serverstart und on-demand über `POST /internal/sync`
   (`src/routes/internal.ts`, **kein** Contract-Bestandteil, nur
   Betriebs-/Testhilfe für diesen Durchstich).
-- `unsubscribe_actions`, `message_links`, `reminders`, `signatures`,
+- `unsubscribe_actions`, `message_links`, `reminders`, ~~`signatures`~~,
   `ai_provider_config` existieren in `db-schema.sql`, haben aber (noch)
   keine Entsprechung in `api-spec.yaml`. Nicht in diesem Durchstich
-  implementiert — siehe "Offene Fragen" in `SYNC.md`.
+  implementiert — siehe "Offene Fragen" in `SYNC.md`. **Nachgezogen
+  (Terminal 21.09.):** `signatures` — siehe Abschnitt "Signaturen &
+  Abwesenheitsassistent" unten, `api-spec.yaml` hat jetzt echte
+  `GET`/`POST`/`PATCH`/`DELETE /signatures`-Pfade und das Backend liefert
+  sie wirklich aus. `message_links`, `reminders` (Contract-Pfade existieren
+  zwar bereits, siehe `/reminders`, aber ohne Backend-Implementierung) und
+  `ai_provider_config` (ersetzt durch `user_ai_preference`, siehe
+  "BYOK-Cloud-KI" oben) bleiben offen.
 - `security_audit_log` existiert seit dem Auto-Delete-Feature (siehe
   Abschnitt "Auto-Delete: adult/gambling-Spam" oben) teilweise: Write-Pfad
   über `store.logSecurityAudit()` ist da, aber weiterhin **kein**

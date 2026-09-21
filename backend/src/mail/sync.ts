@@ -16,6 +16,7 @@ import { GmailAdapter } from "./gmailAdapter";
 import { ImapAdapter, type ImapCredentials } from "./imapAdapter";
 import { parseInReplyToHeader } from "./inReplyTo";
 import { parseListUnsubscribeHeader, performUnsubscribe } from "./listUnsubscribe";
+import { maybeSendAbsenceResponse } from "./absenceResponder";
 import { store } from "../db/store";
 import type { AiAdapter } from "../ai/types";
 import {
@@ -294,6 +295,15 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         // also nur generic/marketing-Spam, die normal persistiert wird.
         await maybeAutoUnsubscribeFromSpam(mail.rawHeaders, account.userId, message.id, adapter);
       }
+
+      // Abwesenheitsassistent (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+      // Abwesenheitsassistent"): entscheidet selbst anhand von
+      // classification/List-Unsubscribe-Header/Cooldown, ob eine
+      // automatische Antwort rausgeht -- bewusst fuer JEDE Klassifikation
+      // aufgerufen (nicht nur "safe"), die Sicherheits-Ausnahme
+      // (spam/phishing ausschliessen) lebt in der Funktion selbst, siehe
+      // mail/absenceResponder.ts.
+      await maybeSendAbsenceResponse(mail.rawHeaders, mail.fromAddress, security.classification, account, adapter);
 
       // Vertragsdaten best-effort extrahieren (Mock).
       const contractData = await ai.extractContract(mail.bodyText ?? "");

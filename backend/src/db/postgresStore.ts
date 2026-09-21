@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Store } from "./store";
 import type {
+  AbsenceResponderRecord,
   AiPreferenceRecord,
   ContractRecord,
   DraftRecord,
@@ -36,6 +37,7 @@ import type {
   QuarantineRecord,
   SecurityAuditLogRecord,
   SessionRecord,
+  SignatureRecord,
   SystemFolderKey,
   TrustedSenderRecord,
   UnsubscribeActionRecord,
@@ -97,6 +99,29 @@ function rowToMailAccount(r: any): MailAccountRecord {
 
 function rowToTrustedSender(r: any): TrustedSenderRecord {
   return { id: r.id, userId: r.user_id, senderAddress: r.sender_address, addedAt: r.added_at };
+}
+
+function rowToSignature(r: any): SignatureRecord {
+  return {
+    id: r.id,
+    mailAccountId: r.mail_account_id,
+    contentHtml: r.content_html,
+    isDefault: r.is_default,
+    applyToNew: r.apply_to_new,
+    applyToReplies: r.apply_to_replies,
+  };
+}
+
+function rowToAbsenceResponder(r: any): AbsenceResponderRecord {
+  return {
+    userId: r.user_id,
+    active: r.active,
+    startDate: r.start_date,
+    endDate: r.end_date,
+    subject: r.subject,
+    body: r.body,
+    updatedAt: r.updated_at,
+  };
 }
 
 function rowToFolder(r: any): FolderRecord {
@@ -1201,5 +1226,130 @@ export class PostgresStore implements Store {
       [userId, senderAddress],
     );
     return rows.length > 0;
+  }
+
+  // ----- Signaturen -----
+
+  async listSignatures(mailAccountId: string): Promise<SignatureRecord[]> {
+    const { rows } = await this.pool.query("SELECT * FROM signatures WHERE mail_account_id = $1", [mailAccountId]);
+    return rows.map(rowToSignature);
+  }
+
+  async getSignature(id: string): Promise<SignatureRecord | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM signatures WHERE id = $1", [id]);
+    return rows[0] ? rowToSignature(rows[0]) : undefined;
+  }
+
+  async createSignature(input: Omit<SignatureRecord, "id">): Promise<SignatureRecord> {
+    const { rows: existing } = await this.pool.query("SELECT 1 FROM signatures WHERE mail_account_id = $1", [input.mailAccountId]);
+    const isDefault = input.isDefault || existing.length === 0;
+    const { rows } = await this.pool.query(
+      `INSERT INTO signatures (mail_account_id, content_html, is_default, apply_to_new, apply_to_replies)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [input.mailAccountId, input.contentHtml, isDefault, input.applyToNew, input.applyToReplies],
+    );
+    const record = rowToSignature(rows[0]);
+    if (record.isDefault) await this.unsetOtherDefaultSignatures(record.mailAccountId, record.id);
+    return record;
+  }
+
+  async updateSignature(
+    id: string,
+    patch: Partial<Omit<SignatureRecord, "id" | "mailAccountId">>,
+  ): Promise<SignatureRecord | undefined> {
+    const { rows } = await this.pool.query(
+      `UPDATE signatures SET
+         content_html = COALESCE($2, content_html),
+         is_default = COALESCE($3, is_default),
+         apply_to_new = COALESCE($4, apply_to_new),
+         apply_to_replies = COALESCE($5, apply_to_replies)
+       WHERE id = $1
+       RETURNING *`,
+      [id, patch.contentHtml ?? null, patch.isDefault ?? null, patch.applyToNew ?? null, patch.applyToReplies ?? null],
+    );
+    if (!rows[0]) return undefined;
+    const record = rowToSignature(rows[0]);
+    if (patch.isDefault === true) await this.unsetOtherDefaultSignatures(record.mailAccountId, record.id);
+    return record;
+  }
+
+  async deleteSignature(id: string): Promise<boolean> {
+    const { rows } = await this.pool.query("DELETE FROM signatures WHERE id = $1 RETURNING *", [id]);
+    if (!rows[0]) return false;
+    const removed = rowToSignature(rows[0]);
+    if (removed.isDefault) {
+      await this.pool.query(
+        `UPDATE signatures SET is_default = true WHERE id = (
+           SELECT id FROM signatures WHERE mail_account_id = $1 ORDER BY id LIMIT 1
+         )`,
+        [removed.mailAccountId],
+      );
+    }
+    return true;
+  }
+
+  private async unsetOtherDefaultSignatures(mailAccountId: string, keepId: string): Promise<void> {
+    await this.pool.query("UPDATE signatures SET is_default = false WHERE mail_account_id = $1 AND id != $2", [
+      mailAccountId,
+      keepId,
+    ]);
+  }
+
+  // ----- Abwesenheitsassistent -----
+
+  async getAbsenceResponder(userId: string): Promise<AbsenceResponderRecord | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM absence_responder WHERE user_id = $1", [userId]);
+    return rows[0] ? rowToAbsenceResponder(rows[0]) : undefined;
+  }
+
+  async setAbsenceResponder(
+    userId: string,
+    patch: Partial<Pick<AbsenceResponderRecord, "active" | "startDate" | "endDate" | "subject" | "body">>,
+  ): Promise<AbsenceResponderRecord> {
+    const existing = await this.getAbsenceResponder(userId);
+    const merged = {
+      active: patch.active ?? existing?.active ?? false,
+      startDate: patch.startDate !== undefined ? patch.startDate : (existing?.startDate ?? null),
+      endDate: patch.endDate !== undefined ? patch.endDate : (existing?.endDate ?? null),
+      subject: patch.subject !== undefined ? patch.subject : (existing?.subject ?? null),
+      body: patch.body !== undefined ? patch.body : (existing?.body ?? null),
+    };
+    const { rows } = await this.pool.query(
+      `INSERT INTO absence_responder (user_id, active, start_date, end_date, subject, body, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, now())
+       ON CONFLICT (user_id) DO UPDATE SET
+         active = EXCLUDED.active,
+         start_date = EXCLUDED.start_date,
+         end_date = EXCLUDED.end_date,
+         subject = EXCLUDED.subject,
+         body = EXCLUDED.body,
+         updated_at = EXCLUDED.updated_at
+       RETURNING *`,
+      [userId, merged.active, merged.startDate, merged.endDate, merged.subject, merged.body],
+    );
+    return rowToAbsenceResponder(rows[0]);
+  }
+
+  async listActiveAbsenceResponders(): Promise<AbsenceResponderRecord[]> {
+    const { rows } = await this.pool.query("SELECT * FROM absence_responder WHERE active = true");
+    return rows.map(rowToAbsenceResponder);
+  }
+
+  async getAbsenceResponderLastSent(userId: string, senderAddress: string): Promise<string | null> {
+    const { rows } = await this.pool.query(
+      "SELECT last_sent_at FROM absence_responder_log WHERE user_id = $1 AND LOWER(sender_address) = LOWER($2)",
+      [userId, senderAddress],
+    );
+    return rows[0]?.last_sent_at ?? null;
+  }
+
+  async recordAbsenceResponderSent(userId: string, senderAddress: string, sentAt: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO absence_responder_log (user_id, sender_address, last_sent_at)
+       VALUES ($1, LOWER($2), $3)
+       ON CONFLICT (user_id, sender_address) DO UPDATE SET last_sent_at = EXCLUDED.last_sent_at`,
+      [userId, senderAddress, sentAt],
+    );
   }
 }

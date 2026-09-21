@@ -18,6 +18,7 @@
 import { randomUUID } from "node:crypto";
 import { PostgresStore } from "./postgresStore";
 import type {
+  AbsenceResponderRecord,
   AiPreferenceRecord,
   ContractRecord,
   DraftRecord,
@@ -31,6 +32,7 @@ import type {
   QuarantineRecord,
   SecurityAuditLogRecord,
   SessionRecord,
+  SignatureRecord,
   SystemFolderKey,
   TrustedSenderRecord,
   UnsubscribeActionRecord,
@@ -219,6 +221,38 @@ export interface Store {
   /** Case-insensitiver Abgleich (Mail-Adressen sind lokal case-insensitiv
    * üblich) -- genutzt von mail/sync.ts VOR der Auto-Delete-/Ordner-Logik. */
   isTrustedSender(userId: string, senderAddress: string): Promise<boolean>;
+
+  // ----- Signaturen (WEB_INBOX.md 21.09. "Abwesenheitsassistent" --
+  // /signatures war im Contract nie implementiert, siehe types.ts-Kommentar
+  // bei SignatureRecord) -----
+  listSignatures(mailAccountId: string): Promise<SignatureRecord[]>;
+  getSignature(id: string): Promise<SignatureRecord | undefined>;
+  /** Erste Signatur eines Kontos wird automatisch is_default (ein Konto
+   * ohne jede Default-Signatur ist kein sinnvoller Zustand). Wird
+   * is_default=true explizit gesetzt, verlieren alle anderen Signaturen
+   * desselben Kontos ihren Default-Status (Invariante "höchstens ein
+   * Default pro Konto", gleiches Prinzip wie mail-actions/SignatureStore,
+   * hier gegen echte Persistenz nachgebaut). */
+  createSignature(input: Omit<SignatureRecord, "id">): Promise<SignatureRecord>;
+  updateSignature(id: string, patch: Partial<Omit<SignatureRecord, "id" | "mailAccountId">>): Promise<SignatureRecord | undefined>;
+  /** War die gelöschte Signatur Default und es gibt noch andere Signaturen
+   * desselben Kontos, wird die älteste automatisch neuer Default -- sonst
+   * bliebe das Konto ohne jede Default-Signatur zurück. */
+  deleteSignature(id: string): Promise<boolean>;
+
+  // ----- Abwesenheitsassistent (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+  // Abwesenheitsassistent") -----
+  getAbsenceResponder(userId: string): Promise<AbsenceResponderRecord | undefined>;
+  setAbsenceResponder(
+    userId: string,
+    patch: Partial<Pick<AbsenceResponderRecord, "active" | "startDate" | "endDate" | "subject" | "body">>,
+  ): Promise<AbsenceResponderRecord>;
+  /** Fuer die "aktiv"-Liste beim Sync (alle User mit active=true, deren
+   * Zeitraum das aktuelle Datum einschliesst) -- siehe mail/sync.ts. */
+  listActiveAbsenceResponders(): Promise<AbsenceResponderRecord[]>;
+  /** Pro-Absender-Rate-Begrenzung ("max. eine Antwort alle X Tage"). */
+  getAbsenceResponderLastSent(userId: string, senderAddress: string): Promise<string | null>;
+  recordAbsenceResponderSent(userId: string, senderAddress: string, sentAt: string): Promise<void>;
 }
 
 /** In-Memory-Implementierung (Standard, wenn DATABASE_URL nicht gesetzt ist).
@@ -251,6 +285,9 @@ export class InMemoryStore implements Store {
   // `trusted_senders` (db-schema.sql, WEB_INBOX.md 15.09.) -- siehe
   // TrustedSenderRecord-Kommentar in types.ts.
   trustedSenders: TrustedSenderRecord[] = [];
+  signatures: SignatureRecord[] = [];
+  absenceResponder: Map<string, AbsenceResponderRecord> = new Map(); // key: userId
+  absenceResponderLog: Map<string, string> = new Map(); // key: `${userId}:${senderAddress}`, value: lastSentAt
 
   // ----- Externe Lookup-Adapter (SYNC.md 08.09., Web-Antwort "vier externe
   // Lookups") -----
@@ -788,6 +825,88 @@ export class InMemoryStore implements Store {
   async isTrustedSender(userId: string, senderAddress: string): Promise<boolean> {
     const normalized = senderAddress.toLowerCase();
     return this.trustedSenders.some((t) => t.userId === userId && t.senderAddress.toLowerCase() === normalized);
+  }
+
+  // ----- Signaturen -----
+
+  async listSignatures(mailAccountId: string): Promise<SignatureRecord[]> {
+    return this.signatures.filter((s) => s.mailAccountId === mailAccountId);
+  }
+
+  async getSignature(id: string): Promise<SignatureRecord | undefined> {
+    return this.signatures.find((s) => s.id === id);
+  }
+
+  async createSignature(input: Omit<SignatureRecord, "id">): Promise<SignatureRecord> {
+    const isFirstForAccount = (await this.listSignatures(input.mailAccountId)).length === 0;
+    const record: SignatureRecord = { id: randomUUID(), ...input, isDefault: input.isDefault || isFirstForAccount };
+    this.signatures.push(record);
+    if (record.isDefault) this.unsetOtherDefaultSignatures(record.mailAccountId, record.id);
+    return record;
+  }
+
+  async updateSignature(
+    id: string,
+    patch: Partial<Omit<SignatureRecord, "id" | "mailAccountId">>,
+  ): Promise<SignatureRecord | undefined> {
+    const record = await this.getSignature(id);
+    if (!record) return undefined;
+    Object.assign(record, patch);
+    if (patch.isDefault === true) this.unsetOtherDefaultSignatures(record.mailAccountId, record.id);
+    return record;
+  }
+
+  async deleteSignature(id: string): Promise<boolean> {
+    const idx = this.signatures.findIndex((s) => s.id === id);
+    if (idx === -1) return false;
+    const [removed] = this.signatures.splice(idx, 1);
+    if (removed!.isDefault) {
+      const remaining = this.signatures.filter((s) => s.mailAccountId === removed!.mailAccountId);
+      if (remaining.length > 0) remaining[0]!.isDefault = true;
+    }
+    return true;
+  }
+
+  private unsetOtherDefaultSignatures(mailAccountId: string, keepId: string): void {
+    for (const s of this.signatures) {
+      if (s.mailAccountId === mailAccountId && s.id !== keepId) s.isDefault = false;
+    }
+  }
+
+  // ----- Abwesenheitsassistent -----
+
+  async getAbsenceResponder(userId: string): Promise<AbsenceResponderRecord | undefined> {
+    return this.absenceResponder.get(userId);
+  }
+
+  async setAbsenceResponder(
+    userId: string,
+    patch: Partial<Pick<AbsenceResponderRecord, "active" | "startDate" | "endDate" | "subject" | "body">>,
+  ): Promise<AbsenceResponderRecord> {
+    const existing = this.absenceResponder.get(userId);
+    const updated: AbsenceResponderRecord = {
+      userId,
+      active: patch.active ?? existing?.active ?? false,
+      startDate: patch.startDate !== undefined ? patch.startDate : (existing?.startDate ?? null),
+      endDate: patch.endDate !== undefined ? patch.endDate : (existing?.endDate ?? null),
+      subject: patch.subject !== undefined ? patch.subject : (existing?.subject ?? null),
+      body: patch.body !== undefined ? patch.body : (existing?.body ?? null),
+      updatedAt: new Date().toISOString(),
+    };
+    this.absenceResponder.set(userId, updated);
+    return updated;
+  }
+
+  async listActiveAbsenceResponders(): Promise<AbsenceResponderRecord[]> {
+    return Array.from(this.absenceResponder.values()).filter((r) => r.active);
+  }
+
+  async getAbsenceResponderLastSent(userId: string, senderAddress: string): Promise<string | null> {
+    return this.absenceResponderLog.get(`${userId}:${senderAddress.toLowerCase()}`) ?? null;
+  }
+
+  async recordAbsenceResponderSent(userId: string, senderAddress: string, sentAt: string): Promise<void> {
+    this.absenceResponderLog.set(`${userId}:${senderAddress.toLowerCase()}`, sentAt);
   }
 }
 

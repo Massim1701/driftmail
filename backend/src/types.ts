@@ -433,3 +433,63 @@ export interface ApiDraftPhishingCheckResult {
   recipientReputation: RecipientReputation;
   riskyLinks: ApiRiskyLink[];
 }
+
+// [2026-09-21] "Abwesenheitsassistent"-Auftrag (WEB_INBOX.md 21.09.,
+// "NEUER AUFTRAG - Abwesenheitsassistent"): `signatures` (db-schema.sql)
+// existierte im Contract bereits seit dem allerersten Durchstich, wurde
+// aber NIE vom echten Backend implementiert (Track E baute die reine
+// Auswahl-/Verwaltungslogik als eigenstaendiges `mail-actions`-Package,
+// das nie an `backend/` angebunden wurde) -- eine echte Funktionslücke,
+// hier nachgezogen, weil der Abwesenheitsassistent eine echte Signatur
+// zum Anhaengen braucht. Siehe backend/README.md.
+export interface SignatureRecord {
+  id: string;
+  mailAccountId: string;
+  contentHtml: string;
+  isDefault: boolean;
+  applyToNew: boolean;
+  applyToReplies: boolean;
+}
+
+export interface ApiSignature {
+  id: string;
+  mailAccountId: string;
+  contentHtml: string;
+  isDefault: boolean;
+  applyToNew: boolean;
+  applyToReplies: boolean;
+}
+
+// `absence_responder` (db-schema.sql, "Abwesenheitsassistent"-Auftrag):
+// genau eine Zeile pro User (analog zu `user_ai_preference`) -- kein
+// eigener Endpunkt pro Mail-Konto, der Abwesenheitstext gilt kontoweit.
+// `startDate`/`subject`/`body` sind NULL erlaubt, solange `active=false`
+// (noch nie konfiguriert) -- die "Pflicht"-Vorgabe aus dem Auftrag wird
+// bei PUT /absence-responder durchgesetzt (siehe routes/), nicht per
+// DB-Constraint, damit ein unkonfigurierter User keine Zeile braucht.
+export interface AbsenceResponderRecord {
+  userId: string;
+  active: boolean;
+  startDate: string | null; // ISO date
+  endDate: string | null; // ISO date, null = unbefristet
+  subject: string | null;
+  body: string | null;
+  updatedAt: string;
+}
+
+export interface ApiAbsenceResponder {
+  active: boolean;
+  startDate: string | null;
+  endDate: string | null;
+  subject: string | null;
+  body: string | null;
+}
+
+// `absence_responder_log` (db-schema.sql): Grundlage fuer "pro Absender
+// maximal eine Antwort alle X Tage" -- verhindert Antwort-Schleifen bei
+// wiederholten Mails derselben Person waehrend der Abwesenheit.
+export interface AbsenceResponderLogRecord {
+  userId: string;
+  senderAddress: string;
+  lastSentAt: string;
+}

@@ -889,7 +889,20 @@ paths:
 
   /signatures:
     get:
-      summary: Signaturen des Users auflisten
+      summary: >
+        Signaturen des Users auflisten, optional gefiltert per accountId
+        (analog zu GET /folders/GET /messages -- "getrennte Ansichten pro
+        Konto"). [2026-09-21] "Abwesenheitsassistent"-Auftrag: dieser
+        Endpunkt war seit dem allerersten Durchstich im Contract definiert,
+        aber nie vom Backend implementiert (siehe backend/README.md) --
+        jetzt echt.
+      parameters:
+        - name: accountId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
       responses:
         "200":
           description: Liste der Signaturen
@@ -948,6 +961,47 @@ paths:
       responses:
         "204":
           description: Gelöscht
+
+  /absence-responder:
+    get:
+      summary: >
+        [2026-09-21] WEB_INBOX.md "NEUER AUFTRAG - Abwesenheitsassistent":
+        aktuelle Abwesenheitsassistent-Einstellung des Users abrufen.
+        Kontoweit (nicht pro Mail-Konto), genau eine Konfiguration pro User.
+      responses:
+        "200":
+          description: Aktuelle Einstellung (active=false, wenn nie konfiguriert)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AbsenceResponder"
+    put:
+      summary: >
+        Einstellung setzen. active=true verlangt startDate + subject + body
+        (entweder in diesem Request mitgeschickt oder bereits vorher
+        gespeichert) -- sonst 400. Die bestehende Standard-Signatur des
+        Kontos (siehe /signatures) wird automatisch angehaengt, wenn beim
+        tatsaechlichen automatischen Versand eine existiert (kein
+        eigenes Signatur-Feld hier). Sicherheits-Ausnahme (kein Contract-
+        Feld, serverseitig fest verdrahtet, siehe backend/README.md): KEINE
+        automatische Antwort an Absender mit classification=spam/phishing,
+        spamSubcategory=advance_fee_scam, oder mit List-Unsubscribe-Header
+        (vermutlich Mailingliste). Pro Absender maximal eine Antwort alle
+        4 Tage (konfigurierbar per ABSENCE_RESPONDER_COOLDOWN_DAYS).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AbsenceResponder"
+      responses:
+        "200":
+          description: Gespeicherte Einstellung
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AbsenceResponder"
+        "400":
+          description: active=true ohne startDate/subject/body
 
   /reminders:
     get:
@@ -1388,6 +1442,22 @@ components:
         isDefault: { type: boolean }
         applyToNew: { type: boolean }
         applyToReplies: { type: boolean }
+
+    AbsenceResponder:
+      type: object
+      description: >
+        [2026-09-21] WEB_INBOX.md "NEUER AUFTRAG - Abwesenheitsassistent",
+        siehe GET/PUT /absence-responder.
+      properties:
+        active: { type: boolean }
+        startDate: { type: string, format: date, nullable: true }
+        endDate:
+          type: string
+          format: date
+          nullable: true
+          description: "null = unbefristet, kein automatisches Abschalten."
+        subject: { type: string, nullable: true }
+        body: { type: string, nullable: true }
 
     Reminder:
       type: object

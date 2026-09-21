@@ -1,6 +1,6 @@
 // driftmail — Track E (Antwort & Signatur): öffentliches Modul-Interface
 
-export { draftReply, composeReplyDraft } from "./draftReply";
+export { draftReply, composeReplyDraft } from "./draftReply.js";
 export {
   selectSignatureForContext,
   selectSignatureForNewMail,
@@ -8,5 +8,5 @@ export {
   appendSignature,
   SignatureStore,
   type NewSignatureInput,
-} from "./signatures";
-export type { SignatureRecord, CompositionContext, MailThread, AiSource } from "./types";
+} from "./signatures.js";
+export type { SignatureRecord, CompositionContext, MailThread, AiSource } from "./types.js";

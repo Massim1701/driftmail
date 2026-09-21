@@ -13,6 +13,8 @@ import { mailProvidersRouter } from "./routes/mailProviders";
 import { aiSettingsRouter } from "./routes/aiSettings";
 import { settingsRouter } from "./routes/settings";
 import { contactsRouter } from "./routes/contacts";
+import { signaturesRouter } from "./routes/signatures";
+import { absenceResponderRouter } from "./routes/absenceResponder";
 import { internalRouter } from "./routes/internal";
 import { requireAuth } from "./middleware/auth";
 
@@ -48,6 +50,8 @@ export function createApp() {
   v1.use(aiSettingsRouter);
   v1.use(settingsRouter);
   v1.use(contactsRouter);
+  v1.use(signaturesRouter);
+  v1.use(absenceResponderRouter);
   app.use("/v1", v1);
 
   // Betriebs-/Test-Hilfsmittel, kein Contract-Bestandteil.

@@ -5,7 +5,8 @@
 import { createApp } from "./app";
 import { ensureDemoUser, initStore, store } from "./db/store";
 import { PostgresStore } from "./db/postgresStore";
-import { syncAccount } from "./mail/sync";
+import { syncAccount, adapterForAccount } from "./mail/sync";
+import { maybeSendAbsenceResponse } from "./mail/absenceResponder";
 import { runSyncForAllAccounts } from "./mail/scheduler";
 import { aiAdapter } from "./ai";
 import { domainReputationLookup, extractIbanCandidates, ibanHistoryCheck } from "./lookups";
@@ -1363,6 +1364,133 @@ async function main() {
       "GET /v1/contacts sollte alphabetisch sortiert sein",
     );
 
+    // ----- GET/POST/PATCH/DELETE /signatures (WEB_INBOX.md 21.09.
+    // "Abwesenheitsassistent" -- Contract existierte laenger, war aber
+    // nie implementiert) -----
+    const createSigRes = await fetch(`${base}/v1/signatures`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mailAccountId: account.id, contentHtml: "Viele Gruesse<br/>Massimo" }),
+    });
+    assert(createSigRes.status === 201, "POST /v1/signatures sollte 201 liefern");
+    const firstSig = (await createSigRes.json()) as Record<string, unknown>;
+    assert(firstSig.isDefault === true, "erste Signatur eines Kontos sollte automatisch Default werden");
+
+    const createSecondSigRes = await fetch(`${base}/v1/signatures`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mailAccountId: account.id, contentHtml: "MfG M." }),
+    });
+    const secondSig = (await createSecondSigRes.json()) as Record<string, unknown>;
+    assert(secondSig.isDefault === false, "zweite Signatur sollte NICHT automatisch Default werden");
+
+    const listSigRes = await fetch(`${base}/v1/signatures?accountId=${account.id}`);
+    const listSig = (await listSigRes.json()) as Array<Record<string, unknown>>;
+    assert(listSig.length === 2, "GET /v1/signatures?accountId= sollte beide Signaturen liefern");
+
+    // PATCH: zweite Signatur zum Default machen -> erste verliert Default-Status.
+    const patchSigRes = await fetch(`${base}/v1/signatures/${secondSig.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isDefault: true }),
+    });
+    assert(patchSigRes.status === 200, "PATCH /v1/signatures/:id sollte 200 liefern");
+    const firstSigAfterPatchRes = await fetch(`${base}/v1/signatures?accountId=${account.id}`);
+    const firstSigAfterPatch = ((await firstSigAfterPatchRes.json()) as Array<Record<string, unknown>>).find((s) => s.id === firstSig.id);
+    assert(firstSigAfterPatch?.isDefault === false, "vorherige Default-Signatur sollte nach PATCH isDefault=false sein");
+
+    // DELETE der jetzt-Default-Signatur -> verbleibende wird automatisch neuer Default.
+    const deleteSigRes = await fetch(`${base}/v1/signatures/${secondSig.id}`, { method: "DELETE" });
+    assert(deleteSigRes.status === 204, "DELETE /v1/signatures/:id sollte 204 liefern");
+    const remainingSigRes = await fetch(`${base}/v1/signatures?accountId=${account.id}`);
+    const remainingSig = (await remainingSigRes.json()) as Array<Record<string, unknown>>;
+    assert(remainingSig.length === 1 && remainingSig[0]!.isDefault === true, "verbleibende Signatur sollte nach dem Löschen der Default-Signatur automatisch neuer Default sein");
+
+    // ----- GET/PUT /absence-responder (WEB_INBOX.md 21.09. "NEUER AUFTRAG -
+    // Abwesenheitsassistent") -----
+    const absenceDefaultRes = await fetch(`${base}/v1/absence-responder`);
+    assert(absenceDefaultRes.status === 200, "GET /v1/absence-responder sollte 200 liefern");
+    const absenceDefault = (await absenceDefaultRes.json()) as Record<string, unknown>;
+    assert(absenceDefault.active === false, "Abwesenheitsassistent sollte im Default aus sein");
+
+    const absenceMissingFieldsRes = await fetch(`${base}/v1/absence-responder`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: true }),
+    });
+    assert(
+      absenceMissingFieldsRes.status === 400,
+      "PUT /v1/absence-responder mit active=true ohne startDate/subject/body sollte 400 liefern",
+    );
+
+    const absenceSetRes = await fetch(`${base}/v1/absence-responder`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        active: true,
+        startDate: "2020-01-01", // in der Vergangenheit, damit der Dispatch-Test unten sofort greift
+        endDate: null,
+        subject: "Bin nicht erreichbar",
+        body: "Ich bin gerade nicht erreichbar und melde mich nach meiner Rückkehr.",
+      }),
+    });
+    assert(absenceSetRes.status === 200, "PUT /v1/absence-responder mit vollständigen Feldern sollte 200 liefern");
+    const absenceSet = (await absenceSetRes.json()) as Record<string, unknown>;
+    assert(absenceSet.active === true, "Abwesenheitsassistent sollte nach dem Setzen aktiv sein");
+
+    // ----- Dispatch-Logik direkt getestet (mail/absenceResponder.ts), analog
+    // zu anderen direkt getesteten internen Funktionen in diesem Smoketest
+    // (z.B. store.hasSentTo) -- vermeidet, dass ein erneuter vollständiger
+    // Sync-Lauf an der Fixture-Dedupe (findMessageByHeader) vorbeigehen
+    // müsste, um den Dispatch-Pfad erneut zu erreichen. -----
+    const absenceAdapter = adapterForAccount(account);
+
+    // Fall 1: normale, safe-klassifizierte Mail -> Antwort geht raus.
+    await maybeSendAbsenceResponse({}, "abwesenheit-test-1@example.com", "safe", account, absenceAdapter);
+    const lastSent1 = await store.getAbsenceResponderLastSent(account.userId, "abwesenheit-test-1@example.com");
+    assert(typeof lastSent1 === "string", "erste automatische Antwort sollte protokolliert worden sein");
+
+    // Fall 2: dieselbe Adresse nochmal, sofort -> Cooldown (Default 4 Tage)
+    // verhindert eine zweite Antwort, Log-Zeitstempel bleibt unverändert.
+    await maybeSendAbsenceResponse({}, "abwesenheit-test-1@example.com", "safe", account, absenceAdapter);
+    const lastSent1Again = await store.getAbsenceResponderLastSent(account.userId, "abwesenheit-test-1@example.com");
+    assert(lastSent1Again === lastSent1, "wiederholte Mail derselben Adresse innerhalb des Cooldowns sollte KEINE zweite Antwort auslösen");
+
+    // Fall 3: Sicherheits-Ausnahme -- spam-klassifizierte Mail bekommt NIE
+    // eine automatische Antwort, selbst bei aktivem Assistenten.
+    await maybeSendAbsenceResponse({}, "abwesenheit-test-spam@example.com", "spam", account, absenceAdapter);
+    assert(
+      (await store.getAbsenceResponderLastSent(account.userId, "abwesenheit-test-spam@example.com")) === null,
+      "spam-klassifizierte Mail sollte NIE eine automatische Abwesenheitsantwort auslösen",
+    );
+
+    // Fall 4: Mailinglisten-Heuristik -- List-Unsubscribe-Header vorhanden
+    // = vermutlich Newsletter/Liste, keine automatische Antwort.
+    await maybeSendAbsenceResponse(
+      { "List-Unsubscribe": "<mailto:unsubscribe@newsletter.example>" },
+      "abwesenheit-test-newsletter@example.com",
+      "safe",
+      account,
+      absenceAdapter,
+    );
+    assert(
+      (await store.getAbsenceResponderLastSent(account.userId, "abwesenheit-test-newsletter@example.com")) === null,
+      "Mail mit List-Unsubscribe-Header (vermutlich Newsletter/Liste) sollte KEINE automatische Antwort auslösen",
+    );
+
+    // Fall 5: Assistent ausschalten -> keine weiteren automatischen Antworten,
+    // auch nicht fuer eine bisher unbekannte Adresse.
+    await fetch(`${base}/v1/absence-responder`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ active: false }),
+    });
+    await maybeSendAbsenceResponse({}, "abwesenheit-test-inaktiv@example.com", "safe", account, absenceAdapter);
+    assert(
+      (await store.getAbsenceResponderLastSent(account.userId, "abwesenheit-test-inaktiv@example.com")) === null,
+      "bei deaktiviertem Abwesenheitsassistenten sollte KEINE automatische Antwort rausgehen",
+    );
+
     // ----- Autorisierung (echte Auth, [2026-09-10]): ein zweiter, echter
     // User darf NICHT auf die Nachrichten/Ordner des ersten zugreifen, nur
     // weil er selbst eingeloggt ist (Authentifizierung allein reicht nicht,
@@ -1586,7 +1714,7 @@ async function main() {
     // Massimo müsste den kompletten Weg einmal mit einem echten GMX-/
     // web.de-/iCloud-Konto gegentesten.
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf) end-to-end grün.");
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent) end-to-end grün.");
   } finally {
     server.close();
     // Ohne das haelt der tesseract.js-Worker (worker_threads) den Prozess

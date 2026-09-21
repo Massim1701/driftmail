@@ -7,9 +7,9 @@
 // unabhängig getestet werden können. Siehe README.md für Annahmen.
 
 import { randomUUID } from "node:crypto";
-import type { CompositionContext, SignatureRecord } from "./types";
+import type { CompositionContext, SignatureRecord } from "./types.js";
 
-export type { SignatureRecord } from "./types";
+export type { SignatureRecord } from "./types.js";
 
 /**
  * Kernregel: welche Signatur wird für einen gegebenen Mail-Account und

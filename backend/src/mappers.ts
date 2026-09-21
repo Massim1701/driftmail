@@ -3,6 +3,8 @@
 
 import { parseListUnsubscribeHeader } from "./mail/listUnsubscribe";
 import type {
+  AbsenceResponderRecord,
+  ApiAbsenceResponder,
   ApiContract,
   ApiDraft,
   ApiFolder,
@@ -12,6 +14,7 @@ import type {
   ApiMessageDetail,
   ApiQuarantineInfo,
   ApiSecurityResult,
+  ApiSignature,
   ApiTrustedSender,
   ContractRecord,
   DraftRecord,
@@ -21,6 +24,7 @@ import type {
   MessageRecord,
   MessageSecurityRecord,
   QuarantineRecord,
+  SignatureRecord,
   TrustedSenderRecord,
 } from "./types";
 
@@ -42,6 +46,21 @@ export function toApiFolder(f: FolderRecord): ApiFolder {
 
 export function toApiTrustedSender(t: TrustedSenderRecord): ApiTrustedSender {
   return { id: t.id, senderAddress: t.senderAddress, addedAt: t.addedAt };
+}
+
+export function toApiSignature(s: SignatureRecord): ApiSignature {
+  return {
+    id: s.id,
+    mailAccountId: s.mailAccountId,
+    contentHtml: s.contentHtml,
+    isDefault: s.isDefault,
+    applyToNew: s.applyToNew,
+    applyToReplies: s.applyToReplies,
+  };
+}
+
+export function toApiAbsenceResponder(a: AbsenceResponderRecord): ApiAbsenceResponder {
+  return { active: a.active, startDate: a.startDate, endDate: a.endDate, subject: a.subject, body: a.body };
 }
 
 export function toApiSecurityResult(s: MessageSecurityRecord): ApiSecurityResult {
