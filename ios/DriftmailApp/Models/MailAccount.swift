@@ -19,3 +19,11 @@ struct MailAccount: Codable, Identifiable, Hashable {
     let emailAddress: String
     let syncStatus: SyncStatus
 }
+
+/// Antwort von `POST /accounts/{accountId}/sync` (WEB_INBOX.md 21.09.
+/// "SEHR WICHTIGE LUECKE - HOECHSTE PRIORITAET", Punkt 1).
+struct SyncResult: Codable {
+    let imported: Int
+    let autoDeleted: Int
+    let syncStatus: MailAccount.SyncStatus
+}

@@ -96,6 +96,10 @@ struct RemoteAPIClient: APIClient {
         try await get("/accounts")
     }
 
+    func syncAccount(id: String) async throws -> SyncResult {
+        try await post("/accounts/\(id)/sync", body: Optional<String>.none)
+    }
+
     func fetchFolders() async throws -> [Folder] {
         try await get("/folders")
     }

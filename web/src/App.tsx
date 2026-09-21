@@ -36,6 +36,7 @@ export default function App() {
   const [theme, setTheme] = useTheme();
   const appLock = useAppLock();
   const [account, setAccount] = useState<MailAccount | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [token, setToken] = useState<string | null>(() => getStoredToken());
   // Nur der EINE Fehler aus dem gerade konsumierten Callback (falls einer da
   // war) -- kein State-Update nötig, ändert sich nicht innerhalb einer
@@ -123,6 +124,25 @@ export default function App() {
   useEffect(() => {
     folders.forEach((f) => loadFolder(f.id));
   }, [folders, loadFolder]);
+
+  // "Jetzt aktualisieren" (WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE -
+  // HOECHSTE PRIORITAET", Punkt 1): löst POST /accounts/{accountId}/sync
+  // aus (sofortiger Mail-Abruf statt auf das automatische Backend-
+  // Intervall zu warten) und lädt danach alle Ordner neu, damit neu
+  // eingetroffene Mail sofort sichtbar wird.
+  async function handleSyncNow() {
+    if (!account || isSyncing) return;
+    setIsSyncing(true);
+    try {
+      await api.syncAccount(account.id);
+      folders.forEach((f) => loadFolder(f.id));
+      setError(null);
+    } catch {
+      setError("Aktualisieren fehlgeschlagen. Bitte später erneut versuchen.");
+    } finally {
+      setIsSyncing(false);
+    }
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -329,6 +349,8 @@ export default function App() {
           appLockEnabled={appLock.enabled}
           onAppLockChange={appLock.setEnabled}
           accountEmail={account?.emailAddress}
+          onSyncNow={handleSyncNow}
+          isSyncing={isSyncing}
           theme={theme}
           onThemeChange={setTheme}
           onCreateFolder={handleCreateFolder}

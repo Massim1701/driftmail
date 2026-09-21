@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { Folder } from "../types";
-import { FOLDER_ICONS, FolderIcon, LockIcon, MoonIcon, PencilIcon, PlusIcon, SunIcon, SystemIcon, TrashIcon, UnlockIcon } from "../icons";
+import { FOLDER_ICONS, FolderIcon, LockIcon, MoonIcon, PencilIcon, PlusIcon, RefreshIcon, SunIcon, SystemIcon, TrashIcon, UnlockIcon } from "../icons";
 import { SYSTEM_FOLDER_META } from "../folderMeta";
 import type { ThemeChoice } from "../useTheme";
 import "./FolderSidebar.css";
@@ -27,6 +27,8 @@ export function FolderSidebar({
   onSelect,
   counts,
   accountEmail,
+  onSyncNow,
+  isSyncing,
   theme,
   onThemeChange,
   appLockSupported,
@@ -41,6 +43,11 @@ export function FolderSidebar({
   onSelect: (folderId: string) => void;
   counts: Partial<Record<string, number>>;
   accountEmail?: string;
+  /** "Jetzt aktualisieren" (WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE -
+   * HOECHSTE PRIORITAET", Punkt 1): löst POST /accounts/{accountId}/sync
+   * aus, statt auf das automatische Backend-Intervall zu warten. */
+  onSyncNow: () => void;
+  isSyncing: boolean;
   theme: ThemeChoice;
   onThemeChange: (t: ThemeChoice) => void;
   /** Web-Äquivalent zur iOS-App-Sperre (WEB_INBOX.md 19.09. Punkt 3, siehe
@@ -95,7 +102,21 @@ export function FolderSidebar({
         <span className="brand-dot" aria-hidden="true" />
         driftmail
       </div>
-      {accountEmail && <div className="folder-sidebar-account">{accountEmail}</div>}
+      {accountEmail && (
+        <div className="folder-sidebar-account-row">
+          <div className="folder-sidebar-account">{accountEmail}</div>
+          <button
+            type="button"
+            className="sync-now-button"
+            onClick={onSyncNow}
+            disabled={isSyncing}
+            title="Jetzt nach neuer Mail suchen"
+            aria-label="Jetzt aktualisieren"
+          >
+            <RefreshIcon className={isSyncing ? "spinning" : undefined} />
+          </button>
+        </div>
+      )}
 
       <ul className="folder-list">
         {folders.map((f) => {

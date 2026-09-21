@@ -90,6 +90,15 @@ struct FolderListView: View {
                 await loadFoldersAndCounts()
             }
             .refreshable {
+                // Pull-to-Refresh (WEB_INBOX.md 21.09. "SEHR WICHTIGE
+                // LUECKE - HOECHSTE PRIORITAET", Punkt 1): löst zuerst
+                // einen echten Mail-Abruf aus (statt nur den lokalen Stand
+                // neu zu laden), bevor Ordner/Zähler aktualisiert werden --
+                // sonst würde Pull-to-Refresh nie neue Mail zeigen, egal
+                // wie oft man zieht.
+                if let accountId = environment.account?.id {
+                    _ = try? await environment.apiClient.syncAccount(id: accountId)
+                }
                 await loadFoldersAndCounts(forceRefresh: true)
             }
             .alert("Neuer Ordner", isPresented: $isCreatingFolder) {

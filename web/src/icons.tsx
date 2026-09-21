@@ -171,6 +171,14 @@ export function SystemIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function RefreshIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M20 11a8 8 0 1 0-2.34 5.66M20 11V5m0 6h-6" />
+    </Svg>
+  );
+}
+
 export function LockIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <Svg {...props}>

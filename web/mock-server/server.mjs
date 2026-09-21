@@ -196,6 +196,14 @@ const server = createServer(async (req, res) => {
     return send(res, 200, accounts);
   }
 
+  // POST /accounts/{accountId}/sync (WEB_INBOX.md 21.09. "SEHR WICHTIGE
+  // LUECKE - HOECHSTE PRIORITAET", Punkt 1) -- Mock: kein echter IMAP-
+  // Abruf moeglich, liefert nur einen Platzhalter-Erfolg, damit der
+  // "Jetzt aktualisieren"-Button gegen den Mock-Server nicht bricht.
+  if (req.method === "POST" && parts.length === 3 && parts[0] === "accounts" && parts[2] === "sync") {
+    return send(res, 200, { imported: 0, autoDeleted: 0, syncStatus: "ok" });
+  }
+
   // GET /auth/google/start ([2026-09-10] echter Google-Login im echten
   // Backend, siehe backend/README.md "Echter Google-Login") -- der
   // Mock-Server hat kein echtes Google, überspringt daher den kompletten

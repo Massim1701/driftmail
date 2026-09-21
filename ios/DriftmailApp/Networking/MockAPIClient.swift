@@ -98,6 +98,16 @@ actor MockAPIClient: APIClient {
         return db.accounts
     }
 
+    /// `POST /accounts/{accountId}/sync`, Mock: kein echter IMAP-Abruf
+    /// möglich -- liefert nur einen Platzhalter-Erfolg, damit Pull-to-
+    /// Refresh gegen den Mock-Client nicht bricht (gleiches Prinzip wie
+    /// web/mock-server/server.mjs).
+    func syncAccount(id: String) async throws -> SyncResult {
+        await delay()
+        guard db.accounts.contains(where: { $0.id == id }) else { throw APIError.notFound }
+        return SyncResult(imported: 0, autoDeleted: 0, syncStatus: .ok)
+    }
+
     func fetchFolders() async throws -> [Folder] {
         await delay()
         return db.folders.sorted { $0.sortOrder < $1.sortOrder }

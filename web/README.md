@@ -364,6 +364,17 @@ Phishing-Demo-Mail hat jetzt `displayNameSpoofingDetected`/
 (Notariat Weber) hat `isNewSender=true`, damit die neuen Badges in der
 Mock-UI überhaupt sichtbar sind.
 
+## Jetzt aktualisieren (WEB_INBOX.md 21.09., "SEHR WICHTIGE LUECKE - HOECHSTE PRIORITAET")
+
+Kleiner Rund-Button (Refresh-Icon) neben der Konto-E-Mail-Adresse in der
+Sidebar, ruft `POST /accounts/{accountId}/sync` auf (löst sofort einen
+Mail-Abruf aus, statt auf das automatische Backend-Intervall zu warten)
+und lädt danach alle Ordner neu. Kein eigenes Client-seitiges Polling für
+`GET /messages` -- das automatische Nachziehen neuer Mail läuft
+serverseitig (siehe `backend/README.md` "Automatischer + manueller
+Mail-Abruf"), dieser Button ist nur der explizite "jetzt sofort"-Weg. Per
+`curl`/Netzwerk-Log gegen den Mock-Server verifiziert (200 OK).
+
 ## Annahmen / offene Punkte
 
 - Es gibt in `api-spec.yaml` keinen eigenen "Liste der Quarantäne-Einträge

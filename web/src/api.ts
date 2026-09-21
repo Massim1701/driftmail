@@ -149,6 +149,16 @@ export const api = {
 
   listAccounts: () => request<MailAccount[]>("/accounts"),
 
+  // POST /accounts/{accountId}/sync (WEB_INBOX.md 21.09. "SEHR WICHTIGE
+  // LUECKE - HOECHSTE PRIORITAET", Punkt 1) -- fuer den "Jetzt
+  // aktualisieren"-Button, loest sofort einen Sync aus statt auf das
+  // naechste automatische Backend-Intervall zu warten.
+  syncAccount: (accountId: string) =>
+    request<{ imported: number; autoDeleted: number; syncStatus: MailAccount["syncStatus"] }>(
+      `/accounts/${accountId}/sync`,
+      { method: "POST" },
+    ),
+
   // GET /trusted-senders (WEB_INBOX.md 15.09. "Whitelist vertrauenswuerdiger
   // Absender") -- kombiniert sich mit MessageDetail.isNewSender: die "Neuer
   // Absender"-Badge wird nur gezeigt, wenn die Adresse hier NICHT auftaucht.

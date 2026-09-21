@@ -24,6 +24,11 @@ protocol APIClient {
     func fetchTrustedSenders() async throws -> [TrustedSender]
 
     func fetchAccounts() async throws -> [MailAccount]
+    /// `POST /accounts/{accountId}/sync` (WEB_INBOX.md 21.09. "SEHR
+    /// WICHTIGE LUECKE - HOECHSTE PRIORITAET", Punkt 1) -- fuer Pull-to-
+    /// Refresh: loest sofort einen Mail-Abruf fuer EIN Konto aus, statt auf
+    /// das automatische Backend-Intervall zu warten.
+    func syncAccount(id: String) async throws -> SyncResult
 
     // Ordner (contracts/api-spec.yaml `/folders`, `/folders/{folderId}`).
     // [2026-09-08] Neu seit der Ordner-Contract-Änderung: Ordner sind

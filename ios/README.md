@@ -601,6 +601,20 @@ Endpunkte), aber nicht abschließend verifiziert.
 iOS einmal mit einem echten Konto gegentesten, sobald die
 `RemoteAPIClient`-Netzwerk-Eigenheit oben geklärt ist.
 
+## [2026-09-21] Nachtrag: Pull-to-Refresh löst echten Mail-Abruf aus (WEB_INBOX.md 21.09., "SEHR WICHTIGE LUECKE - HOECHSTE PRIORITAET")
+
+`FolderListView.swift`s bereits vorhandenes `.refreshable` rief bisher nur
+`environment.loadFolders(forceRefresh:)` auf -- lädt also nur den bereits
+im Backend vorhandenen Stand neu, löst aber keinen neuen Mail-Abruf beim
+Provider aus. Jetzt: vor dem Neuladen wird `POST /accounts/{accountId}/sync`
+aufgerufen (`APIClient.syncAccount(id:)`, neue `SyncResult`-Antwort in
+`Models/MailAccount.swift`), Fehler dort bewusst mit `try?` verschluckt
+(Pull-to-Refresh soll trotzdem den lokal bereits bekannten Stand zeigen,
+auch wenn der Sync-Versuch selbst fehlschlägt -- kein zweiter Error-Banner
+nötig). `MockAPIClient` liefert einen Platzhalter-Erfolg. Kein eigener
+Button (anders als Web) -- Pull-to-Refresh ist die iOS-native Konvention
+dafür.
+
 ## Status: gebaut UND im Simulator getestet
 
 Anders als der Auftrag es als Fallback vorsah, war in dieser Umgebung eine
