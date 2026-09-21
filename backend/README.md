@@ -1497,6 +1497,94 @@ früheren, unabhängigen Assertions, nicht an den neuen Sync-Tests).
 Refresh verdrahten, der `POST /accounts/{accountId}/sync` aufruft und
 danach die Nachrichtenliste neu lädt.
 
+## Mehrfach-Konten-Unterstützung (WEB_INBOX.md 21.09. Punkt 2)
+
+Vorher: 1:1-Annahme zwischen User und Mail-Konto überall im Code
+(`getMailAccountByUserId()`, `POST /accounts` legt bei erster Verbindung
+einer E-Mail-Adresse einen NEUEN User an statt ein zweites Konto an einen
+bestehenden zu hängen) UND Ordner waren an `user_id` gebunden -- alle
+Konten eines Users hätten sich denselben Ordnerbaum geteilt. Massimo hat
+sich für **"getrennte Ansichten pro Konto"** entschieden (Rückfrage per
+AskUserQuestion, 21.09.), nicht einen vereinheitlichten Eingang über alle
+Konten hinweg.
+
+**Ordner sind jetzt an `mail_account_id` gebunden, nicht mehr an
+`user_id`** (`contracts/db-schema.sql`, analog zu `messages`). Jedes
+verbundene Konto bekommt seine eigenen 7 System-Ordner
+(`createSystemFoldersForAccount()`, vorher `createSystemFoldersForUser()`).
+Betroffen: `db/store.ts`/`postgresStore.ts` (Interface + beide
+Implementierungen), `routes/folders.ts`, `routes/messages.ts` (Ownership-
+Checks liefen vorher über `folder.userId`, jetzt über das Konto des
+Ordners), `mail/sync.ts` `resolveFolderId()`.
+
+**Echte Postgres-Migration nötig** (kein reiner App-Logik-Move wie beim
+Ordner-Umbau vom 09.09. -- hier ändert eine SPALTE selbst ihre Bedeutung,
+nicht nur Zeileninhalte): `postgresStore.ts` `migrateFoldersToAccountScope()`
+läuft bei jedem Start VOR `db-schema.sql` (Reihenfolge wichtig -- das
+Schema selbst enthält schon `CREATE INDEX ... (mail_account_id)`, das auf
+einer noch nicht migrierten DB sonst fehlschlägt, bevor die Migration
+überhaupt drankäme). Erkennt die alte Spalte `folders.user_id` per
+`information_schema`-Check, backfilled `mail_account_id` (vor diesem
+Schritt hatte jeder User höchstens ein Konto, die Zuordnung ist also
+eindeutig), entfernt die alte Spalte + Constraint. Auf einer frischen DB
+sofortiger No-Op. **Live gegen eine simulierte Alt-DB verifiziert** (echte
+`user_id`-Spalte + 14 Ordner-Zeilen über 2 Konten manuell zurückgebaut,
+Server gestartet, Migration griff automatisch, alle 14 Zeilen korrekt den
+richtigen Konten zugeordnet).
+
+**`POST /accounts` unterstützt jetzt zwei Modi:**
+- **Ohne** gültigen Bearer-Token: unverändert der bisherige Login-/
+  Registrierungs-Weg (erstes Konto, User wird über die E-Mail-Adresse
+  gefunden/angelegt).
+- **Mit** gültigem Bearer-Token: das neue Konto wird an DIESEN
+  angemeldeten User gehängt, nicht über die E-Mail-Adresse aufgelöst --
+  echtes "weiteres Konto hinzufügen". Idempotent pro (User,
+  E-Mail-Adresse): derselbe Login + dieselbe Adresse liefert das
+  bestehende Konto zurück, kein Duplikat. Gibt bei diesem Pfad denselben
+  Token zurück (kein neuer Token nötig, der Client ist ja schon
+  eingeloggt).
+- Gilt aktuell nur für `provider=imap` bzw. den Fallback-Weg ohne
+  Google-OAuth. Der ECHTE Gmail-Login (`GET /auth/google/start`)
+  unterstützt das Anhängen an einen bestehenden User NICHT -- der
+  Redirect-Callback kennt keinen bestehenden Login-Zustand (kein `state`-
+  Parameter, der eine Session durchreicht). **Offene Frage an Track C/F/
+  Web** (siehe SYNC.md): `GET /auth/google/start` um einen optionalen
+  Redirect-Ziel-Parameter erweitern, damit ein zweites Gmail-Konto auch
+  über den echten OAuth-Weg hinzufügbar wird? Bis dahin: zweites Gmail-
+  Konto nur über den (ungeprüften) Fallback-Pfad möglich, genau wie das
+  erste Konto ohne konfiguriertes Google-OAuth.
+
+**`GET /folders?accountId=`**: mit `accountId` nur die Ordner dieses
+Kontos (Ownership-geprüft), ohne `accountId` die Ordner ALLER eigenen
+Konten zusammen (flache Liste, jeder Folder trägt seine `accountId` --
+"getrennte Ansichten" ist bewusst Client-Sache, nicht serverseitig
+gruppiert). **`POST /folders`**: `accountId` im Body erforderlich, sobald
+mehr als ein Konto verbunden ist (sonst 400 -- nicht erratbar, welchem
+Konto ein neuer Ordner gehören soll), bei genau einem Konto weiterhin
+automatisch.
+
+**`GET /messages`** ohne `accountId`/`folderId` fällt weiterhin auf "das
+EINE Konto" zurück (`getMailAccountByUserId()`, unverändert) -- für
+Mehrfach-Konten-Clients bewusst nicht automatisch erraten, welches der
+mehreren Konten gemeint ist. Client-UI mit Account-Switcher muss
+`accountId` explizit mitschicken, sobald mehr als ein Konto existiert.
+
+**Tests:** `smoketest.ts` verifiziert: zweites Konto zum selben Login
+anlegen (eigener User, kein neuer), Idempotenz (gleiche Adresse zweimal ->
+dasselbe Konto), 7 eigene Ordner fürs zweite Konto, `GET /folders` ohne
+`accountId` liefert beide Konten zusammen (14 = 7+7), `GET
+/folders?accountId=<fremd>` -> 403, `POST /folders` ohne `accountId` bei
+&gt;1 Konten -> 400, mit explizitem `accountId` weiterhin 201. Grün ohne
+UND mit `DATABASE_URL` gegen frisches Postgres, plus die oben beschriebene
+manuelle Migrations-Simulation gegen eine Alt-Schema-DB.
+
+**Übergabe:** Track C/F müssen einen Account-Switcher bauen ("getrennte
+Ansichten pro Konto") + einen "Konto hinzufügen"-Einstiegspunkt außerhalb
+des Erst-Onboardings (z.B. in den Einstellungen) -- beide können den
+bereits bestehenden Onboarding-Provider-Auswahlbildschirm wiederverwenden
+(Provider-Liste + IMAP-Formular sind identisch, nur der Aufrufkontext
+unterscheidet sich).
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war

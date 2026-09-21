@@ -29,7 +29,15 @@ export function toApiMailAccount(a: MailAccountRecord): ApiMailAccount {
 }
 
 export function toApiFolder(f: FolderRecord): ApiFolder {
-  return { id: f.id, name: f.name, icon: f.icon, isSystem: f.isSystem, systemKey: f.systemKey, sortOrder: f.sortOrder };
+  return {
+    id: f.id,
+    accountId: f.mailAccountId,
+    name: f.name,
+    icon: f.icon,
+    isSystem: f.isSystem,
+    systemKey: f.systemKey,
+    sortOrder: f.sortOrder,
+  };
 }
 
 export function toApiTrustedSender(t: TrustedSenderRecord): ApiTrustedSender {

@@ -95,7 +95,7 @@ function rowToTrustedSender(r: any): TrustedSenderRecord {
 function rowToFolder(r: any): FolderRecord {
   return {
     id: r.id,
-    userId: r.user_id,
+    mailAccountId: r.mail_account_id,
     name: r.name,
     icon: r.icon,
     isSystem: r.is_system,
@@ -252,10 +252,79 @@ export class PostgresStore implements Store {
 
   /** Führt contracts/db-schema.sql aus (alle CREATE TABLE/INDEX sind
    * `IF NOT EXISTS`, siehe dortiger Kopfkommentar -- beliebig oft
-   * wiederholbar, kein separates Migrations-Tool nötig für diesen Stand). */
+   * wiederholbar, kein separates Migrations-Tool nötig für diesen Stand).
+   *
+   * `migrateFoldersToAccountScope()` MUSS zuerst laufen, nicht danach: das
+   * Schema selbst enthält bereits `CREATE INDEX IF NOT EXISTS
+   * idx_folders_account ON folders (mail_account_id)` -- auf einer noch
+   * nicht migrierten (alten) DB gibt es diese Spalte noch nicht, der
+   * gesamte `db-schema.sql`-Batch (eine einzige Simple-Query, faktisch
+   * eine implizite Transaktion) würde daran scheitern, BEVOR die Migration
+   * überhaupt die Chance hätte, die Spalte anzulegen. */
   async migrate(): Promise<void> {
+    await this.migrateFoldersToAccountScope();
     const sql = readFileSync(SCHEMA_PATH, "utf-8");
     await this.pool.query(sql);
+  }
+
+  /** [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2, siehe
+   * contracts/db-schema.sql-Kommentar bei "folders"): `folders.user_id` ->
+   * `mail_account_id`. `CREATE TABLE IF NOT EXISTS` oben ändert eine
+   * bereits bestehende Tabelle nie rückwirkend -- auf einer schon vorher
+   * angelegten DB existiert die Spalte `user_id` deshalb ggf. noch, ohne
+   * `mail_account_id`. Echte, einmalige ALTER-TABLE-Migration (idempotent
+   * über `IF EXISTS`/den Spalten-Check unten, kein separater
+   * Wiederholungsschutz nötig): Spalte ergänzen, über das (VOR diesem
+   * Schritt einzige) Konto jedes betroffenen Users befüllen, alte Spalte +
+   * Constraint entfernen. Auf einer frischen DB (Spalte existiert nie) ein
+   * sofortiger No-Op. */
+  private async migrateFoldersToAccountScope(): Promise<void> {
+    const { rows } = await this.pool.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_name = 'folders' AND column_name = 'user_id'`,
+    );
+    if (rows.length === 0) return; // schon migriert oder frische DB
+
+    console.log("[migrate] folders.user_id -> mail_account_id (Mehrfach-Konten-Umbau, WEB_INBOX.md 21.09.)...");
+
+    await this.pool.query(
+      `ALTER TABLE folders ADD COLUMN IF NOT EXISTS mail_account_id UUID REFERENCES mail_accounts(id) ON DELETE CASCADE`,
+    );
+
+    // Backfill: vor diesem Schritt hatte jeder User höchstens EIN Konto
+    // (alte 1:1-Annahme), die Zuordnung ist deshalb eindeutig.
+    await this.pool.query(`
+      UPDATE folders f
+      SET mail_account_id = (SELECT id FROM mail_accounts m WHERE m.user_id = f.user_id LIMIT 1)
+      WHERE f.mail_account_id IS NULL
+    `);
+
+    const { rows: orphaned } = await this.pool.query(`SELECT count(*) AS n FROM folders WHERE mail_account_id IS NULL`);
+    if (Number(orphaned[0]?.n ?? 0) > 0) {
+      throw new Error(
+        `[migrate] ${orphaned[0].n} folders-Zeile(n) ohne zuordenbares mail_account gefunden (User ohne Konto?) -- Migration abgebrochen, manuell prüfen.`,
+      );
+    }
+
+    // Alte Constraint dynamisch finden statt den (nicht garantiert
+    // stabilen) Postgres-Auto-Namen zu raten.
+    const { rows: constraints } = await this.pool.query(`
+      SELECT tc.constraint_name
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+      WHERE tc.table_name = 'folders' AND tc.constraint_type = 'UNIQUE' AND kcu.column_name = 'user_id'
+    `);
+    for (const c of constraints) {
+      await this.pool.query(`ALTER TABLE folders DROP CONSTRAINT IF EXISTS "${c.constraint_name}"`);
+    }
+
+    await this.pool.query(`ALTER TABLE folders DROP COLUMN user_id`);
+    await this.pool.query(`ALTER TABLE folders ALTER COLUMN mail_account_id SET NOT NULL`);
+    await this.pool.query(
+      `ALTER TABLE folders ADD CONSTRAINT folders_mail_account_id_system_key_key UNIQUE (mail_account_id, system_key)`,
+    );
+    await this.pool.query(`DROP INDEX IF EXISTS idx_folders_user`);
+
+    console.log("[migrate] folders.user_id -> mail_account_id abgeschlossen.");
   }
 
   // ----- Users / Accounts -----
@@ -307,6 +376,11 @@ export class PostgresStore implements Store {
   async getMailAccountByUserId(userId: string): Promise<MailAccountRecord | undefined> {
     const { rows } = await this.pool.query("SELECT * FROM mail_accounts WHERE user_id = $1 LIMIT 1", [userId]);
     return rows[0] ? rowToMailAccount(rows[0]) : undefined;
+  }
+
+  async listMailAccountsByUserId(userId: string): Promise<MailAccountRecord[]> {
+    const { rows } = await this.pool.query("SELECT * FROM mail_accounts WHERE user_id = $1", [userId]);
+    return rows.map(rowToMailAccount);
   }
 
   async updateMailAccount(
@@ -379,16 +453,16 @@ export class PostgresStore implements Store {
 
   async createFolder(input: Omit<FolderRecord, "id">): Promise<FolderRecord> {
     const { rows } = await this.pool.query(
-      `INSERT INTO folders (user_id, name, icon, is_system, system_key, sort_order)
+      `INSERT INTO folders (mail_account_id, name, icon, is_system, system_key, sort_order)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [input.userId, input.name, input.icon, input.isSystem, input.systemKey, input.sortOrder],
+      [input.mailAccountId, input.name, input.icon, input.isSystem, input.systemKey, input.sortOrder],
     );
     return rowToFolder(rows[0]);
   }
 
-  async listFolders(userId: string): Promise<FolderRecord[]> {
-    const { rows } = await this.pool.query("SELECT * FROM folders WHERE user_id = $1 ORDER BY sort_order ASC", [userId]);
+  async listFolders(accountId: string): Promise<FolderRecord[]> {
+    const { rows } = await this.pool.query("SELECT * FROM folders WHERE mail_account_id = $1 ORDER BY sort_order ASC", [accountId]);
     return rows.map(rowToFolder);
   }
 
@@ -397,8 +471,8 @@ export class PostgresStore implements Store {
     return rows[0] ? rowToFolder(rows[0]) : undefined;
   }
 
-  async getSystemFolder(userId: string, systemKey: SystemFolderKey): Promise<FolderRecord | undefined> {
-    const { rows } = await this.pool.query("SELECT * FROM folders WHERE user_id = $1 AND system_key = $2", [userId, systemKey]);
+  async getSystemFolder(accountId: string, systemKey: SystemFolderKey): Promise<FolderRecord | undefined> {
+    const { rows } = await this.pool.query("SELECT * FROM folders WHERE mail_account_id = $1 AND system_key = $2", [accountId, systemKey]);
     return rows[0] ? rowToFolder(rows[0]) : undefined;
   }
 
@@ -603,17 +677,15 @@ export class PostgresStore implements Store {
     const record = rowToQuarantine(rows[0]);
 
     // Ordner-Umstellung (SYNC.md, Commit 734781e): der Quarantäne-"Ordner"
-    // ist eine echte folders-Zeile pro User. Der User wird über die
-    // mail_account der Nachricht ermittelt (kein eigenes userId-Feld auf
-    // messages, siehe db-schema.sql) -- ein Join spart den Umweg über
-    // getMessage()+getMailAccount().
+    // ist eine echte folders-Zeile pro Konto (seit 21.09. Mehrfach-Konten-
+    // Umbau, vorher pro User). Ein Join spart den Umweg über
+    // getMessage()+getMailAccount()+getSystemFolder().
     await this.pool.query(
       `UPDATE messages m
          SET folder_id = f.id
-         FROM mail_accounts a, folders f
+         FROM folders f
         WHERE m.id = $1
-          AND a.id = m.mail_account_id
-          AND f.user_id = a.user_id
+          AND f.mail_account_id = m.mail_account_id
           AND f.system_key = 'quarantaene'`,
       [messageId],
     );

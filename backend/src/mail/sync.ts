@@ -91,12 +91,12 @@ export function adapterForAccount(account: MailAccountRecord): MailAdapter {
  * [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09.): normale Mail landet jetzt
  * in "eingang" (echte automatische Landezone) statt "sonstiges" (nur noch
  * manuell nutzbar, keine Auto-Zuordnung mehr). */
-async function resolveFolderId(classification: string, userId: string): Promise<string> {
+async function resolveFolderId(classification: string, accountId: string): Promise<string> {
   const key: SystemFolderKey = classification === "phishing" || classification === "spam" ? "spam" : "eingang";
-  const folder = await store.getSystemFolder(userId, key);
+  const folder = await store.getSystemFolder(accountId, key);
   if (!folder) {
     throw new Error(
-      `Systemordner '${key}' fehlt für User ${userId} — ensureDemoUser() muss vor dem ersten Sync gelaufen sein.`,
+      `Systemordner '${key}' fehlt für Konto ${accountId} — die 7 System-Ordner müssen vor dem ersten Sync angelegt sein (siehe ensureDemoUser()/POST /accounts).`,
     );
   }
   return folder.id;
@@ -253,7 +253,7 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
         continue;
       }
 
-      const folderId = await resolveFolderId(security.classification, account.userId);
+      const folderId = await resolveFolderId(security.classification, account.id);
 
       const message = await store.insertMessage({
         mailAccountId: account.id,

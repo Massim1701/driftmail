@@ -119,8 +119,22 @@ paths:
         /auth/session bereits seit Track 0 darauf verwies. Legt bei erster
         Verbindung dieser E-Mail-Adresse einen neuen User + dessen 7
         Standard-Ordner an, sonst wird der bestehende User/das bestehende
-        Konto wiederverwendet (kein Multi-Account pro User in diesem
-        Entwicklungsstand, siehe backend/README.md "Auth"). [2026-09-10]
+        Konto wiederverwendet.
+        [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): wird
+        dieser Endpoint MIT einem gueltigen `Authorization: Bearer`-Header
+        aufgerufen (optional -- der Endpoint bleibt technisch
+        `security: []`, ein fehlender/ungueltiger Token wird wie "nicht
+        eingeloggt" behandelt, kein 401), wird das Konto an den ANGEMELDETEN
+        User angehaengt (echtes weiteres Konto), statt wie bisher immer
+        User-Zuordnung ueber die E-Mail-Adresse selbst vorzunehmen. Pro
+        (User, E-Mail-Adresse) hoechstens ein Konto (idempotent, wie schon
+        bisher pro User). Ohne Token unveraendert der bisherige Login-/
+        Registrierungs-Weg (erstes Konto). Gilt aktuell nur fuer
+        `provider=imap` -- `provider=gmail` ueber diesen Fallback-Endpunkt
+        theoretisch auch, aber der empfohlene ECHTE Gmail-Weg
+        (`GET /auth/google/start`) unterstuetzt das Anhaengen an einen
+        bestehenden User noch nicht (der Redirect-Callback kennt keinen
+        bestehenden Login-Zustand), siehe SYNC.md "Offene Frage". [2026-09-10]
         Fuer Gmail mit konfiguriertem Google-OAuth (siehe backend/README.md
         "Auth") ist `GET /auth/google/start` der echte, empfohlene Weg --
         dieser Endpoint bleibt als Fallback (kein Google-OAuth konfiguriert)
@@ -214,7 +228,17 @@ paths:
 
   /folders:
     get:
-      summary: Ordner des Users auflisten (System- und eigene Ordner)
+      summary: >
+        Ordner des Users auflisten (System- und eigene Ordner). [2026-09-21]
+        Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): mit `accountId` nur
+        die Ordner DIESES Kontos (Ownership-Check), ohne `accountId` die
+        Ordner ALLER verbundenen Konten des Users zusammen (flache Liste,
+        jeder Folder traegt seine `accountId` -- Client gruppiert selbst,
+        siehe "getrennte Ansichten pro Konto").
+      parameters:
+        - name: accountId
+          in: query
+          schema: { type: string, format: uuid }
       responses:
         "200":
           description: Liste der Ordner
@@ -225,7 +249,11 @@ paths:
                 items:
                   $ref: "#/components/schemas/Folder"
     post:
-      summary: Neuen eigenen Ordner anlegen
+      summary: >
+        Neuen eigenen Ordner anlegen. `accountId` ist erforderlich, sobald
+        der User mehr als ein Konto verbunden hat (sonst 400 -- nicht
+        erratbar, zu welchem Konto der Ordner gehoeren soll); bei genau
+        einem Konto faellt es auf dieses zurueck.
       requestBody:
         content:
           application/json:
@@ -235,6 +263,7 @@ paths:
               properties:
                 name: { type: string }
                 icon: { type: string }
+                accountId: { type: string, format: uuid }
       responses:
         "201":
           description: Angelegt
@@ -242,6 +271,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Folder"
+        "400":
+          description: accountId fehlt und ist bei mehreren verbundenen Konten nicht eindeutig ableitbar
 
   /folders/{folderId}:
     patch:
@@ -940,6 +971,14 @@ components:
       type: object
       properties:
         id: { type: string, format: uuid }
+        accountId:
+          type: string
+          format: uuid
+          description: >
+            [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2):
+            Ordner gehoeren jetzt zu GENAU EINEM Mail-Konto ("getrennte
+            Ansichten pro Konto", nicht ein vereinheitlichter Eingang) --
+            jedes verbundene Konto hat seine eigenen 7 System-Ordner.
         name: { type: string }
         icon: { type: string }
         isSystem: { type: boolean }

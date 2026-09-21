@@ -56,6 +56,10 @@ export interface Store {
   listMailAccounts(): Promise<MailAccountRecord[]>;
   getMailAccount(id: string): Promise<MailAccountRecord | undefined>;
   getMailAccountByUserId(userId: string): Promise<MailAccountRecord | undefined>;
+  /** [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): ALLE
+   * Konten eines Users, nicht nur das erste -- `getMailAccountByUserId`
+   * bleibt für die (weiterhin single-account) Demo-User-Logik bestehen. */
+  listMailAccountsByUserId(userId: string): Promise<MailAccountRecord[]>;
   /** Für den Sync-Status (syncAccount() in mail/sync.ts) UND für das
    * Nachtragen/Erneuern des Gmail-Refresh-Tokens beim erneuten Login
    * (GET /auth/google/callback, routes/auth.ts) -- ersetzt die vorherige
@@ -75,10 +79,14 @@ export interface Store {
   refreshSession(token: string): Promise<SessionRecord | undefined>;
 
   // ----- Ordner -----
+  // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): Ordner
+  // gehören jetzt zu einem mail_account, nicht mehr zu einem user direkt
+  // ("getrennte Ansichten pro Konto") -- alle folgenden Parameter heißen
+  // deshalb accountId statt userId.
   createFolder(input: Omit<FolderRecord, "id">): Promise<FolderRecord>;
-  listFolders(userId: string): Promise<FolderRecord[]>;
+  listFolders(accountId: string): Promise<FolderRecord[]>;
   getFolder(id: string): Promise<FolderRecord | undefined>;
-  getSystemFolder(userId: string, systemKey: SystemFolderKey): Promise<FolderRecord | undefined>;
+  getSystemFolder(accountId: string, systemKey: SystemFolderKey): Promise<FolderRecord | undefined>;
   updateFolder(id: string, patch: Partial<Pick<FolderRecord, "name" | "icon" | "sortOrder">>): Promise<FolderRecord | undefined>;
   deleteFolder(id: string): Promise<boolean>;
 
@@ -257,6 +265,10 @@ export class InMemoryStore implements Store {
     return this.mailAccounts.find((a) => a.userId === userId);
   }
 
+  async listMailAccountsByUserId(userId: string): Promise<MailAccountRecord[]> {
+    return this.mailAccounts.filter((a) => a.userId === userId);
+  }
+
   async updateMailAccount(
     id: string,
     patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt" | "encryptedOauthToken">>,
@@ -309,16 +321,16 @@ export class InMemoryStore implements Store {
     return record;
   }
 
-  async listFolders(userId: string): Promise<FolderRecord[]> {
-    return this.folders.filter((f) => f.userId === userId).sort((a, b) => a.sortOrder - b.sortOrder);
+  async listFolders(accountId: string): Promise<FolderRecord[]> {
+    return this.folders.filter((f) => f.mailAccountId === accountId).sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
   async getFolder(id: string): Promise<FolderRecord | undefined> {
     return this.folders.find((f) => f.id === id);
   }
 
-  async getSystemFolder(userId: string, systemKey: SystemFolderKey): Promise<FolderRecord | undefined> {
-    return this.folders.find((f) => f.userId === userId && f.systemKey === systemKey);
+  async getSystemFolder(accountId: string, systemKey: SystemFolderKey): Promise<FolderRecord | undefined> {
+    return this.folders.find((f) => f.mailAccountId === accountId && f.systemKey === systemKey);
   }
 
   async updateFolder(
@@ -432,12 +444,12 @@ export class InMemoryStore implements Store {
     this.quarantine.push(record);
 
     // Ordner-Umstellung (SYNC.md, Commit 734781e): der Quarantäne-"Ordner"
-    // ist jetzt eine echte folders-Zeile pro User, kein fester String mehr.
-    // Der User wird über die mail_account der Nachricht ermittelt (kein
-    // eigenes userId-Feld auf messages, siehe db-schema.sql).
+    // ist jetzt eine echte folders-Zeile pro Konto (seit 21.09. Mehrfach-
+    // Konten-Umbau, vorher pro User), kein fester String mehr. Das Konto
+    // wird über mail_account_id der Nachricht ermittelt.
     const message = await this.getMessage(messageId);
     const account = message ? await this.getMailAccount(message.mailAccountId) : undefined;
-    const quarantaeneFolder = account ? await this.getSystemFolder(account.userId, "quarantaene") : undefined;
+    const quarantaeneFolder = account ? await this.getSystemFolder(account.id, "quarantaene") : undefined;
     if (quarantaeneFolder) await this.moveMessage(messageId, quarantaeneFolder.id);
 
     return record;
@@ -713,17 +725,21 @@ const SYSTEM_FOLDER_DEFAULTS: Array<{ systemKey: SystemFolderKey; name: string; 
 // koennen. Der Vergleich unten arbeitet deshalb auf String-Ebene.
 const LEGACY_SYSTEM_FOLDER_KEYS: string[] = ["wichtig", "rechnungen"];
 
-/** Legt die 7 Standard-System-Ordner für einen frisch angelegten User an
+/** Legt die 7 Standard-System-Ordner für ein frisch angelegtes Konto an
  * (aus `ensureDemoUser()` herausgezogen, [2026-09-10] echte Auth, damit
  * `POST /accounts` -- der reguläre Login/Registrierungs-Weg für echte User,
  * siehe routes/auth.ts -- dieselbe Ordnerstruktur bekommt wie der
  * Demo-User, ohne den Demo-spezifischen Rest von `ensureDemoUser()`
- * mitzuschleppen). Nur für User ohne jede bestehende Ordner-Zeile gedacht --
- * `migrateLegacySystemFolders()` deckt den Bestands-User-Fall separat ab. */
-export async function createSystemFoldersForUser(userId: string): Promise<void> {
+ * mitzuschleppen). [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09.
+ * Punkt 2): pro KONTO statt pro User -- jedes verbundene Konto ("getrennte
+ * Ansichten pro Konto") bekommt seine eigenen 7 System-Ordner, auch wenn
+ * derselbe User bereits ein anderes Konto (und damit andere Ordner) hat.
+ * Nur für Konten ohne jede bestehende Ordner-Zeile gedacht --
+ * `migrateLegacySystemFolders()` deckt den Bestands-Fall separat ab. */
+export async function createSystemFoldersForAccount(accountId: string): Promise<void> {
   for (const [index, def] of SYSTEM_FOLDER_DEFAULTS.entries()) {
     await store.createFolder({
-      userId,
+      mailAccountId: accountId,
       name: def.name,
       icon: def.icon,
       isSystem: true,
@@ -733,22 +749,22 @@ export async function createSystemFoldersForUser(userId: string): Promise<void> 
   }
 }
 
-/** Migriert einen User von der alten 6-Ordner- auf die neue 7-Ordner-Struktur
+/** Migriert ein Konto von der alten 6-Ordner- auf die neue 7-Ordner-Struktur
  * (WEB_INBOX.md 09.09. "KORREKTUR/ERWEITERUNG des Ordner-Umbau-Eintrags").
- * Idempotent -- für neu angelegte User (die die neuen Defaults schon über
+ * Idempotent -- für neu angelegte Konten (die die neuen Defaults schon über
  * `ensureDemoUser()` bekommen haben) sind beide Schritte No-Ops. Kein
  * SQL-Migrationstool (siehe db-schema.sql-Kommentar), stattdessen
  * Anwendungslogik wie beim Löschen eines Ordners. */
-async function migrateLegacySystemFolders(userId: string): Promise<void> {
-  const folders = await store.listFolders(userId);
+async function migrateLegacySystemFolders(accountId: string): Promise<void> {
+  const folders = await store.listFolders(accountId);
   const bySystemKey = new Map(folders.filter((f) => f.systemKey).map((f) => [f.systemKey as SystemFolderKey, f]));
 
-  // Schritt 1: neue Pflicht-System-Ordner nachrüsten, falls sie fehlen (User
+  // Schritt 1: neue Pflicht-System-Ordner nachrüsten, falls sie fehlen (Konto
   // von vor dem Umbau hatte nur die alten 6).
   for (const [index, def] of SYSTEM_FOLDER_DEFAULTS.entries()) {
     if (bySystemKey.has(def.systemKey)) continue;
     const created = await store.createFolder({
-      userId,
+      mailAccountId: accountId,
       name: def.name,
       icon: def.icon,
       isSystem: true,
@@ -791,14 +807,14 @@ export async function ensureDemoUser(): Promise<{ user: User; account: MailAccou
     });
   }
 
-  if ((await store.listFolders(user.id)).length === 0) {
-    await createSystemFoldersForUser(user.id);
+  if ((await store.listFolders(account.id)).length === 0) {
+    await createSystemFoldersForAccount(account.id);
   } else {
-    // Bestehender User (von vor dem Ordner-Umbau) -- neue Pflicht-Ordner
+    // Bestehendes Konto (von vor dem Ordner-Umbau) -- neue Pflicht-Ordner
     // nachrüsten + wichtig/rechnungen auflösen. Im `length === 0`-Zweig
-    // oben nicht nötig, da SYSTEM_FOLDER_DEFAULTS für neue User bereits die
-    // neue Liste ist.
-    await migrateLegacySystemFolders(user.id);
+    // oben nicht nötig, da SYSTEM_FOLDER_DEFAULTS für neue Konten bereits
+    // die neue Liste ist.
+    await migrateLegacySystemFolders(account.id);
   }
 
   // Demo-Seed für den Empfänger-Reputations-Lookup (src/lookups/

@@ -62,19 +62,35 @@ CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions (token);
 -- message_attachments weiter unten). Bestehende wichtig/rechnungen-Ordner +
 -- deren Nachrichten werden app-seitig migriert (siehe
 -- backend/src/db/store.ts migrateLegacySystemFolders()), nicht per SQL.
+--
+-- [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE -
+-- HOECHSTE PRIORITAET", Punkt 2; Massimo: "getrennte Ansichten pro Konto",
+-- nicht ein vereinheitlichter Eingang): `user_id` -> `mail_account_id`
+-- ersetzt, analog zu `messages` (die schon `mail_account_id` statt
+-- `user_id` nutzen). Vorher teilten sich ALLE Konten eines Users denselben
+-- Ordnerbaum (ein einziges "eingang" fuer den ganzen User) -- das
+-- widerspricht "getrennte Ansichten", jedes Konto bekommt jetzt seine
+-- eigenen 7 System-Ordner. Direkt am CREATE TABLE geaendert (Repo-
+-- Konvention, s.o.); fuer eine bereits bestehende Postgres-DB (Spalte
+-- `user_id` existiert noch) migriert `backend/src/db/postgresStore.ts`
+-- `migrate()` die Spalte automatisch beim Start (ADD mail_account_id,
+-- Backfill ueber das erste/einzige Konto jedes betroffenen Users, DROP
+-- user_id) -- echte ALTER-TABLE-Migration, kein reiner App-Logik-Move wie
+-- beim Ordner-Umbau oben, weil hier eine Spalte selbst (nicht nur
+-- Zeileninhalte) ihre Bedeutung aendert.
 
 CREATE TABLE IF NOT EXISTS folders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    mail_account_id UUID NOT NULL REFERENCES mail_accounts(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     icon TEXT NOT NULL DEFAULT 'inbox',
     is_system BOOLEAN NOT NULL DEFAULT false,
     system_key TEXT CHECK (system_key IN ('eingang', 'entwuerfe', 'gesendet', 'sonstiges', 'quarantaene', 'spam', 'papierkorb')),
     sort_order INTEGER NOT NULL DEFAULT 0,
-    UNIQUE (user_id, system_key)
+    UNIQUE (mail_account_id, system_key)
   );
 
-CREATE INDEX IF NOT EXISTS idx_folders_user ON folders (user_id);
+CREATE INDEX IF NOT EXISTS idx_folders_account ON folders (mail_account_id);
 
 -- ===== Messages =====
 

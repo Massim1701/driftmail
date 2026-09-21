@@ -763,7 +763,7 @@ async function main() {
     // (kein echtes Constraint-Konzept) läuft derselbe Code unverändert direkt.
     const runLegacyFolderMigrationCheck = async () => {
       const legacyWichtigFolder = await store.createFolder({
-        userId: account.userId,
+        mailAccountId: account.id,
         name: "Wichtig",
         icon: "star",
         isSystem: true,
@@ -1042,6 +1042,85 @@ async function main() {
     const manualUnsubMissingRes = await fetch(`${base}/v1/messages/00000000-0000-0000-0000-000000000000/unsubscribe`, { method: "POST" });
     assert(manualUnsubMissingRes.status === 404, "POST .../unsubscribe für unbekannte messageId sollte 404 liefern");
 
+    // ----- Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): der bereits
+    // eingeloggte Demo-User (authToken) verbindet ein ZWEITES, eigenes
+    // Konto -- muss am SELBEN User landen (nicht einen neuen User
+    // anlegen), eigene System-Ordner bekommen, und beide Konten müssen
+    // über GET /accounts + GET /folders sichtbar sein. -----
+    const secondAccountEmail = "demo-zweitkonto@driftmail.local";
+    const addAccountRes = await fetch(`${base}/v1/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "gmail", emailAddress: secondAccountEmail }),
+    });
+    assert(addAccountRes.status === 200, "POST /v1/accounts mit bestehendem Token + neuer E-Mail-Adresse sollte 200 liefern");
+    const addAccountBody = (await addAccountRes.json()) as { account: { id: string; emailAddress: string }; token: string };
+    assert(
+      addAccountBody.token === authToken,
+      "Konto zu einem bestehenden Login hinzufügen sollte denselben Token zurückgeben, keinen neuen ausstellen",
+    );
+    assert(addAccountBody.account.emailAddress === secondAccountEmail, "zurückgegebenes Konto sollte die neue E-Mail-Adresse tragen");
+
+    const accountsAfterAdd = await store.listMailAccountsByUserId(account.userId);
+    assert(accountsAfterAdd.length === 2, "Demo-User sollte jetzt genau 2 Konten haben");
+
+    // Idempotenz: derselbe Token + dieselbe E-Mail-Adresse ein zweites Mal
+    // -> dasselbe Konto, kein drittes.
+    const addAccountAgainRes = await fetch(`${base}/v1/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "gmail", emailAddress: secondAccountEmail }),
+    });
+    const addAccountAgainBody = (await addAccountAgainRes.json()) as { account: { id: string } };
+    assert(
+      addAccountAgainBody.account.id === addAccountBody.account.id,
+      "erneutes Verbinden derselben E-Mail-Adresse unter demselben Login sollte dasselbe Konto liefern, kein drittes anlegen",
+    );
+    assert((await store.listMailAccountsByUserId(account.userId)).length === 2, "weiterhin genau 2 Konten nach dem idempotenten zweiten Aufruf erwartet");
+
+    // Jedes Konto bekommt seine EIGENEN 7 System-Ordner ("getrennte
+    // Ansichten pro Konto", nicht ein gemeinsamer Ordnerbaum).
+    const secondAccountFoldersRes = await fetch(`${base}/v1/folders?accountId=${addAccountBody.account.id}`);
+    const secondAccountFolders = (await secondAccountFoldersRes.json()) as Array<Record<string, unknown>>;
+    assert(secondAccountFolders.length === 7, "zweites Konto sollte 7 eigene System-Ordner haben");
+    assert(
+      secondAccountFolders.every((f) => f.accountId === addAccountBody.account.id),
+      "alle zurückgegebenen Ordner sollten zum angefragten Konto gehören",
+    );
+
+    // GET /folders OHNE accountId: Ordner ALLER eigenen Konten zusammen (14 = 7+7).
+    const allOwnFoldersRes = await fetch(`${base}/v1/folders`);
+    const allOwnFolders = (await allOwnFoldersRes.json()) as Array<Record<string, unknown>>;
+    assert(allOwnFolders.length === 14, "GET /folders ohne accountId sollte Ordner beider eigener Konten zusammen liefern (7+7)");
+
+    // Ownership: ein fremdes accountId (z.B. noch gar nicht verbunden) -> 403.
+    const foreignAccountFoldersRes = await fetch(`${base}/v1/folders?accountId=00000000-0000-0000-0000-000000000000`);
+    assert(foreignAccountFoldersRes.status === 403, "GET /folders?accountId=<fremd/unbekannt> sollte 403 liefern");
+
+    // POST /folders ohne accountId ist jetzt mehrdeutig (2 Konten) -> 400.
+    const ambiguousCreateFolderRes = await fetch(`${base}/v1/folders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Mehrdeutig" }),
+    });
+    assert(
+      ambiguousCreateFolderRes.status === 400,
+      "POST /folders ohne accountId sollte bei mehreren verbundenen Konten 400 liefern",
+    );
+
+    // Mit explizitem accountId funktioniert das Anlegen weiterhin.
+    const explicitCreateFolderRes = await fetch(`${base}/v1/folders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Zweitkonto-Ordner", accountId: addAccountBody.account.id }),
+    });
+    assert(explicitCreateFolderRes.status === 201, "POST /folders mit explizitem accountId sollte weiterhin 201 liefern");
+    const explicitCreateFolderBody = (await explicitCreateFolderRes.json()) as { accountId: string };
+    assert(
+      explicitCreateFolderBody.accountId === addAccountBody.account.id,
+      "neu angelegter Ordner sollte zum angegebenen Konto gehören",
+    );
+
     // ----- Autorisierung (echte Auth, [2026-09-10]): ein zweiter, echter
     // User darf NICHT auf die Nachrichten/Ordner des ersten zugreifen, nur
     // weil er selbst eingeloggt ist (Authentifizierung allein reicht nicht,
@@ -1144,7 +1223,7 @@ async function main() {
     );
     assert(secondUserFixture2Security?.spamSubcategory === null, "spamSubcategory sollte beim Whitelist-Override null sein");
 
-    const secondUserEingang = await store.getSystemFolder(secondUserRecord!.id, "eingang");
+    const secondUserEingang = await store.getSystemFolder(secondUserAccount!.id, "eingang");
     assert(
       secondUserFixture2!.folderId === secondUserEingang!.id,
       "whitelisted Mail sollte in 'eingang' landen, nicht in Quarantäne/Spam",

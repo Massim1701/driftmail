@@ -58,7 +58,7 @@ export interface MailAccountRecord {
 
 export interface FolderRecord {
   id: string;
-  userId: string;
+  mailAccountId: string;
   name: string;
   icon: string;
   isSystem: boolean;
@@ -275,6 +275,7 @@ export interface ApiTrustedSender {
 
 export interface ApiFolder {
   id: string;
+  accountId: string;
   name: string;
   icon: string;
   isSystem: boolean;

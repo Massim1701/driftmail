@@ -208,7 +208,7 @@ messagesRouter.post("/messages/send", async (req, res) => {
   // ist die tatsaechliche sentMessageId. Keine message_security-Zeile --
   // eigene ausgehende Mail wird nicht klassifiziert, GET .../id liefert
   // dafuer korrekt classification="unclear"/security=null (siehe mappers.ts).
-  const gesendet = await store.getSystemFolder(account.userId, "gesendet");
+  const gesendet = await store.getSystemFolder(account.id, "gesendet");
   if (gesendet) {
     const sentMessage = await store.insertMessage({
       mailAccountId: account.id,
@@ -265,8 +265,13 @@ messagesRouter.get("/messages", async (req, res) => {
     if (!folder) return res.status(400).json({ error: `ungültiger folderId-Wert: ${folderId}` });
     // [2026-09-10] echte Auth: vorher konnte jeder angemeldete User jede
     // beliebige (existierende) folderId übergeben und so fremde Nachrichten
-    // sehen -- listMessages() selbst filtert nicht nach User.
-    if (folder.userId !== req.userId) return res.status(403).json({ error: "Ordner gehört nicht zum angemeldeten User" });
+    // sehen -- listMessages() selbst filtert nicht nach User. [2026-09-21]
+    // Mehrfach-Konten: Ordner gehören jetzt zu einem Konto, nicht direkt zu
+    // einem User -- Ownership über das Konto des Ordners geprüft.
+    const folderAccount = await store.getMailAccount(folder.mailAccountId);
+    if (!folderAccount || folderAccount.userId !== req.userId) {
+      return res.status(403).json({ error: "Ordner gehört nicht zum angemeldeten User" });
+    }
   }
 
   if (accountId) {
@@ -358,8 +363,10 @@ messagesRouter.post("/messages/:messageId/move", async (req, res) => {
   }
   // [2026-09-10] echte Auth: verhindert, eine eigene Nachricht in einen
   // fremden Ordner zu verschieben (targetFolder existierte zwar, gehörte
-  // aber vorher ungeprüft irgendeinem User).
-  if (targetFolder.userId !== req.userId) {
+  // aber vorher ungeprüft irgendeinem User). [2026-09-21] Mehrfach-Konten:
+  // Ownership über das Konto des Ziel-Ordners, nicht mehr direkt userId.
+  const targetAccount = await store.getMailAccount(targetFolder.mailAccountId);
+  if (!targetAccount || targetAccount.userId !== req.userId) {
     return res.status(403).json({ error: "Ziel-Ordner gehört nicht zum angemeldeten User" });
   }
 
@@ -378,7 +385,7 @@ messagesRouter.delete("/messages/:messageId", async (req, res) => {
   if (!owned) return;
   const { message, account } = owned;
 
-  const papierkorb = await store.getSystemFolder(account.userId, "papierkorb");
+  const papierkorb = await store.getSystemFolder(account.id, "papierkorb");
   if (!papierkorb) {
     // Sollte praktisch nie passieren (ensureDemoUser() legt den Ordner
     // immer an), aber sauberer 500 statt eines "undefined"-Absturzes falls
@@ -418,7 +425,7 @@ messagesRouter.delete("/messages/:messageId/permanent", async (req, res) => {
   if (!owned) return;
   const { message, account } = owned;
 
-  const papierkorb = await store.getSystemFolder(account.userId, "papierkorb");
+  const papierkorb = await store.getSystemFolder(account.id, "papierkorb");
   if (!papierkorb || message.folderId !== papierkorb.id) {
     return res.status(400).json({
       error: "endgültiges Löschen ist nur für Nachrichten im Papierkorb erlaubt -- zuerst DELETE /messages/{messageId} (in den Papierkorb verschieben)",

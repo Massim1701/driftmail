@@ -26,7 +26,7 @@ import { Router } from "express";
 import { google } from "googleapis";
 import { isEmailAllowed } from "../auth/allowlist";
 import { encryptCredentials } from "../auth/credentialsEncryption";
-import { createSystemFoldersForUser, store } from "../db/store";
+import { createSystemFoldersForAccount, store } from "../db/store";
 import { ImapAdapter, type ImapCredentials } from "../mail/imapAdapter";
 import { toApiMailAccount } from "../mappers";
 import type { Provider } from "../types";
@@ -153,8 +153,8 @@ authRouter.get("/auth/google/callback", async (req, res) => {
     account = (await store.updateMailAccount(account.id, { encryptedOauthToken: encryptedRefreshToken })) ?? account;
   }
 
-  if ((await store.listFolders(user.id)).length === 0) {
-    await createSystemFoldersForUser(user.id);
+  if ((await store.listFolders(account.id)).length === 0) {
+    await createSystemFoldersForAccount(account.id);
   }
 
   const session = await store.createSession(user.id);
@@ -172,17 +172,37 @@ authRouter.post("/accounts", async (req, res) => {
     return res.status(403).json({ error: "Diese E-Mail-Adresse ist fuer driftmail (noch) nicht freigeschaltet." });
   }
 
-  let user = await store.getUserByEmail(emailAddress);
-  if (!user) user = await store.createUser(emailAddress);
+  // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): ist bereits
+  // ein gueltiger, nicht abgelaufener Bearer-Token vorhanden, wird das neue
+  // Konto an DIESEN User angehaengt ("weiteres Konto hinzufuegen"), statt
+  // (wie bisher immer) den User ueber die E-Mail-Adresse selbst
+  // nachzuschlagen/anzulegen. Der Endpunkt bleibt technisch `security: []`
+  // -- ein fehlender/ungueltiger Token wird wie "nicht eingeloggt"
+  // behandelt (bisheriger Login-/Registrierungs-Weg), kein 401.
+  const authHeader = req.header("authorization");
+  const bearerToken = authHeader?.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : null;
+  const existingSession = bearerToken ? await store.getSessionByToken(bearerToken) : undefined;
+  const isAddingToExistingSession = !!existingSession && new Date(existingSession.expiresAt).getTime() >= Date.now();
 
-  // Kein Multi-Account pro User in diesem Entwicklungsstand (gleiche
-  // 1:1-Annahme wie schon bei ensureDemoUser()/drafts.ts) -- ein zweiter
-  // POST /accounts-Aufruf mit derselben E-Mail gibt einfach das bestehende
-  // Konto zurück, statt ein zweites anzulegen. Gilt auch fuer IMAP: ein
-  // zweiter Aufruf mit (ggf. geaenderten) IMAP-Feldern aendert die bereits
-  // gespeicherten Zugangsdaten NICHT -- kein Update-Pfad in diesem Schritt,
-  // siehe api-spec.yaml-Summary/backend/README.md.
-  let account = await store.getMailAccountByUserId(user.id);
+  let userId: string;
+  if (isAddingToExistingSession) {
+    userId = existingSession!.userId;
+  } else {
+    let user = await store.getUserByEmail(emailAddress);
+    if (!user) user = await store.createUser(emailAddress);
+    userId = user.id;
+  }
+
+  // Idempotenz pro (User, E-Mail-Adresse) -- ein zweiter POST /accounts-
+  // Aufruf mit dem GLEICHEN eingeloggten User UND derselben E-Mail-Adresse
+  // gibt einfach das bestehende Konto zurück, statt ein zweites anzulegen
+  // (gleiche Grundidee wie bisher, nur nicht mehr "ein Konto pro User
+  // insgesamt", sondern "ein Konto pro User+E-Mail-Adresse-Kombination" --
+  // das ist genau die Verallgemeinerung, die Mehrfach-Konten braucht). Gilt
+  // auch fuer IMAP: ein zweiter Aufruf mit (ggf. geaenderten) IMAP-Feldern
+  // aendert die bereits gespeicherten Zugangsdaten NICHT -- kein Update-Pfad
+  // in diesem Schritt, siehe api-spec.yaml-Summary/backend/README.md.
+  let account = (await store.listMailAccountsByUserId(userId)).find((a) => a.emailAddress === emailAddress);
   if (!account) {
     let encryptedImapCredentials: string | null = null;
 
@@ -230,7 +250,7 @@ authRouter.post("/accounts", async (req, res) => {
     }
 
     account = await store.createMailAccount({
-      userId: user.id,
+      userId,
       provider,
       emailAddress,
       encryptedOauthToken: null,
@@ -240,12 +260,16 @@ authRouter.post("/accounts", async (req, res) => {
     });
   }
 
-  if ((await store.listFolders(user.id)).length === 0) {
-    await createSystemFoldersForUser(user.id);
+  if ((await store.listFolders(account.id)).length === 0) {
+    await createSystemFoldersForAccount(account.id);
   }
 
-  const session = await store.createSession(user.id);
-  res.status(200).json({ account: toApiMailAccount(account), token: session.token });
+  // Beim Hinzufuegen eines weiteren Kontos zu einer bestehenden Sitzung
+  // wird KEIN neuer Token ausgestellt (der Client ist ja schon eingeloggt,
+  // ein neuer Token wuerde den alten nur unnoetig invalidieren-lassen-
+  // muessen) -- derselbe Token wird einfach zurueckgegeben.
+  const token = isAddingToExistingSession ? existingSession!.token : (await store.createSession(userId)).token;
+  res.status(200).json({ account: toApiMailAccount(account), token });
 });
 
 authRouter.post("/auth/session", async (req, res) => {
