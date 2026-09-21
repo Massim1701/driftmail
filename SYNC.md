@@ -827,3 +827,16 @@ Damit ist die KI-Anbindungs-Korrektur ueber alle drei Tracks fertig.
 **Tests:** Smoketest deckt beide Endpunkte ab (Konto loeschen inkl. Cascade-Verifikation, letztes Konto -> 400, Settings-Default/-Aenderung/-Validierung). Gruen in-memory + gegen frisches Postgres.
 
 **Uebergabe an Track C/F:** die eigentliche Einstellungsbereich-UI (Konten-Liste + Hinzufuegen/Entfernen, Akzentfarben-Auswahl, gebuendelte Sicherheit-Sektion mit KI-Einstellungen/App-Sperre + einfacher Text-Uebersicht der aktiven Sicherheitsfeatures, Link zur Installationsanleitung) ist noch zu bauen -- Details in `backend/README.md` "Einstellungsbereich (Backend-Grundlage)".
+
+
+[2026-09-21] [terminal] [C] — WEB_INBOX.md 21.09. "NEUER AUFTRAG - Einstellungsbereich + Info-Seite", Punkt 1 (iOS-Teil) fertig (Commit `41b4b3f`). Erweitert die bereits bestehende `SettingsView` (`FolderListView.swift`) statt eine neue zu bauen.
+
+**Konto entfernen:** `.swipeActions` je Konto-Zeile, ruft neues `AppEnvironment.removeAccount(_:)` → `DELETE /accounts/{id}` auf. Letztes Konto client-seitig gar nicht erst als entfernbar angeboten, Server prueft denselben Fall trotzdem nochmal (`APIError.badRequest` abgefangen). Nach Erfolg laedt `removeAccount(_:)` `accounts` neu -- bestehende `loadAccounts()`-Logik waehlt automatisch ein verbleibendes Konto, falls das aktive entfernt wurde.
+
+**Neue "Ansicht"-Sektion:** fuenf Akzentfarben-Swatches aus `AccentTheme` (neu, `Models/UserSettings.swift`, Werte 1:1 aus `design-tokens.json` `color.accentThemes`), `ocean_verlauf` als echter `LinearGradient`-Swatch. Ruft `PUT /settings` auf. **Design-Entscheidung fuer echtes Live-Umfaerben ohne App-Neustart:** `DesignTokens.Color.accent` war ein `static let` -- jetzt `static var`, `AppEnvironment` bekam ein neues `@Published accentTheme`, `applyAccentTheme(_:)` setzt beides zusammen. Die vier Views, die die Farbe schon lesen UND `environment` bereits als `@EnvironmentObject` beobachten (`FolderListView`, `MessageDetailView`, `OnboardingCapabilityCheckView`, `RootView`), faerben sich dadurch automatisch um -- kein Antasten der 14 bestehenden Aufrufstellen noetig. Bewusst NICHT umgestellt: `AppLockGateView`/`OnboardingAccountConnectView` (laufen vor jedem Settings-Load, statischer Default ist dort korrekt, kein Kompromiss).
+
+**Sicherheits-Uebersicht + Hilfe-Link:** nicht-technischer Text-Block (Wortlaut von Massimo vorgegeben, Malware-Scan ehrlich als "in Vorbereitung" markiert -- ist tatsaechlich noch ein Mock) und ein Platzhalter-Link auf `https://driftware.online`, bis die andere Claude-Session die echte Info-Seite fertig hat.
+
+**Tests:** `xcodebuild` BUILD SUCCEEDED, sauberer Uninstall/Install/Launch ohne Crash/Decode-Fehler, Onboarding-Screen unveraendert korrekt gerendert (Screenshot verifiziert). Neue Settings-Sektionen selbst NICHT interaktiv verifizierbar -- gleiche Ursache wie bei allen vorherigen Nachtraegen dieser Session (kein Weg am Onboarding-Gate vorbei ohne echte Test-Mailbox). Offener Punkt fuer eine spaetere Session: einmal mit echter Test-Mailbox live durchklicken.
+
+**Kein Blocker.** Web-Teil von Punkt 1 laeuft parallel in einer anderen Session/einem anderen Fork.
