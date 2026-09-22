@@ -1155,3 +1155,65 @@ Alt: "Eindeutiger Muell wird automatisch aussortiert, Grenzfaelle landen mit War
 Neu: "Eindeutiger Muell wird automatisch aussortiert, Grenzfaelle landen mit Warnhinweis in Quarantaene statt geloescht zu werden -- auch klassischer Vorschussbetrug."
 
 Nur das Klammer-Namensbeispiel entfernen, Rest bleibt gleich. Reine Text-Aenderung im driftware-Repo, kein Contract-Bruch, kein Blocker.
+
+
+[2026-09-21] [offen] [ANLEITUNG - Pro-Anbieter-Unterseiten] [driftware-Repo, Datei driftmail/anleitung.html] — Massimo: Bedienungsanleitung um eine eigene Schritt-fuer-Schritt-Unterseite pro Mail-Anbieter erweitern. Hinweis: echte Screenshots der Fremd-Oberflaechen (Google/Apple/GMX/web.de) kann ich nicht liefern -- Text ist so detailliert wie moeglich, Code kann bei Bedarf eigene einfache Icons/Nummerierungs-Grafiken statt echter Screenshots einbauen, keine 1:1-Nachbildung fremder UIs.
+
+---
+## Gmail
+
+1. In driftmail "Gmail" bei der Provider-Auswahl anklicken.
+2. Der bekannte Google-Anmeldebildschirm oeffnet sich in einem neuen Fenster/Tab.
+3. Mit der Gmail-Adresse und dem Google-Passwort anmelden.
+4. Google zeigt eine Berechtigungsanfrage ("driftmail moechte auf dein Gmail-Konto zugreifen") -- bestaetigen.
+5. Fertig, das Postfach laedt automatisch. Kein App-Passwort noetig.
+
+---
+## iCloud Mail
+
+1. App-spezifisches Passwort erzeugen (einmalig): im Browser appleid.apple.com oeffnen, mit der Apple-ID einloggen.
+2. Zu "Anmeldung und Sicherheit" scrollen/klicken.
+3. "App-spezifische Passwoerter" auswaehlen.
+4. "Ein App-spezifisches Passwort erstellen" klicken, einen Namen vergeben (z.B. "driftmail").
+5. Das angezeigte Passwort (Format xxxx-xxxx-xxxx-xxxx) kopieren.
+6. In driftmail "iCloud Mail" auswaehlen, die @icloud.com-Adresse eintragen.
+7. Als Passwort das gerade erzeugte App-Passwort einfuegen (NICHT das normale Apple-ID-Passwort).
+8. Server-Einstellungen sind schon richtig vorausgefuellt (imap.mail.me.com).
+9. "Verbinden" klicken.
+
+---
+## GMX
+
+1. Bei GMX einloggen, oben rechts auf das Profil-Symbol klicken.
+2. Zu den E-Mail-Einstellungen wechseln, Bereich "POP3/IMAP" suchen.
+3. IMAP-Zugriff aktivieren (bei GMX/web.de standardmaessig ausgeschaltet, muss einmalig angeschaltet werden).
+4. Falls Zwei-Faktor-Authentifizierung aktiv ist: zusaetzlich ein App-Passwort in den Sicherheitseinstellungen erzeugen. Ohne 2FA reicht das normale GMX-Passwort.
+5. In driftmail "GMX" auswaehlen, E-Mail-Adresse eintragen.
+6. Passwort (normales Passwort oder App-Passwort, je nach Schritt 4) eintragen.
+7. Server-Einstellungen sind vorausgefuellt (imap.gmx.net).
+8. "Verbinden" klicken.
+
+---
+## web.de
+
+1. Bei web.de einloggen, oben rechts auf das Namenskuerzel klicken.
+2. "E-Mail-Einstellungen" auswaehlen, Bereich "POP3/IMAP" suchen.
+3. IMAP-Abruf einschalten (auch hier standardmaessig aus).
+4. Falls Zwei-Faktor-Authentifizierung aktiv ist: App-Passwort erzeugen. Ohne 2FA reicht das normale web.de-Passwort.
+5. In driftmail "web.de" auswaehlen, E-Mail-Adresse eintragen.
+6. Passwort eintragen.
+7. Server-Einstellungen sind vorausgefuellt (imap.web.de).
+8. "Verbinden" klicken.
+
+---
+## Anderer Anbieter (generisches IMAP)
+
+1. Beim eigenen Mail-Anbieter herausfinden: IMAP-Server-Adresse, IMAP-Port (meist 993), SMTP-Server-Adresse, SMTP-Port (meist 587) -- steht meist in den Hilfeseiten des Anbieters unter "IMAP-Einstellungen" oder "E-Mail-Programm einrichten".
+2. In driftmail "Anderer Anbieter (IMAP)" auswaehlen.
+3. E-Mail-Adresse und Passwort eintragen.
+4. IMAP-Server, Port und SMTP-Angaben aus Schritt 1 manuell eintragen.
+5. "Verbinden" klicken. Bei Fehler: Angaben nochmal beim Anbieter gegenpruefen, manche verlangen ebenfalls ein App-Passwort statt des normalen Passworts.
+
+---
+
+Bitte diese sechs Unterabschnitte als eigene, klar betitelte Bereiche auf der Anleitungs-Seite einbauen (z.B. Tabs oder Akkordeon-Elemente, damit die Seite nicht zu lang/unuebersichtlich wird -- Umsetzung Code ueberlassen). Reine Content-Erweiterung, kein Contract-Bruch.
