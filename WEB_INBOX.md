@@ -1146,3 +1146,12 @@ Ausserdem offene Rueckfrage von Massimo: der iOS-Abschlussbericht von vorhin erw
 Bitte Umfang/Aufwand realistisch einschaetzen, das ist vermutlich groesser als die meisten Einzelauftraege bisher -- in SYNC.md dokumentieren, ob es in einem Zug geht oder aufgeteilt werden sollte. Hohe Prioritaet, da zwei bereits fertige Backend-Features erst dadurch nutzbar werden.
 
 **Aufwands-Einschaetzung (Terminal, 22.09., wie oben verlangt):** in drei unabhaengige Schritte aufgeteilt, Backend zuerst -- Web/iOS koennen parallel auf einer fertigen, getesteten API aufbauen statt gegen einen sich noch aendernden Contract zu entwickeln. Backend jetzt fertig (`messages.body_html`, Sanitisierung/Bild-Blockierung/Link-Umschreibung serverseitig, `message_links` befuellt, Migration + Smoketest verifiziert, siehe SYNC.md 22.09.). Web (Sandbox-`<iframe>`) und iOS (`WKWebView` ohne JS) sind vom Umfang her vergleichbar mit den bisherigen "9 Features"-UI-Rundgaengen -- keine neuen Contract-Aenderungen mehr noetig, reine Anzeige-Arbeit gegen die jetzt fertige `bodyHtml`/`links`-API.
+
+
+[2026-09-21] [offen] [TEXT-KORREKTUR - anderes Repo, bitte beachten] [driftware-Repo, NICHT driftmail-Repo] — Massimo: Text auf der driftmail-Info-Seite (driftware-Repo, Datei driftmail/index.html) im ersten Funktionsuebersicht-Feld "Spam, Phishing & Betrug erkennen" wirkt mit dem Namensbeispiel unprofessionell. Bitte aendern:
+
+Alt: "Eindeutiger Muell wird automatisch aussortiert, Grenzfaelle landen mit Warnhinweis in Quarantaene statt geloescht zu werden -- auch klassischer Vorschussbetrug ("Prinz aus Nigeria"-Muster)."
+
+Neu: "Eindeutiger Muell wird automatisch aussortiert, Grenzfaelle landen mit Warnhinweis in Quarantaene statt geloescht zu werden -- auch klassischer Vorschussbetrug."
+
+Nur das Klammer-Namensbeispiel entfernen, Rest bleibt gleich. Reine Text-Aenderung im driftware-Repo, kein Contract-Bruch, kein Blocker.
