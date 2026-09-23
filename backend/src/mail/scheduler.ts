@@ -55,9 +55,12 @@ export async function runSyncForAllAccounts(): Promise<void> {
     accounts.map(async (account) => {
       try {
         const { imported, autoDeleted } = await syncAccount(account, aiAdapter);
-        if (imported > 0 || autoDeleted > 0) {
-          console.log(`[sync] ${account.emailAddress}: ${imported} importiert, ${autoDeleted} automatisch geloescht`);
-        }
+        // [TEMP - Diagnose "automatischer Abruf funktioniert nicht"]: auch
+        // 0-Treffer loggen, um zu unterscheiden ob der Sync ueberhaupt
+        // laeuft (und nur nichts Neues findet) oder gar nicht erst
+        // ausgefuehrt wird. Nach der Diagnose wieder auf "nur bei Treffern"
+        // zurueckstellen (siehe Kommentar davor in Git-History).
+        console.log(`[sync] ${account.emailAddress}: ${imported} importiert, ${autoDeleted} automatisch geloescht`);
       } catch (err) {
         console.error(`[sync] Fehlgeschlagen fuer Konto ${account.emailAddress}:`, err);
       }

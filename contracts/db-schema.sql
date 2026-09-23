@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS mail_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    provider TEXT NOT NULL CHECK (provider IN ('gmail', 'imap')),
+    provider TEXT NOT NULL CHECK (provider IN ('gmail', 'imap', 'pop3')),
     email_address TEXT NOT NULL,
     encrypted_oauth_token TEXT,
     encrypted_imap_credentials TEXT,

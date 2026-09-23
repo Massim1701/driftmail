@@ -14,6 +14,7 @@ import { decryptCredentials } from "../auth/credentialsEncryption";
 import { FixtureMailAdapter } from "./fixtureAdapter";
 import { GmailAdapter } from "./gmailAdapter";
 import { ImapAdapter, type ImapCredentials } from "./imapAdapter";
+import { Pop3Adapter, type Pop3Credentials } from "./pop3Adapter";
 import { parseInReplyToHeader } from "./inReplyTo";
 import { parseListUnsubscribeHeader, performUnsubscribe } from "./listUnsubscribe";
 import { maybeSendAbsenceResponse } from "./absenceResponder";
@@ -83,6 +84,18 @@ export function adapterForAccount(account: MailAccountRecord): MailAdapter {
         smtpPort: Number(process.env.SMTP_PORT ?? 587),
         smtpSecure: process.env.SMTP_SECURE === "true",
       });
+    }
+  }
+  if (account.provider === "pop3") {
+    // Gleiches verschluesseltes Feld wie IMAP (encryptedImapCredentials) --
+    // Pop3Credentials und ImapCredentials haben identisches Schema
+    // (host/port/secure/user/password/smtp*), eine eigene DB-Spalte nur
+    // fuers Feldnamen-"POP3" waere reine Kosmetik gewesen. Keine
+    // Env-Var-Fallback-Variante (anders als IMAP oben) -- POP3 ist ein
+    // reiner echter-User-Weg, kein Demo-/Dev-Zero-Config-Pfad.
+    if (account.encryptedImapCredentials) {
+      const credentials = JSON.parse(decryptCredentials(account.encryptedImapCredentials)) as Pop3Credentials;
+      return new Pop3Adapter(credentials);
     }
   }
   return new FixtureMailAdapter();

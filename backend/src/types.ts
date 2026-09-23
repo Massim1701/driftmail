@@ -5,7 +5,7 @@
 // contracts/ai-adapter-interface.ts wird direkt für den KI-Teil verwendet,
 // siehe src/ai/types.ts.
 
-export type Provider = "gmail" | "imap";
+export type Provider = "gmail" | "imap" | "pop3";
 export type SyncStatus = "pending" | "syncing" | "ok" | "error";
 // CONTRACT-ÄNDERUNG (SYNC.md, Commit 734781e): fester Folder-Enum ersetzt
 // durch benutzerdefinierte Ordner (Tabelle `folders`). SystemFolderKey

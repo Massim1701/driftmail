@@ -138,7 +138,9 @@ struct MessageDetailView: View {
             set: { if !$0 { composeMode = nil } }
         )) {
             if let composeMode {
-                ComposeView(mode: composeMode, onSent: {})
+                ComposeView(mode: composeMode, onSent: {
+                    Task { await environment.loadFolders(forceRefresh: true) }
+                })
             }
         }
     }
@@ -679,12 +681,17 @@ private struct SecurityBadgesView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DesignTokens.Spacing.sm) {
-            HStack(spacing: DesignTokens.Spacing.sm) {
+            FlowLayout(spacing: DesignTokens.Spacing.sm, lineSpacing: DesignTokens.Spacing.sm) {
                 badge("SPF", security.spfStatus)
                 badge("DKIM", security.dkimStatus)
                 badge("DMARC", security.dmarcStatus)
             }
-            HStack(spacing: DesignTokens.Spacing.sm) {
+            // Wrapping row (FlowLayout statt HStack): mit sechs moeglichen
+            // Signalen plus dem "Neuer Absender"-Hinweis passt das laengst
+            // nicht immer in eine Zeile -- eine starre HStack wuerde die
+            // Labels dann Buchstabe fuer Buchstabe in ihrer eigenen Kapsel
+            // umbrechen statt in eine neue Zeile zu wandern.
+            FlowLayout(spacing: DesignTokens.Spacing.sm, lineSpacing: DesignTokens.Spacing.sm) {
                 if security.homoglyphDetected {
                     flag("Homoglyph erkannt")
                 }
@@ -724,6 +731,7 @@ private struct SecurityBadgesView: View {
         return Text("\(label): \(status.rawValue)")
             .font(.system(size: DesignTokens.Typography.Size.caption, weight: .medium))
             .foregroundStyle(color)
+            .fixedSize()
             .padding(.horizontal, DesignTokens.Spacing.sm)
             .padding(.vertical, 2)
             .background(Capsule().stroke(color, lineWidth: 1))
@@ -742,6 +750,7 @@ private struct SecurityBadgesView: View {
         return Text(label)
             .font(.system(size: DesignTokens.Typography.Size.caption, weight: .medium))
             .foregroundStyle(textColor)
+            .fixedSize()
             .padding(.horizontal, DesignTokens.Spacing.sm)
             .padding(.vertical, 2)
             .background(Capsule().fill(color.opacity(0.15)))

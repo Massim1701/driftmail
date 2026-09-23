@@ -136,6 +136,13 @@ actor MockAPIClient: APIClient {
         return (account, "mock-session-token")
     }
 
+    func connectPop3Account(emailAddress: String, pop3Host: String, pop3Port: Int, pop3Secure: Bool, pop3User: String?, pop3Password: String, smtpHost: String?, smtpPort: Int?, smtpSecure: Bool?) async throws -> (account: MailAccount, token: String) {
+        await delay()
+        let account = MailAccount(id: UUID().uuidString, provider: .pop3, emailAddress: emailAddress, syncStatus: .ok)
+        db.accounts = [account]
+        return (account, "mock-session-token")
+    }
+
     func fetchTrustedSenders() async throws -> [TrustedSender] {
         await delay()
         return trustedSenders

@@ -32,10 +32,16 @@ struct AppLockGateView<Content: View>: View {
                 if isEnabled && !isUnlocked {
                     Task { await attemptUnlock() }
                 }
-            } else if isEnabled {
-                // Erneut sperren, sobald die App den Vordergrund verlässt --
-                // ein simples "beim nächsten Start" würde eine kurz
-                // geöffnete App-Wechsler-Vorschau nicht abdecken.
+            } else if isEnabled && newPhase == .background {
+                // NUR bei .background erneut sperren, nicht bei .inactive --
+                // .inactive feuert auch fuer rein interne Uebergaenge, bei
+                // denen die App fuer den User sichtbar im Vordergrund
+                // bleibt (Sheet-Praesentation wie ComposeView, der
+                // Face-ID-System-Prompt selbst, Kontrollzentrum-Wisch...).
+                // Mit ".inactive ODER .background" (vorheriger Code) sperrte
+                // sich die App dadurch quasi bei jeder Interaktion neu und
+                // fragte Face ID ständig erneut ab, statt nur einmal pro
+                // echtem Verlassen der App -- genau der gemeldete Bug.
                 isUnlocked = false
             }
         }

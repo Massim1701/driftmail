@@ -28,6 +28,7 @@ import { isEmailAllowed } from "../auth/allowlist";
 import { encryptCredentials } from "../auth/credentialsEncryption";
 import { createSystemFoldersForAccount, store } from "../db/store";
 import { ImapAdapter, type ImapCredentials } from "../mail/imapAdapter";
+import { Pop3Adapter, type Pop3Credentials } from "../mail/pop3Adapter";
 import { toApiMailAccount } from "../mappers";
 import type { Provider } from "../types";
 
@@ -163,7 +164,7 @@ authRouter.get("/auth/google/callback", async (req, res) => {
 
 authRouter.post("/accounts", async (req, res) => {
   const body = req.body ?? {};
-  const provider: Provider = body.provider === "imap" ? "imap" : "gmail";
+  const provider: Provider = body.provider === "imap" ? "imap" : body.provider === "pop3" ? "pop3" : "gmail";
   const emailAddress = typeof body.emailAddress === "string" ? body.emailAddress.trim() : "";
   if (!emailAddress) {
     return res.status(400).json({ error: "emailAddress ist erforderlich" });
@@ -246,6 +247,47 @@ authRouter.post("/accounts", async (req, res) => {
         });
       }
 
+      encryptedImapCredentials = encryptCredentials(JSON.stringify(credentials));
+    }
+
+    if (provider === "pop3") {
+      // Eigene Feldnamen (pop3*) statt der imap*-Felder oben -- eigenes
+      // Protokoll mit eigenen Standard-Ports (995 statt 993), gleiche
+      // Grundstruktur/Validierung sonst 1:1 gespiegelt.
+      const pop3Host = typeof body.pop3Host === "string" ? body.pop3Host.trim() : "";
+      const pop3Password = typeof body.pop3Password === "string" ? body.pop3Password : "";
+      if (!pop3Host || !pop3Password) {
+        return res.status(400).json({ error: "pop3Host und pop3Password sind fuer provider=pop3 erforderlich" });
+      }
+      const pop3Port = typeof body.pop3Port === "number" ? body.pop3Port : 995;
+      const pop3Secure = typeof body.pop3Secure === "boolean" ? body.pop3Secure : true;
+      const pop3User = typeof body.pop3User === "string" && body.pop3User.trim() ? body.pop3User.trim() : emailAddress;
+      const smtpHost = typeof body.smtpHost === "string" && body.smtpHost.trim() ? body.smtpHost.trim() : pop3Host;
+      const smtpPort = typeof body.smtpPort === "number" ? body.smtpPort : 587;
+      const smtpSecure = typeof body.smtpSecure === "boolean" ? body.smtpSecure : false;
+
+      const credentials: Pop3Credentials = {
+        host: pop3Host,
+        port: pop3Port,
+        secure: pop3Secure,
+        user: pop3User,
+        password: pop3Password,
+        smtpHost,
+        smtpPort,
+        smtpSecure,
+      };
+
+      try {
+        await new Pop3Adapter(credentials).testConnection();
+      } catch (err) {
+        console.error(`[auth] POP3-Verbindungstest fehlgeschlagen fuer ${pop3Host}:`, err);
+        return res.status(422).json({
+          error: "POP3-Zugangsdaten konnten nicht verifiziert werden -- bitte Host, Adresse und (App-)Passwort prüfen.",
+        });
+      }
+
+      // Gleiches verschluesseltes Feld wie IMAP -- siehe Kommentar in
+      // mail/sync.ts adapterForAccount() zur Begruendung.
       encryptedImapCredentials = encryptCredentials(JSON.stringify(credentials));
     }
 

@@ -18,6 +18,9 @@ protocol APIClient {
     /// bei fehlgeschlagenem IMAP-Login (422) und `APIError.notAllowlisted`
     /// bei nicht freigeschalteter Adresse (403).
     func connectImapAccount(emailAddress: String, imapHost: String, imapPort: Int, imapSecure: Bool, imapUser: String?, imapPassword: String, smtpHost: String?, smtpPort: Int?, smtpSecure: Bool?) async throws -> (account: MailAccount, token: String)
+    /// `POST /accounts` (`provider=pop3`) -- Pendant zu connectImapAccount()
+    /// fuer POP3 (Massimo: "web.de ist POP3"). Gleiches Fehlerbild.
+    func connectPop3Account(emailAddress: String, pop3Host: String, pop3Port: Int, pop3Secure: Bool, pop3User: String?, pop3Password: String, smtpHost: String?, smtpPort: Int?, smtpSecure: Bool?) async throws -> (account: MailAccount, token: String)
     /// `GET /trusted-senders` (WEB_INBOX.md 15.09. "Whitelist
     /// vertrauenswürdiger Absender") -- kombiniert sich mit
     /// `MessageDetail.isNewSender` (siehe dortigen Kommentar).

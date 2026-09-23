@@ -5,6 +5,7 @@ struct MailAccount: Codable, Identifiable, Hashable {
     enum Provider: String, Codable {
         case gmail
         case imap
+        case pop3
     }
 
     enum SyncStatus: String, Codable {

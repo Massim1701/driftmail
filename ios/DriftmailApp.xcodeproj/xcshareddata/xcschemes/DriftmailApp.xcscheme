@@ -59,6 +59,13 @@
             ReferencedContainer = "container:DriftmailApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "DRIFTMAIL_API_BASE_URL"
+            value = "http://localhost:3000/v1"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

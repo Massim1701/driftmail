@@ -22,6 +22,8 @@
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>driftmail kann Face ID nutzen, um die App zu sperren und deinen lokalen Mail-Cache zu schützen, falls dein Gerät verloren geht oder gestohlen wird.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>driftmail braucht Zugriff auf dein lokales Netzwerk, um sich waehrend der Entwicklung mit dem lokalen Backend zu verbinden (DRIFTMAIL_API_BASE_URL).</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

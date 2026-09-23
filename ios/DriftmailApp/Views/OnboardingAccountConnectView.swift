@@ -144,7 +144,7 @@ private struct ProviderRow: View {
                     Text(provider.label)
                         .font(.system(size: DesignTokens.Typography.Size.body, weight: .medium))
                         .foregroundStyle(provider.comingSoon ? DesignTokens.Color.textMuted : DesignTokens.Color.textPrimary)
-                    Text(provider.comingSoon ? "demnächst" : provider.authType == .oauth ? "Anmelden" : "IMAP verbinden")
+                    Text(provider.comingSoon ? "demnächst" : provider.authType == .oauth ? "Anmelden" : provider.authType == .pop3 ? "POP3 verbinden" : "IMAP verbinden")
                         .font(.system(size: DesignTokens.Typography.Size.caption))
                         .foregroundStyle(DesignTokens.Color.textMuted)
                 }
@@ -175,6 +175,19 @@ private struct ProviderRow: View {
 /// eingeklappt (Normalfall braucht nur E-Mail + Passwort), außer beim
 /// generischen IMAP-Provider (`imapHost == nil`), wo sie sofort nötig sind.
 private struct ImapConnectFormView: View {
+    /// [2026-09-22] "web.de ist POP3": manche Provider/Nutzer bevorzugen
+    /// POP3 statt IMAP (oder haben bei ihrem Provider nur POP3 aktiviert).
+    /// Eigener kleiner Enum statt `MailAccount.Provider` wiederzuverwenden
+    /// -- hier geht es um das Verbindungsprotokoll fuer DIESES Formular,
+    /// nicht um den gespeicherten Konto-Provider-Typ (beide haben zufaellig
+    /// dieselben zwei Werte, sind aber unterschiedliche Konzepte).
+    private enum ConnectionProtocol: String, CaseIterable, Identifiable {
+        case imap = "IMAP"
+        case pop3 = "POP3"
+        var id: String { rawValue }
+        var defaultPort: Int { self == .imap ? 993 : 995 }
+    }
+
     let provider: MailProvider
     let client: RemoteAPIClient
     let onBack: () -> Void
@@ -183,6 +196,7 @@ private struct ImapConnectFormView: View {
     @State private var emailAddress = ""
     @State private var password = ""
     @State private var showAdvanced: Bool
+    @State private var connectionProtocol: ConnectionProtocol = .imap
     @State private var imapHost: String
     @State private var imapPort: String
     @State private var imapSecure: Bool
@@ -199,6 +213,7 @@ private struct ImapConnectFormView: View {
         self.onBack = onBack
         self.onConnected = onConnected
         _showAdvanced = State(initialValue: provider.imapHost == nil)
+        _connectionProtocol = State(initialValue: provider.authType == .pop3 ? .pop3 : .imap)
         _imapHost = State(initialValue: provider.imapHost ?? "")
         _imapPort = State(initialValue: String(provider.imapPort ?? 993))
         _imapSecure = State(initialValue: provider.imapSecure ?? true)
@@ -239,14 +254,50 @@ private struct ImapConnectFormView: View {
                 SecureField(provider.requiresAppPassword ? "App-Passwort" : "Passwort", text: $password)
             }
 
+            // [2026-09-22] Massimo: "die App muss erkennen ob POP oder IMAP,
+            // das sind ja keine Geheimnisse, nur bei unbekannten
+            // Mailservern abfragen welcher Dienst -- zu viele Fragen
+            // koennen User verwirren". Bei einem BEKANNTEN Preset (web.de,
+            // GMX, iCloud -- `provider.imapHost != nil`) steht das
+            // Protokoll schon fest (funktioniert bereits zuverlaessig ueber
+            // IMAP, echt verifiziert) -- keine zusaetzliche Frage. Nur beim
+            // generischen "Anderer Anbieter" (`imapHost == nil`, wirklich
+            // unbekannter Server) zeigen wir die Wahl ueberhaupt.
+            if provider.imapHost == nil {
+                Section {
+                    Picker("Protokoll", selection: $connectionProtocol) {
+                        ForEach(ConnectionProtocol.allCases) { p in
+                            Text(p.rawValue).tag(p)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: connectionProtocol) { oldValue, newValue in
+                        // Host-Praefix + Standard-Port automatisch mitziehen,
+                        // z.B. "imap.provider.de"/993 -> "pop3.provider.de"/995
+                        // -- nur wenn Host/Port noch auf dem jeweiligen
+                        // Standard stehen (kein Ueberschreiben eigener
+                        // manueller Werte).
+                        if imapHost.hasPrefix("\(oldValue.rawValue.lowercased()).") {
+                            imapHost = "\(newValue.rawValue.lowercased())." + imapHost.dropFirst(oldValue.rawValue.count + 1)
+                        }
+                        if Int(imapPort) == oldValue.defaultPort {
+                            imapPort = String(newValue.defaultPort)
+                        }
+                    }
+                } footer: {
+                    Text("Falls du nicht sicher bist: dein Anbieter nennt das meist \"IMAP\" oder \"POP3\" in seinen Einstellungen.")
+                        .font(.system(size: DesignTokens.Typography.Size.small))
+                }
+            }
+
             Section {
                 DisclosureGroup("Servereinstellungen", isExpanded: $showAdvanced) {
-                    TextField("IMAP-Server", text: $imapHost)
+                    TextField("\(connectionProtocol.rawValue)-Server", text: $imapHost)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    TextField("IMAP-Port", text: $imapPort)
+                    TextField("\(connectionProtocol.rawValue)-Port", text: $imapPort)
                         .keyboardType(.numberPad)
-                    Toggle("IMAP TLS", isOn: $imapSecure)
+                    Toggle("\(connectionProtocol.rawValue) TLS", isOn: $imapSecure)
                     TextField("Nutzername (optional, falls abweichend)", text: $imapUser)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -291,17 +342,34 @@ private struct ImapConnectFormView: View {
         errorMessage = nil
         defer { isSubmitting = false }
         do {
-            let (account, token) = try await client.connectImapAccount(
-                emailAddress: emailAddress.trimmingCharacters(in: .whitespaces),
-                imapHost: imapHost.trimmingCharacters(in: .whitespaces),
-                imapPort: Int(imapPort) ?? 993,
-                imapSecure: imapSecure,
-                imapUser: imapUser.trimmingCharacters(in: .whitespaces).isEmpty ? nil : imapUser,
-                imapPassword: password,
-                smtpHost: smtpHost.trimmingCharacters(in: .whitespaces).isEmpty ? nil : smtpHost,
-                smtpPort: Int(smtpPort),
-                smtpSecure: smtpSecure
-            )
+            let account: MailAccount
+            let token: String
+            switch connectionProtocol {
+            case .imap:
+                (account, token) = try await client.connectImapAccount(
+                    emailAddress: emailAddress.trimmingCharacters(in: .whitespaces),
+                    imapHost: imapHost.trimmingCharacters(in: .whitespaces),
+                    imapPort: Int(imapPort) ?? 993,
+                    imapSecure: imapSecure,
+                    imapUser: imapUser.trimmingCharacters(in: .whitespaces).isEmpty ? nil : imapUser,
+                    imapPassword: password,
+                    smtpHost: smtpHost.trimmingCharacters(in: .whitespaces).isEmpty ? nil : smtpHost,
+                    smtpPort: Int(smtpPort),
+                    smtpSecure: smtpSecure
+                )
+            case .pop3:
+                (account, token) = try await client.connectPop3Account(
+                    emailAddress: emailAddress.trimmingCharacters(in: .whitespaces),
+                    pop3Host: imapHost.trimmingCharacters(in: .whitespaces),
+                    pop3Port: Int(imapPort) ?? 995,
+                    pop3Secure: imapSecure,
+                    pop3User: imapUser.trimmingCharacters(in: .whitespaces).isEmpty ? nil : imapUser,
+                    pop3Password: password,
+                    smtpHost: smtpHost.trimmingCharacters(in: .whitespaces).isEmpty ? nil : smtpHost,
+                    smtpPort: Int(smtpPort),
+                    smtpSecure: smtpSecure
+                )
+            }
             onConnected(account, token)
         } catch APIError.verificationFailed {
             errorMessage = "Verbindung fehlgeschlagen. Bitte E-Mail-Adresse, App-Passwort und Servereinstellungen prüfen."

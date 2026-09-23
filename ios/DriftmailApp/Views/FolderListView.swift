@@ -10,6 +10,7 @@ import SwiftUI
 /// da `POST /folders` jetzt Teil des Contracts ist.
 struct FolderListView: View {
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.scenePhase) private var scenePhase
     @State private var counts: [String: Int] = [:]
     @State private var isLoading = true
     @State private var isCreatingFolder = false
@@ -103,6 +104,12 @@ struct FolderListView: View {
             // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2):
             // activeAccount statt des einzelnen account.
             .navigationTitle(environment.activeAccount?.emailAddress ?? "driftmail")
+            // Inline statt der (hier default) grossen Titel-Darstellung:
+            // eine E-Mail-Adresse ist variabel lang und kann mit einer
+            // grossen, fetten Titel-Schrift schon bei kurzen Adressen
+            // abgeschnitten werden ("massimo@example.co…") -- inline bleibt
+            // klein genug, um die Adresse vollstaendig zu zeigen.
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -143,7 +150,9 @@ struct FolderListView: View {
                 SettingsView()
             }
             .sheet(isPresented: $isComposingNew) {
-                ComposeView(mode: .new, onSent: {})
+                ComposeView(mode: .new, onSent: {
+                    Task { await loadFoldersAndCounts(forceRefresh: true) }
+                })
             }
             .navigationDestination(for: Folder.self) { folder in
                 // "entwuerfe" zeigt GET /drafts, nicht GET /messages (siehe
@@ -194,17 +203,31 @@ struct FolderListView: View {
                 }
             }
             .refreshable {
-                // Pull-to-Refresh (WEB_INBOX.md 21.09. "SEHR WICHTIGE
-                // LUECKE - HOECHSTE PRIORITAET", Punkt 1): löst zuerst
-                // einen echten Mail-Abruf aus (statt nur den lokalen Stand
-                // neu zu laden), bevor Ordner/Zähler aktualisiert werden --
-                // sonst würde Pull-to-Refresh nie neue Mail zeigen, egal
-                // wie oft man zieht. Nur für das AKTIVE Konto (Mehrfach-
-                // Konten, WEB_INBOX.md 21.09. Punkt 2).
-                if let accountId = environment.activeAccountId {
-                    _ = try? await environment.apiClient.syncAccount(id: accountId)
+                await refreshFromProvider()
+            }
+            .task {
+                // Automatischer periodischer Abruf (Massimo: "automatischer
+                // Abruf funktioniert nicht" -- das Backend synct zwar
+                // bereits alle 3 Minuten von selbst (mail/scheduler.ts),
+                // aber ohne einen Client-seitigen Poll zeigt die App das
+                // Ergebnis erst nach manuellem Pull-to-Refresh oder
+                // Neustart an). 60s reichen, um innerhalb eines
+                // Backend-Sync-Intervalls sichtbar nachzuziehen, ohne den
+                // Server unnötig oft zu befragen. `.task` wird automatisch
+                // abgebrochen, sobald diese View verschwindet.
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 60_000_000_000)
+                    guard !Task.isCancelled else { break }
+                    await refreshFromProvider()
                 }
-                await loadFoldersAndCounts(forceRefresh: true)
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                // Sofortiger Abruf beim Zurueckkehren in den Vordergrund
+                // (App-Wechsel, Homescreen-Neustart) -- nicht erst nach bis
+                // zu 60s auf den periodischen Poll warten.
+                if newPhase == .active {
+                    Task { await refreshFromProvider() }
+                }
             }
             .alert("Neuer Ordner", isPresented: $isCreatingFolder) {
                 // [2026-09-15] WEB_INBOX.md 10.09. "kleine UX-Ergänzung":
@@ -274,6 +297,18 @@ struct FolderListView: View {
 
     private func endAbsenceResponderNow() async {
         _ = try? await environment.updateAbsenceResponder(active: false, startDate: nil, endDate: nil, subject: nil, body: nil)
+    }
+
+    /// Loest einen echten Mail-Abruf beim Provider aus (nicht nur den
+    /// lokalen Stand neu laden) und aktualisiert danach Ordner/Zaehler --
+    /// gemeinsamer Kern von Pull-to-Refresh, Vordergrund-Rueckkehr und dem
+    /// periodischen Hintergrund-Poll (siehe `.task`/`.onChange` oben). Nur
+    /// fuer das AKTIVE Konto (Mehrfach-Konten, WEB_INBOX.md 21.09. Punkt 2).
+    private func refreshFromProvider() async {
+        if let accountId = environment.activeAccountId {
+            _ = try? await environment.apiClient.syncAccount(id: accountId)
+        }
+        await loadFoldersAndCounts(forceRefresh: true)
     }
 
     private func loadFoldersAndCounts(forceRefresh: Bool = false) async {

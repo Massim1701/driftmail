@@ -8,6 +8,12 @@ struct MailProvider: Codable, Identifiable, Hashable {
     enum AuthType: String, Codable {
         case oauth
         case imap
+        // [2026-09-22] "web.de ist POP3": manche Provider-Presets nutzen
+        // POP3 statt IMAP -- automatisch vorbefuellt, User wird dafuer
+        // NICHT gefragt (Massimo: "das sind ja keine Geheimnisse, nur bei
+        // unbekannten Mailservern abfragen"). Gleiche imap*/smtp*-Felder
+        // wie authType=.imap, siehe contracts/api-spec.yaml MailProvider.
+        case pop3
     }
 
     let id: String
@@ -38,7 +44,7 @@ extension MailProvider {
         MailProvider(id: "yahoo", label: "Yahoo", authType: .oauth, comingSoon: true, imapHost: nil, imapPort: nil, imapSecure: nil, smtpHost: nil, smtpPort: nil, smtpSecure: nil, requiresAppPassword: false, appPasswordHelpUrl: nil),
         MailProvider(id: "icloud", label: "iCloud Mail", authType: .imap, comingSoon: false, imapHost: "imap.mail.me.com", imapPort: 993, imapSecure: true, smtpHost: "smtp.mail.me.com", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://support.apple.com/en-us/102654"),
         MailProvider(id: "gmx", label: "GMX", authType: .imap, comingSoon: false, imapHost: "imap.gmx.net", imapPort: 993, imapSecure: true, smtpHost: "mail.gmx.net", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://hilfe.gmx.net"),
-        MailProvider(id: "web_de", label: "web.de", authType: .imap, comingSoon: false, imapHost: "imap.web.de", imapPort: 993, imapSecure: true, smtpHost: "smtp.web.de", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://hilfe.web.de"),
+        MailProvider(id: "web_de", label: "web.de", authType: .pop3, comingSoon: false, imapHost: "pop3.web.de", imapPort: 995, imapSecure: true, smtpHost: "smtp.web.de", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://hilfe.web.de"),
         MailProvider(id: "other_imap", label: "Anderer Anbieter (IMAP)", authType: .imap, comingSoon: false, imapHost: nil, imapPort: 993, imapSecure: true, smtpHost: nil, smtpPort: 587, smtpSecure: false, requiresAppPassword: false, appPasswordHelpUrl: nil),
     ]
 }

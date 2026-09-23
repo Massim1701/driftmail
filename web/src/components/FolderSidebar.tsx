@@ -122,7 +122,7 @@ export function FolderSidebar({
               ))}
             </select>
           ) : (
-            <div className="folder-sidebar-account">{accounts[0].emailAddress}</div>
+            <div className="folder-sidebar-account" title={accounts[0].emailAddress}>{accounts[0].emailAddress}</div>
           )}
           <button
             type="button"
@@ -184,7 +184,7 @@ export function FolderSidebar({
                   aria-current={isActive ? "page" : undefined}
                 >
                   <Icon />
-                  <span className="folder-label">{f.name}</span>
+                  <span className="folder-label" title={f.name}>{f.name}</span>
                   <span className="folder-count">{counts[f.id] ?? 0}</span>
                 </button>
                 {meta.renamable && (

@@ -1398,14 +1398,18 @@ components:
       type: object
       description: >
         Ein Eintrag aus contracts/mail-providers.json (GET /mail-providers).
-        Fuer authType=imap sind imapHost/imapPort/imapSecure/smtpHost/
+        Fuer authType=imap/pop3 sind imapHost/imapPort/imapSecure/smtpHost/
         smtpPort/smtpSecure Presets zum Vorbefuellen des Verbindungs-
-        Formulars -- `other_imap` hat bewusst null-Host-Felder (User muss
-        selbst eintragen).
+        Formulars (bei authType=pop3 tragen dieselben Felder die POP3-
+        Servereinstellungen, siehe mail-providers.json "web_de") --
+        `other_imap` hat bewusst null-Host-Felder (User muss selbst
+        eintragen). [2026-09-22] authType=pop3 neu (Massimo: "web.de ist
+        POP3" -- soll automatisch erkannt werden, ohne dass der User danach
+        gefragt wird, siehe ios/README.md).
       properties:
         id: { type: string }
         label: { type: string }
-        authType: { type: string, enum: [oauth, imap] }
+        authType: { type: string, enum: [oauth, imap, pop3] }
         comingSoon: { type: boolean }
         imapHost: { type: string, nullable: true }
         imapPort: { type: integer, nullable: true }

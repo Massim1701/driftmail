@@ -351,8 +351,34 @@ export class PostgresStore implements Store {
     await this.migrateUsersAccentTheme();
     await this.migrateMessagesConfidentialUntil();
     await this.migrateDraftsScheduleSend();
+    await this.migrateMailAccountsProviderCheck();
     const sql = readFileSync(SCHEMA_PATH, "utf-8");
     await this.pool.query(sql);
+  }
+
+  /** [2026-09-22] "web.de ist POP3": neuer Provider-Wert `pop3` (siehe
+   * mail/pop3Adapter.ts) -- `mail_accounts.provider` hatte bisher nur
+   * `('gmail', 'imap')` im CHECK. Gleiches Muster wie
+   * migrateUnsubscribeActionsStatusCheck(): Constraint-Name auf einer
+   * bereits laufenden Alt-DB ist nicht garantiert der aus dem Schema (kann
+   * Postgres-autogeneriert sein), deshalb dynamisch ueber die
+   * Constraint-Definition suchen statt einen festen Namen anzunehmen. */
+  private async migrateMailAccountsProviderCheck(): Promise<void> {
+    const { rows: exists } = await this.pool.query(`SELECT to_regclass('mail_accounts') AS reg`);
+    if (!exists[0]?.reg) return;
+
+    const { rows: constraints } = await this.pool.query(`
+      SELECT con.conname
+      FROM pg_constraint con
+      JOIN pg_class rel ON rel.oid = con.conrelid
+      WHERE rel.relname = 'mail_accounts' AND con.contype = 'c' AND pg_get_constraintdef(con.oid) ILIKE '%provider%'
+    `);
+    for (const c of constraints) {
+      await this.pool.query(`ALTER TABLE mail_accounts DROP CONSTRAINT IF EXISTS "${c.conname}"`);
+    }
+    await this.pool.query(
+      `ALTER TABLE mail_accounts ADD CONSTRAINT mail_accounts_provider_check CHECK (provider IN ('gmail', 'imap', 'pop3'))`,
+    );
   }
 
   /** [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2, siehe

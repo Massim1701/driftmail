@@ -11,6 +11,7 @@
 		03EC2AAC33D0475E244538CE /* OnDeviceAiAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C71D7712BABCA5340A13D7CD /* OnDeviceAiAdapter.swift */; };
 		10F4B8755688A675B9F670D6 /* RemoteAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E04FC8B982502B4009BD5E99 /* RemoteAPIClient.swift */; };
 		13433A55E04668BCDD55BE65 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6D5F16B1DECCDF540A2C9F8 /* DesignTokens.swift */; };
+		1C41F089F4C96601BEC47D19 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = B476129A37FF00FB20A0C7A5 /* FlowLayout.swift */; };
 		17C4F14248E732BB8B07E467 /* MessageRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DDCF453B5648DAD69C4517F /* MessageRowView.swift */; };
 		2A58757BBADB259127258013 /* MockAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BABE409ECD1D46EF47FB98FA /* MockAPIClient.swift */; };
 		2C051F1E1F7C145570751413 /* OnboardingCapabilityCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B86F3D07CC73E890FB011D0 /* OnboardingCapabilityCheckView.swift */; };
@@ -73,6 +74,7 @@
 		950D7FA63F0DC96B0256A8CE /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		A3467EF332535F3D4020CD77 /* Classification.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Classification.swift; sourceTree = "<group>"; };
 		A6D5F16B1DECCDF540A2C9F8 /* DesignTokens.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		B476129A37FF00FB20A0C7A5 /* FlowLayout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
 		AD063563C80DCB4C97F9555C /* FolderListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FolderListView.swift; sourceTree = "<group>"; };
 		B8E1462919128D856CCE8B27 /* DriftmailApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DriftmailApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BABE409ECD1D46EF47FB98FA /* MockAPIClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MockAPIClient.swift; sourceTree = "<group>"; };
@@ -182,6 +184,7 @@
 			isa = PBXGroup;
 			children = (
 				A6D5F16B1DECCDF540A2C9F8 /* DesignTokens.swift */,
+				B476129A37FF00FB20A0C7A5 /* FlowLayout.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -343,6 +346,7 @@
 				68DAA2A9E031687D45B1E6BC /* AppEnvironment.swift in Sources */,
 				DA8E86676314DFDDD036B6AF /* DriftmailApp.swift in Sources */,
 				13433A55E04668BCDD55BE65 /* DesignTokens.swift in Sources */,
+				1C41F089F4C96601BEC47D19 /* FlowLayout.swift in Sources */,
 				4DE709219BA100DA0A5740EC /* Classification.swift in Sources */,
 				C36254E4E64800CBC3B9774C /* Attachment.swift in Sources */,
 				3D2D5371615152664FA22A0F /* Draft.swift in Sources */,

@@ -27,11 +27,27 @@ struct RemoteAPIClient: APIClient {
     private let decoder: JSONDecoder
     private let token: String?
 
+    /// UserDefaults-Key fuer den zuletzt per `DRIFTMAIL_API_BASE_URL`
+    /// gesetzten Override -- die Env-Var selbst gilt nur fuer GENAU den
+    /// einen Prozess-Start, ueber den sie gesetzt wurde (z.B. `devicectl
+    /// device process launch --environment-variables`). Oeffnet der User
+    /// die App danach normal ueber den Homescreen neu, fehlt die Env-Var,
+    /// und der Client faellt sonst mitten in einem laufenden lokalen Test
+    /// unbemerkt auf die Produktions-URL zurueck -- dort kennt der Server
+    /// das lokal erzeugte Session-Token/Konto nicht, sichtbar als "Postfach
+    /// weg" nach Beenden+Neustart. Deshalb: einmal per Env-Var gesetzt,
+    /// bleibt der Override bestehen, bis er ueber dieselbe Env-Var wieder
+    /// explizit auf die Produktions-URL gesetzt wird.
+    private static let baseURLOverrideDefaultsKey = "DRIFTMAIL_API_BASE_URL_OVERRIDE"
+
     init(session: URLSession = .shared, token: String? = nil) {
         self.session = session
         self.decoder = DriftmailDateDecoding.makeDecoder()
         self.token = token
         if let override = ProcessInfo.processInfo.environment["DRIFTMAIL_API_BASE_URL"], let url = URL(string: override) {
+            self.baseURL = url
+            UserDefaults.standard.set(override, forKey: Self.baseURLOverrideDefaultsKey)
+        } else if let saved = UserDefaults.standard.string(forKey: Self.baseURLOverrideDefaultsKey), let url = URL(string: saved) {
             self.baseURL = url
         } else {
             self.baseURL = URL(string: "https://api.driftware.online/v1")!
@@ -67,6 +83,50 @@ struct RemoteAPIClient: APIClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(Body(emailAddress: emailAddress, imapHost: imapHost, imapPort: imapPort, imapSecure: imapSecure, imapUser: imapUser, imapPassword: imapPassword, smtpHost: smtpHost, smtpPort: smtpPort, smtpSecure: smtpSecure))
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw APIError.network(error)
+        }
+        switch (response as? HTTPURLResponse)?.statusCode ?? 200 {
+        case 422: throw APIError.verificationFailed
+        case 403: throw APIError.notAllowlisted
+        default: break
+        }
+        do {
+            let decoded = try decoder.decode(Response.self, from: data)
+            return (decoded.account, decoded.token)
+        } catch let error as DecodingError {
+            throw APIError.decodingFailed(error)
+        }
+    }
+
+    /// `POST /accounts` (`provider=pop3`) -- Pendant zu connectImapAccount()
+    /// oben fuer Provider, die nur POP3 anbieten bzw. bei denen der User
+    /// POP3 bevorzugt (Massimo: "web.de ist POP3"). Gleiches Fehlerbild
+    /// (422/403), eigene Feldnamen (pop3*) statt imap*.
+    func connectPop3Account(emailAddress: String, pop3Host: String, pop3Port: Int, pop3Secure: Bool, pop3User: String?, pop3Password: String, smtpHost: String?, smtpPort: Int?, smtpSecure: Bool?) async throws -> (account: MailAccount, token: String) {
+        struct Body: Encodable {
+            let provider = "pop3"
+            let emailAddress: String
+            let pop3Host: String
+            let pop3Port: Int
+            let pop3Secure: Bool
+            let pop3User: String?
+            let pop3Password: String
+            let smtpHost: String?
+            let smtpPort: Int?
+            let smtpSecure: Bool?
+        }
+        struct Response: Decodable { let account: MailAccount; let token: String }
+
+        var request = URLRequest(url: baseURL.appendingPathComponent("/accounts"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(Body(emailAddress: emailAddress, pop3Host: pop3Host, pop3Port: pop3Port, pop3Secure: pop3Secure, pop3User: pop3User, pop3Password: pop3Password, smtpHost: smtpHost, smtpPort: smtpPort, smtpSecure: smtpSecure))
 
         let data: Data
         let response: URLResponse

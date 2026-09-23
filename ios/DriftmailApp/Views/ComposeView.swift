@@ -619,14 +619,56 @@ struct ComposeView: View {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) } ?? raw.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Haeufige Mail-Anbieter als Fallback fuer die Domain-Vervollstaendigung
+    /// nach "@" -- nur relevant, wenn noch KEIN gelernter Kontakt zu dem
+    /// Anbieter existiert (Massimo: "alle Mailprovider fangen mit einem
+    /// anderen Buchstaben an, falls es was Unbekanntes ist, soll die App
+    /// sich das merken" -- eine feste Liste allein reicht ihm nicht, siehe
+    /// `learnedDomains` unten, das ist der eigentliche Mechanismus).
+    private static let commonEmailDomains = [
+        "gmail.com", "web.de", "gmx.de", "gmx.net", "icloud.com",
+        "outlook.com", "hotmail.com", "yahoo.de", "yahoo.com", "t-online.de",
+    ]
+
+    /// Domains aus den bereits bekannten Kontakten (WEB_INBOX.md 21.09.
+    /// "FUENF NEUE KOMFORT-FEATURES" Punkt 2, `environment.contacts` --
+    /// vom Server aus der echten Mail-Historie befuellt) -- "merkt" sich
+    /// dadurch automatisch JEDEN Anbieter, mit dem Massimo je gemailt hat,
+    /// nicht nur die grossen bekannten. Haeufigster Treffer zuerst.
+    private var learnedDomains: [String] {
+        let domains = environment.contacts.compactMap { address -> String? in
+            guard let atIndex = address.firstIndex(of: "@") else { return nil }
+            return String(address[address.index(after: atIndex)...]).lowercased()
+        }
+        let counts = Dictionary(domains.map { ($0, 1) }, uniquingKeysWith: +)
+        return counts.keys.sorted { (counts[$0] ?? 0, $1) > (counts[$1] ?? 0, $0) }
+    }
+
     private func suggestions(for field: ComposeField, text: String) -> [String] {
         guard focusedField == field else { return [] }
         let fragment = Self.lastFragment(of: text).lowercased()
         guard !fragment.isEmpty else { return [] }
-        return environment.contacts
+        let contactMatches = environment.contacts
             .filter { $0.contains(fragment) && $0 != fragment }
             .prefix(5)
             .map { $0 }
+        if contactMatches.count >= 5 { return Array(contactMatches) }
+
+        var domainMatches: [String] = []
+        if let atIndex = fragment.firstIndex(of: "@") {
+            let localPart = fragment[..<atIndex]
+            let domainFragment = fragment[fragment.index(after: atIndex)...]
+            guard !localPart.isEmpty else { return Array(contactMatches) }
+            let candidateDomains = learnedDomains + Self.commonEmailDomains
+            var seenDomains = Set<String>()
+            for domain in candidateDomains {
+                guard domain.hasPrefix(domainFragment), domain != domainFragment, !seenDomains.contains(domain) else { continue }
+                seenDomains.insert(domain)
+                let address = "\(localPart)@\(domain)"
+                if !contactMatches.contains(address) { domainMatches.append(address) }
+            }
+        }
+        return Array((contactMatches + domainMatches).prefix(5))
     }
 
     /// Ersetzt nur das Fragment NACH dem letzten Komma durch die gewählte
