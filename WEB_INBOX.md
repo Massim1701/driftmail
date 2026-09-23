@@ -1258,3 +1258,12 @@ Rest der Seite wurde gegengeprueft und ist in Ordnung, keine weiteren Aenderunge
 **Vorschlag statt Emoji:** echte, minimalistische Icons (z.B. Tabler Icons oder aehnliches SVG-Icon-Set, passend zur bereits festgelegten Superhuman-Design-Richtung -- neutrale Strichzeichnungen statt bunter Symbole, nur die bestehenden Sicherheits-Warnfarben duerfen weiter farbig hervorgehoben sein, siehe frueherer Design-Auftrag). Falls kein Icon-Set eingebunden werden soll: ersatzweise nur der Text-Titel ohne jegliches Icon davor, auch das waere schon deutlich aufgeraeumter.
 
 Bitte konsistent auf der ganzen driftmail-Unterseite (nicht nur der Startseite) durchziehen, falls Emojis auch in anleitung.html oder den Rechtstexten verwendet wurden.
+
+
+[2026-09-23] [offen] [ERGAENZUNG Datenschutzerklaerung - US-Hosting/Registrar] [driftware-Repo, Datei driftmail/privacy.html] — Massimo hat bestaetigt: Hosting laeuft ueber GitHub Pages (GitHub Inc./Microsoft, USA), Domain-Registrar ist Namecheap (USA). Beides sind US-Anbieter und gehoeren in die Datenschutzerklaerung, aehnlich wie der bestehende Hinweis zu optionalen Cloud-KI-Anbietern (Drittland-Datenuebermittlung).
+
+Bitte folgenden Abschnitt in privacy.html ergaenzen (Formulierung als Vorschlag, Massimo/Anwalt kann anpassen):
+
+"Diese Website wird ueber GitHub Pages (GitHub Inc., ein Unternehmen von Microsoft, USA) gehostet und die Domain driftware.online ist bei Namecheap Inc. (USA) registriert. Beim Aufruf dieser Seite werden technische Daten (z.B. IP-Adresse) an die Server dieser US-Anbieter uebermittelt. Fuer den Datentransfer in die USA stuetzen sich die Anbieter nach eigenen Angaben auf Standardvertragsklauseln bzw. ein Angemessenheitsniveau nach Art. 46 DSGVO -- bitte die aktuellen Datenschutzbedingungen von GitHub und Namecheap fuer Details ergaenzend verlinken."
+
+Reine Ergaenzung des bestehenden Datenschutzerklaerung-Entwurfs (bereits als "Entwurf, in anwaltlicher Pruefung" gekennzeichnet), kein Contract-Bruch.
