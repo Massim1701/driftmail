@@ -300,6 +300,72 @@ authRouter.post("/accounts", async (req, res) => {
       syncStatus: "pending",
       lastSyncedAt: null,
     });
+  } else if (provider === "imap" || provider === "pop3") {
+    // [2026-09-23] KORREKTUR des bisherigen Idempotenz-Verhaltens oben
+    // ("aendert die bereits gespeicherten Zugangsdaten NICHT"): das war der
+    // eigentliche Grund, warum ein Protokoll-/Passwort-Wechsel fuer ein
+    // bereits verbundenes Konto (Massimo: web.de von IMAP auf POP3) beim
+    // erneuten Verbinden nie ankam -- der Server hat die neuen Felder im
+    // Request komplett ignoriert und stillschweigend das alte Konto
+    // zurueckgegeben. Jetzt: liegen imap*/pop3*-Felder im Request, werden
+    // sie ECHT getestet und das bestehende Konto aktualisiert, statt nur
+    // ignoriert zu werden -- gleiche Verbindungstest-Pflicht wie beim
+    // erstmaligen Verbinden oben (kein Passwort ungeprueft uebernehmen).
+    let encryptedImapCredentials: string;
+
+    if (provider === "imap") {
+      const imapHost = typeof body.imapHost === "string" ? body.imapHost.trim() : "";
+      const imapPassword = typeof body.imapPassword === "string" ? body.imapPassword : "";
+      if (!imapHost || !imapPassword) {
+        return res.status(400).json({ error: "imapHost und imapPassword sind fuer provider=imap erforderlich" });
+      }
+      const credentials: ImapCredentials = {
+        host: imapHost,
+        port: typeof body.imapPort === "number" ? body.imapPort : 993,
+        secure: typeof body.imapSecure === "boolean" ? body.imapSecure : true,
+        user: typeof body.imapUser === "string" && body.imapUser.trim() ? body.imapUser.trim() : emailAddress,
+        password: imapPassword,
+        smtpHost: typeof body.smtpHost === "string" && body.smtpHost.trim() ? body.smtpHost.trim() : imapHost,
+        smtpPort: typeof body.smtpPort === "number" ? body.smtpPort : 587,
+        smtpSecure: typeof body.smtpSecure === "boolean" ? body.smtpSecure : false,
+      };
+      try {
+        await new ImapAdapter(credentials).testConnection();
+      } catch (err) {
+        console.error(`[auth] IMAP-Verbindungstest (Update) fehlgeschlagen fuer ${imapHost}:`, err);
+        return res.status(422).json({
+          error: "IMAP-Zugangsdaten konnten nicht verifiziert werden -- bitte Host, Adresse und (App-)Passwort prüfen.",
+        });
+      }
+      encryptedImapCredentials = encryptCredentials(JSON.stringify(credentials));
+    } else {
+      const pop3Host = typeof body.pop3Host === "string" ? body.pop3Host.trim() : "";
+      const pop3Password = typeof body.pop3Password === "string" ? body.pop3Password : "";
+      if (!pop3Host || !pop3Password) {
+        return res.status(400).json({ error: "pop3Host und pop3Password sind fuer provider=pop3 erforderlich" });
+      }
+      const credentials: Pop3Credentials = {
+        host: pop3Host,
+        port: typeof body.pop3Port === "number" ? body.pop3Port : 995,
+        secure: typeof body.pop3Secure === "boolean" ? body.pop3Secure : true,
+        user: typeof body.pop3User === "string" && body.pop3User.trim() ? body.pop3User.trim() : emailAddress,
+        password: pop3Password,
+        smtpHost: typeof body.smtpHost === "string" && body.smtpHost.trim() ? body.smtpHost.trim() : pop3Host,
+        smtpPort: typeof body.smtpPort === "number" ? body.smtpPort : 587,
+        smtpSecure: typeof body.smtpSecure === "boolean" ? body.smtpSecure : false,
+      };
+      try {
+        await new Pop3Adapter(credentials).testConnection();
+      } catch (err) {
+        console.error(`[auth] POP3-Verbindungstest (Update) fehlgeschlagen fuer ${pop3Host}:`, err);
+        return res.status(422).json({
+          error: "POP3-Zugangsdaten konnten nicht verifiziert werden -- bitte Host, Adresse und (App-)Passwort prüfen.",
+        });
+      }
+      encryptedImapCredentials = encryptCredentials(JSON.stringify(credentials));
+    }
+
+    account = (await store.updateMailAccount(account.id, { provider, encryptedImapCredentials })) ?? account;
   }
 
   if ((await store.listFolders(account.id)).length === 0) {

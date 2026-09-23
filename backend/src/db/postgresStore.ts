@@ -609,16 +609,18 @@ export class PostgresStore implements Store {
 
   async updateMailAccount(
     id: string,
-    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt" | "encryptedOauthToken">>,
+    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt" | "encryptedOauthToken" | "provider" | "encryptedImapCredentials">>,
   ): Promise<MailAccountRecord | undefined> {
     const { rows } = await this.pool.query(
       `UPDATE mail_accounts SET
          sync_status = COALESCE($2, sync_status),
          last_synced_at = COALESCE($3, last_synced_at),
-         encrypted_oauth_token = COALESCE($4, encrypted_oauth_token)
+         encrypted_oauth_token = COALESCE($4, encrypted_oauth_token),
+         provider = COALESCE($5, provider),
+         encrypted_imap_credentials = COALESCE($6, encrypted_imap_credentials)
        WHERE id = $1
        RETURNING *`,
-      [id, patch.syncStatus ?? null, patch.lastSyncedAt ?? null, patch.encryptedOauthToken ?? null],
+      [id, patch.syncStatus ?? null, patch.lastSyncedAt ?? null, patch.encryptedOauthToken ?? null, patch.provider ?? null, patch.encryptedImapCredentials ?? null],
     );
     return rows[0] ? rowToMailAccount(rows[0]) : undefined;
   }

@@ -81,7 +81,13 @@ export interface Store {
    * DB nicht persistiert hätte. */
   updateMailAccount(
     id: string,
-    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt" | "encryptedOauthToken">>,
+    // [2026-09-23] provider/encryptedImapCredentials ergaenzt: ein erneuter
+    // POST /accounts fuer eine bereits verbundene Adresse (routes/auth.ts)
+    // aktualisiert damit echt die gespeicherten Zugangsdaten/das Protokoll,
+    // statt sie stillschweigend zu ignorieren (siehe dortigen Kommentar --
+    // war der eigentliche Grund, warum ein Wechsel von IMAP auf POP3 fuer
+    // ein bereits bestehendes Konto nie ankam).
+    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt" | "encryptedOauthToken" | "provider" | "encryptedImapCredentials">>,
   ): Promise<MailAccountRecord | undefined>;
   /** [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09.,
    * Konten-Verwaltung): entfernt ein Konto UND alles, was daran hängt
@@ -414,13 +420,15 @@ export class InMemoryStore implements Store {
 
   async updateMailAccount(
     id: string,
-    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt" | "encryptedOauthToken">>,
+    patch: Partial<Pick<MailAccountRecord, "syncStatus" | "lastSyncedAt" | "encryptedOauthToken" | "provider" | "encryptedImapCredentials">>,
   ): Promise<MailAccountRecord | undefined> {
     const account = await this.getMailAccount(id);
     if (!account) return undefined;
     if (patch.syncStatus !== undefined) account.syncStatus = patch.syncStatus;
     if (patch.lastSyncedAt !== undefined) account.lastSyncedAt = patch.lastSyncedAt;
     if (patch.encryptedOauthToken !== undefined) account.encryptedOauthToken = patch.encryptedOauthToken;
+    if (patch.provider !== undefined) account.provider = patch.provider;
+    if (patch.encryptedImapCredentials !== undefined) account.encryptedImapCredentials = patch.encryptedImapCredentials;
     return account;
   }
 
