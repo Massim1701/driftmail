@@ -1219,3 +1219,21 @@ Nur das Klammer-Namensbeispiel entfernen, Rest bleibt gleich. Reine Text-Aenderu
 ---
 
 Bitte diese sechs Unterabschnitte als eigene, klar betitelte Bereiche auf der Anleitungs-Seite einbauen (z.B. Tabs oder Akkordeon-Elemente, damit die Seite nicht zu lang/unuebersichtlich wird -- Umsetzung Code ueberlassen). Reine Content-Erweiterung, kein Contract-Bruch.
+
+
+[2026-09-21] [offen] [BUG - iOS erreicht lokales Backend nicht] [Track C] [hohe Prioritaet, blockiert laufenden iOS-Test] — Massimo hat im Simulator DRIFTMAIL_API_BASE_URL=http://localhost:3000/v1 in Edit Scheme gesetzt (Run -> Arguments -> Environment Variables), Backend laeuft nachweislich (neu gestartet, npm run dev). Trotzdem zeigt die App weiterhin "Anbieterliste konnte nicht live geladen werden -- zeige die zuletzt bekannten Anbieter" UND ein IMAP-Verbindungsversuch (web.de) schlaegt ebenfalls fehl. Backend-Verfuegbarkeit ist damit ausgeschlossen, das Problem liegt auf iOS-Seite.
+
+**Verdacht, bitte zuerst pruefen:** App Transport Security (ATS) blockiert vermutlich Klartext-HTTP zu localhost. Frueherer SYNC.md-Eintrag erwaehnt bereits eine ATS-Ausnahme, die per INFOPLIST_FILE_ADDITIONAL_CONTENT-Build-Setting gesetzt werden sollte, aber von Xcode "still ignoriert" wurde (nur durch Diff des tatsaechlich gebauten Info.plist entdeckt). Bitte pruefen, ob diese ATS-Ausnahme (NSAppTransportSecurity / NSExceptionDomains fuer localhost, oder NSAllowsArbitraryLoads fuer Debug-Builds) im tatsaechlich gebauten Info.plist des aktuellen Standes wirklich vorhanden ist -- nicht nur im Xcode-Projekteinstellungs-UI, sondern im gebauten Artefakt selbst (gleiche Verifikationsmethode wie beim fruehren Fund).
+
+Bitte mit echtem Simulator-Build + Netzwerk-Log (z.B. per log stream oder Xcode-Konsole waehrend eines Verbindungsversuchs) reproduzieren und beheben, nicht nur den Info.plist-Inhalt statisch pruefen.
+
+---
+
+[2026-09-21] [offen] [UX-VERBESSERUNG - Anbieter automatisch aus E-Mail-Adresse erkennen] [contracts + Track A + Track C/F] — Massimo: die Provider-Auswahl VOR der E-Mail-Eingabe ist ein unnoetiger Extra-Schritt, da der User seine Adresse ohnehin eingeben muss. Bitte Ablauf umdrehen:
+
+1. Erster Bildschirm: nur EIN Eingabefeld fuer die E-Mail-Adresse (kein Anbieter-Auswahl-Bildschirm mehr davor).
+2. Nach Eingabe: Endung automatisch auswerten (@gmail.com -> Gmail-OAuth-Flow direkt starten, @icloud.com/@me.com -> iCloud-Preset, @gmx.de/@gmx.net -> GMX-Preset, @web.de -> web.de-Preset, @outlook.com/@hotmail.com -> Outlook falls/sobald verfuegbar).
+3. Bei unbekannter Endung: sauberer, logischer Fallback auf den "Anderer Anbieter (IMAP)"-Weg mit manueller Server-Eingabe -- kein Fehler, keine Sackgasse, einfach der naechste sinnvolle Schritt.
+4. Passwort-/App-Passwort-Feld erscheint danach, mit dem zum erkannten Anbieter passenden Hinweistext (wie bisher schon vorhanden).
+
+Bitte GET /mail-providers weiterhin nutzen, um die Domain-zu-Preset-Zuordnung zu pflegen (z.B. um das Praefix-Matching serverseitig zentral zu halten, nicht hart im Client verdrahtet) -- Track A entscheidet sinnvolle Umsetzung. Kein Contract-Bruch, reine Ablauf-/UX-Aenderung, betrifft Web und iOS gleichermassen.
