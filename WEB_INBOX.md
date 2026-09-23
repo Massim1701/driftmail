@@ -1237,3 +1237,24 @@ Bitte mit echtem Simulator-Build + Netzwerk-Log (z.B. per log stream oder Xcode-
 4. Passwort-/App-Passwort-Feld erscheint danach, mit dem zum erkannten Anbieter passenden Hinweistext (wie bisher schon vorhanden).
 
 Bitte GET /mail-providers weiterhin nutzen, um die Domain-zu-Preset-Zuordnung zu pflegen (z.B. um das Praefix-Matching serverseitig zentral zu halten, nicht hart im Client verdrahtet) -- Track A entscheidet sinnvolle Umsetzung. Kein Contract-Bruch, reine Ablauf-/UX-Aenderung, betrifft Web und iOS gleichermassen.
+
+
+[2026-09-23] [offen] [ZWEI TEXT-KORREKTUREN - unprofessionelle Formulierungen] [driftware-Repo, Datei driftmail/index.html] — Massimo: zwei Formulierungen auf der driftmail-Info-Seite wirken zu umgangssprachlich fuer erwachsene Nutzer, bitte aendern:
+
+1) Karte "Spam, Phishing & Betrug erkennen":
+Alt: "Eindeutiger Muell wird automatisch aussortiert, Grenzfaelle landen mit Warnhinweis in Quarantaene statt geloescht zu werden -- auch klassischer Vorschussbetrug."
+Neu: "Eindeutig schaedliche Nachrichten werden automatisch aussortiert, Grenzfaelle landen mit Warnhinweis in Quarantaene statt geloescht zu werden -- auch klassischer Vorschussbetrug."
+
+2) Karte "Echter Virenscan":
+Alt-Titel: "Echter Virenscan"
+Neu-Titel: "Vollstaendiger Virenscan"
+(Beschreibungstext "Fuer Anhaenge in beide Richtungen -- beim Senden und beim Empfangen." bleibt unveraendert.)
+
+Rest der Seite wurde gegengeprueft und ist in Ordnung, keine weiteren Aenderungen noetig. Reine Text-Korrektur, kein Contract-Bruch.
+
+
+[2026-09-23] [offen] [EMOJIS ENTFERNEN - wirken kindlich] [driftware-Repo, Datei driftmail/index.html] [gilt auch fuer anleitung.html, agb.html, privacy.html, haftungsausschluss.html falls dort ebenfalls Emojis verwendet werden] — Massimo: alle Emoji-Icons auf der driftmail-Seite entfernen (Schutzschild, Haken, Warndreieck, Maske, "Neu", Mikrobe, Kamera, Roboter, Briefumschlag, Schloss, Kompass vor den Funktions-Karten-Titeln) -- wirkt zu verspielt/kindlich fuer ein Sicherheitsprodukt fuer erwachsene Nutzer.
+
+**Vorschlag statt Emoji:** echte, minimalistische Icons (z.B. Tabler Icons oder aehnliches SVG-Icon-Set, passend zur bereits festgelegten Superhuman-Design-Richtung -- neutrale Strichzeichnungen statt bunter Symbole, nur die bestehenden Sicherheits-Warnfarben duerfen weiter farbig hervorgehoben sein, siehe frueherer Design-Auftrag). Falls kein Icon-Set eingebunden werden soll: ersatzweise nur der Text-Titel ohne jegliches Icon davor, auch das waere schon deutlich aufgeraeumter.
+
+Bitte konsistent auf der ganzen driftmail-Unterseite (nicht nur der Startseite) durchziehen, falls Emojis auch in anleitung.html oder den Rechtstexten verwendet wurden.
