@@ -29,6 +29,23 @@ export function createApp() {
   app.use(cors);
   app.use(express.json());
 
+  // Zugriffs-Log: zeigt, was ein Client (iOS/Web) tatsaechlich anfragt und
+  // mit welchem Status geantwortet wurde. Beim Geraete-Test am 23.09. war
+  // genau das die fehlende Information -- der Server lieferte die Mails
+  // nachweislich aus, die App zeigte trotzdem nichts, und ohne dieses Log
+  // liess sich nicht unterscheiden, ob die App falsch fragt, gar nicht
+  // fragt oder die Antwort verwirft. Per DISABLE_ACCESS_LOG=true abschaltbar.
+  if (process.env.DISABLE_ACCESS_LOG !== "true") {
+    app.use((req, res, next) => {
+      const startedAt = Date.now();
+      res.on("finish", () => {
+        const query = Object.keys(req.query).length > 0 ? ` ${JSON.stringify(req.query)}` : "";
+        console.log(`[http] ${req.method} ${req.path}${query} -> ${res.statusCode} (${Date.now() - startedAt}ms)`);
+      });
+      next();
+    });
+  }
+
   // api-spec.yaml: servers[0].url = https://api.driftware.online/v1
   // -> alle Contract-Routen unter /v1 gemountet.
   const v1 = express.Router();

@@ -104,6 +104,18 @@ final class AppEnvironment: ObservableObject {
         self.activeAccountId = account.id
         self.apiClient = RemoteAPIClient(token: token)
         self.isAuthenticated = true
+        // [2026-09-23] Massimo: "angemeldet, keine Verbesserung, Mails werden
+        // nicht geladen" -- obwohl der Server die Mails nachweislich
+        // ausgeliefert hat. Ursache: hier wurden die kontogebundenen Caches
+        // NICHT geleert (anders als in switchAccount()/logOut()). Nach einem
+        // erneuten Verbinden hielt `folders` noch die Ordner-IDs des
+        // VORHERIGEN Kontos, und `loadFolders()` laedt bei nicht-leerem
+        // Cache nichts nach -- die App fragte danach Nachrichten unter
+        // Ordner-IDs ab, die es fuer das neue Konto gar nicht gibt, und
+        // bekam korrekterweise eine leere Liste zurueck.
+        self.folders = []
+        self.trustedSenderAddresses = []
+        self.contacts = []
     }
 
     /// [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): ein
@@ -202,7 +214,12 @@ final class AppEnvironment: ObservableObject {
     /// No-Op, `FolderListView` ruft das nach `loadAccounts()` erneut auf.
     func loadFolders(forceRefresh: Bool = false) async {
         guard let activeAccountId else { return }
-        if !forceRefresh && !folders.isEmpty { return }
+        // Zweite Absicherung gegen den Fehler aus completeAccountConnection():
+        // ein Cache, der zu einem ANDEREN Konto gehoert, darf nie
+        // weiterverwendet werden -- sonst werden Nachrichten unter fremden
+        // Ordner-IDs abgefragt und die Liste bleibt stillschweigend leer.
+        let cacheBelongsToActiveAccount = folders.allSatisfy { $0.accountId == activeAccountId }
+        if !forceRefresh && !folders.isEmpty && cacheBelongsToActiveAccount { return }
         do {
             folders = try await apiClient.fetchFolders(accountId: activeAccountId).sorted { $0.sortOrder < $1.sortOrder }
         } catch {
