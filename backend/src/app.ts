@@ -23,6 +23,21 @@ import { requireAuth } from "./middleware/auth";
 
 export function createApp() {
   const app = express();
+
+  // [2026-09-23] Massimo: "mails sind nicht da", obwohl der Server sie
+  // nachweislich gespeichert hatte und die App mit den RICHTIGEN IDs
+  // gefragt hat. Das Zugriffs-Log zeigte: Express beantwortete praktisch
+  // jede Anfrage der App mit "304 Not Modified" (ETag ist in Express
+  // standardmaessig an) -- also OHNE Inhalt. Kommt eine 304 in der App an,
+  // ist es keine 2xx-Antwort: ihre Fehlerbehandlung faengt das still ab und
+  // setzt leere Listen (`catch { messages = [] }`), weshalb das Postfach
+  // leer blieb, ohne dass irgendwo ein Fehler sichtbar wurde.
+  //
+  // Fuer eine Postfach-API ist diese Zwischenspeicherung ohnehin falsch:
+  // der Client darf den Zustand einer Mailbox nie aus einem HTTP-Cache
+  // bedienen, und die Antworten sind benutzerspezifisch (der URL-Cache
+  // kennt den Authorization-Header nicht).
+  app.set("etag", false);
   // Vor allem anderen (auch vor express.json()): OPTIONS-Preflights
   // brauchen keinen geparsten Body, und alle Antworten -- auch Fehler --
   // sollen die CORS-Header tragen (WEB_INBOX.md 21.09. "BUG").
@@ -40,11 +55,23 @@ export function createApp() {
       const startedAt = Date.now();
       res.on("finish", () => {
         const query = Object.keys(req.query).length > 0 ? ` ${JSON.stringify(req.query)}` : "";
-        console.log(`[http] ${req.method} ${req.path}${query} -> ${res.statusCode} (${Date.now() - startedAt}ms)`);
+        const size = res.getHeader("content-length");
+        console.log(
+          `[http] ${req.method} ${req.path}${query} -> ${res.statusCode}${size ? ` ${size}B` : ""} (${Date.now() - startedAt}ms)`,
+        );
       });
       next();
     });
   }
+
+  // Ergaenzung zu `app.set("etag", false)` oben: ein Client (URLSession/
+  // Browser) darf eine Postfach-Antwort auch nicht ohne Rueckfrage aus
+  // seinem eigenen Cache bedienen. Ohne Cache-Control wendet URLSession
+  // heuristische Frische an und kann eine veraltete Antwort ausliefern.
+  app.use((_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
 
   // api-spec.yaml: servers[0].url = https://api.driftware.online/v1
   // -> alle Contract-Routen unter /v1 gemountet.
