@@ -1237,3 +1237,17 @@ Bitte mit echtem Simulator-Build + Netzwerk-Log (z.B. per log stream oder Xcode-
 4. Passwort-/App-Passwort-Feld erscheint danach, mit dem zum erkannten Anbieter passenden Hinweistext (wie bisher schon vorhanden).
 
 Bitte GET /mail-providers weiterhin nutzen, um die Domain-zu-Preset-Zuordnung zu pflegen (z.B. um das Praefix-Matching serverseitig zentral zu halten, nicht hart im Client verdrahtet) -- Track A entscheidet sinnvolle Umsetzung. Kein Contract-Bruch, reine Ablauf-/UX-Aenderung, betrifft Web und iOS gleichermassen.
+
+
+[2026-09-23] [offen] [ZWEI TEXT-KORREKTUREN - unprofessionelle Formulierungen] [driftware-Repo, Datei driftmail/index.html] — Massimo: zwei Formulierungen auf der driftmail-Info-Seite wirken zu umgangssprachlich fuer erwachsene Nutzer, bitte aendern:
+
+1) Karte "Spam, Phishing & Betrug erkennen":
+Alt: "Eindeutiger Muell wird automatisch aussortiert, Grenzfaelle landen mit Warnhinweis in Quarantaene statt geloescht zu werden -- auch klassischer Vorschussbetrug."
+Neu: "Eindeutig schaedliche Nachrichten werden automatisch aussortiert, Grenzfaelle landen mit Warnhinweis in Quarantaene statt geloescht zu werden -- auch klassischer Vorschussbetrug."
+
+2) Karte "Echter Virenscan":
+Alt-Titel: "Echter Virenscan"
+Neu-Titel: "Vollstaendiger Virenscan"
+(Beschreibungstext "Fuer Anhaenge in beide Richtungen -- beim Senden und beim Empfangen." bleibt unveraendert.)
+
+Rest der Seite wurde gegengeprueft und ist in Ordnung, keine weiteren Aenderungen noetig. Reine Text-Korrektur, kein Contract-Bruch.
