@@ -29,6 +29,8 @@ import { encryptCredentials } from "../auth/credentialsEncryption";
 import { createSystemFoldersForAccount, store } from "../db/store";
 import { ImapAdapter, type ImapCredentials } from "../mail/imapAdapter";
 import { Pop3Adapter, type Pop3Credentials } from "../mail/pop3Adapter";
+import { syncAccount } from "../mail/sync";
+import { aiAdapter } from "../ai";
 import { toApiMailAccount } from "../mappers";
 import type { Provider } from "../types";
 
@@ -370,6 +372,21 @@ authRouter.post("/accounts", async (req, res) => {
 
   if ((await store.listFolders(account.id)).length === 0) {
     await createSystemFoldersForAccount(account.id);
+  }
+
+  // [2026-09-23] Massimo: "verbunden, wird nicht abgeholt". Bisher passierte
+  // nach dem Verbinden GAR NICHTS -- das Postfach blieb leer, bis der
+  // periodische Scheduler das naechste Mal lief (Standard: 3 Minuten). Fuer
+  // den Nutzer sah genau das wie "der Abruf funktioniert nicht" aus, obwohl
+  // Zugangsdaten und Abruf in Ordnung waren. Jetzt wird direkt beim
+  // Verbinden einmal synchronisiert, damit die App sofort echte Mail zeigt.
+  // Ein Fehlschlag hier bricht das Verbinden bewusst NICHT ab: die
+  // Zugangsdaten sind oben schon durch einen echten Verbindungstest belegt,
+  // und der Scheduler versucht es ohnehin weiter.
+  try {
+    await syncAccount(account, aiAdapter);
+  } catch (err) {
+    console.error(`[auth] Erster Sync nach dem Verbinden fehlgeschlagen fuer ${account.emailAddress}:`, err);
   }
 
   // Beim Hinzufuegen eines weiteren Kontos zu einer bestehenden Sitzung

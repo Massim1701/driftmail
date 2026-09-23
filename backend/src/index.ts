@@ -1,3 +1,4 @@
+import "./loadEnv"; // muss vor jedem anderen Import stehen, siehe loadEnv.ts
 import { createApp } from "./app";
 import { ensureDemoUser, initStore, store } from "./db/store";
 import { syncAccount } from "./mail/sync";
@@ -12,6 +13,15 @@ async function main() {
   // Store-Zugriff abgewartet werden, sonst schlagen die ersten Queries
   // gegen noch nicht existierende Tabellen fehl.
   await initStore();
+  // Beim Start sichtbar machen, welcher Store aktiv ist: ein unbemerkt
+  // laufender In-Memory-Store sah im Betrieb exakt wie ein funktionierender
+  // Server aus, hat aber bei jedem Neustart Konten, Nachrichten und
+  // Sitzungen verloren (siehe loadEnv.ts).
+  console.log(
+    process.env.DATABASE_URL
+      ? `[startup] Persistenz: Postgres (${process.env.DATABASE_URL.replace(/:[^:@/]*@/, ":***@")})`
+      : "[startup] Persistenz: In-Memory — ALLE Daten gehen bei jedem Neustart verloren. Fuer echten Betrieb DATABASE_URL in backend/.env setzen.",
+  );
   const { user, account } = await ensureDemoUser();
 
   // [2026-09-10] echte Auth: seit requireAuth (middleware/auth.ts) auf allen

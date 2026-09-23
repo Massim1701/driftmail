@@ -181,18 +181,15 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
   let autoDeleted = 0;
   try {
     const fetched = await adapter.fetchRecentMessages(limit);
-    // [TEMP - Diagnose "Mail wird nicht abgeholt", Mail liegt nachweislich
-    // im Posteingang]: zeigt exakt, was der Adapter zurueckliefert, BEVOR
-    // irgendein Dedupe/Filter greift.
-    console.log(`[sync-debug] ${account.emailAddress}: Adapter lieferte ${fetched.length} Nachricht(en):`, fetched.map((m) => ({ subject: m.subject, messageIdHeader: m.messageIdHeader, from: m.fromAddress })));
+    let skippedKnown = 0;
 
     for (const mail of fetched) {
       if (await store.findMessageByHeader(account.id, mail.messageIdHeader)) {
-        console.log(`[sync-debug] uebersprungen (schon bekannt): ${mail.subject} (${mail.messageIdHeader})`);
+        skippedKnown++;
         continue; // dedupe, siehe UNIQUE-Constraint im Schema
       }
       if (await store.wasAutoDeleted(account.id, mail.messageIdHeader)) {
-        console.log(`[sync-debug] uebersprungen (auto-deleted): ${mail.subject}`);
+        skippedKnown++;
         continue; // dedupe für den Auto-Delete-Pfad, siehe store.ts
       }
 
@@ -448,6 +445,13 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
 
       imported++;
     }
+
+    // Eine Zeile pro Abruf statt einer pro Nachricht: reicht, um "laeuft der
+    // Abruf ueberhaupt und was kam an" zu beantworten (genau die Frage, die
+    // beim Geraete-Test am 22./23.09. offen war), ohne die Konsole zu fluten.
+    console.log(
+      `[sync] ${account.emailAddress}: ${fetched.length} vom Server geholt, ${imported} neu importiert, ${skippedKnown} bereits bekannt, ${autoDeleted} automatisch geloescht`,
+    );
 
     account.syncStatus = "ok";
     account.lastSyncedAt = new Date().toISOString();
