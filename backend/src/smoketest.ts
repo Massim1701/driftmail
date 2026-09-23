@@ -2114,16 +2114,34 @@ async function main() {
 
     const secondUserRecord = await store.getUserByEmail("zweiter-user@driftmail.local");
     assert(secondUserRecord !== undefined, "zweiter User sollte im Store auffindbar sein");
-    const secondUserAccount = await store.getMailAccountByUserId(secondUserRecord!.id);
-    assert(secondUserAccount !== undefined, "zweiter User sollte ein Mail-Konto haben (POST /accounts legt es an)");
 
-    const { imported: secondUserImported, autoDeleted: secondUserAutoDeleted } = await syncAccount(secondUserAccount!, aiAdapter);
-    assert(secondUserImported > 0, "Sync des zweiten Users sollte Nachrichten importieren");
+    // [2026-09-23] POST /accounts synchronisiert jetzt direkt beim Verbinden
+    // (siehe routes/auth.ts) -- das weiter oben angelegte Konto ist also
+    // bereits abgerufen, und zwar BEVOR der Whitelist-Eintrag existierte.
+    // Fuer den Whitelist-Nachweis wird deshalb ein frisches zweites Konto
+    // desselben Users verbunden: dessen allererster Abruf laeuft bereits
+    // unter der Whitelist (Mehrfach-Konten, siehe POST /accounts).
+    const whitelistAccountRes = await globalThis.fetch(`${base}/v1/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secondUserToken}` },
+      body: JSON.stringify({ emailAddress: "zweiter-user-whitelist@driftmail.local" }),
+    });
+    assert(whitelistAccountRes.status === 200, "zweites Konto für den Whitelist-Test sollte angelegt werden");
+    const whitelistAccountBody = (await whitelistAccountRes.json()) as { account: { id: string } };
+    const secondUserAccount = await store.getMailAccount(whitelistAccountBody.account.id);
+    assert(secondUserAccount !== undefined, "zweites Konto sollte im Store auffindbar sein");
+
+    // Statt der Rueckgabewerte von syncAccount() wird jetzt der beobachtbare
+    // Zustand nach dem Verbinden geprueft -- das ist genau das, was der
+    // Nutzer in der App sieht.
+    const secondUserMessages = await store.listMessages({ accountId: secondUserAccount!.id });
+    assert(secondUserMessages.length > 0, "Verbinden sollte beim zweiten User sofort Nachrichten importieren");
     // Whitelist wirkt gezielt NUR auf Fixture 2 -- Fixture 5 (gambling) und
     // Fixture 7 (advance_fee_scam) werden trotzdem automatisch gelöscht,
     // ihre Absender stehen nicht auf der Whitelist dieses Users.
     assert(
-      secondUserAutoDeleted === 2,
+      (await store.wasAutoDeleted(secondUserAccount!.id, "<fixture-5@casino-bonus-express.example>")) &&
+        (await store.wasAutoDeleted(secondUserAccount!.id, "<fixture-7@erbschaft-mitteilung.example>")),
       "Whitelist betrifft nur Fixture 2 -- Fixture 5/7 werden beim zweiten User trotzdem automatisch gelöscht",
     );
 
