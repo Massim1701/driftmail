@@ -508,7 +508,20 @@ struct ComposeView: View {
         if scheduleSendEnabled {
             await scheduleSend()
         } else {
-            beginUndoSendCountdown()
+            // [2026-09-23] Undo-Send-Countdown (6s Wartezeit VOR dem
+            // eigentlichen POST /messages/send) entfernt: Massimo hat beim
+            // echten Testen wiederholt "Gesendet bleibt leer" gemeldet.
+            // Ursache gefunden -- der Countdown lief als `Task`, der beim
+            // Schliessen/Wechseln der App waehrend der 6 Sekunden (genau
+            // das naheliegende Verhalten beim schnellen Testen) nie zu Ende
+            // lief, wodurch dispatchSend() nie aufgerufen wurde: die Mail
+            // wurde serverseitig NIE abgeschickt, obwohl die App den
+            // Compose-Screen normal geschlossen hat. Zuverlässigkeit hat
+            // Vorrang vor der Undo-Bequemlichkeit -- direkter Versand ohne
+            // Wartefenster. beginUndoSendCountdown()/die Banner-UI bleiben
+            // im Code (nicht geloescht, falls das Feature spaeter robuster
+            // nachgebaut wird), werden aber nicht mehr aufgerufen.
+            await dispatchSend()
         }
     }
 

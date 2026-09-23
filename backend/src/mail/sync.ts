@@ -181,10 +181,20 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
   let autoDeleted = 0;
   try {
     const fetched = await adapter.fetchRecentMessages(limit);
+    // [TEMP - Diagnose "Mail wird nicht abgeholt", Mail liegt nachweislich
+    // im Posteingang]: zeigt exakt, was der Adapter zurueckliefert, BEVOR
+    // irgendein Dedupe/Filter greift.
+    console.log(`[sync-debug] ${account.emailAddress}: Adapter lieferte ${fetched.length} Nachricht(en):`, fetched.map((m) => ({ subject: m.subject, messageIdHeader: m.messageIdHeader, from: m.fromAddress })));
 
     for (const mail of fetched) {
-      if (await store.findMessageByHeader(account.id, mail.messageIdHeader)) continue; // dedupe, siehe UNIQUE-Constraint im Schema
-      if (await store.wasAutoDeleted(account.id, mail.messageIdHeader)) continue; // dedupe für den Auto-Delete-Pfad, siehe store.ts
+      if (await store.findMessageByHeader(account.id, mail.messageIdHeader)) {
+        console.log(`[sync-debug] uebersprungen (schon bekannt): ${mail.subject} (${mail.messageIdHeader})`);
+        continue; // dedupe, siehe UNIQUE-Constraint im Schema
+      }
+      if (await store.wasAutoDeleted(account.id, mail.messageIdHeader)) {
+        console.log(`[sync-debug] uebersprungen (auto-deleted): ${mail.subject}`);
+        continue; // dedupe für den Auto-Delete-Pfad, siehe store.ts
+      }
 
       const security = await ai.analyzeMail(mail.bodyText ?? "", mail.rawHeaders);
 
