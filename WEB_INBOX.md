@@ -1231,7 +1231,7 @@ Bitte mit echtem Simulator-Build + Netzwerk-Log (z.B. per log stream oder Xcode-
 
 ---
 
-[2026-09-21] [offen] [UX-VERBESSERUNG - Anbieter automatisch aus E-Mail-Adresse erkennen] [contracts + Track A + Track C/F] — Massimo: die Provider-Auswahl VOR der E-Mail-Eingabe ist ein unnoetiger Extra-Schritt, da der User seine Adresse ohnehin eingeben muss. Bitte Ablauf umdrehen:
+[2026-09-21] [teilweise erledigt: 42e98ef -- Contract + iOS (Track C), Web (Track F) noch offen] [UX-VERBESSERUNG - Anbieter automatisch aus E-Mail-Adresse erkennen] [contracts + Track A + Track C/F] — Massimo: die Provider-Auswahl VOR der E-Mail-Eingabe ist ein unnoetiger Extra-Schritt, da der User seine Adresse ohnehin eingeben muss. Bitte Ablauf umdrehen:
 
 1. Erster Bildschirm: nur EIN Eingabefeld fuer die E-Mail-Adresse (kein Anbieter-Auswahl-Bildschirm mehr davor).
 2. Nach Eingabe: Endung automatisch auswerten (@gmail.com -> Gmail-OAuth-Flow direkt starten, @icloud.com/@me.com -> iCloud-Preset, @gmx.de/@gmx.net -> GMX-Preset, @web.de -> web.de-Preset, @outlook.com/@hotmail.com -> Outlook falls/sobald verfuegbar).
@@ -1239,6 +1239,8 @@ Bitte mit echtem Simulator-Build + Netzwerk-Log (z.B. per log stream oder Xcode-
 4. Passwort-/App-Passwort-Feld erscheint danach, mit dem zum erkannten Anbieter passenden Hinweistext (wie bisher schon vorhanden).
 
 Bitte GET /mail-providers weiterhin nutzen, um die Domain-zu-Preset-Zuordnung zu pflegen (z.B. um das Praefix-Matching serverseitig zentral zu halten, nicht hart im Client verdrahtet) -- Track A entscheidet sinnvolle Umsetzung. Kein Contract-Bruch, reine Ablauf-/UX-Aenderung, betrifft Web und iOS gleichermassen.
+
+**Umgesetzt (Terminal, 25.09., Commit `42e98ef`): Contract + iOS.** `contracts/mail-providers.json`/`api-spec.yaml` bekommen ein `domains`-Feld pro Provider (Kleinbuchstaben-Domainliste, `other_imap` leer als Fallback) -- kein Backend-Code-Change noetig, `mailProviders.ts` liefert die Datei unveraendert aus. iOS (`OnboardingAccountConnectView`) fragt jetzt zuerst nur die Adresse, matcht die Domain und springt direkt ins passende Formular (Adresse durchgereicht); bekannte-aber-nicht-nutzbare Treffer (Gmail/Outlook/Yahoo) erklaeren das + bieten "trotzdem per IMAP versuchen" an, unbekannte Domains fallen ohne Fehlermeldung auf generisches IMAP zurueck (Punkt 3). Der alte Listen-Picker bleibt als manueller Override erhalten. Details/Testgrenzen in `ios/README.md` 25.09.-Eintrag. **Offen: Web (Track F)** -- `web/src/components/OnboardingScreen.tsx` braucht denselben `domains`-Abgleich noch.
 
 
 [2026-09-23] [offen] [ZWEI TEXT-KORREKTUREN - unprofessionelle Formulierungen] [driftware-Repo, Datei driftmail/index.html] — Massimo: zwei Formulierungen auf der driftmail-Info-Seite wirken zu umgangssprachlich fuer erwachsene Nutzer, bitte aendern:
