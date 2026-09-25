@@ -1932,6 +1932,56 @@ mit echtem Xcode-/Geraete-Zugriff: einmal durchs Onboarding klicken und
 die Ordnerliste gegenpruefen, bevor dieser Nachtrag als vollstaendig
 bestaetigt gilt.
 
+## [2026-09-25] Nachtrag: Gmail/googlemail.com per IMAP nutzbar (statt Sackgasse bei OAuth-Anfrage)
+
+Massimo, direkt: "passe die app auf googlemail.com an (Gmail)" -- zum
+Zeitpunkt dieses Auftrags erkannte die App `googlemail.com`/`gmail.com`
+bereits als Gmail (Domain-Matching seit dem 25.09.-Nachtrag "Anbieter
+automatisch erkennen"), aber jede Erkennung endete in der "Gmail auf iOS
+nicht verfügbar"-Erklärung (OAuth-Redirect-Ziel ist serverseitig fest auf
+den Web-Client verdrahtet, siehe Nachtrag 21.09.) und fiel danach auf das
+komplett LEERE generische IMAP-Formular zurück -- der User musste
+`imap.gmail.com` selbst kennen und eintippen, obwohl Gmail (mit
+aktiviertem IMAP-Zugriff + App-Passwort bei aktivierter 2FA) genauso gut
+per IMAP nutzbar ist wie iCloud/GMX/web.de.
+
+**Fix:** `contracts/mail-providers.json` + `Models/MailProvider.mocked`:
+`gmail`-Eintrag bekommt jetzt echte IMAP/SMTP-Werte
+(`imap.gmail.com:993`/`smtp.gmail.com:587`, `requiresAppPassword: true`,
+Link zu Googles offizieller App-Passwort-Hilfe) -- `authType` bleibt
+bewusst `"oauth"` (der Web-Client nutzt weiterhin echten Google-Login,
+keine Backend-Änderung nötig). `OnboardingAccountConnectView.swift`:
+`unavailableProviderLabel: String?` durch `unavailableProvider:
+MailProvider?` ersetzt, `proceedWithFallbackImap()` nutzt jetzt dessen
+eigenes IMAP-Preset, falls vorhanden, statt immer das leere
+`other_imap`-Formular zu öffnen. Effekt: `googlemail.com`/`gmail.com`
+eingeben → "nicht verfügbar"-Hinweis (unverändert, OAuth funktioniert auf
+iOS weiterhin nicht) → "Trotzdem per IMAP versuchen" → Formular ist jetzt
+mit Gmails echten Servereinstellungen vorbefüllt, App-Passwort-Hinweis
+inklusive, genau wie bei den bereits funktionierenden Presets.
+
+**Tests:** `xcodebuild` **BUILD SUCCEEDED**, `GET /mail-providers` gegen
+den echten `backend/`-Prozess liefert die neuen Gmail-Felder (per `curl`
+verifiziert, Backend-Neustart nötig, da `mail-providers.json` nur beim
+Modulstart gelesen wird). Der Domain-Match → Dialog → "Trotzdem per
+IMAP"-Pfad selbst ist NICHT per Tap durchgeklickt (gleiche
+Tap-Automatisierungs-Grenze wie in allen vorherigen Einträgen) --
+Codepfad per Review verifiziert: `proceedWithFallbackImap()` wählt bei
+`unavailableProvider?.imapHost != nil` (jetzt der Fall für Gmail) dessen
+eigenes Preset statt `fallbackImapProvider`.
+
+**Separat beantwortet (keine Code-Änderung, siehe Chat 25.09.):
+"Ist das POP3-Problem gelöst, werden Mails abgerufen?"** Ja, weiterhin --
+der Kernfix vom 23.09. (Commit `fb4621f`, `backend/src/loadEnv.ts`: ohne
+diese Datei wurde `backend/.env` nie gelesen, der Server lief trotz
+eingerichteter Postgres-DB unbemerkt im In-Memory-Store, jeder
+`tsx watch`-Neustart löschte Konten/Nachrichten/Sitzungstoken) hält
+weiterhin, keine Regression seit damals (per `git log` auf
+`loadEnv.ts`/`sync.ts`/`routes/accounts.ts` geprüft, keine Commits seit
+`fb4621f`). Live gegenverifiziert: Backend mehrfach neu gestartet, der
+Demo-Sync zeigt jedes Mal identisch "11 vom Server geholt, 0 neu
+importiert, 11 bereits bekannt" -- Persistenz und Dedupe funktionieren.
+
 ## Nächste Schritte (nicht Teil dieses Durchstichs)
 
 - Ordner umbenennen/löschen/neu sortieren in der UI (Endpunkte sind da,

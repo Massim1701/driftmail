@@ -10,7 +10,16 @@
       "label": "Gmail",
       "authType": "oauth",
       "comingSoon": false,
-      "domains": ["gmail.com", "googlemail.com"]
+      "imapHost": "imap.gmail.com",
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": "smtp.gmail.com",
+      "smtpPort": 587,
+      "smtpSecure": false,
+      "requiresAppPassword": true,
+      "appPasswordHelpUrl": "https://support.google.com/accounts/answer/185833",
+      "domains": ["gmail.com", "googlemail.com"],
+      "_imapNote": "[2026-09-25] Massimo: 'passe die App auf googlemail.com an' -- Gmail-OAuth ist auf iOS nicht funktional (siehe ios/README.md 21.09. 'Bewusste Grenze'), authType bleibt 'oauth' (der Web-Client nutzt weiterhin echten Google-Login), aber diese IMAP/SMTP-Werte dienen iOS als Vorbefuellung fuer den erklaerten IMAP-Fallback (App-Passwort noetig, Gmail-IMAP muss in den Google-Kontoeinstellungen aktiviert sein)."
     },
     {
       "id": "outlook",

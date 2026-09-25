@@ -90,7 +90,7 @@ extension MailProvider {
     /// `contracts/mail-providers.json` changes, update this to match and
     /// note it in `SYNC.md` under "Contract-Änderungen".
     static let mocked: [MailProvider] = [
-        MailProvider(id: "gmail", label: "Gmail", authType: .oauth, comingSoon: false, imapHost: nil, imapPort: nil, imapSecure: nil, smtpHost: nil, smtpPort: nil, smtpSecure: nil, requiresAppPassword: false, appPasswordHelpUrl: nil, domains: ["gmail.com", "googlemail.com"]),
+        MailProvider(id: "gmail", label: "Gmail", authType: .oauth, comingSoon: false, imapHost: "imap.gmail.com", imapPort: 993, imapSecure: true, smtpHost: "smtp.gmail.com", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://support.google.com/accounts/answer/185833", domains: ["gmail.com", "googlemail.com"]),
         MailProvider(id: "outlook", label: "Outlook / Microsoft 365", authType: .oauth, comingSoon: true, imapHost: nil, imapPort: nil, imapSecure: nil, smtpHost: nil, smtpPort: nil, smtpSecure: nil, requiresAppPassword: false, appPasswordHelpUrl: nil, domains: ["outlook.com", "hotmail.com", "live.com", "msn.com"]),
         MailProvider(id: "yahoo", label: "Yahoo", authType: .oauth, comingSoon: true, imapHost: nil, imapPort: nil, imapSecure: nil, smtpHost: nil, smtpPort: nil, smtpSecure: nil, requiresAppPassword: false, appPasswordHelpUrl: nil, domains: ["yahoo.com", "yahoo.de"]),
         MailProvider(id: "icloud", label: "iCloud Mail", authType: .imap, comingSoon: false, imapHost: "imap.mail.me.com", imapPort: 993, imapSecure: true, smtpHost: "smtp.mail.me.com", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://support.apple.com/en-us/102654", domains: ["icloud.com", "me.com", "mac.com"]),

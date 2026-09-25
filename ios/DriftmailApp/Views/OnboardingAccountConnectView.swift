@@ -51,7 +51,13 @@ struct OnboardingAccountConnectView: View {
     @State private var email = ""
     @State private var providers: [MailProvider] = MailProvider.mocked
     @State private var providersLoadFailed = false
-    @State private var unavailableProviderLabel: String?
+    /// [2026-09-25] Statt nur des Labels wird jetzt der ganze Provider
+    /// gemerkt: faellt der User nach der "nicht verfuegbar"-Erklaerung auf
+    /// IMAP zurueck (`proceedWithFallbackImap()`), sollen bereits bekannte
+    /// IMAP/SMTP-Einstellungen des erkannten Anbieters (z.B. Gmail) das
+    /// Formular vorbefuellen, statt immer im komplett leeren generischen
+    /// Formular zu landen.
+    @State private var unavailableProvider: MailProvider?
 
     private let connectClient = RemoteAPIClient()
 
@@ -135,9 +141,9 @@ struct OnboardingAccountConnectView: View {
         }
         .background(DesignTokens.Color.surfacePage)
         .task { await loadProviders() }
-        .alert(unavailableProviderLabel.map { "\($0) auf iOS noch nicht verfügbar" } ?? "", isPresented: Binding(
-            get: { unavailableProviderLabel != nil },
-            set: { if !$0 { unavailableProviderLabel = nil } }
+        .alert(unavailableProvider.map { "\($0.label) auf iOS noch nicht verfügbar" } ?? "", isPresented: Binding(
+            get: { unavailableProvider != nil },
+            set: { if !$0 { unavailableProvider = nil } }
         )) {
             Button("Trotzdem per IMAP versuchen") { proceedWithFallbackImap() }
             Button("Verstanden", role: .cancel) {}
@@ -179,16 +185,26 @@ struct OnboardingAccountConnectView: View {
             // serverseitig noch gar nicht angebunden (comingSoon). Beides
             // wird hier gleich behandelt: erklären + Fallback anbieten,
             // statt den User ins Leere laufen zu lassen.
-            unavailableProviderLabel = match.label
+            unavailableProvider = match
             return
         }
         step = .imapForm(match, initialEmail: trimmed)
     }
 
+    /// [2026-09-25] "passe die App auf googlemail.com an": Gmail hat (siehe
+    /// `MailProvider.mocked`/`contracts/mail-providers.json`) inzwischen
+    /// ein echtes IMAP-Preset (imap.gmail.com, App-Passwort-Hinweis),
+    /// obwohl `authType == .oauth` bleibt (der Web-Client nutzt weiterhin
+    /// den echten Google-Login) -- auf iOS, wo OAuth nicht funktioniert,
+    /// wird dieses Preset jetzt als Vorbefuellung genutzt, statt immer im
+    /// leeren generischen Formular zu landen. Andere aktuell unverfuegbare
+    /// Treffer ohne eigenes IMAP-Preset (Outlook/Yahoo, `imapHost == nil`)
+    /// fallen weiterhin auf das komplett generische Formular zurueck.
     private func proceedWithFallbackImap() {
         let trimmed = email.trimmingCharacters(in: .whitespaces)
-        unavailableProviderLabel = nil
-        step = .imapForm(fallbackImapProvider, initialEmail: trimmed)
+        let provider = unavailableProvider?.imapHost != nil ? unavailableProvider! : fallbackImapProvider
+        unavailableProvider = nil
+        step = .imapForm(provider, initialEmail: trimmed)
     }
 
     /// Manueller Fallback/Override (z.B. um ein Preset unabhängig von der
@@ -229,7 +245,7 @@ struct OnboardingAccountConnectView: View {
     private func select(_ provider: MailProvider) {
         guard !provider.comingSoon else { return }
         if provider.authType == .oauth {
-            unavailableProviderLabel = provider.label
+            unavailableProvider = provider
             return
         }
         step = .imapForm(provider, initialEmail: email.trimmingCharacters(in: .whitespaces))
