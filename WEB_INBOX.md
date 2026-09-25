@@ -1260,7 +1260,7 @@ Rest der Seite wurde gegengeprueft und ist in Ordnung, keine weiteren Aenderunge
 Bitte konsistent auf der ganzen driftmail-Unterseite (nicht nur der Startseite) durchziehen, falls Emojis auch in anleitung.html oder den Rechtstexten verwendet wurden.
 
 
-[2026-09-23] [offen] [ERGAENZUNG Datenschutzerklaerung - US-Hosting/Registrar] [driftware-Repo, Datei driftmail/privacy.html] — Massimo hat bestaetigt: Hosting laeuft ueber GitHub Pages (GitHub Inc./Microsoft, USA), Domain-Registrar ist Namecheap (USA). Beides sind US-Anbieter und gehoeren in die Datenschutzerklaerung, aehnlich wie der bestehende Hinweis zu optionalen Cloud-KI-Anbietern (Drittland-Datenuebermittlung).
+[2026-09-23] [erledigt: c005a84 im driftware-Repo, "Datenschutz: helles Design + US-Hosting-Hinweis"] [ERGAENZUNG Datenschutzerklaerung - US-Hosting/Registrar] [driftware-Repo, Datei driftmail/privacy.html] — Massimo hat bestaetigt: Hosting laeuft ueber GitHub Pages (GitHub Inc./Microsoft, USA), Domain-Registrar ist Namecheap (USA). Beides sind US-Anbieter und gehoeren in die Datenschutzerklaerung, aehnlich wie der bestehende Hinweis zu optionalen Cloud-KI-Anbietern (Drittland-Datenuebermittlung).
 
 Bitte folgenden Abschnitt in privacy.html ergaenzen (Formulierung als Vorschlag, Massimo/Anwalt kann anpassen):
 
