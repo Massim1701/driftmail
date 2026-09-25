@@ -1272,3 +1272,20 @@ Reine Ergaenzung des bestehenden Datenschutzerklaerung-Entwurfs (bereits als "En
 
 
 [2026-09-24] [offen] [PRAEZISIERUNG - Titel oben bei mehreren Konten] [Track C/F] — Massimo praezisiert den aelteren offenen Punkt "Driftmail-Titel oben durch E-Mail-Adresse ersetzen" (WEB_INBOX.md 10.09.): bei nur EINEM verbundenen Konto reicht die einzelne E-Mail-Adresse oben wie bereits spezifiziert. Bei MEHREREN verbundenen Konten sollen ALLE Konto-Namen/E-Mail-Adressen oben aufgefuehrt werden, nicht nur das aktuell aktive -- damit der User auf einen Blick sieht, welche Konten insgesamt verbunden sind, nicht nur in welchem er gerade ist. Umsetzung (z.B. mehrere Adressen nebeneinander/als kleine Liste, oder das aktive hervorgehoben mit den anderen daneben/darunter kleiner) bleibt Track C/F ueberlassen, Hauptsache alle sind sichtbar, nicht nur eine. Betrifft Web und iOS gleichermassen. Kein Contract-Bruch, reine UI-Anpassung.
+
+
+[2026-09-24] [offen] [NEUE DESIGN-RICHTUNG - App hell + Kobaltblau] [Web + iOS] [ersetzt/ergaenzt fruehere Design-Vorgaben, bitte als aktuellste Vorgabe behandeln] — Massimo hat aus mehreren gezeigten Mockup-Varianten "Kobaltblau, hell" gewaehlt (nicht das dunkle Superhuman-Grau/Teal von vorher, auch bewusst ANDERS als die neue helle Salbeigruen-Landingpage -- eigene Identitaet fuer die App selbst).
+
+**Farben (aus dem bestaetigten Mockup):**
+- Hintergrund: reines Weiss (#ffffff) bzw. sehr helles Grau fuer Panels
+- Primaerer Akzent: Kobaltblau #2f5fdb (Buttons, aktive Zustaende, "Neu"-Badges)
+- Helle Akzent-Flaeche fuer hervorgehobene/neue Mails: #eef3ff Hintergrund, #2f5fdb bzw. dunkleres Blau fuer Text/Badge darauf (Badge-Hintergrund #dbe6ff, Badge-Text #2f5fdb)
+- Fliesstext dunkel: #1a1d24 (Haupttext), #444751 (sekundaerer Text), #7c8291 (gedaempft/Meta-Text)
+- Trennlinien: #e6e8ec (Rahmen), #f1f2f5 (Listenzeilen-Trenner)
+- Sicherheits-Warnfarben (rot fuer "Prüfen"-Badges etc.) bleiben wie bisher UNVERAENDERT fest/nicht themebar -- nur der normale UI-Akzent wechselt auf Kobaltblau.
+
+**Hinweis zum bestehenden 5-Themes-System:** Falls die App bereits die fruehere "5 waehlbare Akzent-Themes"-Struktur hat (Teal Default, Ocean Blue #378ADD, Violett, Koralle, Ocean-Verlauf) -- pruefen, ob sich das neue Kobaltblau (#2f5fdb) als NEUER DEFAULT in dieses System einordnen laesst (aehnlich/ueberschneidend mit dem bisherigen "Ocean Blue"), oder ob Massimo eine komplett neue Grundausrichtung moechte, die das alte Teal-Default ersetzt. Bitte kurze Rueckfrage/Einschaetzung in SYNC.md, falls das nicht eindeutig ist, sonst nach bestem Wissen umsetzen: Kobaltblau + Hell wird der neue Standard-Look der App (Web + iOS), ersetzt den bisherigen dunklen/Teal-Grundton als Ausgangspunkt.
+
+**Umfang:** Betrifft grundlegende Hintergrund-/Textfarben, Buttons, aktive/hervorgehobene Listenzeilen, Badges -- im Prinzip die gesamte App-Oberflaeche auf Web und iOS, nicht nur einzelne Screens. Bitte Umfang/Reihenfolge (z.B. zentrale Farb-Variablen zuerst anpassen, dann Screen fuer Screen pruefen) selbst sinnvoll einteilen und in SYNC.md dokumentieren.
+
+Kein Contract-Bruch (reine visuelle Ueberarbeitung), aber grosser Umfang -- bitte realistisch einschaetzen, ob das in einem Zug geht oder aufgeteilt werden sollte.
