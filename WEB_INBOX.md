@@ -1367,3 +1367,10 @@ Damit ist die Form endgueltig festgelegt. Bitte NICHT die Shutterstock-Datei sel
 **Flieger:** derselbe Papierflieger (Form + Blautoene #5eb1ec/#0078d4/#106ebe/#8ecbf5 aus der bestaetigten Icon-Spec), zentriert auf der Salbei-Flaeche, in den ueblichen Groessen/Skalierungsstufen fuer ein iOS-AppIcon-Set (alle benoetigten @1x/@2x/@3x bzw. px-Groessen gemaess Xcode-Anforderungen).
 
 Bitte bestehendes AppIcon.appiconset ersetzen. Falls es fuer Web ein eigenes Favicon/PWA-Icon-Set gibt, gleiches Motiv dort ebenfalls anwenden, sonst nur iOS.
+
+
+[2026-09-25] [offen] [APP-ICON - Papierflieger-Form noch nicht getroffen, bitte im echten Build iterieren] [iOS] [gehoert zum Eintrag "APP-ICON (Homescreen) - Papierflieger auf Salbei-Hintergrund" vom selben Tag] — Massimo hat mehrere Chat-Mockups des Papierflieger-Icons durchgesehen, keines hat gepasst (zu nadelartig, Rumpf fehlte, dann "verschlimmbessert"). Genau dieselbe Lehre wie beim Gesendet-Ordner-Icon: SVG-Mockups im Chat sind fuer diese Formfeinheit nicht praezise genug, bitte NICHT weiter hier iterieren, sondern direkt im echten Build/Icon-Editor probieren und Massimo am tatsaechlichen Icon (echte Groesse, z.B. 60pt/180px) entscheiden lassen.
+
+**Referenz-Beschreibung (verbal, keine Bilddatei -- Original-Artwork zeichnen):** klassische Papierflieger-Silhouette, Nase oben-rechts, EIN zusammenhaengender Hauptkoerper (Rumpf+oberer Fluegel als eine Flaeche), UND zusaetzlich ein separates kleines Dreieck ("Kiel"), das unten mittig aus dem Hauptkoerper heraushaengt -- klar erkennbar als eigenes Element, getrennt durch eine duenne Fuge/Falzlinie vom Hauptkoerper (nicht Teil derselben Flaeche). Genau dieser haengende untere Kiel hat in den bisherigen Versuchen gefehlt bzw. wurde falsch getroffen.
+
+**Farbe:** durchgehend ein Hellblau (Familie um #5eb1ec), keine mehrfarbigen Facetten mehr -- nur duenne, etwas dunklere Konturlinien (#2f7cc4 o.ae.) um Rumpf/Kiel/Fluegel-Kanten sichtbar zu machen, falls das dem Rumpf-Erkennungsproblem hilft. Massimo entscheidet final am echten gerenderten Icon, nicht im Chat.
