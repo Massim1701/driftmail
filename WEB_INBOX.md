@@ -1314,3 +1314,13 @@ Klassisches Drei-Spalten-Layout, nicht nur eine Liste:
 **Ecken/Formen:** dezente Rundung (4px), keine starken Schatten, klare Trennlinien statt Card-Schatten (Fluent-Stil, nicht Material-Design-Schatten).
 
 Bitte den fruehreren, vageren "Kobaltblau"-Eintrag vom selben Tag als ueberholt behandeln -- dieser hier mit dem Drei-Spalten-Layout und den exakten Hex-Werten ist die verbindliche Vorgabe. Kein Contract-Bruch, aber grosser Umfang (Grundlayout-Aenderung von Liste zu Drei-Spalten auf Web, iOS behaelt vermutlich den bestehenden Navigations-Stack mit angepassten Farben, da Drei-Spalten auf dem iPhone nicht sinnvoll ist -- auf iPad ggf. schon, bitte einschaetzen). Bitte Umfang/Reihenfolge selbst einteilen und in SYNC.md dokumentieren.
+
+
+[2026-09-24] [offen] [ORDNER-ICONS - 3D/Facetten-Stil, Details bestaetigt] [Web + iOS] [gehoert zum Eintrag "DESIGN-RICHTUNG PRAEZISIERT - Outlook-inspiriert"] — Massimo hat nach mehreren Mockup-Runden einen 3D/Facetten-Icon-Stil bestaetigt (flache Farbflaechen die Tiefe andeuten, kein echter Gradient/Schatten -- aehnlich Fluent-3D-Icons, aber mit klar abgegrenzten Farbflaechen statt weichem Verlauf). Referenz-Farben passend zur Outlook-Palette (Blau #0078d4/#5eb1ec/#106ebe/#004578, Amber #f0a800/#ffcb5c/#7a4d00 fuer Quarantaene, Grau #a19f9d/#c8c6c4/#8a8886 fuer Papierkorb). Jedes Icon steht auf einer flachen ovalen "Schatten"-Ellipse darunter (#e1dfdd) als Bodenkontakt.
+
+Bestaetigt (bitte 1:1 uebernehmen, Formen liegen als SVG-Pfade in der Chat-Historie/den Mockups vor, Track C/F kann sich bei Bedarf ein SVG-Set exportieren lassen):
+- Eingang: Briefumschlag-Form in Blau, mit hellerer Flap-Flaeche oben und zwei dunkleren Seiten-Facetten
+- Quarantaene: Warndreieck in Amber/Gelb mit dunklerem Ausrufezeichen
+- Papierkorb: ECHTER Papierkorb (leicht konisch, oben breiter als unten, mit sichtbaren vertikalen "Gitterstaeben"), NICHT eine eckige Muelltonne -- das war explizit falsch und wurde korrigiert
+
+Noch NICHT final: das Icon fuer "Gesendet" soll ein Papierflieger sein, mehrere Varianten (spitz/flach, hart/weich) wurden gezeigt, aber keine hat Massimo ueberzeugt ("weichere Linien" war letztes Feedback, noch nicht getroffen). Statt weiter blind im Chat zu iterieren: bitte Track C/F einen Papierflieger in der oben stehenden Blau-Palette (#0078d4/#5eb1ec/#106ebe) direkt im echten Build umsetzen (2-3 Formvarianten probieren) und Massimo am tatsaechlichen Screen/Icon-Preview entscheiden lassen -- das laesst sich in einem echten Icon-Editor/Build praeziser treffen als in einem Chat-Mockup.
