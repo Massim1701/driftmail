@@ -1377,3 +1377,12 @@ Bitte bestehendes AppIcon.appiconset ersetzen. Falls es fuer Web ein eigenes Fav
 
 
 [2026-09-25] [offen] [APP-ICON - Praezisierung: Fugen als Hintergrundfarbe, nicht als Kontur] [iOS] [Ergaenzung zum Eintrag "APP-ICON - Papierflieger-Form noch nicht getroffen" vom selben Tag] — Massimo praezisiert: die Trennung zwischen Hauptkoerper und Kiel soll wie im Referenzbild eine DUENNE FUGE IN DER HINTERGRUNDFARBE sein (also durchscheinendes Salbei-Icon-Hintergrund an den Faltkanten), NICHT eine dunkle/farbige Konturlinie. Das komplette Icon bleibt einfarbig Hellblau (#5eb1ec-Familie), die Faltkanten werden ausschliesslich durch schmale ausgesparte Fugen (Hintergrundfarbe scheint durch) sichtbar, aehnlich wie bei der urspruenglich gezeigten Referenz-Silhouette.
+
+
+[2026-09-25] [offen] [APP-ICON/GESENDET-ICON - LOESUNG GEFUNDEN: SF Symbol statt Custom-Asset] [iOS] [ersetzt alle vorherigen Papierflieger-Formbeschreibungen vom 25.09., diese Loesung ist einfacher und praeziser] — Massimo hat nach mehreren gescheiterten Chat-Mockup-Versuchen zwei Referenzbilder geschickt (Screenshots), die eindeutig das STANDARD-APPLE-SYMBOL zeigen: SF Symbol "paperplane.fill" (das uebliche, jedem iOS-Entwickler bekannte Papierflieger-Icon mit sichtbarer gefalteter Unterseite/Kiel-Flap). Das ist KEINE Sonderform, sondern das eingebaute System-Symbol.
+
+**Bitte umsetzen:** SF Symbol "paperplane.fill" verwenden (Image(systemName: "paperplane.fill") bzw. UIImage(systemName:)), eingefaerbt/getintet in der bestaetigten Hellblau-Farbe (#5eb1ec-Familie) statt ein eigenes SVG/PNG-Asset von Hand nachzuzeichnen. Das loest sowohl:
+- das "Gesendet"-Ordner-Icon (ersetzt FolderIconGesendet.png/die bisherigen Versuche)
+- als auch als Motiv fuer das App-Icon (Homescreen), dort ggf. als gerendertes/exportiertes PNG auf Salbei-Hintergrund noetig, da App-Icons keine SF-Symbol-Referenzen zur Laufzeit einbinden koennen -- bitte das SF-Symbol-Erscheinungsbild 1:1 als Vorlage fuer den AppIcon-Export nehmen (z.B. per Xcode/Sketch/Icon-Composer aus dem SF-Symbol exportieren und auf Salbei-Flaeche platzieren), damit Ordner-Icon und App-Icon optisch identisch wirken.
+
+Bitte pruefen, ob sich SF Symbols per Lizenz problemlos in App-Icons einbetten lassen (fuer In-App-UI ist das unproblematisch/Standard, fuers App-Icon-Set gibt es ggf. Apple-eigene Vorgaben/Restriktionen -- kurz gegenchecken, falls unklar in SYNC.md vermerken statt zu raten).
