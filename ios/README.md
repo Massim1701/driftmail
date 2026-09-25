@@ -2008,6 +2008,38 @@ siehe Screenshots im Session-Verlauf. `xcodebuild` **BUILD SUCCEEDED**.
 `contracts/design-tokens.json` `systemFolders.facetIconStyle.gesendet`
 entsprechend aktualisiert.
 
+## [2026-09-25] Nachtrag: Titel zeigt bei mehreren Konten ALLE Adressen (WEB_INBOX.md 24.09. "PRAEZISIERUNG")
+
+Präzisiert den älteren Punkt vom 10.09. ("Titel → Konto-Adresse", damals
+schon für den Einzelkonto-Fall umgesetzt): bei mehreren verbundenen
+Konten soll der Titelbereich ALLE Adressen zeigen, nicht nur die aktive,
+damit der User auf einen Blick sieht, welche Konten insgesamt verbunden
+sind.
+
+`FolderListView.swift`: der bisherige einzeilige `.navigationTitle(...)`-
+String kann das nicht abbilden (nur eine Zeile). Ersetzt durch einen
+`ToolbarItem(placement: .principal)` mit einer neuen `titleView`
+(`navigationTitle` bleibt als leerer String bestehen, reine
+Kompatibilität mit `.navigationBarTitleDisplayMode(.inline)`): aktive
+Adresse fett/normal groß oben, bei mehr als einem Konto darunter eine
+kleinere, gedämpfte zweite Zeile mit allen ÜBRIGEN Adressen
+(`· `-getrennt). Bei nur einem Konto ist die zweite Zeile leer/nicht
+vorhanden -- visuell identisch zum bisherigen Verhalten, keine Regression
+für den (häufigeren) Einzelkonto-Fall. Der bestehende Konto-Umschalter
+(`accountSwitcherMenu`, Person-Icon in der Toolbar) bleibt unverändert
+bestehen -- er tauscht das aktive Konto, die neue zweite Titelzeile ist
+rein informativ (passiv sichtbar, kein zusätzlicher Tap nötig).
+
+**Tests:** `xcodebuild -destination 'platform=iOS Simulator,name=iPhone
+17 Pro' build` **BUILD SUCCEEDED**. NICHT per Screenshot mit echten
+mehreren Konten verifiziert -- das bräuchte entweder zwei echte
+Mail-Konten durchs Onboarding (keine Testzugangsdaten für ein zweites
+Konto verfügbar) oder Tap-Interaktion (gleiche Werkzeug-Grenze wie in
+allen vorherigen iOS-Einträgen). Der Einzelkonto-Fall (weit häufiger,
+keine Verhaltensänderung beabsichtigt) läuft über denselben Code-Pfad wie
+vorher, nur über einen anderen SwiftUI-Mechanismus (`principal`-
+Toolbar-Item statt `navigationTitle`-String) umgesetzt.
+
 ## Nächste Schritte (nicht Teil dieses Durchstichs)
 
 - Ordner umbenennen/löschen/neu sortieren in der UI (Endpunkte sind da,

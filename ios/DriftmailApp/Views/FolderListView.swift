@@ -103,7 +103,14 @@ struct FolderListView: View {
             // dann bewusst nil statt einen Ladezustand zu erzwingen).
             // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2):
             // activeAccount statt des einzelnen account.
-            .navigationTitle(environment.activeAccount?.emailAddress ?? "driftmail")
+            // [2026-09-25] WEB_INBOX.md 24.09. "PRAEZISIERUNG - Titel oben
+            // bei mehreren Konten": bei nur einem Konto reicht der einfache
+            // Titel (unveraendert, leerer String hier, echter Inhalt kommt
+            // ueber den .principal-Toolbar-Eintrag `titleView` unten, siehe
+            // dort) -- bei MEHREREN Konten muessen ALLE sichtbar sein, nicht
+            // nur das aktive, das ein normaler `navigationTitle`-String
+            // (nur eine Zeile) nicht abbilden kann.
+            .navigationTitle("")
             // Inline statt der (hier default) grossen Titel-Darstellung:
             // eine E-Mail-Adresse ist variabel lang und kann mit einer
             // grossen, fetten Titel-Schrift schon bei kurzen Adressen
@@ -111,6 +118,9 @@ struct FolderListView: View {
             // klein genug, um die Adresse vollstaendig zu zeigen.
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    titleView
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         isShowingSettings = true
@@ -243,6 +253,35 @@ struct FolderListView: View {
                 .disabled(newFolderName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
+    }
+
+    /// [2026-09-25] WEB_INBOX.md 24.09. "PRAEZISIERUNG - Titel oben bei
+    /// mehreren Konten": bei einem einzigen Konto identisch zum bisherigen
+    /// `navigationTitle`-Verhalten (nur die eine Adresse, eine Zeile). Bei
+    /// mehreren verbundenen Konten kommt eine zweite, kleinere Zeile mit
+    /// ALLEN anderen Konten dazu -- der User sieht so auf einen Blick jedes
+    /// verbundene Postfach, nicht nur das gerade aktive (das aktive bleibt
+    /// durch Fettung/Groesse hervorgehoben, wie im Auftrag als eine
+    /// moegliche Umsetzung vorgeschlagen). Ersetzt den vorherigen simplen
+    /// `.navigationTitle(...)`-String, weil der nur eine Zeile kann.
+    @ViewBuilder
+    private var titleView: some View {
+        let others = environment.accounts.filter { $0.id != environment.activeAccountId }
+        VStack(spacing: 1) {
+            Text(environment.activeAccount?.emailAddress ?? "driftmail")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            if !others.isEmpty {
+                Text(others.map(\.emailAddress).joined(separator: " · "))
+                    .font(.system(size: DesignTokens.Typography.Size.caption))
+                    .foregroundStyle(DesignTokens.Color.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .frame(maxWidth: 220)
     }
 
     /// Ausgelagert aus dem `.toolbar`-Builder (verschachtelte `if` +
