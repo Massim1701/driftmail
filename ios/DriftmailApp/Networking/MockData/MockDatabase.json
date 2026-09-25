@@ -83,7 +83,7 @@
     {
       "id": "folder-rechnungen",
       "accountId": "acc-001",
-      "name": "Rechnungen",
+      "name": "Dokumente",
       "icon": "receipt",
       "isSystem": false,
       "systemKey": null,

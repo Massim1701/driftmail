@@ -98,7 +98,7 @@ export const folders = [
   // Nachrichten bleiben unter derselben folderId auffindbar).
   {
     id: "f1000000-0000-0000-0000-000000000003",
-    name: "Rechnungen",
+    name: "Dokumente",
     icon: "receipt",
     is_system: false,
     system_key: null,
