@@ -3,7 +3,9 @@ import Foundation
 /// Mirrors `components/schemas/MailProvider` in contracts/api-spec.yaml,
 /// served by `GET /mail-providers` (`contracts/mail-providers.json`).
 /// Drives the onboarding provider-picker (WEB_INBOX.md 19.09.
-/// "Onboarding: Provider-Auswahlbildschirm").
+/// "Onboarding: Provider-Auswahlbildschirm") and, since 25.09., the
+/// domain-matching in `OnboardingAccountConnectView` (WEB_INBOX.md 21.09.
+/// "Anbieter automatisch aus E-Mail-Adresse erkennen").
 struct MailProvider: Codable, Identifiable, Hashable {
     enum AuthType: String, Codable {
         case oauth
@@ -28,8 +30,13 @@ struct MailProvider: Codable, Identifiable, Hashable {
     let smtpSecure: Bool?
     let requiresAppPassword: Bool
     let appPasswordHelpUrl: String?
+    /// [2026-09-25] Kleinbuchstaben-Domains ohne "@", die dieser Provider
+    /// abdeckt (siehe contracts/mail-providers.json). `other_imap` hat
+    /// bewusst eine leere Liste -- das ist der Fallback fuer jede nicht
+    /// erkannte Domain, kein eigenes Matching noetig/moeglich.
+    let domains: [String]
 
-    init(id: String, label: String, authType: AuthType, comingSoon: Bool, imapHost: String?, imapPort: Int?, imapSecure: Bool?, smtpHost: String?, smtpPort: Int?, smtpSecure: Bool?, requiresAppPassword: Bool, appPasswordHelpUrl: String?) {
+    init(id: String, label: String, authType: AuthType, comingSoon: Bool, imapHost: String?, imapPort: Int?, imapSecure: Bool?, smtpHost: String?, smtpPort: Int?, smtpSecure: Bool?, requiresAppPassword: Bool, appPasswordHelpUrl: String?, domains: [String] = []) {
         self.id = id
         self.label = label
         self.authType = authType
@@ -42,6 +49,7 @@ struct MailProvider: Codable, Identifiable, Hashable {
         self.smtpSecure = smtpSecure
         self.requiresAppPassword = requiresAppPassword
         self.appPasswordHelpUrl = appPasswordHelpUrl
+        self.domains = domains
     }
 
     // `contracts/mail-providers.json` laesst `requiresAppPassword` fuer
@@ -52,7 +60,9 @@ struct MailProvider: Codable, Identifiable, Hashable {
     // alle Elemente), nicht nur den betroffenen Eintrag. Das war die
     // tatsaechliche Ursache von WEB_INBOX.md "BUG - iOS erreicht lokales
     // Backend nicht" (21.09.) -- keine ATS-/Netzwerk-Eigenheit wie zunaechst
-    // vermutet, siehe ios/README.md.
+    // vermutet, siehe ios/README.md. `domains` (neu 25.09.) bekommt aus
+    // demselben Grund vorsorglich dieselbe decodeIfPresent-Behandlung,
+    // auch wenn die aktuelle Contract-Datei es fuer jeden Eintrag mitgibt.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
@@ -67,6 +77,7 @@ struct MailProvider: Codable, Identifiable, Hashable {
         smtpSecure = try container.decodeIfPresent(Bool.self, forKey: .smtpSecure)
         requiresAppPassword = try container.decodeIfPresent(Bool.self, forKey: .requiresAppPassword) ?? false
         appPasswordHelpUrl = try container.decodeIfPresent(String.self, forKey: .appPasswordHelpUrl)
+        domains = try container.decodeIfPresent([String].self, forKey: .domains) ?? []
     }
 }
 
@@ -79,12 +90,12 @@ extension MailProvider {
     /// `contracts/mail-providers.json` changes, update this to match and
     /// note it in `SYNC.md` under "Contract-Änderungen".
     static let mocked: [MailProvider] = [
-        MailProvider(id: "gmail", label: "Gmail", authType: .oauth, comingSoon: false, imapHost: nil, imapPort: nil, imapSecure: nil, smtpHost: nil, smtpPort: nil, smtpSecure: nil, requiresAppPassword: false, appPasswordHelpUrl: nil),
-        MailProvider(id: "outlook", label: "Outlook / Microsoft 365", authType: .oauth, comingSoon: true, imapHost: nil, imapPort: nil, imapSecure: nil, smtpHost: nil, smtpPort: nil, smtpSecure: nil, requiresAppPassword: false, appPasswordHelpUrl: nil),
-        MailProvider(id: "yahoo", label: "Yahoo", authType: .oauth, comingSoon: true, imapHost: nil, imapPort: nil, imapSecure: nil, smtpHost: nil, smtpPort: nil, smtpSecure: nil, requiresAppPassword: false, appPasswordHelpUrl: nil),
-        MailProvider(id: "icloud", label: "iCloud Mail", authType: .imap, comingSoon: false, imapHost: "imap.mail.me.com", imapPort: 993, imapSecure: true, smtpHost: "smtp.mail.me.com", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://support.apple.com/en-us/102654"),
-        MailProvider(id: "gmx", label: "GMX", authType: .imap, comingSoon: false, imapHost: "imap.gmx.net", imapPort: 993, imapSecure: true, smtpHost: "mail.gmx.net", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://hilfe.gmx.net"),
-        MailProvider(id: "web_de", label: "web.de", authType: .pop3, comingSoon: false, imapHost: "pop3.web.de", imapPort: 995, imapSecure: true, smtpHost: "smtp.web.de", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://hilfe.web.de"),
-        MailProvider(id: "other_imap", label: "Anderer Anbieter (IMAP)", authType: .imap, comingSoon: false, imapHost: nil, imapPort: 993, imapSecure: true, smtpHost: nil, smtpPort: 587, smtpSecure: false, requiresAppPassword: false, appPasswordHelpUrl: nil),
+        MailProvider(id: "gmail", label: "Gmail", authType: .oauth, comingSoon: false, imapHost: nil, imapPort: nil, imapSecure: nil, smtpHost: nil, smtpPort: nil, smtpSecure: nil, requiresAppPassword: false, appPasswordHelpUrl: nil, domains: ["gmail.com", "googlemail.com"]),
+        MailProvider(id: "outlook", label: "Outlook / Microsoft 365", authType: .oauth, comingSoon: true, imapHost: nil, imapPort: nil, imapSecure: nil, smtpHost: nil, smtpPort: nil, smtpSecure: nil, requiresAppPassword: false, appPasswordHelpUrl: nil, domains: ["outlook.com", "hotmail.com", "live.com", "msn.com"]),
+        MailProvider(id: "yahoo", label: "Yahoo", authType: .oauth, comingSoon: true, imapHost: nil, imapPort: nil, imapSecure: nil, smtpHost: nil, smtpPort: nil, smtpSecure: nil, requiresAppPassword: false, appPasswordHelpUrl: nil, domains: ["yahoo.com", "yahoo.de"]),
+        MailProvider(id: "icloud", label: "iCloud Mail", authType: .imap, comingSoon: false, imapHost: "imap.mail.me.com", imapPort: 993, imapSecure: true, smtpHost: "smtp.mail.me.com", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://support.apple.com/en-us/102654", domains: ["icloud.com", "me.com", "mac.com"]),
+        MailProvider(id: "gmx", label: "GMX", authType: .imap, comingSoon: false, imapHost: "imap.gmx.net", imapPort: 993, imapSecure: true, smtpHost: "mail.gmx.net", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://hilfe.gmx.net", domains: ["gmx.de", "gmx.net", "gmx.at", "gmx.ch"]),
+        MailProvider(id: "web_de", label: "web.de", authType: .pop3, comingSoon: false, imapHost: "pop3.web.de", imapPort: 995, imapSecure: true, smtpHost: "smtp.web.de", smtpPort: 587, smtpSecure: false, requiresAppPassword: true, appPasswordHelpUrl: "https://hilfe.web.de", domains: ["web.de"]),
+        MailProvider(id: "other_imap", label: "Anderer Anbieter (IMAP)", authType: .imap, comingSoon: false, imapHost: nil, imapPort: 993, imapSecure: true, smtpHost: nil, smtpPort: 587, smtpSecure: false, requiresAppPassword: false, appPasswordHelpUrl: nil, domains: []),
     ]
 }

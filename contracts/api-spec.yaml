@@ -1405,7 +1405,13 @@ components:
         `other_imap` hat bewusst null-Host-Felder (User muss selbst
         eintragen). [2026-09-22] authType=pop3 neu (Massimo: "web.de ist
         POP3" -- soll automatisch erkannt werden, ohne dass der User danach
-        gefragt wird, siehe ios/README.md).
+        gefragt wird, siehe ios/README.md). [2026-09-25] `domains` neu
+        (WEB_INBOX.md 21.09. "Anbieter automatisch aus E-Mail-Adresse
+        erkennen"): Kleinbuchstaben-Domains ohne "@", die dieser Provider
+        abdeckt -- Client matcht die eingegebene E-Mail-Adresse dagegen,
+        statt den User vor der Adresseingabe nach dem Anbieter zu fragen.
+        `other_imap` hat bewusst eine leere Liste (Fallback fuer jede nicht
+        erkannte Domain).
       properties:
         id: { type: string }
         label: { type: string }
@@ -1419,6 +1425,7 @@ components:
         smtpSecure: { type: boolean, nullable: true }
         requiresAppPassword: { type: boolean }
         appPasswordHelpUrl: { type: string, nullable: true }
+        domains: { type: array, items: { type: string } }
 
     TrustedSender:
       type: object

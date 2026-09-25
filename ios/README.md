@@ -1751,6 +1751,67 @@ zeigt nach dem Fix keinen Decoding-Fehler mehr, Screenshot bestätigt: kein
 alle 7 Provider erscheinen wie beim Mock (Gmail/iCloud/GMX/web.de/Anderer
 Anbieter anwählbar, Outlook/Yahoo ausgegraut "demnächst").
 
+## [2026-09-25] Nachtrag: Anbieter automatisch aus E-Mail-Adresse erkennen (WEB_INBOX.md 21.09.)
+
+Bisher fragte `OnboardingAccountConnectView` zuerst nach dem Anbieter
+(Liste), erst danach nach der E-Mail-Adresse -- unnötiger Extra-Schritt,
+da der User die Adresse ohnehin eingeben muss. Umgedreht:
+
+- **Contract-Ergänzung** (`contracts/mail-providers.json` +
+  `api-spec.yaml` `MailProvider.domains`): jeder Provider trägt jetzt eine
+  Liste seiner Domains in Kleinbuchstaben (z. B. `gmx: ["gmx.de", "gmx.net",
+  "gmx.at", "gmx.ch"]`), `other_imap` bewusst leer (Fallback für jede nicht
+  erkannte Domain). Reine Datenergänzung, `backend/src/routes/
+  mailProviders.ts` liefert die Datei ohnehin unverändert aus -- kein
+  Backend-Code-Change nötig.
+- **`Models/MailProvider.swift`**: `domains: [String]` ergänzt, mit
+  derselben `decodeIfPresent(...) ?? []`-Vorsicht wie bei
+  `requiresAppPassword` (siehe Nachtrag oben) -- auch wenn die aktuelle
+  Contract-Datei das Feld für jeden Eintrag mitgibt, soll ein zukünftig
+  fehlendes Feld nicht wieder die gesamte Liste zum Absturz bringen.
+- **`Views/OnboardingAccountConnectView.swift`** komplett umgebaut: neuer
+  erster Schritt `.enterEmail` (ein `TextField` + "Weiter"), matcht die
+  eingegebene Adresse nach dem "@" gegen `MailProvider.domains` (exakter
+  Domain-Vergleich, kein Teilstring-Match -- `not-gmail.com` matcht nicht
+  auf Gmail). Drei Fälle:
+  1. Bekannte, nutzbare Domain (iCloud/GMX/web.de) -> direkt weiter zu
+     `.imapForm(provider, initialEmail:)` -- die Adresse wird
+     durchgereicht, kein erneutes Eintippen.
+  2. Bekannte, aber (noch) nicht nutzbare Domain (Gmail: oauth, auf iOS
+     ohnehin nicht funktional; Outlook/Yahoo: `comingSoon`) -> Hinweis-
+     Alert mit Erklärung UND einem "Trotzdem per IMAP versuchen"-Button,
+     der in denselben generischen IMAP-Fallback springt wie Fall 3 -- keine
+     Sackgasse, wie im Auftrag gefordert.
+  3. Unbekannte Domain -> direkt (ohne Fehlermeldung) zu `other_imap` mit
+     vorbefüllter Adresse, manuelle Servereingabe wie bisher.
+  Der bisherige listenbasierte Auswahlbildschirm ist NICHT entfernt,
+  sondern als sekundärer, manueller Weg erhalten
+  (`.pickProviderManually`, über einen "Anbieter manuell auswählen"-Link
+  erreichbar) -- für Korrekturen einer Fehlerkennung oder um bewusst ein
+  anderes Preset zu testen, ohne eine bereits funktionierende Möglichkeit
+  zu streichen.
+- **`ImapConnectFormView`** bekommt einen neuen `initialEmail`-Parameter
+  (Default `""`, damit der bestehende manuelle Weg über den Picker
+  weiterhin ohne vorbefüllte Adresse funktioniert).
+- **Web-Seite (Track F) nicht Teil dieser Änderung** -- der Auftrag betrifft
+  laut WEB_INBOX.md "Web und iOS gleichermaßen", dieser Nachtrag deckt nur
+  den iOS-Teil + die gemeinsame Contract-Datei ab. `web/src/components/
+  OnboardingScreen.tsx` müsste denselben `domains`-Abgleich noch bekommen.
+
+**Tests:** `xcodebuild -destination 'platform=iOS Simulator,name=iPhone 17
+Pro' build` **BUILD SUCCEEDED**, App per `simctl install`+`launch` gegen den
+echten `backend/`-Prozess gestartet, neuer Eingabebildschirm per Screenshot
+verifiziert. Die drei Domain-Matching-Fälle selbst sind NICHT per
+Tap-Interaktion durchgeklickt (gleiche Werkzeug-Grenze wie in allen
+vorherigen iOS-Einträgen: kein `idb`, keine automatisierten
+Texteingaben/Taps im Simulator in dieser Umgebung) -- die Matching-Logik
+selbst ist reiner, von der UI entkoppelter Code
+(`matchedProvider(for:)`) und wurde stattdessen durch Code-Review + die
+bereits gegen den echten Server verifizierten `GET /mail-providers`-Daten
+(inkl. `domains`-Feld) abgesichert, ehrlich so dokumentiert statt ein
+End-to-End-Ergebnis zu behaupten, das in dieser Umgebung nicht geprüft
+werden konnte.
+
 ## Nächste Schritte (nicht Teil dieses Durchstichs)
 
 - Ordner umbenennen/löschen/neu sortieren in der UI (Endpunkte sind da,

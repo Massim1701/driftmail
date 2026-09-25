@@ -16,6 +16,15 @@ import SwiftUI
 /// `environment.completeAccountConnection(...)` aufruft und damit
 /// `environment.apiClient` für den Rest der App auf einen echten,
 /// token-tragenden `RemoteAPIClient` umstellt.
+///
+/// [2026-09-25] WEB_INBOX.md 21.09. "Anbieter automatisch aus E-Mail-
+/// Adresse erkennen": der bisherige erste Schritt (Anbieter-Liste VOR der
+/// Adresseingabe) ist jetzt der SEKUNDÄRE, manuelle Weg
+/// (`.pickProviderManually`, über einen Link erreichbar). Der neue erste
+/// Schritt fragt nur die E-Mail-Adresse; die Endung wird gegen
+/// `MailProvider.domains` (aus `GET /mail-providers`) gematcht, um direkt
+/// zum passenden Formular zu springen -- kein unnötiger Extra-Klick für
+/// den Normalfall.
 struct OnboardingAccountConnectView: View {
     /// [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): `.login`
     /// ist der bisherige Erst-Onboarding-Schritt (kein Zurück möglich, es
@@ -33,32 +42,37 @@ struct OnboardingAccountConnectView: View {
     @Environment(\.dismiss) private var dismiss
 
     private enum Step {
-        case pickProvider
-        case imapForm(MailProvider)
+        case enterEmail
+        case pickProviderManually
+        case imapForm(MailProvider, initialEmail: String)
     }
 
-    @State private var step: Step = .pickProvider
+    @State private var step: Step = .enterEmail
+    @State private var email = ""
     @State private var providers: [MailProvider] = MailProvider.mocked
     @State private var providersLoadFailed = false
-    @State private var showGmailUnavailable = false
+    @State private var unavailableProviderLabel: String?
 
     private let connectClient = RemoteAPIClient()
 
     var body: some View {
         switch step {
-        case .pickProvider:
+        case .enterEmail:
+            emailEntry
+        case .pickProviderManually:
             providerPicker
-        case .imapForm(let provider):
+        case .imapForm(let provider, let initialEmail):
             ImapConnectFormView(
                 provider: provider,
+                initialEmail: initialEmail,
                 client: connectClient,
-                onBack: { step = .pickProvider },
+                onBack: { step = .enterEmail },
                 onConnected: onConnected
             )
         }
     }
 
-    private var providerPicker: some View {
+    private var emailEntry: some View {
         VStack(spacing: DesignTokens.Spacing.xl) {
             if mode == .addAccount {
                 HStack {
@@ -85,11 +99,118 @@ struct OnboardingAccountConnectView: View {
             }
 
             if providersLoadFailed {
-                Text("Anbieterliste konnte nicht live geladen werden — zeige die zuletzt bekannten Anbieter.")
+                Text("Anbieterliste konnte nicht live geladen werden — Erkennung nutzt die zuletzt bekannten Anbieter.")
                     .font(.system(size: DesignTokens.Typography.Size.small))
                     .foregroundStyle(DesignTokens.Color.textMuted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DesignTokens.Spacing.xl)
+            }
+
+            VStack(spacing: DesignTokens.Spacing.sm) {
+                TextField("E-Mail-Adresse", text: $email)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { continueFromEmail() }
+
+                Button {
+                    continueFromEmail()
+                } label: {
+                    Text("Weiter")
+                        .frame(maxWidth: .infinity)
+                        .font(.system(size: DesignTokens.Typography.Size.bodyLarge, weight: .medium))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(DesignTokens.Color.accent)
+                .disabled(!email.contains("@"))
+
+                Button("Anbieter manuell auswählen") { step = .pickProviderManually }
+                    .font(.system(size: DesignTokens.Typography.Size.small))
+            }
+            .padding(.horizontal, DesignTokens.Spacing.xl)
+
+            Spacer()
+            Spacer()
+        }
+        .background(DesignTokens.Color.surfacePage)
+        .task { await loadProviders() }
+        .alert(unavailableProviderLabel.map { "\($0) auf iOS noch nicht verfügbar" } ?? "", isPresented: Binding(
+            get: { unavailableProviderLabel != nil },
+            set: { if !$0 { unavailableProviderLabel = nil } }
+        )) {
+            Button("Trotzdem per IMAP versuchen") { proceedWithFallbackImap() }
+            Button("Verstanden", role: .cancel) {}
+        } message: {
+            Text("Der Login läuft über einen Browser-Redirect, dessen Rücksprungziel serverseitig aktuell fest auf den Web-Client zeigt (siehe SYNC.md, Offene Frage an Track A). Du kannst es trotzdem über den generischen IMAP-Weg versuchen, falls dein Anbieter das zulässt, oder ein anderes Konto verwenden.")
+        }
+    }
+
+    /// Domain-Matching der eingegebenen Adresse gegen `MailProvider.domains`
+    /// (case-insensitive, exakter Domain-Vergleich nach dem "@" -- kein
+    /// Suffix-/Teilstring-Match, um z.B. "not-gmail.com" nicht faelschlich
+    /// auf Gmail zu matchen).
+    private func matchedProvider(for email: String) -> MailProvider? {
+        guard let at = email.lastIndex(of: "@") else { return nil }
+        let domain = email[email.index(after: at)...].lowercased().trimmingCharacters(in: .whitespaces)
+        guard !domain.isEmpty else { return nil }
+        return providers.first { $0.domains.contains(domain) }
+    }
+
+    private var fallbackImapProvider: MailProvider {
+        providers.first { $0.id == "other_imap" }
+            ?? providers.first { $0.authType == .imap && $0.imapHost == nil }
+            ?? MailProvider.mocked.first { $0.id == "other_imap" }!
+    }
+
+    private func continueFromEmail() {
+        let trimmed = email.trimmingCharacters(in: .whitespaces)
+        guard trimmed.contains("@") else { return }
+
+        guard let match = matchedProvider(for: trimmed) else {
+            // Unbekannte Endung: sauberer Fallback auf generisches IMAP,
+            // kein Fehler, keine Sackgasse (WEB_INBOX.md 21.09. Punkt 3).
+            step = .imapForm(fallbackImapProvider, initialEmail: trimmed)
+            return
+        }
+        if match.authType == .oauth || match.comingSoon {
+            // Gmail ist auf iOS erkannt, aber ungefixt nicht funktional
+            // (siehe bestehende Grenze weiter unten); Outlook/Yahoo sind
+            // serverseitig noch gar nicht angebunden (comingSoon). Beides
+            // wird hier gleich behandelt: erklären + Fallback anbieten,
+            // statt den User ins Leere laufen zu lassen.
+            unavailableProviderLabel = match.label
+            return
+        }
+        step = .imapForm(match, initialEmail: trimmed)
+    }
+
+    private func proceedWithFallbackImap() {
+        let trimmed = email.trimmingCharacters(in: .whitespaces)
+        unavailableProviderLabel = nil
+        step = .imapForm(fallbackImapProvider, initialEmail: trimmed)
+    }
+
+    /// Manueller Fallback/Override (z.B. um ein Preset unabhängig von der
+    /// eingegebenen Adresse zu testen, oder eine falsche Erkennung zu
+    /// korrigieren) -- bewusst nicht entfernt, nur zum sekundären Weg
+    /// gemacht, damit die bestehende, funktionierende Auswahl erhalten
+    /// bleibt.
+    private var providerPicker: some View {
+        VStack(spacing: DesignTokens.Spacing.xl) {
+            HStack {
+                Button(action: { step = .enterEmail }) {
+                    Label("Zurück", systemImage: "chevron.left")
+                        .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
+                }
+                Spacer()
+            }
+            .padding(.horizontal, DesignTokens.Spacing.xl)
+            .padding(.top, DesignTokens.Spacing.lg)
+
+            VStack(spacing: DesignTokens.Spacing.xs) {
+                Text("Anbieter manuell auswählen")
+                    .font(.system(size: DesignTokens.Typography.Size.heading, weight: .medium))
             }
 
             VStack(spacing: DesignTokens.Spacing.sm) {
@@ -103,21 +224,15 @@ struct OnboardingAccountConnectView: View {
             Spacer()
         }
         .background(DesignTokens.Color.surfacePage)
-        .task { await loadProviders() }
-        .alert("Gmail auf iOS noch nicht verfügbar", isPresented: $showGmailUnavailable) {
-            Button("Verstanden", role: .cancel) {}
-        } message: {
-            Text("Der Google-Login läuft über einen Browser-Redirect, dessen Rücksprungziel serverseitig aktuell fest auf den Web-Client zeigt (siehe SYNC.md, Offene Frage an Track A). Bitte vorerst ein IMAP-Konto verwenden (iCloud, GMX, web.de oder ein anderer Anbieter).")
-        }
     }
 
     private func select(_ provider: MailProvider) {
         guard !provider.comingSoon else { return }
         if provider.authType == .oauth {
-            showGmailUnavailable = true
+            unavailableProviderLabel = provider.label
             return
         }
-        step = .imapForm(provider)
+        step = .imapForm(provider, initialEmail: email.trimmingCharacters(in: .whitespaces))
     }
 
     private func loadProviders() async {
@@ -193,7 +308,7 @@ private struct ImapConnectFormView: View {
     let onBack: () -> Void
     let onConnected: (MailAccount, String) -> Void
 
-    @State private var emailAddress = ""
+    @State private var emailAddress: String
     @State private var password = ""
     @State private var showAdvanced: Bool
     @State private var connectionProtocol: ConnectionProtocol = .imap
@@ -207,11 +322,15 @@ private struct ImapConnectFormView: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
 
-    init(provider: MailProvider, client: RemoteAPIClient, onBack: @escaping () -> Void, onConnected: @escaping (MailAccount, String) -> Void) {
+    /// `initialEmail`: die auf dem vorigen Schritt (`enterEmail`) bereits
+    /// eingegebene Adresse -- WEB_INBOX.md 21.09. "kein unnötiger
+    /// Extra-Schritt" heißt auch: nicht nochmal von vorn tippen lassen.
+    init(provider: MailProvider, initialEmail: String = "", client: RemoteAPIClient, onBack: @escaping () -> Void, onConnected: @escaping (MailAccount, String) -> Void) {
         self.provider = provider
         self.client = client
         self.onBack = onBack
         self.onConnected = onConnected
+        _emailAddress = State(initialValue: initialEmail)
         _showAdvanced = State(initialValue: provider.imapHost == nil)
         _connectionProtocol = State(initialValue: provider.authType == .pop3 ? .pop3 : .imap)
         _imapHost = State(initialValue: provider.imapHost ?? "")
