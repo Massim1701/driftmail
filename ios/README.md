@@ -1671,6 +1671,86 @@ ios/
   Grundgerüst ausreichend, für eine Mehrfenster-/Mehrgeräte-Situation
   später zu prüfen.
 
+## [2026-09-25] BUG behoben: "iOS erreicht lokales Backend nicht" (WEB_INBOX.md 21.09.) -- keine ATS-/Netzwerk-Eigenheit, echter Decoding-Bug
+
+Massimo hatte im Simulator `DRIFTMAIL_API_BASE_URL=http://localhost:3000/v1`
+gesetzt, Backend lief nachweislich -- trotzdem zeigte
+`OnboardingAccountConnectView` weiterhin "Anbieterliste konnte nicht live
+geladen werden" UND ein IMAP-Verbindungsversuch (web.de) schlug fehl.
+Verdacht laut Auftrag: App Transport Security blockiert Klartext-HTTP zu
+localhost. Bereits der 21.09.-Eintrag oben ("Onboarding: Provider-Auswahl")
+hatte dasselbe Symptom gegen `SIMCTL_CHILD_DRIFTMAIL_API_BASE_URL`
+beobachtet und es als "vermutlich eine Simulator-/Xcode-27-spezifische
+Netzwerk-Eigenheit" eingeordnet -- **diese Einordnung war falsch**, wie
+sich jetzt zeigt.
+
+**Reproduziert mit echtem Simulator-Build + Netzwerk-Log, nicht nur
+Info.plist-Diff:**
+
+1. `plutil -p` auf das TATSAECHLICH gebaute `Info.plist`
+   (`/tmp/driftmail-build/.../DriftmailApp.app/Info.plist`) zeigt
+   `NSAppTransportSecurity.NSAllowsLocalNetworking = true` korrekt gesetzt
+   -- der 21.09.-Fund ("Build-Setting wird still ignoriert, jetzt echte
+   Datei") ist also weiterhin gültig gefixt, ATS ist NICHT die Ursache.
+2. `loadProviders()` in `OnboardingAccountConnectView.swift` verschluckte
+   den echten Fehler komplett (`catch { providersLoadFailed = true }`,
+   keinerlei Logging) -- ATS-Verdacht beruhte allein auf dem sichtbaren
+   Symptom, nie auf dem tatsächlichen `Error`-Wert. Temporär ein `print()`
+   in den `catch`-Zweig eingefügt, per `xcrun simctl launch --console-pty`
+   (mit `SIMCTL_CHILD_DRIFTMAIL_API_BASE_URL=http://localhost:3000/v1`)
+   gegen den echten `backend/`-Prozess ausgeführt und die Konsolenausgabe
+   abgefangen -- das ist der Teil, der beim 21.09.-Versuch fehlte.
+3. Echter Fehler: `DecodingError.keyNotFound("requiresAppPassword")` beim
+   ersten Array-Element. Ursache: `contracts/mail-providers.json` lässt
+   `imapHost`/…/`requiresAppPassword`/`appPasswordHelpUrl` für
+   `authType=oauth`-Einträge (Gmail/Outlook/Yahoo) komplett weg (siehe die
+   Datei selbst), aber `Models/MailProvider.swift` deklarierte
+   `requiresAppPassword: Bool` als Pflichtfeld ohne Sonderbehandlung.
+   Swifts synthetisiertes `Decodable` wirft dadurch für die Gmail-Zeile
+   (erstes Element), und ein einzelner Decoding-Fehler verwirft laut
+   `JSONDecoder`-Semantik das GESAMTE Array, nicht nur den betroffenen
+   Eintrag -- **das Backend war zu jedem Zeitpunkt erreichbar, ATS/Netzwerk
+   nie das Problem**, jeder einzelne `GET /mail-providers`-Aufruf gegen den
+   echten Server scheiterte stattdessen an dieser einen fehlenden
+   Optional-Behandlung.
+
+**Fix (`Models/MailProvider.swift`):** eigener `init(from decoder:)` statt
+der synthetisierten Decodable-Implementierung -- alle bereits als
+`String?`/`Int?`/`Bool?` deklarierten Felder nutzen weiterhin
+`decodeIfPresent` (unverändertes Verhalten), `requiresAppPassword` bleibt
+bewusst ein nicht-optionales `Bool` in der Swift-API (beide Call-Sites in
+`OnboardingAccountConnectView.swift` nutzen es als klares Ja/Nein), wird
+aber jetzt per `decodeIfPresent(...) ?? false` gelesen -- fehlt der
+Schlüssel (oauth-Provider), gilt `false`, exakt die Bedeutung, die die
+sechs bereits eingecheckten `MailProvider.mocked`-Fixtures für Gmail/
+Outlook/Yahoo ohnehin schon fest verdrahtet hatten (`requiresAppPassword:
+false`) -- der Fix bringt den Live-Pfad also in Deckung mit dem Mock-Pfad,
+keine neue Semantik erfunden.
+
+**Zweites Symptom aus dem Auftrag ("IMAP-Verbindungsversuch schlägt
+ebenfalls fehl") eingeordnet, nicht separat gefixt:** `POST /accounts`
+gegen den echten `backend/`-Prozess mit absichtlich falschem Passwort
+(`curl`, gleicher Endpunkt wie `RemoteAPIClient.connectImapAccount`/
+`connectPop3Account`) liefert korrekt `422` mit einer sprechenden
+Fehlermeldung -- Verbindung/ATS funktionieren auch hier einwandfrei, kein
+zweiter Bug. `RemoteAPIClient` wertet `422` bereits explizit als
+`APIError.verificationFailed` aus (eigener catch-Zweig in
+`OnboardingAccountConnectView.swift`, keine generische Netzwerkfehler-
+Meldung). Das von Massimo beobachtete Fehlschlagen war damit sehr
+wahrscheinlich eine echte Zugangsdaten-/App-Passwort-Verwechslung beim
+Testen mit einem echten web.de-Konto, kein App-Bug -- bitte beim nächsten
+Test mit einem web.de-App-Passwort (nicht dem normalen Kontopasswort)
+gegenprüfen, jetzt wo die Anbieterliste wieder live lädt.
+
+**Verifiziert:** `xcodebuild -destination 'platform=iOS Simulator,name=iPhone
+17 Pro' build` **BUILD SUCCEEDED**, App per `simctl install`+`simctl launch`
+(mit `SIMCTL_CHILD_DRIFTMAIL_API_BASE_URL` gegen den echten laufenden
+`backend/`-Prozess) auf einem echten Simulator gestartet, Konsolenausgabe
+zeigt nach dem Fix keinen Decoding-Fehler mehr, Screenshot bestätigt: kein
+"Anbieterliste konnte nicht live geladen werden"-Hinweis mehr sichtbar,
+alle 7 Provider erscheinen wie beim Mock (Gmail/iCloud/GMX/web.de/Anderer
+Anbieter anwählbar, Outlook/Yahoo ausgegraut "demnächst").
+
 ## Nächste Schritte (nicht Teil dieses Durchstichs)
 
 - Ordner umbenennen/löschen/neu sortieren in der UI (Endpunkte sind da,
