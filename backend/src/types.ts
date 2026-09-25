@@ -52,7 +52,7 @@ export interface AiPreferenceRecord {
 // [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09.,
 // "Ansicht: Akzentfarben-Auswahl") -- siehe contracts/design-tokens.json
 // color.accentThemes fuer die 5 moeglichen Werte.
-export type AccentTheme = "teal" | "ocean_blue" | "violett" | "koralle" | "ocean_verlauf";
+export type AccentTheme = "teal" | "ocean_blue" | "violett" | "koralle" | "ocean_verlauf" | "outlook_blue";
 
 export interface User {
   id: string;

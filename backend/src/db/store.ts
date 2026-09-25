@@ -366,7 +366,7 @@ export class InMemoryStore implements Store {
     const user: User = {
       id: randomUUID(),
       email,
-      accentTheme: "teal",
+      accentTheme: "outlook_blue",
       strictUnknownSenders: true,
       nudgeUnansweredEnabled: true,
       createdAt: new Date().toISOString(),

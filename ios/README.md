@@ -1812,6 +1812,126 @@ bereits gegen den echten Server verifizierten `GET /mail-providers`-Daten
 End-to-End-Ergebnis zu behaupten, das in dieser Umgebung nicht geprüft
 werden konnte.
 
+## [2026-09-25] Nachtrag: Neue Design-Richtung "Outlook-inspiriert" (WEB_INBOX.md 24.09./25.09.) -- Farben, Radien, Ordner-Icons
+
+WEB_INBOX.md 24.09. "DESIGN-RICHTUNG PRAEZISIERT - Outlook-inspiriert"
+(ersetzt den kurz zuvor verworfenen "Kobaltblau"-Entwurf) + "ORDNER-ICONS
+- 3D/Facetten-Stil" + 25.09. "GESENDET-ICON - finale Referenz erhalten".
+Umfang laut Auftrag selbst eingeteilt: das Drei-Spalten-Layout ist eine
+Web-Grundlayout-Aenderung (Track F) und NICHT Teil dieses Nachtrags --
+iOS behaelt den bestehenden Navigations-Stack, wie im Auftrag selbst als
+plausibel vorgezeichnet ("Drei-Spalten auf dem iPhone nicht sinnvoll").
+Dieser Nachtrag deckt Contract + iOS-Farben/Radien/Icons ab.
+
+**`contracts/design-tokens.json`:**
+- `color.accent` von Teal (`#1D9E75`) auf Microsoft-Blau (`#0078D4`)
+  umgestellt, neuer Eintrag `outlook_blue` in `accentThemes` als neuer
+  Default -- `teal` bleibt als waehlbare Alternative bestehen (kein Nutzer
+  verliert eine bereits getroffene Wahl, siehe `_accentThemesNote`).
+- `color.danger`/`dangerText` auf `#A4262C` + neuer `dangerBg` (`#FDE7E9`)
+  fuer die "Pruefen"-Badges -- `warning`/`success` bewusst UNVERAENDERT
+  gelassen (vom Auftrag nicht erwaehnt, das waren nur Icon-Palette-Werte
+  fuer die Quarantaene-GRAFIK, nicht der semantische Warnfarben-Token).
+- Neuer `color.selected` (Hintergrund/Text der aktiven Zeile/des aktiven
+  Ordners, `#DEECF9`/`#004578`) -- Outlook nutzt hier einen eigenen Ton
+  statt einer transparenten Akzentflaeche.
+- `color.light.*` auf die Outlook/Fluent-Palette umgestellt (reines Weiss,
+  abgesetzte Karten/Ordner-Leiste `#FAF9F8`, neue `borderSubtle` fuer
+  dezentere Listentrenner). `color.dark` bewusst unveraendert (Auftrag
+  spezifiziert nur hell).
+- `typography.fontFamilyWeb` neu ("Segoe UI" mit System-Fallback, nur fuer
+  Web) -- iOS bleibt bei SF Pro (System-Schrift), wie im Auftrag
+  ausdruecklich als ausreichend bestaetigt ("Ziel ist der Fluent-
+  Charakter, nicht Pixel-Kopie").
+- `radius.control`/`radius.card` von 8/12 auf 4 reduziert ("dezente
+  Rundung, keine starken Schatten").
+- Neuer `systemFolders.facetIconStyle`-Block: Motiv-Beschreibung + die
+  drei Facetten-Farbtoene (base/light/dark) je Icon (Eingang/Gesendet/
+  Quarantaene/Papierkorb) plus die gemeinsame Boden-Schatten-Ellipsen-
+  Farbe -- gemeinsame Referenz fuer Web+iOS, damit beide Plattformen aus
+  denselben Werten bauen statt das Chat-Mockup je einzeln nachzumessen.
+
+**Backend (`accent_theme`-Default, noetig weil der neue Akzent auch der
+neue Standard fuer neue Konten ist, nicht nur eine weitere Wahlmoeglichkeit):**
+- `contracts/db-schema.sql`: `CREATE TABLE users` DEFAULT + CHECK auf
+  `outlook_blue` erweitert/umgestellt (frische DBs).
+- `backend/src/db/postgresStore.ts` `migrateUsersAccentTheme()`: fuer
+  bereits migrierte DBs (wo die additive `ADD COLUMN IF NOT EXISTS` nicht
+  mehr greift) ein DROP/ADD-CONSTRAINT + `ALTER COLUMN ... SET DEFAULT`
+  ergaenzt, gleiches Muster wie die bestehende
+  `migrateUnsubscribeActionsStatusCheck`-Migration. Gegen die echte
+  laufende Demo-Postgres-DB verifiziert (`pg_constraint`-Abfrage vor/nach,
+  Test-Insert eines neuen Users zeigt `outlook_blue`) -- bestehende
+  Nutzer (z.B. der Demo-Account) behalten ihre gespeicherte Wahl
+  (`teal`), nur NEUE Zeilen bekommen den neuen Default. `src/types.ts`,
+  `src/routes/settings.ts` (`VALID_ACCENT_THEMES`), `src/db/store.ts`
+  (In-Memory-Store-Default) und `src/smoketest.ts` (Default-Assertion)
+  entsprechend mitgezogen. `npm run typecheck` sauber; `npm test`
+  (Smoketest) bricht an einer davon UNABHAENGIGEN Stelle ab (fehlender
+  lokaler ClamAV-Daemon fuer den Anhang-Scan-Test, Umgebungslimitation,
+  kein Code-Fehler) -- die accentTheme-Assertion selbst wurde deshalb nicht
+  vom Smoketest-Lauf bestaetigt, sondern direkt per SQL/curl gegenverifiziert
+  (siehe oben), ehrlich so vermerkt statt "Tests gruen" zu behaupten.
+
+**iOS:**
+- `DesignSystem/DesignTokens.swift`: alle obigen Farb-/Radius-Werte 1:1
+  gespiegelt (`accent`, `danger`/`dangerBg`/`dangerText`,
+  `selectedBackground`/`selectedText`, `surfacePage`/`surfaceCard`/
+  `textPrimary`/`textSecondary`/`textMuted`/`border`/`borderSubtle`,
+  `Radius.control`/`.card`). `selectedBackground`/`selectedText` sind neu
+  angelegt, aber noch NICHT verdrahtet (keine bestehende View nutzt bisher
+  ein eigenes "ausgewaehlte Zeile"-Farbpaar statt Akzent-mit-Opacity) --
+  bewusst nur als Token vorbereitet, Verdrahtung waere ein eigener,
+  groesserer UI-Umbau pro Liste und war nicht Teil dieses Nachtrags.
+- `Models/UserSettings.swift`: `AccentTheme.outlookBlue` (`"outlook_blue"`)
+  neu, als erster Fall (Default-Charakter), `MockAPIClient`s
+  Default-`UserSettings` darauf umgestellt.
+- **Vier neue Ordner-Icons** (`Assets.xcassets/FolderIcon{Eingang,
+  Gesendet,Quarantaene,Papierkorb}.imageset`, je 1x/2x/3x-PNG): eigene
+  SVG-Nachbauten nach der `facetIconStyle`-Spezifikation (flache
+  Farbflaechen statt Gradient, Boden-Schatten-Ellipse), gerendert per
+  Headless-Chrome-Screenshot + `sips`-Skalierung (gleiche Methode wie
+  beim App-Icon-Nachtrag, siehe oben). `Models/Folder.swift`:
+  `facetIconAssetName`-Computed-Property mappt die vier betroffenen
+  Icon-Keys auf die Asset-Namen, alle anderen (Entwürfe/Sonstiges/Spam/
+  eigene Ordner) bleiben unveraendert einfarbige SF Symbole -- dafuer gab
+  es keine Facetten-Vorgabe. `Views/FolderListView.swift`s `FolderRow`
+  nutzt das Asset statt `Image(systemName:)`, wenn vorhanden (kein
+  `.foregroundStyle` mehr fuer diese vier, die Grafik bringt ihre Farbe
+  schon mit) -- die bisherige "genau EIN Akzent pro Zeile"-Neutralitaetsregel
+  gilt fuer die uebrigen Icons unveraendert weiter.
+- **Bewusste Grenze:** die `ContentUnavailableCompat(systemImage:)`- und
+  `Label(systemImage:)`-Aufrufe in `InboxListView.swift`/
+  `DraftListView.swift`/`MessageDetailView.swift` (Leerzustand-Icon bzw.
+  "Verschieben nach…"-Menü) nutzen weiterhin `folder.systemImage` (SF
+  Symbol) statt der neuen Facetten-Grafik -- beide APIs nehmen nur einen
+  Symbol-Namen entgegen, kein beliebiges Bild; ein Umbau auf eigene
+  Icon-Views waere ein groesserer, hier nicht angemessener Eingriff fuer
+  zwei sekundaere Stellen (Leerzustand, Menüzeile). Hauptsächliche
+  Sichtbarkeit (Sidebar-Ordnerliste) ist abgedeckt.
+
+**Tests/Verifikation:** `xcodebuild -destination 'platform=iOS
+Simulator,name=iPhone 17 Pro' build` **BUILD SUCCEEDED**. Neu installiert
+und gestartet (frischer Bundle-State, kein Keychain-Token) -- Onboarding-
+Bildschirm per Screenshot bestaetigt: reines Weiss statt Creme, Icon/Link
+in neuem Microsoft-Blau statt Teal. Die vier Facetten-Icons wurden
+EINZELN vor dem Einbau als PNG gerendert und visuell gegen die Spec
+geprueft (Eingang: blauer Umschlag mit hellerer Flap + zwei dunkleren
+Seiten; Quarantaene: Amber-Warndreieck mit dunklerem Ausrufezeichen;
+Papierkorb: konischer Korb mit sichtbaren Gitterstaeben, keine eckige
+Tonne; Gesendet: blauer Papierflieger nach oben-rechts mit hellerem
+Fluegel/dunklerer Unterseite) -- siehe Screenshots im Session-Verlauf.
+**Nicht verifiziert:** die zusammengesetzte Ordnerliste selbst (alle vier
+Icons gemeinsam im echten `FolderListView`-Kontext, mit den neuen
+Zeilenfarben) liess sich in dieser Umgebung nicht screenshotten -- das
+erfordert entweder einen echten verbundenen Mail-Account (keine
+Testzugangsdaten verfuegbar) oder Tap-Interaktion durch das Onboarding
+(keine UI-Automation in dieser Umgebung, gleiche Werkzeug-Grenze wie in
+allen vorherigen iOS-Eintraegen). Empfehlung fuer die naechste Sitzung
+mit echtem Xcode-/Geraete-Zugriff: einmal durchs Onboarding klicken und
+die Ordnerliste gegenpruefen, bevor dieser Nachtrag als vollstaendig
+bestaetigt gilt.
+
 ## Nächste Schritte (nicht Teil dieses Durchstichs)
 
 - Ordner umbenennen/löschen/neu sortieren in der UI (Endpunkte sind da,

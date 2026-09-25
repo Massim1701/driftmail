@@ -50,7 +50,7 @@ actor MockAPIClient: APIClient {
     /// `strictUnknownSenders` in "FUENF NEUE KOMFORT-FEATURES" Punkt 1) --
     /// rein In-Memory, kein Contract-Pendant in MockDatabase.json noetig,
     /// analog zu `aiSettings` oben.
-    private var userSettings = UserSettings(accentTheme: .teal, strictUnknownSenders: true)
+    private var userSettings = UserSettings(accentTheme: .outlookBlue, strictUnknownSenders: true)
 
     /// `GET`/`PUT /privacy-settings` (WEB_INBOX.md 21.09. "5
     /// Wettbewerbs-Luecken" Punkt 1) -- rein In-Memory, analog zu

@@ -72,6 +72,24 @@ struct Folder: Codable, Identifiable, Hashable {
         }
     }
 
+    /// [2026-09-25] WEB_INBOX.md 24.09. "ORDNER-ICONS - 3D/Facetten-Stil" +
+    /// 25.09. "GESENDET-ICON": vier Ordner-Icons (Eingang/Gesendet/
+    /// Quarantäne/Papierkorb) sind jetzt fest eingefärbte 3D-Facetten-
+    /// Grafiken (`contracts/design-tokens.json` `systemFolders.
+    /// facetIconStyle`) statt einfarbiger SF Symbols -- Asset-Name im
+    /// Katalog `Assets.xcassets`. Alle anderen Icon-Keys (Entwürfe/
+    /// Sonstiges/Spam/eigene Ordner) behalten bewusst das bisherige
+    /// neutrale SF-Symbol-Verhalten, dafuer gibt es hier keine Vorgabe.
+    var facetIconAssetName: String? {
+        switch icon {
+        case "inbox": return "FolderIconEingang"
+        case "send": return "FolderIconGesendet"
+        case "shield-exclamation": return "FolderIconQuarantaene"
+        case "trash-2": return "FolderIconPapierkorb"
+        default: return nil
+        }
+    }
+
     /// design-tokens.json `systemFolders.defaults` marks quarantaene with
     /// colorRole "danger".
     var usesDangerColor: Bool { systemKey == .quarantaene }

@@ -372,15 +372,27 @@ private struct FolderRow: View {
 
     var body: some View {
         HStack(spacing: DesignTokens.Spacing.md) {
-            // [2026-09-21] "DESIGN-RICHTUNG" (WEB_INBOX.md 21.09.): Ordner-
-            // Icons sind bewusst neutral, nicht durchgehend in der
+            // [2026-09-21] "DESIGN-RICHTUNG" (WEB_INBOX.md 21.09.): uebrige
+            // Ordner-Icons sind bewusst neutral, nicht durchgehend in der
             // Akzentfarbe -- sonst verliert sich der eine echte
             // Sicherheitshinweis (Quarantäne, danger) in siebenfach
             // wiederholter Akzentfarbe. "Genau EIN Akzent pro Ansicht"
             // bedeutet hier: kein Akzent auf jeder Zeile.
-            Image(systemName: folder.systemImage)
-                .foregroundStyle(folder.usesDangerColor ? DesignTokens.Color.danger : DesignTokens.Color.textSecondary)
-                .frame(width: 24)
+            // [2026-09-25] "ORDNER-ICONS - 3D/Facetten-Stil": vier Icons
+            // (Eingang/Gesendet/Quarantäne/Papierkorb) sind jetzt fest
+            // eingefaerbte Facetten-Grafiken statt einfarbiger SF Symbole --
+            // die obige Neutral-Regel gilt fuer sie nicht mehr, kein
+            // `.foregroundStyle` (das Bild bringt seine Farbe schon mit).
+            if let assetName = folder.facetIconAssetName {
+                Image(assetName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+            } else {
+                Image(systemName: folder.systemImage)
+                    .foregroundStyle(folder.usesDangerColor ? DesignTokens.Color.danger : DesignTokens.Color.textSecondary)
+                    .frame(width: 24)
+            }
 
             Text(folder.name)
                 .font(.system(size: DesignTokens.Typography.Size.bodyLarge))

@@ -486,6 +486,21 @@ export class PostgresStore implements Store {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS accent_theme TEXT NOT NULL DEFAULT 'teal'
         CHECK (accent_theme IN ('teal', 'ocean_blue', 'violett', 'koralle', 'ocean_verlauf'))
     `);
+    // [2026-09-25] WEB_INBOX.md 24.09. "DESIGN-RICHTUNG PRAEZISIERT -
+    // Outlook-inspiriert": neue waehlbare Akzentfarbe 'outlook_blue', UND
+    // neuer Standard-Akzent fuer neue Konten (ersetzt 'teal' als DEFAULT --
+    // bestehende Nutzer behalten ihre bereits gespeicherte Wahl, dieser
+    // Schritt aendert nur den DEFAULT fuer zukuenftige INSERTs, kein
+    // UPDATE bestehender Zeilen). Auf bereits migrierten DBs greift die
+    // obige ADD COLUMN IF NOT EXISTS nicht mehr (Spalte existiert schon),
+    // deshalb Constraint/Default hier explizit nachziehen, gleiches
+    // DROP/ADD-CONSTRAINT-Muster wie migrateUnsubscribeActionsStatusCheck.
+    await this.pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_accent_theme_check`);
+    await this.pool.query(`
+      ALTER TABLE users ADD CONSTRAINT users_accent_theme_check
+        CHECK (accent_theme IN ('teal', 'ocean_blue', 'violett', 'koralle', 'ocean_verlauf', 'outlook_blue'))
+    `);
+    await this.pool.query(`ALTER TABLE users ALTER COLUMN accent_theme SET DEFAULT 'outlook_blue'`);
     await this.pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS strict_unknown_senders BOOLEAN NOT NULL DEFAULT true
     `);

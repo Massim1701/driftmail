@@ -10,7 +10,7 @@ import type { AccentTheme, User } from "../types";
 
 export const settingsRouter = Router();
 
-const VALID_ACCENT_THEMES: AccentTheme[] = ["teal", "ocean_blue", "violett", "koralle", "ocean_verlauf"];
+const VALID_ACCENT_THEMES: AccentTheme[] = ["teal", "ocean_blue", "violett", "koralle", "ocean_verlauf", "outlook_blue"];
 
 function toApiSettings(user: Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled">) {
   return {

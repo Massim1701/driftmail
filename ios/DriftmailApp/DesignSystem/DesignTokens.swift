@@ -23,31 +23,49 @@ enum DesignTokens {
         /// keep reading the static default: both run before any settings
         /// have loaded (lock screen / onboarding), so there is no
         /// personalized theme to reflect there yet.
-        static var accent = SwiftUI.Color(hex: "#1D9E75")
-        static let danger = SwiftUI.Color(hex: "#D85A30")
-        static let dangerText = SwiftUI.Color(hex: "#993C1D")
+        // [2026-09-25] WEB_INBOX.md 24.09. "DESIGN-RICHTUNG PRAEZISIERT -
+        // Outlook-inspiriert": Default-Akzent auf Microsoft-Blau umgestellt
+        // (ersetzt das vorherige Teal), siehe contracts/design-tokens.json
+        // `color.accent` + `AccentTheme.outlookBlue`.
+        static var accent = SwiftUI.Color(hex: "#0078D4")
+        // dangerBg (Hintergrund fuer "Pruefen"-Badges) auf die neue,
+        // kraeftigere Fluent-Rotvariante umgestellt; warning/success
+        // bewusst UNVERAENDERT gelassen (vom Auftrag nicht erwaehnt).
+        static let danger = SwiftUI.Color(hex: "#A4262C")
+        static let dangerBg = SwiftUI.Color(hex: "#FDE7E9")
+        static let dangerText = SwiftUI.Color(hex: "#A4262C")
         static let warning = SwiftUI.Color(hex: "#EF9F27")
         static let success = SwiftUI.Color(hex: "#1D9E75")
+        /// Hintergrund/Text der ausgewaehlten/aktiven Zeile bzw. des aktiven
+        /// Ordners (design-tokens.json `color.selected`) -- eigenes Paar
+        /// statt einer transparenten Akzentflaeche, wie im Outlook-Vorbild.
+        static let selectedBackground = SwiftUI.Color(hex: "#DEECF9")
+        static let selectedText = SwiftUI.Color(hex: "#004578")
 
         // Light/dark resolved dynamically via SwiftUI.Color(light:dark:) below,
-        // matching design-tokens.json "color.light" / "color.dark".
+        // matching design-tokens.json "color.light" / "color.dark". "dark"
+        // bewusst unveraendert gelassen (der Outlook-Auftrag spezifiziert nur
+        // den hellen Modus).
         static let surfacePage = SwiftUI.Color(
-            light: "#FAFAF8", dark: "#141414"
+            light: "#FFFFFF", dark: "#141414"
         )
         static let surfaceCard = SwiftUI.Color(
-            light: "#FFFFFF", dark: "#1E1E1E"
+            light: "#FAF9F8", dark: "#1E1E1E"
         )
         static let textPrimary = SwiftUI.Color(
-            light: "#141414", dark: "#FAFAF8"
+            light: "#201F1E", dark: "#FAFAF8"
         )
         static let textSecondary = SwiftUI.Color(
-            light: "#6B6B66", darkOpacity: (white: 1, opacity: 0.75)
+            light: "#605E5C", darkOpacity: (white: 1, opacity: 0.75)
         )
         static let textMuted = SwiftUI.Color(
-            light: "#9A9A94", darkOpacity: (white: 1, opacity: 0.4)
+            light: "#A19F9D", darkOpacity: (white: 1, opacity: 0.4)
         )
         static let border = SwiftUI.Color(
-            light: "#EAEAE6", dark: "#2A2A2A"
+            light: "#E1DFDD", dark: "#2A2A2A"
+        )
+        static let borderSubtle = SwiftUI.Color(
+            light: "#F3F2F1", dark: "#242424"
         )
     }
 
@@ -69,8 +87,11 @@ enum DesignTokens {
     }
 
     enum Radius {
-        static let control: CGFloat = 8
-        static let card: CGFloat = 12
+        // [2026-09-25] WEB_INBOX.md 24.09. Outlook-Design: "dezente Rundung
+        // (4px), keine starken Schatten" -- control/card von vormals 8/12
+        // auf 4 reduziert (Fluent-Stil statt Card-Schatten-Optik).
+        static let control: CGFloat = 4
+        static let card: CGFloat = 4
         static let pill: CGFloat = 20
     }
 

@@ -10,6 +10,13 @@ import Foundation
 /// this enum -- an earlier Massimo decision keeps those fixed for every
 /// user so the existing security-warning system never loses its clarity.
 enum AccentTheme: String, Codable, CaseIterable, Identifiable {
+    /// [2026-09-25] WEB_INBOX.md 24.09. "DESIGN-RICHTUNG PRAEZISIERT -
+    /// Outlook-inspiriert": neuer Standard-Akzent (ersetzt `.teal` als
+    /// Default fuer neue Konten, siehe backend/src/db/postgresStore.ts
+    /// Migration + contracts/db-schema.sql). `.teal` bleibt als waehlbare
+    /// Alternative bestehen, kein Nutzer verliert eine bereits getroffene
+    /// Wahl.
+    case outlookBlue = "outlook_blue"
     case teal
     case oceanBlue = "ocean_blue"
     case violett
@@ -20,6 +27,7 @@ enum AccentTheme: String, Codable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
+        case .outlookBlue: return "Outlook-Blau"
         case .teal: return "Teal"
         case .oceanBlue: return "Ocean Blue"
         case .violett: return "Violett"
@@ -30,6 +38,7 @@ enum AccentTheme: String, Codable, CaseIterable, Identifiable {
 
     var accentHex: String {
         switch self {
+        case .outlookBlue: return "#0078D4"
         case .teal: return "#1D9E75"
         case .oceanBlue: return "#378ADD"
         case .violett: return "#7F77DD"

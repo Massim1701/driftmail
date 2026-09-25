@@ -8,26 +8,34 @@
     ]
   },
   "color": {
-    "accent": "#1D9E75",
+    "accent": "#0078D4",
     "accentThemes": [
+      { "id": "outlook_blue", "label": "Outlook-Blau", "accent": "#0078D4" },
       { "id": "teal", "label": "Teal", "accent": "#1D9E75" },
       { "id": "ocean_blue", "label": "Ocean Blue", "accent": "#378ADD" },
       { "id": "violett", "label": "Violett", "accent": "#7F77DD" },
       { "id": "koralle", "label": "Koralle", "accent": "#D85A30" },
       { "id": "ocean_verlauf", "label": "Ocean-Verlauf", "accent": "#378ADD", "gradient": ["#378ADD", "#1D9E75"] }
     ],
-    "_accentThemesNote": "WEB_INBOX.md 21.09. 'ERGAENZUNG zur Design-Richtung': 5 waehlbare Akzentfarben, Default 'teal' (== color.accent oben, unveraendert fuer Code-Pfade ohne User-Praeferenz). NUR die neutrale Akzentfarbe (Buttons, Links, ausgewaehlte Zeile, aktiver Ordner) ist waehlbar -- danger/warning/success bleiben FEST fuer alle User, sind bewusst NICHT Teil dieser Liste (Sicherheits-Farbrollen duerfen ihre Eindeutigkeit nicht verlieren).",
-    "danger": "#D85A30",
-    "dangerText": "#993C1D",
+    "_accentThemesNote": "WEB_INBOX.md 21.09. 'ERGAENZUNG zur Design-Richtung': waehlbare Akzentfarben, Default seit 24.09. 'outlook_blue' (== color.accent oben, WEB_INBOX.md 24.09. 'DESIGN-RICHTUNG PRAEZISIERT - Outlook-inspiriert', ersetzt den vorherigen Teal-Default). Das alte 'teal' bleibt als waehlbare Alternative erhalten, nicht entfernt (kein Nutzer verliert eine bereits getroffene Wahl). NUR die neutrale Akzentfarbe (Buttons, Links, ausgewaehlte Zeile, aktiver Ordner) ist waehlbar -- danger/warning/success bleiben FEST fuer alle User, sind bewusst NICHT Teil dieser Liste (Sicherheits-Farbrollen duerfen ihre Eindeutigkeit nicht verlieren).",
+    "danger": "#A4262C",
+    "dangerBg": "#FDE7E9",
+    "dangerText": "#A4262C",
     "warning": "#EF9F27",
     "success": "#1D9E75",
+    "selected": {
+      "background": "#DEECF9",
+      "text": "#004578",
+      "_note": "WEB_INBOX.md 24.09. Outlook-Design: Hintergrund/Textfarbe fuer die ausgewaehlte/aktive Listenzeile bzw. den aktiven Ordner -- eigenes Farbpaar statt nur accent-mit-Opacity, weil Outlook hier einen eigenen helleren Ton nutzt statt einer transparenten Akzentflaeche."
+    },
     "light": {
-      "surfacePage": "#FAFAF8",
-      "surfaceCard": "#FFFFFF",
-      "textPrimary": "#141414",
-      "textSecondary": "#6B6B66",
-      "textMuted": "#9A9A94",
-      "border": "#EAEAE6"
+      "surfacePage": "#FFFFFF",
+      "surfaceCard": "#FAF9F8",
+      "textPrimary": "#201F1E",
+      "textSecondary": "#605E5C",
+      "textMuted": "#A19F9D",
+      "border": "#E1DFDD",
+      "borderSubtle": "#F3F2F1"
     },
     "dark": {
       "surfacePage": "#141414",
@@ -35,11 +43,15 @@
       "textPrimary": "#FAFAF8",
       "textSecondary": "rgba(255,255,255,0.75)",
       "textMuted": "rgba(255,255,255,0.4)",
-      "border": "#2A2A2A"
-    }
+      "border": "#2A2A2A",
+      "borderSubtle": "#242424"
+    },
+    "_lightDarkNote": "WEB_INBOX.md 24.09.: Farbwerte fuer 'light' auf die Outlook/Fluent-Palette umgestellt (reines Weiss + abgesetzte Ordner-Leiste/Karten in #FAF9F8, staerkere/dezentere Trennlinie getrennt als border/borderSubtle). 'dark' bewusst UNVERAENDERT gelassen -- der Auftrag spezifiziert nur den hellen Modus, ein Dark-Mode-Pendant zur neuen Palette wurde nicht vorgegeben."
   },
   "typography": {
     "fontFamily": "system-ui",
+    "fontFamilyWeb": "'Segoe UI', system-ui",
+    "_fontFamilyNote": "WEB_INBOX.md 24.09.: 'Segoe UI' als primaere Schriftfamilie auf Web (mit System-Font-Fallback, siehe fontFamilyWeb), auf iOS bewusst weiterhin die System-Schrift (SF Pro) -- Massimo: 'Ziel ist der Fluent-Charakter, nicht Pixel-Kopie', keine Segoe-Emulation auf iOS noetig.",
     "sizes": {
       "caption": 11,
       "small": 12,
@@ -53,9 +65,10 @@
     }
   },
   "radius": {
-    "control": 8,
-    "card": 12,
-    "pill": 20
+    "control": 4,
+    "card": 4,
+    "pill": 20,
+    "_note": "WEB_INBOX.md 24.09. Outlook-Design: 'dezente Rundung (4px), keine starken Schatten' -- control/card von vormals 8/12 auf 4 reduziert, pill (Badges/Avatare, vollstaendig rund) unveraendert."
   },
   "spacing": {
     "xs": 4,
@@ -111,7 +124,27 @@
         "icon": "trash-2",
         "renamable": false
       }
-    ]
+    ],
+    "facetIconStyle": {
+      "_note": "WEB_INBOX.md 24.09. 'ORDNER-ICONS - 3D/Facetten-Stil' + 25.09. 'GESENDET-ICON - finale Referenz erhalten': flache Farbflaechen, die Tiefe andeuten (kein echter Gradient/Schatten) fuer die vier Icons eingang/gesendet/quarantaene/papierkorb. Jedes Icon steht auf einer flachen ovalen Boden-Schatten-Ellipse (shadowEllipse). Restliche Ordner-Icons (entwuerfe/sonstiges/spam) bleiben einfarbige System-Icons, kein Facetten-Redesign dafuer vorgegeben.",
+      "shadowEllipse": "#E1DFDD",
+      "eingang": {
+        "motif": "Briefumschlag, hellere Flap-Flaeche oben, zwei dunklere Seiten-Facetten",
+        "colors": { "base": "#0078D4", "light": "#5EB1EC", "dark": "#106EBE" }
+      },
+      "gesendet": {
+        "motif": "Papierflieger nach oben-rechts, sichtbare dreieckige Faltkanten (Rumpf/Nase, ein Fluegel heller, Rumpf-Falz/Unterseite dunkler) -- Referenzbild siehe WEB_INBOX.md 25.09.",
+        "colors": { "base": "#0078D4", "light": "#5EB1EC", "dark": "#106EBE" }
+      },
+      "quarantaene": {
+        "motif": "Warndreieck in Amber/Gelb mit dunklerem Ausrufezeichen",
+        "colors": { "base": "#F0A800", "light": "#FFCB5C", "dark": "#7A4D00" }
+      },
+      "papierkorb": {
+        "motif": "Echter Papierkorb, leicht konisch (oben breiter als unten), sichtbare vertikale Gitterstaebe -- explizit KEINE eckige Muelltonne",
+        "colors": { "base": "#A19F9D", "light": "#C8C6C4", "dark": "#8A8886" }
+      }
+    }
   },
   "customFolder": {
     "defaultIcon": "folder"

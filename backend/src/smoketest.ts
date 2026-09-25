@@ -1360,7 +1360,7 @@ async function main() {
     const settingsDefaultRes = await fetch(`${base}/v1/settings`);
     assert(settingsDefaultRes.status === 200, "GET /v1/settings sollte 200 liefern");
     const settingsDefault = (await settingsDefaultRes.json()) as Record<string, unknown>;
-    assert(settingsDefault.accentTheme === "teal", `Default-Akzentfarbe sollte 'teal' sein, war '${settingsDefault.accentTheme}'`);
+    assert(settingsDefault.accentTheme === "outlook_blue", `Default-Akzentfarbe sollte 'outlook_blue' sein, war '${settingsDefault.accentTheme}'`);
 
     const settingsInvalidRes = await fetch(`${base}/v1/settings`, {
       method: "PUT",
