@@ -163,3 +163,7 @@ Ausserdem zur Klarstellung von eben (WEB_INBOX.md 21.09. "KLARSTELLUNG - Missver
 5. **POP3/Mail-Abruf (Rueckfrage von Massimo, 25.09.):** nochmal gegengeprueft, der `fb4621f`-Fix vom 23.09. (`.env` wurde nie geladen) haelt weiterhin, keine Regression. Betrifft Track F nicht direkt, nur damit ihr wisst, dass der Kernmechanismus (Postgres-Persistenz + `POST /accounts` synct sofort) stabil ist, falls ihr etwas Aehnliches auf Web-Seite braucht.
 
 Kein Blocker fuer Terminal. Alle fuenf Punkte sind unabhaengig voneinander, koennt ihr in beliebiger Reihenfolge angehen.
+
+---
+
+[2026-09-25] [erledigt: b93bfde] [Nachtrag zum eigenen Sammel-Eintrag oben] — Massimo hat mich (Terminal) gebeten, die fuenf Punkte oben direkt selbst umzusetzen statt auf Web zu warten. Details/Verifikation in SYNC.md 25.09. "[terminal] [F]". Kurzfassung: Punkte 1-3 umgesetzt (Domain-Autoerkennung in `OnboardingScreen.tsx`, Outlook-Token-Sync in `tokens.css`/`accentThemes.ts`, vier Facetten-Icons in neuer `facetIcons.tsx`), Punkte 4+5 brauchten keine Code-Aenderung auf Web (reines FYI bzw. bereits bestaetigt keine Regression). Falls parallel schon an einem dieser Punkte gearbeitet wurde -- bitte hier melden, bevor doppelte Arbeit entsteht.
