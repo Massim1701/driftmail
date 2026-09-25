@@ -30,8 +30,7 @@
   gap: 2px;
   padding: var(--space-sm) var(--space-md);
   border: none;
-  border-bottom: 1px solid var(--color-border);
-  border-left: 2px solid transparent;
+  border-bottom: 1px solid var(--color-border-subtle);
   background: transparent;
   text-align: left;
   cursor: pointer;
@@ -42,9 +41,16 @@
   background: var(--color-surface-card);
 }
 
+/* [2026-09-25] Outlook-Vorgabe (WEB_INBOX.md 24.09. "DESIGN-RICHTUNG
+   PRAEZISIERT"): "Ausgewaehlte/aktive Listenzeile: Hintergrund #deecf9,
+   Text #004578" -- eigenes Farbpaar (color.selected) statt des vorherigen
+   schlanken linken Akzent-Balkens. */
 .message-row.active {
-  background: var(--color-surface-card);
-  border-left-color: var(--color-accent);
+  background: var(--color-selected-bg);
+}
+
+.message-row.active .message-from {
+  color: var(--color-selected-text);
 }
 
 .message-row-top {

@@ -174,6 +174,9 @@
 }
 
 .onboarding-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--font-family);
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-medium);
@@ -183,6 +186,18 @@
   background: var(--color-accent);
   color: white;
   cursor: pointer;
+  text-decoration: none;
+}
+
+/* [2026-09-25] Domain-Matching (siehe OnboardingScreen.tsx-Kommentar):
+   Hinweis-Karte für bekannte, aber nicht direkt nutzbare/oauth-Domains
+   (Fälle 2+3), gleiche Bausteine (.onboarding-subtitle/.onboarding-button/
+   .link-button) wie der Rest der Seite. */
+.onboarding-domain-notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  align-items: center;
 }
 
 .onboarding-button:hover:not(:disabled) {

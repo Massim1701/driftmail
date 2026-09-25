@@ -18,6 +18,10 @@ export interface AccentThemeDefinition {
 }
 
 export const ACCENT_THEMES: AccentThemeDefinition[] = [
+  // [2026-09-25] design-tokens.json: neuer Default seit WEB_INBOX.md 24.09.
+  // "DESIGN-RICHTUNG PRAEZISIERT - Outlook-inspiriert" (ersetzt den
+  // vorherigen Teal-Default, siehe tokens.css :root --color-accent).
+  { id: "outlook_blue", label: "Outlook-Blau", accent: "#0078D4" },
   { id: "teal", label: "Teal", accent: "#1D9E75" },
   { id: "ocean_blue", label: "Ocean Blue", accent: "#378ADD" },
   { id: "violett", label: "Violett", accent: "#7F77DD" },

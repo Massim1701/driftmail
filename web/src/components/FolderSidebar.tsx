@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { Folder, MailAccount } from "../types";
 import { FOLDER_ICONS, FolderIcon, MoonIcon, PencilIcon, PlusIcon, RefreshIcon, SendIcon, SettingsIcon, SunIcon, SystemIcon, TrashIcon } from "../icons";
+import { FACET_ICONS } from "../facetIcons";
 import { SYSTEM_FOLDER_META } from "../folderMeta";
 import type { ThemeChoice } from "../useTheme";
 import "./FolderSidebar.css";
@@ -149,6 +150,11 @@ export function FolderSidebar({
       <ul className="folder-list">
         {folders.map((f) => {
           const meta = metaFor(f);
+          // [2026-09-25] TERMINAL_INBOX.md 25.09. Punkt 3: die vier
+          // Facetten-Icons (fest eingefärbt) haben Vorrang vor den
+          // einfarbigen Stroke-Icons, nur für ihre jeweiligen System-Ordner
+          // -- siehe facetIcons.tsx-Kommentar zum Contract-Umfang.
+          const FacetIcon = f.systemKey ? FACET_ICONS[f.systemKey] : undefined;
           const Icon = FOLDER_ICONS[f.icon] ?? FolderIcon;
           const isActive = f.id === active;
           const isEditing = editingId === f.id;
@@ -183,7 +189,7 @@ export function FolderSidebar({
                   onClick={() => onSelect(f.id)}
                   aria-current={isActive ? "page" : undefined}
                 >
-                  <Icon />
+                  {FacetIcon ? <FacetIcon className="folder-item-icon-facet" width={20} height={20} /> : <Icon />}
                   <span className="folder-label" title={f.name}>{f.name}</span>
                   <span className="folder-count">{counts[f.id] ?? 0}</span>
                 </button>

@@ -56,7 +56,11 @@ export interface AiSettings {
 // accentTheme. Nur die neutrale Akzentfarbe ist wählbar, siehe
 // contracts/design-tokens.json color.accentThemes -- danger/warning/success
 // bleiben für alle User fest.
-export type AccentTheme = "teal" | "ocean_blue" | "violett" | "koralle" | "ocean_verlauf";
+// [2026-09-25] design-tokens.json color.accentThemes: "outlook_blue" neu als
+// Default-Theme (WEB_INBOX.md 24.09. "DESIGN-RICHTUNG PRAEZISIERT"), "teal"
+// bleibt als wählbare Alternative erhalten (kein Nutzer verliert eine
+// bereits getroffene Wahl).
+export type AccentTheme = "outlook_blue" | "teal" | "ocean_blue" | "violett" | "koralle" | "ocean_verlauf";
 
 export interface UserSettings {
   accentTheme: AccentTheme;
@@ -234,7 +238,11 @@ export interface TrustedSender {
 export interface MailProvider {
   id: string;
   label: string;
-  authType: "oauth" | "imap";
+  // [2026-09-22] api-spec.yaml: "pop3" ergänzt (web.de), war hier nie
+  // nachgezogen -- authType-Vergleiche im Code müssen weiterhin nur explizit
+  // auf "oauth" prüfen (nicht auf "imap"), damit pop3-Provider denselben
+  // IMAP/POP3-Formularweg wie imap-Provider nehmen.
+  authType: "oauth" | "imap" | "pop3";
   comingSoon: boolean;
   imapHost: string | null;
   imapPort: number | null;
@@ -244,6 +252,11 @@ export interface MailProvider {
   smtpSecure: boolean | null;
   requiresAppPassword: boolean;
   appPasswordHelpUrl: string | null;
+  // [2026-09-25] WEB_INBOX.md 21.09. "Anbieter automatisch aus
+  // E-Mail-Adresse erkennen": Kleinbuchstaben-Domains ohne "@", die dieser
+  // Provider abdeckt (siehe contracts/mail-providers.json "domains"-Note).
+  // "other_imap" hat bewusst eine leere Liste.
+  domains: string[];
 }
 
 // GET/POST /drafts, PATCH/DELETE /drafts/{id} (WEB_INBOX.md 09.09.

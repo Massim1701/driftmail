@@ -57,8 +57,13 @@ const AI_IMPLEMENTED_PROVIDERS = ["anthropic", "openai"];
 // KOMFORT-FEATURES" Punkt 1) -- spiegelt users.accent_theme/
 // strict_unknown_senders (siehe backend/README.md "Einstellungsbereich" /
 // "Fuenf Komfort-Features").
-let userSettings = { accentTheme: "teal", strictUnknownSenders: true, nudgeUnansweredEnabled: true };
-const ACCENT_THEME_VALUES = ["teal", "ocean_blue", "violett", "koralle", "ocean_verlauf"];
+// [2026-09-25] "outlook_blue" ergaenzt + neuer Default (design-tokens.json,
+// WEB_INBOX.md 24.09. "DESIGN-RICHTUNG PRAEZISIERT" -- backend/src/routes/
+// settings.ts VALID_ACCENT_THEMES hat das bereits seit Commit 701f91b,
+// dieser Mock-Server war beim Drei-Spalten-Layout-Umbau noch nicht
+// nachgezogen).
+let userSettings = { accentTheme: "outlook_blue", strictUnknownSenders: true, nudgeUnansweredEnabled: true };
+const ACCENT_THEME_VALUES = ["outlook_blue", "teal", "ocean_blue", "violett", "koralle", "ocean_verlauf"];
 
 // GET/PUT /privacy-settings (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 1,
 // "Tracking-Pixel-Blockierung") -- Default false wie im echten Backend

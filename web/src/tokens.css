@@ -4,6 +4,15 @@
   erfinden — bei Änderungsbedarf zuerst die Contract-Datei anpassen und
   in SYNC.md unter "Contract-Änderungen" eintragen.
 
+  [2026-09-25] TERMINAL_INBOX.md 25.09. Punkt 2 ("Drei-Spalten-Layout"):
+  war seit der "DESIGN-RICHTUNG PRAEZISIERT - Outlook-inspiriert"-Vorgabe
+  (WEB_INBOX.md 24.09., Commit 701f91b für Contract+iOS) auf Web NICHT
+  nachgezogen -- dieses File führte noch die alte Teal-Palette/8px-Radius.
+  Jetzt 1:1 auf design-tokens.json synchronisiert (color.accent/.danger/
+  .selected/.light, radius.control/.card, typography.fontFamilyWeb).
+  color.dark bewusst unverändert (Contract-Note: kein Dark-Mode-Pendant zur
+  neuen Palette vorgegeben).
+
   Theme-Logik: drei Zustände laut design-tokens.json ("hell", "dunkel",
   "system"). "system" = kein data-theme-Attribut -> folgt
   prefers-color-scheme. Explizite Wahl setzt data-theme="hell"/"dunkel"
@@ -12,22 +21,31 @@
 
 :root {
   /* Farben: Rollen (plattformunabhängig) */
-  --color-accent: #1D9E75;
-  --color-danger: #D85A30;
-  --color-danger-text: #993C1D;
+  --color-accent: #0078D4;
+  --color-danger: #A4262C;
+  --color-danger-bg: #FDE7E9;
+  --color-danger-text: #A4262C;
   --color-warning: #EF9F27;
   --color-success: #1D9E75;
 
-  /* Farben: hell (Default) */
-  --color-surface-page: #FAFAF8;
-  --color-surface-card: #FFFFFF;
-  --color-text-primary: #141414;
-  --color-text-secondary: #6B6B66;
-  --color-text-muted: #9A9A94;
-  --color-border: #EAEAE6;
+  /* Ausgewaehlte/aktive Zeile bzw. aktiver Ordner (design-tokens.json
+     color.selected) -- eigenes Farbpaar statt nur accent-mit-Opacity. */
+  --color-selected-bg: #DEECF9;
+  --color-selected-text: #004578;
 
-  /* Typografie */
-  --font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Farben: hell (Default) */
+  --color-surface-page: #FFFFFF;
+  --color-surface-card: #FAF9F8;
+  --color-text-primary: #201F1E;
+  --color-text-secondary: #605E5C;
+  --color-text-muted: #A19F9D;
+  --color-border: #E1DFDD;
+  --color-border-subtle: #F3F2F1;
+
+  /* Typografie -- "Segoe UI" als primaere Schriftfamilie auf Web
+     (design-tokens.json typography.fontFamilyWeb), Systemschrift als
+     Fallback. */
+  --font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
   --font-size-caption: 11px;
   --font-size-small: 12px;
   --font-size-body: 13px;
@@ -36,9 +54,9 @@
   --font-weight-regular: 400;
   --font-weight-medium: 500;
 
-  /* Radius */
-  --radius-control: 8px;
-  --radius-card: 12px;
+  /* Radius -- dezente Rundung (Fluent-Stil), keine starken Schatten. */
+  --radius-control: 4px;
+  --radius-card: 4px;
   --radius-pill: 20px;
 
   /* Spacing */
@@ -60,6 +78,7 @@
     --color-text-secondary: rgba(255, 255, 255, 0.75);
     --color-text-muted: rgba(255, 255, 255, 0.4);
     --color-border: #2A2A2A;
+    --color-border-subtle: #242424;
     color-scheme: dark;
   }
 }
@@ -72,16 +91,18 @@
   --color-text-secondary: rgba(255, 255, 255, 0.75);
   --color-text-muted: rgba(255, 255, 255, 0.4);
   --color-border: #2A2A2A;
+  --color-border-subtle: #242424;
   color-scheme: dark;
 }
 
 /* explizite Wahl "hell" gewinnt immer, auch wenn OS dunkel eingestellt ist */
 :root[data-theme="hell"] {
-  --color-surface-page: #FAFAF8;
-  --color-surface-card: #FFFFFF;
-  --color-text-primary: #141414;
-  --color-text-secondary: #6B6B66;
-  --color-text-muted: #9A9A94;
-  --color-border: #EAEAE6;
+  --color-surface-page: #FFFFFF;
+  --color-surface-card: #FAF9F8;
+  --color-text-primary: #201F1E;
+  --color-text-secondary: #605E5C;
+  --color-text-muted: #A19F9D;
+  --color-border: #E1DFDD;
+  --color-border-subtle: #F3F2F1;
   color-scheme: light;
 }

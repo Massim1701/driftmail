@@ -149,14 +149,26 @@
   text-align: left;
 }
 
+/* [2026-09-25] TERMINAL_INBOX.md 25.09. Punkt 3: die vier Facetten-Icons
+   (facetIcons.tsx) bringen ihre Farbe fest mit -- anders als die
+   currentColor-Stroke-Icons in icons.tsx dürfen sie beim Hover/Active der
+   Zeile NICHT die Textfarbe annehmen, deshalb kein `color: inherit`-Erbe
+   hier nötig, nur der Größen-Fixpunkt. */
+.folder-item-icon-facet {
+  flex-shrink: 0;
+}
+
 .folder-item:hover {
   background: var(--color-surface-page);
   color: var(--color-text-primary);
 }
 
+/* [2026-09-25] Outlook-Vorgabe (WEB_INBOX.md 24.09. "DESIGN-RICHTUNG
+   PRAEZISIERT"): eigenes Hintergrund-/Textfarbpaar für die aktive Zeile
+   (color.selected) statt einer transparenten Akzentfläche. */
 .folder-item.active {
-  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
-  color: var(--color-accent);
+  background: var(--color-selected-bg);
+  color: var(--color-selected-text);
   font-weight: var(--font-weight-medium);
 }
 
