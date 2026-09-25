@@ -1282,7 +1282,7 @@ Reine Ergaenzung des bestehenden Datenschutzerklaerung-Entwurfs (bereits als "En
 **Umgesetzt (Terminal, 25.09., Commit `7ecec18`): iOS.** `FolderListView.swift`: aktive Adresse bleibt oben (fett), bei mehr als einem Konto erscheint darunter eine kleinere, gedaempfte Zeile mit allen uebrigen Adressen (·-getrennt). Einzelkonto-Fall visuell unveraendert. Details/Testgrenzen in `ios/README.md` 25.09.-Eintrag. **Offen: Web (Track F)** -- dieselbe Praezisierung fuer die Web-Sidebar/den Header.
 
 
-[2026-09-24] [offen] [NEUE DESIGN-RICHTUNG - App hell + Kobaltblau] [Web + iOS] [ersetzt/ergaenzt fruehere Design-Vorgaben, bitte als aktuellste Vorgabe behandeln] — Massimo hat aus mehreren gezeigten Mockup-Varianten "Kobaltblau, hell" gewaehlt (nicht das dunkle Superhuman-Grau/Teal von vorher, auch bewusst ANDERS als die neue helle Salbeigruen-Landingpage -- eigene Identitaet fuer die App selbst).
+[2026-09-24] [ueberholt: durch den praeziseren Eintrag "DESIGN-RICHTUNG PRAEZISIERT - Outlook-inspiriert" vom selben Tag ersetzt (dort umgesetzt, siehe Commits 701f91b/e0e656e) -- dieser Eintrag selbst ist nicht mehr die gueltige Vorgabe] [NEUE DESIGN-RICHTUNG - App hell + Kobaltblau] [Web + iOS] [ersetzt/ergaenzt fruehere Design-Vorgaben, bitte als aktuellste Vorgabe behandeln] — Massimo hat aus mehreren gezeigten Mockup-Varianten "Kobaltblau, hell" gewaehlt (nicht das dunkle Superhuman-Grau/Teal von vorher, auch bewusst ANDERS als die neue helle Salbeigruen-Landingpage -- eigene Identitaet fuer die App selbst).
 
 **Farben (aus dem bestaetigten Mockup):**
 - Hintergrund: reines Weiss (#ffffff) bzw. sehr helles Grau fuer Panels
