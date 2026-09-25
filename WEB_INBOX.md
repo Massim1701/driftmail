@@ -1271,3 +1271,46 @@ Bitte folgenden Abschnitt in privacy.html ergaenzen (Formulierung als Vorschlag,
 "Diese Website wird ueber GitHub Pages (GitHub Inc., ein Unternehmen von Microsoft, USA) gehostet und die Domain driftware.online ist bei Namecheap Inc. (USA) registriert. Beim Aufruf dieser Seite werden technische Daten (z.B. IP-Adresse) an die Server dieser US-Anbieter uebermittelt. Fuer den Datentransfer in die USA stuetzen sich die Anbieter nach eigenen Angaben auf Standardvertragsklauseln bzw. ein Angemessenheitsniveau nach Art. 46 DSGVO -- bitte die aktuellen Datenschutzbedingungen von GitHub und Namecheap fuer Details ergaenzend verlinken."
 
 Reine Ergaenzung des bestehenden Datenschutzerklaerung-Entwurfs (bereits als "Entwurf, in anwaltlicher Pruefung" gekennzeichnet), kein Contract-Bruch.
+
+
+[2026-09-24] [offen] [PRAEZISIERUNG - Titel oben bei mehreren Konten] [Track C/F] — Massimo praezisiert den aelteren offenen Punkt "Driftmail-Titel oben durch E-Mail-Adresse ersetzen" (WEB_INBOX.md 10.09.): bei nur EINEM verbundenen Konto reicht die einzelne E-Mail-Adresse oben wie bereits spezifiziert. Bei MEHREREN verbundenen Konten sollen ALLE Konto-Namen/E-Mail-Adressen oben aufgefuehrt werden, nicht nur das aktuell aktive -- damit der User auf einen Blick sieht, welche Konten insgesamt verbunden sind, nicht nur in welchem er gerade ist. Umsetzung (z.B. mehrere Adressen nebeneinander/als kleine Liste, oder das aktive hervorgehoben mit den anderen daneben/darunter kleiner) bleibt Track C/F ueberlassen, Hauptsache alle sind sichtbar, nicht nur eine. Betrifft Web und iOS gleichermassen. Kein Contract-Bruch, reine UI-Anpassung.
+
+
+[2026-09-24] [offen] [NEUE DESIGN-RICHTUNG - App hell + Kobaltblau] [Web + iOS] [ersetzt/ergaenzt fruehere Design-Vorgaben, bitte als aktuellste Vorgabe behandeln] — Massimo hat aus mehreren gezeigten Mockup-Varianten "Kobaltblau, hell" gewaehlt (nicht das dunkle Superhuman-Grau/Teal von vorher, auch bewusst ANDERS als die neue helle Salbeigruen-Landingpage -- eigene Identitaet fuer die App selbst).
+
+**Farben (aus dem bestaetigten Mockup):**
+- Hintergrund: reines Weiss (#ffffff) bzw. sehr helles Grau fuer Panels
+- Primaerer Akzent: Kobaltblau #2f5fdb (Buttons, aktive Zustaende, "Neu"-Badges)
+- Helle Akzent-Flaeche fuer hervorgehobene/neue Mails: #eef3ff Hintergrund, #2f5fdb bzw. dunkleres Blau fuer Text/Badge darauf (Badge-Hintergrund #dbe6ff, Badge-Text #2f5fdb)
+- Fliesstext dunkel: #1a1d24 (Haupttext), #444751 (sekundaerer Text), #7c8291 (gedaempft/Meta-Text)
+- Trennlinien: #e6e8ec (Rahmen), #f1f2f5 (Listenzeilen-Trenner)
+- Sicherheits-Warnfarben (rot fuer "Prüfen"-Badges etc.) bleiben wie bisher UNVERAENDERT fest/nicht themebar -- nur der normale UI-Akzent wechselt auf Kobaltblau.
+
+**Hinweis zum bestehenden 5-Themes-System:** Falls die App bereits die fruehere "5 waehlbare Akzent-Themes"-Struktur hat (Teal Default, Ocean Blue #378ADD, Violett, Koralle, Ocean-Verlauf) -- pruefen, ob sich das neue Kobaltblau (#2f5fdb) als NEUER DEFAULT in dieses System einordnen laesst (aehnlich/ueberschneidend mit dem bisherigen "Ocean Blue"), oder ob Massimo eine komplett neue Grundausrichtung moechte, die das alte Teal-Default ersetzt. Bitte kurze Rueckfrage/Einschaetzung in SYNC.md, falls das nicht eindeutig ist, sonst nach bestem Wissen umsetzen: Kobaltblau + Hell wird der neue Standard-Look der App (Web + iOS), ersetzt den bisherigen dunklen/Teal-Grundton als Ausgangspunkt.
+
+**Umfang:** Betrifft grundlegende Hintergrund-/Textfarben, Buttons, aktive/hervorgehobene Listenzeilen, Badges -- im Prinzip die gesamte App-Oberflaeche auf Web und iOS, nicht nur einzelne Screens. Bitte Umfang/Reihenfolge (z.B. zentrale Farb-Variablen zuerst anpassen, dann Screen fuer Screen pruefen) selbst sinnvoll einteilen und in SYNC.md dokumentieren.
+
+Kein Contract-Bruch (reine visuelle Ueberarbeitung), aber grosser Umfang -- bitte realistisch einschaetzen, ob das in einem Zug geht oder aufgeteilt werden sollte.
+
+
+[2026-09-24] [offen] [DESIGN-RICHTUNG PRAEZISIERT - Outlook-inspiriert] [Web + iOS] [ERSETZT den vorherigen Eintrag "NEUE DESIGN-RICHTUNG - App hell + Kobaltblau" vom selben Tag -- bitte NUR diesen hier umsetzen, der alte war zu ungenau] — Massimo hat nach mehreren Mockup-Runden das neue Outlook fuer Windows (2026, aktueller Standard-Look) als konkretes Vorbild bestaetigt. Recherchiert: neues Outlook nutzt Fluent-Design mit Drei-Spalten-Layout, Microsoft-Signalblau, dezente Rundungen, "Segoe UI"-Schriftfamilie.
+
+**Layout (wichtigster Unterschied zum bisherigen Konzept):**
+Klassisches Drei-Spalten-Layout, nicht nur eine Liste:
+1. Schmale linke Ordner-Leiste (Eingang, Gesendet, Entwuerfe, Quarantaene, Spam, Papierkorb) mit einem deutlichen "+ Neue Mail"-Button oben in Akzentfarbe.
+2. Mittlere Nachrichtenliste, kompakt (Absender + Betreff + Uhrzeit/Datum, zweizeilig pro Eintrag).
+3. Rechts der Lesebereich (Vorschau der ausgewaehlten Mail) -- auf breiten Bildschirmen direkt sichtbar, auf schmalen/Mobile als Vollbild-Wechsel wie bisher.
+
+**Farben:**
+- Hintergrund: reines Weiss (#ffffff), Ordner-Leiste leicht abgesetzt (#faf9f8)
+- Primaerer Akzent: Microsoft-Blau #0078d4 (Buttons, aktive/ausgewaehlte Zeile)
+- Ausgewaehlte/aktive Listenzeile: Hintergrund #deecf9, Text #004578
+- Haupttext: #201f1e, sekundaerer Text: #605e5c, gedaempft: #a19f9d
+- Trennlinien: #e1dfdd (staerker), #f3f2f1 (dezenter, zwischen Listenzeilen)
+- Sicherheits-Warnfarben (rot fuer Quarantaene/"Pruefen"-Badges: Hintergrund #fde7e9, Text #a4262c) bleiben FEST, nicht themebar -- nur der normale UI-Akzent ist blau.
+
+**Typografie:** "Segoe UI" als primaere Schriftfamilie auf Web (mit System-Font-Fallback), auf iOS die naechstliegende Systemschrift (SF Pro reicht, keine Segoe-Emulation noetig -- Ziel ist der Fluent-Charakter, nicht Pixel-Kopie).
+
+**Ecken/Formen:** dezente Rundung (4px), keine starken Schatten, klare Trennlinien statt Card-Schatten (Fluent-Stil, nicht Material-Design-Schatten).
+
+Bitte den fruehreren, vageren "Kobaltblau"-Eintrag vom selben Tag als ueberholt behandeln -- dieser hier mit dem Drei-Spalten-Layout und den exakten Hex-Werten ist die verbindliche Vorgabe. Kein Contract-Bruch, aber grosser Umfang (Grundlayout-Aenderung von Liste zu Drei-Spalten auf Web, iOS behaelt vermutlich den bestehenden Navigations-Stack mit angepassten Farben, da Drei-Spalten auf dem iPhone nicht sinnvoll ist -- auf iPad ggf. schon, bitte einschaetzen). Bitte Umfang/Reihenfolge selbst einteilen und in SYNC.md dokumentieren.
