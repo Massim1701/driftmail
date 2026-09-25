@@ -1289,3 +1289,26 @@ Reine Ergaenzung des bestehenden Datenschutzerklaerung-Entwurfs (bereits als "En
 **Umfang:** Betrifft grundlegende Hintergrund-/Textfarben, Buttons, aktive/hervorgehobene Listenzeilen, Badges -- im Prinzip die gesamte App-Oberflaeche auf Web und iOS, nicht nur einzelne Screens. Bitte Umfang/Reihenfolge (z.B. zentrale Farb-Variablen zuerst anpassen, dann Screen fuer Screen pruefen) selbst sinnvoll einteilen und in SYNC.md dokumentieren.
 
 Kein Contract-Bruch (reine visuelle Ueberarbeitung), aber grosser Umfang -- bitte realistisch einschaetzen, ob das in einem Zug geht oder aufgeteilt werden sollte.
+
+
+[2026-09-24] [offen] [DESIGN-RICHTUNG PRAEZISIERT - Outlook-inspiriert] [Web + iOS] [ERSETZT den vorherigen Eintrag "NEUE DESIGN-RICHTUNG - App hell + Kobaltblau" vom selben Tag -- bitte NUR diesen hier umsetzen, der alte war zu ungenau] — Massimo hat nach mehreren Mockup-Runden das neue Outlook fuer Windows (2026, aktueller Standard-Look) als konkretes Vorbild bestaetigt. Recherchiert: neues Outlook nutzt Fluent-Design mit Drei-Spalten-Layout, Microsoft-Signalblau, dezente Rundungen, "Segoe UI"-Schriftfamilie.
+
+**Layout (wichtigster Unterschied zum bisherigen Konzept):**
+Klassisches Drei-Spalten-Layout, nicht nur eine Liste:
+1. Schmale linke Ordner-Leiste (Eingang, Gesendet, Entwuerfe, Quarantaene, Spam, Papierkorb) mit einem deutlichen "+ Neue Mail"-Button oben in Akzentfarbe.
+2. Mittlere Nachrichtenliste, kompakt (Absender + Betreff + Uhrzeit/Datum, zweizeilig pro Eintrag).
+3. Rechts der Lesebereich (Vorschau der ausgewaehlten Mail) -- auf breiten Bildschirmen direkt sichtbar, auf schmalen/Mobile als Vollbild-Wechsel wie bisher.
+
+**Farben:**
+- Hintergrund: reines Weiss (#ffffff), Ordner-Leiste leicht abgesetzt (#faf9f8)
+- Primaerer Akzent: Microsoft-Blau #0078d4 (Buttons, aktive/ausgewaehlte Zeile)
+- Ausgewaehlte/aktive Listenzeile: Hintergrund #deecf9, Text #004578
+- Haupttext: #201f1e, sekundaerer Text: #605e5c, gedaempft: #a19f9d
+- Trennlinien: #e1dfdd (staerker), #f3f2f1 (dezenter, zwischen Listenzeilen)
+- Sicherheits-Warnfarben (rot fuer Quarantaene/"Pruefen"-Badges: Hintergrund #fde7e9, Text #a4262c) bleiben FEST, nicht themebar -- nur der normale UI-Akzent ist blau.
+
+**Typografie:** "Segoe UI" als primaere Schriftfamilie auf Web (mit System-Font-Fallback), auf iOS die naechstliegende Systemschrift (SF Pro reicht, keine Segoe-Emulation noetig -- Ziel ist der Fluent-Charakter, nicht Pixel-Kopie).
+
+**Ecken/Formen:** dezente Rundung (4px), keine starken Schatten, klare Trennlinien statt Card-Schatten (Fluent-Stil, nicht Material-Design-Schatten).
+
+Bitte den fruehreren, vageren "Kobaltblau"-Eintrag vom selben Tag als ueberholt behandeln -- dieser hier mit dem Drei-Spalten-Layout und den exakten Hex-Werten ist die verbindliche Vorgabe. Kein Contract-Bruch, aber grosser Umfang (Grundlayout-Aenderung von Liste zu Drei-Spalten auf Web, iOS behaelt vermutlich den bestehenden Navigations-Stack mit angepassten Farben, da Drei-Spalten auf dem iPhone nicht sinnvoll ist -- auf iPad ggf. schon, bitte einschaetzen). Bitte Umfang/Reihenfolge selbst einteilen und in SYNC.md dokumentieren.
