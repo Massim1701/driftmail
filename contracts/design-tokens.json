@@ -133,8 +133,9 @@
         "colors": { "base": "#0078D4", "light": "#5EB1EC", "dark": "#106EBE" }
       },
       "gesendet": {
-        "motif": "Papierflieger nach oben-rechts, sichtbare dreieckige Faltkanten (Rumpf/Nase, ein Fluegel heller, Rumpf-Falz/Unterseite dunkler) -- Referenzbild siehe WEB_INBOX.md 25.09.",
-        "colors": { "base": "#0078D4", "light": "#5EB1EC", "dark": "#106EBE" }
+        "motif": "[2026-09-25] WEB_INBOX.md 'GESENDET-ICON - endgueltige Form bestaetigt': Papierflieger nach oben-rechts (ca. 30-45 Grad), spitze Nase, ein Fluegel oben hell, Rumpf/Unterseite per diagonaler Falzlinie in zwei Facetten geteilt, hinten ein kurzer spitzer Heck-Zipfel unten (eigenes Original-Artwork nach Beschreibung -- KEINE Stockfoto-Uebernahme, siehe Eintrag).",
+        "colors": { "base": "#0078D4", "light": "#8ECBF5", "dark": "#106EBE", "darkest": "#004578" },
+        "_darkestNote": "darkest gilt nur fuer den kleinen Heck-Zipfel (staerkster Facetten-Kontrast dort), die uebrigen drei Icons kommen weiterhin mit base/light/dark aus."
       },
       "quarantaene": {
         "motif": "Warndreieck in Amber/Gelb mit dunklerem Ausrufezeichen",
