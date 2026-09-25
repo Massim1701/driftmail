@@ -306,6 +306,23 @@ export interface OutgoingSendLogRecord {
   sentAt: string;
   timeSinceDraftShownMs: number | null;
   wasNewRecipient: boolean;
+  /** [2026-09-25] sha256(bodyText), Grundlage fuer duplicate_content-Erkennung. */
+  bodyHash: string | null;
+}
+
+// `send_abuse_flags` (db-schema.sql, WEB_INBOX.md 08.09. "Bot/Human-
+// Missbrauchserkennung beim Versand", Tabelle seit Commit a5432e6, die
+// eigentliche Erkennungslogik seit 25.09., siehe mail/sendAbuseDetection.ts).
+export type AbuseFlagReason = "rate_burst" | "many_new_recipients" | "duplicate_content" | "no_read_before_reply" | "phishing_content";
+export type AbuseActionTaken = "warned" | "rate_limited" | "send_blocked";
+
+export interface SendAbuseFlagRecord {
+  id: string;
+  userId: string;
+  flagReason: AbuseFlagReason;
+  triggeredAt: string;
+  actionTaken: AbuseActionTaken;
+  resolved: boolean;
 }
 
 // `trusted_senders` (db-schema.sql, WEB_INBOX.md 15.09. "Whitelist fuer

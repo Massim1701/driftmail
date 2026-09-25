@@ -20,6 +20,8 @@ import { PostgresStore } from "./postgresStore";
 import { isConfidentialExpired } from "../mail/confidential";
 import type {
   AbsenceResponderRecord,
+  AbuseActionTaken,
+  AbuseFlagReason,
   AiPreferenceRecord,
   ContractRecord,
   DataBreachFindingRecord,
@@ -35,6 +37,7 @@ import type {
   PrivacySettingsRecord,
   QuarantineRecord,
   SecurityAuditLogRecord,
+  SendAbuseFlagRecord,
   SessionRecord,
   SignatureRecord,
   SystemFolderKey,
@@ -188,7 +191,20 @@ export interface Store {
 
   // ----- Ausgehende Sends (Grundlage für recipientReputation) -----
   hasSentTo(userId: string, recipientAddress: string): Promise<boolean>;
-  recordOutgoingSend(input: { userId: string; recipientAddress: string; timeSinceDraftShownMs?: number | null }): Promise<OutgoingSendLogRecord>;
+  recordOutgoingSend(input: { userId: string; recipientAddress: string; timeSinceDraftShownMs?: number | null; bodyHash?: string | null }): Promise<OutgoingSendLogRecord>;
+
+  // ----- Versand-Missbrauchserkennung (WEB_INBOX.md 08.09. "Bot/Human-
+  // Missbrauchserkennung beim Versand", siehe mail/sendAbuseDetection.ts
+  // fuer die Schwellenwerte/Eskalationslogik, die diese vier Methoden nutzt) -----
+  /** Anzahl outgoing_send_log-Zeilen fuer diesen User seit `sinceIso` (Grundlage rate_burst). */
+  countRecentOutgoingSends(userId: string, sinceIso: string): Promise<number>;
+  /** Anzahl outgoing_send_log-Zeilen mit was_new_recipient=true seit `sinceIso` (Grundlage many_new_recipients). */
+  countRecentNewRecipients(userId: string, sinceIso: string): Promise<number>;
+  /** Anzahl DISTINCT Empfaenger, die seit `sinceIso` bodyHash bereits bekommen haben (Grundlage duplicate_content). */
+  countRecentDuplicateContentRecipients(userId: string, bodyHash: string, sinceIso: string): Promise<number>;
+  /** Juengster unresolved-Flag desselben Grundes seit `sinceIso`, oder null (Grundlage fuer die Eskalation warned -> rate_limited). */
+  findRecentUnresolvedAbuseFlag(userId: string, reason: AbuseFlagReason, sinceIso: string): Promise<SendAbuseFlagRecord | null>;
+  createAbuseFlag(input: { userId: string; reason: AbuseFlagReason; actionTaken: AbuseActionTaken }): Promise<SendAbuseFlagRecord>;
 
   /** [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES", Punkt 2
    * "Kontakt-Autovervollstaendigung": einfache Ableitung aus bisherigen
@@ -353,6 +369,9 @@ export class InMemoryStore implements Store {
   // `outgoing_send_log` (db-schema.sql, Commit a5432e6) -- Grundlage für den
   // Empfänger-Reputations-Lookup (siehe src/lookups/recipientReputationMock.ts).
   outgoingSendLog: OutgoingSendLogRecord[] = [];
+  // `send_abuse_flags` (db-schema.sql, Tabelle seit a5432e6) -- siehe
+  // mail/sendAbuseDetection.ts fuer die Erkennungslogik, die diese Liste befuellt.
+  sendAbuseFlags: SendAbuseFlagRecord[] = [];
   // `message_attachments` (db-schema.sql) -- siehe MessageAttachmentRecord-
   // Kommentar in types.ts.
   messageAttachments: MessageAttachmentRecord[] = [];
@@ -789,6 +808,7 @@ export class InMemoryStore implements Store {
     userId: string;
     recipientAddress: string;
     timeSinceDraftShownMs?: number | null;
+    bodyHash?: string | null;
   }): Promise<OutgoingSendLogRecord> {
     const wasNewRecipient = !(await this.hasSentTo(input.userId, input.recipientAddress));
     const record: OutgoingSendLogRecord = {
@@ -798,8 +818,47 @@ export class InMemoryStore implements Store {
       sentAt: new Date().toISOString(),
       timeSinceDraftShownMs: input.timeSinceDraftShownMs ?? null,
       wasNewRecipient,
+      bodyHash: input.bodyHash ?? null,
     };
     this.outgoingSendLog.push(record);
+    return record;
+  }
+
+  async countRecentOutgoingSends(userId: string, sinceIso: string): Promise<number> {
+    return this.outgoingSendLog.filter((e) => e.userId === userId && e.sentAt >= sinceIso).length;
+  }
+
+  async countRecentNewRecipients(userId: string, sinceIso: string): Promise<number> {
+    return this.outgoingSendLog.filter((e) => e.userId === userId && e.sentAt >= sinceIso && e.wasNewRecipient).length;
+  }
+
+  async countRecentDuplicateContentRecipients(userId: string, bodyHash: string, sinceIso: string): Promise<number> {
+    const recipients = new Set(
+      this.outgoingSendLog
+        .filter((e) => e.userId === userId && e.sentAt >= sinceIso && e.bodyHash === bodyHash)
+        .map((e) => e.recipientAddress.toLowerCase()),
+    );
+    return recipients.size;
+  }
+
+  async findRecentUnresolvedAbuseFlag(userId: string, reason: AbuseFlagReason, sinceIso: string): Promise<SendAbuseFlagRecord | null> {
+    const matches = this.sendAbuseFlags.filter(
+      (f) => f.userId === userId && f.flagReason === reason && !f.resolved && f.triggeredAt >= sinceIso,
+    );
+    if (matches.length === 0) return null;
+    return matches.reduce((latest, f) => (f.triggeredAt > latest.triggeredAt ? f : latest));
+  }
+
+  async createAbuseFlag(input: { userId: string; reason: AbuseFlagReason; actionTaken: AbuseActionTaken }): Promise<SendAbuseFlagRecord> {
+    const record: SendAbuseFlagRecord = {
+      id: randomUUID(),
+      userId: input.userId,
+      flagReason: input.reason,
+      triggeredAt: new Date().toISOString(),
+      actionTaken: input.actionTaken,
+      resolved: false,
+    };
+    this.sendAbuseFlags.push(record);
     return record;
   }
 

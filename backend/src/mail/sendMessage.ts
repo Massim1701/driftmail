@@ -10,6 +10,7 @@
 import { store } from "../db/store";
 import { checkDraftForPhishing } from "@driftmail/security-classification";
 import { adapterForAccount } from "./sync";
+import { checkSendAbuse, computeBodyHash } from "./sendAbuseDetection";
 
 const SEND_BODY_URL_REGEX = /https?:\/\/[^\s<>"]+/g;
 
@@ -24,6 +25,10 @@ export interface SendMessageInput {
   confidentialUntil?: unknown;
   attachmentIds?: unknown;
   draftId?: unknown;
+  /** [2026-09-25] WEB_INBOX.md 08.09. "Bot/Human-Missbrauchserkennung beim
+   * Versand", siehe sendAbuseDetection.ts -- optional, nur bei Antworten
+   * ausgewertet. */
+  timeSinceDraftShownMs?: unknown;
 }
 
 export type SendMessageResult =
@@ -100,6 +105,20 @@ export async function sendMessageForUser(userId: string, body: SendMessageInput)
     }
   }
 
+  const recipients = Array.from(new Set([...to, ...cc, ...bcc].map((a) => a.toLowerCase())));
+  const timeSinceDraftShownMs = typeof body.timeSinceDraftShownMs === "number" ? body.timeSinceDraftShownMs : null;
+  const abuseCheck = await checkSendAbuse(store, {
+    userId: account.userId,
+    recipients,
+    bodyText,
+    isReply: inReplyToMessageId !== null,
+    timeSinceDraftShownMs,
+  });
+  if (abuseCheck.blocked) {
+    await store.createAbuseFlag({ userId: account.userId, reason: abuseCheck.blocked.reason, actionTaken: "rate_limited" });
+    return { ok: false, status: 429, body: { error: abuseCheck.blocked.message } };
+  }
+
   const adapter = adapterForAccount(account);
   let sentMessageId: string;
   try {
@@ -135,9 +154,15 @@ export async function sendMessageForUser(userId: string, body: SendMessageInput)
   const draftId = typeof body.draftId === "string" ? body.draftId : null;
   if (draftId) await store.deleteDraft(draftId);
 
-  const recipients = Array.from(new Set([...to, ...cc, ...bcc].map((a) => a.toLowerCase())));
+  const bodyHash = computeBodyHash(bodyText);
   for (const recipientAddress of recipients) {
-    await store.recordOutgoingSend({ userId: account.userId, recipientAddress });
+    await store.recordOutgoingSend({ userId: account.userId, recipientAddress, timeSinceDraftShownMs, bodyHash });
+  }
+  // Erst NACH dem tatsaechlich erfolgreichen Versand vermerken (siehe
+  // Kommentar in checkSendAbuse()) -- ein am Provider gescheiterter Versand
+  // (502 oben) soll keinen Missbrauchs-Flag hinterlassen.
+  for (const reason of abuseCheck.warnReasons) {
+    await store.createAbuseFlag({ userId: account.userId, reason, actionTaken: "warned" });
   }
 
   return { ok: true, sentMessageId };

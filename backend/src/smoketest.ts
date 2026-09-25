@@ -2,6 +2,24 @@
 // in-process, spielt den Kernfluss durch und prüft grob die Response-Form
 // gegen contracts/api-spec.yaml. `npm test` führt das aus.
 
+// [2026-09-25] ECHTER FUND, NICHT behoben (bewusst, siehe Begruendung):
+// diese Datei importiert "./loadEnv" bisher NICHT (anders als index.ts,
+// wo es seit dem fb4621f-Fix vom 23.09. der allererste Import ist) --
+// `npm test` laeuft deshalb IMMER gegen den In-Memory-Store, selbst wenn
+// backend/.env eine echte DATABASE_URL setzt. Kurz testweise ergaenzt und
+// wieder entfernt: der Smoketest griff dadurch auf DIESELBE persistente
+// Postgres-DB zu, die interaktiv fuer manuelles Testen genutzt wird (ein
+// fest verdrahteter DATABASE_URL-Wert in .env fuer beide Zwecke) -- der
+// allererste Assert ("Fixture-Sync sollte Nachrichten importieren")
+// schlug prompt fehl, weil der `demo@driftmail.local`-Account durch
+// vorheriges manuelles Testen bereits alle 11 Fixtures kannte (0 neu
+// importiert). Das ist ein eigenstaendiges, groesseres Test-Infrastruktur-
+// Thema (eigene Test-DB noetig, damit `npm test` nicht von zufaelligem
+// interaktivem Vorzustand abhaengt) -- ausserhalb des Umfangs von "send
+// abuse jetzt umsetzen", deshalb hier nur dokumentiert statt nebenbei neu
+// entschieden. Die neuen Postgres-Methoden in sendAbuseDetection.ts sind
+// stattdessen direkt per curl/psql gegen den echten Dev-Server verifiziert
+// (siehe backend/README.md).
 import { createApp } from "./app";
 import { ensureDemoUser, initStore, store } from "./db/store";
 import { PostgresStore } from "./db/postgresStore";
@@ -2278,7 +2296,156 @@ async function main() {
     // Massimo müsste den kompletten Weg einmal mit einem echten GMX-/
     // web.de-/iCloud-Konto gegentesten.
 
-    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent -> Nudge -> Vertraulicher Modus -> Echter Malware-Scan -> Tracking-Schutz-Einstellungen -> Snooze -> Schedule Send -> Darkweb-Ueberwachung -> Quishing-Schutz -> Klick-Zeit-Link-Pruefung -> HTML-Rendering des Mail-Bodies) end-to-end grün.");
+    // ----- Versand-Missbrauchserkennung (WEB_INBOX.md 08.09. "Bot/Human-
+    // Missbrauchserkennung beim Versand", Logik seit 25.09., siehe
+    // mail/sendAbuseDetection.ts) -- jeweils ein FRISCHER, isolierter User
+    // pro Unter-Test (eindeutige, zeitstempel-basierte E-Mail-Adresse),
+    // damit die zeitfenster-basierten Zaehler nicht durch andere Tests
+    // (oder einen vorherigen Testlauf gegen eine persistente Postgres-DB)
+    // verfaelscht werden koennen. -----
+
+    async function connectFreshAbuseTestUser(label: string): Promise<{ token: string; accountId: string }> {
+      const email = `abuse-test-${label}-${Date.now()}@driftmail.local`;
+      const res = await globalThis.fetch(`${base}/v1/accounts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "gmail", emailAddress: email }),
+      });
+      const connected = (await res.json()) as { account: { id: string }; token: string };
+      return { token: connected.token, accountId: connected.account.id };
+    }
+
+    async function sendAsAbuseTestUser(
+      token: string,
+      accountId: string,
+      overrides: Record<string, unknown>,
+    ): Promise<Response> {
+      return globalThis.fetch(`${base}/v1/messages/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ accountId, to: ["ziel@example.com"], bodyText: "Test-Nachricht", ...overrides }),
+      });
+    }
+
+    // 1) rate_burst: RATE_BURST_THRESHOLD (10) Sende-Vorgaenge in
+    // RATE_BURST_WINDOW_MS (2 Min.) an DENSELBEN Empfaenger (damit
+    // many_new_recipients/duplicate_content nicht gleichzeitig mitausloesen
+    // -- nur der erste Sendevorgang an einen Empfaenger ist "neu", und
+    // COUNT DISTINCT Empfaenger bleibt bei 1).
+    {
+      const { token, accountId } = await connectFreshAbuseTestUser("rate-burst");
+      for (let i = 0; i < 9; i++) {
+        const r = await sendAsAbuseTestUser(token, accountId, {
+          to: ["burst-ziel@example.com"],
+          bodyText: `Burst-Test Nachricht Nummer ${i}`,
+        });
+        assert(r.status === 200, `rate_burst-Test: Sendevorgang ${i + 1}/9 (unterhalb Schwellenwert) sollte 200 liefern`);
+      }
+      const tenthRes = await sendAsAbuseTestUser(token, accountId, {
+        to: ["burst-ziel@example.com"],
+        bodyText: "Burst-Test Nachricht Nummer 9 (erreicht Schwellenwert)",
+      });
+      assert(tenthRes.status === 200, "rate_burst-Test: 10. Sendevorgang (erreicht Schwellenwert) sollte trotzdem 200 liefern (erst warnen)");
+      const rateBurstUser = await store.getUserByEmail((await store.getMailAccount(accountId))!.emailAddress);
+      const warnedFlag = await store.findRecentUnresolvedAbuseFlag(rateBurstUser!.id, "rate_burst", new Date(Date.now() - 60_000).toISOString());
+      assert(warnedFlag !== null && warnedFlag.actionTaken === "warned", "rate_burst-Test: nach Schwellenwert-Ueberschreitung sollte ein 'warned'-Flag existieren");
+
+      const eleventhRes = await sendAsAbuseTestUser(token, accountId, {
+        to: ["burst-ziel@example.com"],
+        bodyText: "Burst-Test Nachricht Nummer 10 (Eskalation)",
+      });
+      assert(eleventhRes.status === 429, "rate_burst-Test: erneutes Ueberschreiten innerhalb des Eskalationsfensters sollte 429 liefern");
+      const escalatedFlag = await store.findRecentUnresolvedAbuseFlag(rateBurstUser!.id, "rate_burst", new Date(Date.now() - 60_000).toISOString());
+      assert(escalatedFlag !== null && escalatedFlag.actionTaken === "rate_limited", "rate_burst-Test: Eskalation sollte ein 'rate_limited'-Flag anlegen");
+    }
+
+    // 2) many_new_recipients: NEW_RECIPIENTS_THRESHOLD (6) NEUE Empfaenger
+    // in NEW_RECIPIENTS_WINDOW_MS (10 Min.), jeweils an eine eindeutige
+    // neue Adresse (unterhalb von RATE_BURST_THRESHOLD, damit dieser Test
+    // isoliert nur many_new_recipients prueft).
+    {
+      // Wichtig: bodyText MUSS pro Aufruf variieren -- sonst wuerde
+      // duplicate_content (Schwellenwert 3 identische Nachrichten) vor
+      // many_new_recipients (Schwellenwert 6) auslösen und diesen Test
+      // verfälschen (genau das ist beim ersten Schreiben dieses Tests
+      // passiert, hier bewusst dokumentiert statt still korrigiert).
+      const { token, accountId } = await connectFreshAbuseTestUser("new-recipients");
+      for (let i = 0; i < 5; i++) {
+        const r = await sendAsAbuseTestUser(token, accountId, { to: [`neu-${i}@example.com`], bodyText: `Individuelle Nachricht ${i}` });
+        assert(r.status === 200, `many_new_recipients-Test: neuer Empfaenger ${i + 1}/5 (unterhalb Schwellenwert) sollte 200 liefern`);
+      }
+      const sixthRes = await sendAsAbuseTestUser(token, accountId, { to: ["neu-5@example.com"], bodyText: "Individuelle Nachricht 5" });
+      assert(sixthRes.status === 200, "many_new_recipients-Test: 6. neuer Empfaenger (erreicht Schwellenwert) sollte trotzdem 200 liefern (erst warnen)");
+      const newRecipientsUser = await store.getUserByEmail((await store.getMailAccount(accountId))!.emailAddress);
+      const warnedFlag = await store.findRecentUnresolvedAbuseFlag(newRecipientsUser!.id, "many_new_recipients", new Date(Date.now() - 60_000).toISOString());
+      assert(warnedFlag !== null && warnedFlag.actionTaken === "warned", "many_new_recipients-Test: nach Schwellenwert-Ueberschreitung sollte ein 'warned'-Flag existieren");
+
+      const seventhRes = await sendAsAbuseTestUser(token, accountId, { to: ["neu-6@example.com"], bodyText: "Individuelle Nachricht 6" });
+      assert(seventhRes.status === 429, "many_new_recipients-Test: erneutes Ueberschreiten innerhalb des Eskalationsfensters sollte 429 liefern");
+    }
+
+    // 3) duplicate_content: DUPLICATE_CONTENT_THRESHOLD (3) unterschiedliche
+    // Empfaenger derselben exakten Nachricht in DUPLICATE_CONTENT_WINDOW_MS
+    // (15 Min.).
+    {
+      const { token, accountId } = await connectFreshAbuseTestUser("duplicate-content");
+      const identicalBody = "Diese exakt gleiche Nachricht geht an mehrere Empfaenger.";
+      for (let i = 0; i < 2; i++) {
+        const r = await sendAsAbuseTestUser(token, accountId, { to: [`dup-${i}@example.com`], bodyText: identicalBody });
+        assert(r.status === 200, `duplicate_content-Test: Empfaenger ${i + 1}/2 (unterhalb Schwellenwert) sollte 200 liefern`);
+      }
+      const thirdRes = await sendAsAbuseTestUser(token, accountId, { to: ["dup-2@example.com"], bodyText: identicalBody });
+      assert(thirdRes.status === 200, "duplicate_content-Test: 3. Empfaenger derselben Nachricht (erreicht Schwellenwert) sollte trotzdem 200 liefern (erst warnen)");
+      const duplicateContentUser = await store.getUserByEmail((await store.getMailAccount(accountId))!.emailAddress);
+      const warnedFlag = await store.findRecentUnresolvedAbuseFlag(duplicateContentUser!.id, "duplicate_content", new Date(Date.now() - 60_000).toISOString());
+      assert(warnedFlag !== null && warnedFlag.actionTaken === "warned", "duplicate_content-Test: nach Schwellenwert-Ueberschreitung sollte ein 'warned'-Flag existieren");
+
+      const fourthRes = await sendAsAbuseTestUser(token, accountId, { to: ["dup-3@example.com"], bodyText: identicalBody });
+      assert(fourthRes.status === 429, "duplicate_content-Test: erneutes Ueberschreiten innerhalb des Eskalationsfensters sollte 429 liefern");
+
+      // Gegenprobe: eine ANDERE Nachricht an einen neuen Empfaenger loest
+      // duplicate_content NICHT aus (anderer body_hash) -- waere aber der
+      // 4. NEUE Empfaenger insgesamt fuer diesen User, bleibt unterhalb von
+      // NEW_RECIPIENTS_THRESHOLD (6), also auch dort kein Flag.
+      const differentContentRes = await sendAsAbuseTestUser(token, accountId, {
+        to: ["andere-nachricht@example.com"],
+        bodyText: "Eine komplett andere Nachricht.",
+      });
+      assert(
+        differentContentRes.status === 200,
+        "duplicate_content-Test: eine andere Nachricht an einen neuen Empfaenger sollte nicht vom duplicate_content-Flag betroffen sein",
+      );
+    }
+
+    // 4) no_read_before_reply: NIE blockierend, nur informativ. Nutzt eine
+    // der beim Verbinden automatisch importierten Fixture-Nachrichten des
+    // frischen Test-Users als Antwort-Ziel.
+    {
+      const { token, accountId } = await connectFreshAbuseTestUser("no-read");
+      const account = await store.getMailAccount(accountId);
+      const ownMessages = await store.listMessages({ accountId: account!.id });
+      assert(ownMessages.length > 0, "no_read_before_reply-Test: frischer User sollte importierte Fixture-Nachrichten haben, um darauf zu antworten");
+      const originalMessageId = ownMessages[0].id;
+
+      const fastReplyRes = await globalThis.fetch(`${base}/v1/messages/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ inReplyToMessageId: originalMessageId, to: ["ziel@example.com"], bodyText: "Sehr schnelle Antwort", timeSinceDraftShownMs: 500 }),
+      });
+      assert(fastReplyRes.status === 200, "no_read_before_reply-Test: implausibel schnelle Antwort sollte trotzdem 200 liefern (nie blockierend)");
+      const noReadUser = await store.getUserByEmail(account!.emailAddress);
+      const noReadFlag = await store.findRecentUnresolvedAbuseFlag(noReadUser!.id, "no_read_before_reply", new Date(Date.now() - 60_000).toISOString());
+      assert(noReadFlag !== null && noReadFlag.actionTaken === "warned", "no_read_before_reply-Test: implausibel schnelle Antwort sollte ein 'warned'-Flag anlegen");
+
+      const slowReplyRes = await globalThis.fetch(`${base}/v1/messages/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ inReplyToMessageId: originalMessageId, to: ["ziel2@example.com"], bodyText: "Bedaechtige Antwort nach dem Lesen", timeSinceDraftShownMs: 8000 }),
+      });
+      assert(slowReplyRes.status === 200, "no_read_before_reply-Test: plausibel langsame Antwort sollte 200 liefern");
+    }
+
+    console.log("✔ Smoketest erfolgreich: Kernfluss (Auth -> Sync -> Messages -> Summary -> Reply-Draft -> Quarantäne -> Papierkorb/Löschen -> Contracts -> Capability -> Draft-Phishing-Check -> Versand -> Anhang-Upload/Scan -> Entwürfe -> Ordner-Umbau-Migration -> Externe Lookup-Adapter -> Automatische/Manuelle Abmeldung bei Spam -> Whitelist/Vorschussbetrug-Auto-Löschung -> Provider-Support -> Periodischer/Manueller Mail-Abruf -> Signaturen -> Abwesenheitsassistent -> Nudge -> Vertraulicher Modus -> Echter Malware-Scan -> Tracking-Schutz-Einstellungen -> Snooze -> Schedule Send -> Darkweb-Ueberwachung -> Quishing-Schutz -> Klick-Zeit-Link-Pruefung -> HTML-Rendering des Mail-Bodies -> Versand-Missbrauchserkennung) end-to-end grün.");
   } finally {
     server.close();
     // Ohne das haelt der tesseract.js-Worker (worker_threads) den Prozess

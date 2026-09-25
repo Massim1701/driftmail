@@ -25,6 +25,8 @@ import type { Store } from "./store";
 import { isConfidentialExpired } from "../mail/confidential";
 import type {
   AbsenceResponderRecord,
+  AbuseActionTaken,
+  AbuseFlagReason,
   AiPreferenceRecord,
   ContractRecord,
   DataBreachFindingRecord,
@@ -40,6 +42,7 @@ import type {
   PrivacySettingsRecord,
   QuarantineRecord,
   SecurityAuditLogRecord,
+  SendAbuseFlagRecord,
   SessionRecord,
   SignatureRecord,
   SystemFolderKey,
@@ -248,6 +251,18 @@ function rowToOutgoingSendLog(r: any): OutgoingSendLogRecord {
     sentAt: r.sent_at,
     timeSinceDraftShownMs: r.time_since_draft_shown_ms,
     wasNewRecipient: r.was_new_recipient,
+    bodyHash: r.body_hash,
+  };
+}
+
+function rowToSendAbuseFlag(r: any): SendAbuseFlagRecord {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    flagReason: r.flag_reason,
+    triggeredAt: r.triggered_at,
+    actionTaken: r.action_taken,
+    resolved: r.resolved,
   };
 }
 
@@ -352,6 +367,7 @@ export class PostgresStore implements Store {
     await this.migrateMessagesConfidentialUntil();
     await this.migrateDraftsScheduleSend();
     await this.migrateMailAccountsProviderCheck();
+    await this.migrateOutgoingSendLogBodyHash();
     const sql = readFileSync(SCHEMA_PATH, "utf-8");
     await this.pool.query(sql);
   }
@@ -543,6 +559,20 @@ export class PostgresStore implements Store {
 
     await this.pool.query(`ALTER TABLE drafts ADD COLUMN IF NOT EXISTS bcc_addresses TEXT[] NOT NULL DEFAULT '{}'`);
     await this.pool.query(`ALTER TABLE drafts ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMPTZ`);
+  }
+
+  /** [2026-09-25] WEB_INBOX.md 08.09. "Bot/Human-Missbrauchserkennung beim
+   * Versand" jetzt umgesetzt (siehe mail/sendAbuseDetection.ts):
+   * outgoing_send_log.body_hash neu, additive ADD-COLUMN-Ergaenzung wie
+   * ueblich (NULL fuer bestehende Zeilen -- die wurden vor dieser Ergaenzung
+   * geschrieben, koennen fuer die duplicate_content-Rueckschau nicht
+   * nachtraeglich gehasht werden, das ist aber unschaedlich: der Check
+   * betrachtet ohnehin nur ein kurzes, gleitendes Zeitfenster). */
+  private async migrateOutgoingSendLogBodyHash(): Promise<void> {
+    const { rows: exists } = await this.pool.query(`SELECT to_regclass('outgoing_send_log') AS reg`);
+    if (!exists[0]?.reg) return;
+
+    await this.pool.query(`ALTER TABLE outgoing_send_log ADD COLUMN IF NOT EXISTS body_hash TEXT`);
   }
 
   // ----- Users / Accounts -----
@@ -1212,15 +1242,59 @@ export class PostgresStore implements Store {
     userId: string;
     recipientAddress: string;
     timeSinceDraftShownMs?: number | null;
+    bodyHash?: string | null;
   }): Promise<OutgoingSendLogRecord> {
     const wasNewRecipient = !(await this.hasSentTo(input.userId, input.recipientAddress));
     const { rows } = await this.pool.query(
-      `INSERT INTO outgoing_send_log (user_id, recipient_address, time_since_draft_shown_ms, was_new_recipient)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO outgoing_send_log (user_id, recipient_address, time_since_draft_shown_ms, was_new_recipient, body_hash)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [input.userId, input.recipientAddress, input.timeSinceDraftShownMs ?? null, wasNewRecipient],
+      [input.userId, input.recipientAddress, input.timeSinceDraftShownMs ?? null, wasNewRecipient, input.bodyHash ?? null],
     );
     return rowToOutgoingSendLog(rows[0]);
+  }
+
+  async countRecentOutgoingSends(userId: string, sinceIso: string): Promise<number> {
+    const { rows } = await this.pool.query(
+      `SELECT COUNT(*)::int AS n FROM outgoing_send_log WHERE user_id = $1 AND sent_at >= $2`,
+      [userId, sinceIso],
+    );
+    return rows[0].n;
+  }
+
+  async countRecentNewRecipients(userId: string, sinceIso: string): Promise<number> {
+    const { rows } = await this.pool.query(
+      `SELECT COUNT(*)::int AS n FROM outgoing_send_log WHERE user_id = $1 AND sent_at >= $2 AND was_new_recipient`,
+      [userId, sinceIso],
+    );
+    return rows[0].n;
+  }
+
+  async countRecentDuplicateContentRecipients(userId: string, bodyHash: string, sinceIso: string): Promise<number> {
+    const { rows } = await this.pool.query(
+      `SELECT COUNT(DISTINCT LOWER(recipient_address))::int AS n FROM outgoing_send_log
+       WHERE user_id = $1 AND sent_at >= $2 AND body_hash = $3`,
+      [userId, sinceIso, bodyHash],
+    );
+    return rows[0].n;
+  }
+
+  async findRecentUnresolvedAbuseFlag(userId: string, reason: AbuseFlagReason, sinceIso: string): Promise<SendAbuseFlagRecord | null> {
+    const { rows } = await this.pool.query(
+      `SELECT * FROM send_abuse_flags
+       WHERE user_id = $1 AND flag_reason = $2 AND NOT resolved AND triggered_at >= $3
+       ORDER BY triggered_at DESC LIMIT 1`,
+      [userId, reason, sinceIso],
+    );
+    return rows[0] ? rowToSendAbuseFlag(rows[0]) : null;
+  }
+
+  async createAbuseFlag(input: { userId: string; reason: AbuseFlagReason; actionTaken: AbuseActionTaken }): Promise<SendAbuseFlagRecord> {
+    const { rows } = await this.pool.query(
+      `INSERT INTO send_abuse_flags (user_id, flag_reason, action_taken) VALUES ($1, $2, $3) RETURNING *`,
+      [input.userId, input.reason, input.actionTaken],
+    );
+    return rowToSendAbuseFlag(rows[0]);
   }
 
   async listKnownContactAddresses(userId: string): Promise<string[]> {

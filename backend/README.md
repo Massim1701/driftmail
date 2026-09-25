@@ -2584,6 +2584,61 @@ vorher bestehende Postgres-DB verifiziert (`ALTER TABLE ... ADD COLUMN IF
 NOT EXISTS`, kein Backfill noetig/moeglich). Gruen in-memory + gegen
 frisches UND migriertes Postgres.
 
+## Versand-Missbrauchserkennung (Bot/Human) -- [2026-09-25] Nachtrag
+
+WEB_INBOX.md 08.09. "Bot/Human-Missbrauchserkennung beim Versand" -- die
+Tabellen (`outgoing_send_log`/`send_abuse_flags`) existierten seit Commit
+`a5432e6`, aber ohne jede Erkennungslogik im Code (nur die vier
+`flag_reason`-Namen waren vorgegeben, kein numerischer Schwellenwert).
+Details/Konstanten in `src/mail/sendAbuseDetection.ts`, hier nur der
+Überblick.
+
+**Eigene, pragmatische Schwellenwerte** (nie vorgegeben, siehe
+Datei-Kopfkommentar für die Begründung je Wert -- bewusst als
+Rücksprache dokumentiert, nicht als endgültig "richtig" behauptet):
+- `rate_burst`: 10 Sende-Vorgänge (Empfänger-Zeilen) in 2 Minuten.
+- `many_new_recipients`: 6 noch nie zuvor angeschriebene Empfänger in 10 Minuten.
+- `duplicate_content`: dieselbe Nachricht (sha256 des exakten `bodyText`) an 3 unterschiedliche Empfänger in 15 Minuten.
+- `no_read_before_reply`: nur bei Antworten, wenn der Client optional `timeSinceDraftShownMs` mitschickt (neues Feld in `POST /messages/send`) und dieser Wert unter 1,5s liegt -- **NIE blockierend**, rein informativ (ein Mensch kann in 1,5s plausibel antworten, das allein ist kein sicheres Bot-Signal). Kein Client sendet dieses Feld bisher (Web/iOS-Nachtrag steht aus), der Check greift so lange einfach nicht.
+
+**Eskalationsprinzip** (einheitlich für die drei blockierbaren Gründe):
+erste Überschreitung eines Schwellenwerts -> nur `action_taken='warned'`,
+Versand geht trotzdem durch (ein einzelner Ausreißer soll niemanden
+aussperren). Wird DERSELBE Grund innerhalb von 15 Minuten erneut
+überschritten, während der vorherige Flag noch `resolved=false` ist ->
+`action_taken='rate_limited'`, Versand wird mit `429` abgelehnt.
+`phishing_content` (siehe bestehender Draft-Phishing-Check) bleibt
+unverändert immer `send_blocked`, davon unberührt.
+
+**Schema-Ergänzung:** `outgoing_send_log.body_hash` (additive
+`ADD COLUMN`, neue Migration `migrateOutgoingSendLogBodyHash()`), NULL für
+Zeilen vor dieser Ergänzung -- unschädlich, der Check betrachtet ohnehin
+nur ein kurzes gleitendes Zeitfenster.
+
+**Tests:** vier neue Smoketest-Blöcke (je ein frischer, eindeutig
+zeitstempel-benannter Test-User pro Unter-Test, damit die zeitfenster-
+basierten Zähler nicht durch andere Tests verfälscht werden können) decken
+Warn- UND Eskalationsfall für alle drei blockierbaren Gründe ab, plus
+`no_read_before_reply` (nie blockierend, mit Gegenprobe bei plausibler
+Antwortzeit). `npm run typecheck`/`npm test` grün. Migration + SQL-Zähl-
+Queries zusätzlich direkt gegen die echte, bereits bestehende Postgres-
+Dev-DB verifiziert (`psql`/`curl`, nicht nur In-Memory) -- `body_hash`-
+Spalte korrekt ergänzt, `duplicate_content` warnt beim 3. und blockiert
+beim 4. identischen Versand, Flags korrekt in `send_abuse_flags`
+persistiert.
+
+**Bewusst nicht Teil dieses Schritts:** beim Testen gefunden, aber NICHT
+behoben (siehe Kommentar in `src/smoketest.ts`): `smoketest.ts` lädt
+`backend/.env` nicht (fehlendes `import "./loadEnv"`, anders als
+`index.ts`), läuft deshalb immer gegen den In-Memory-Store. Kurz testweise
+behoben, dabei aufgefallen, dass `npm test` dann gegen dieselbe
+persistente Postgres-Dev-DB liefe, die interaktiv genutzt wird -- der
+`demo@driftmail.local`-Account kannte durch vorheriges manuelles Testen
+bereits alle Fixtures, der allererste Smoketest-Assert schlug deshalb
+fehl. Das ist ein eigenständiges Test-Infrastruktur-Thema (eigene
+Test-Datenbank nötig), außerhalb des Umfangs dieses Nachtrags -- Fix
+zurückgenommen, hier nur dokumentiert, damit es nicht verloren geht.
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war

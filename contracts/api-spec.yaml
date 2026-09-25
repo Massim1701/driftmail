@@ -815,6 +815,22 @@ paths:
                     Recherche" Punkt 3 ("Vertraulicher Modus"). Muss, falls
                     gesetzt, ein gueltiger, in der Zukunft liegender
                     Zeitpunkt sein (sonst 400) -- siehe Message.confidentialUntil.
+                timeSinceDraftShownMs:
+                  type: integer
+                  nullable: true
+                  description: >
+                    [2026-09-25] WEB_INBOX.md 08.09. "Bot/Human-
+                    Missbrauchserkennung beim Versand": optional, nur bei
+                    Antworten (inReplyToMessageId gesetzt) sinnvoll --
+                    Millisekunden zwischen "Antworten"-Tap/Klick (Entwurf
+                    sichtbar) und diesem Sende-Aufruf. Implausibel kurze
+                    Werte (siehe backend/README.md fuer den Schwellenwert)
+                    deuten auf einen automatisierten/kompromittierten
+                    Absender statt eines Menschen hin, der die Original-
+                    mail tatsaechlich gelesen hat -- rein informativ
+                    (flag_reason='no_read_before_reply'), blockiert den
+                    Versand NIE. Ohne dieses Feld (Client sendet es nicht)
+                    wird dieser eine Check einfach uebersprungen.
       responses:
         "200":
           description: Gesendet
@@ -835,6 +851,22 @@ paths:
                 properties:
                   blocked: { type: boolean }
                   reason: { type: string }
+        "429":
+          description: >
+            [2026-09-25] WEB_INBOX.md 08.09. "Bot/Human-Missbrauchserkennung
+            beim Versand": wiederholtes Ueberschreiten desselben
+            Missbrauchs-Schwellenwerts (rate_burst/many_new_recipients/
+            duplicate_content) innerhalb eines kurzen Zeitfensters, nachdem
+            bereits einmal nur gewarnt (send_abuse_flags.action_taken=
+            'warned') wurde -- Versand wird dieses Mal abgelehnt
+            (action_taken='rate_limited'). Erstmaliges Ueberschreiten wird
+            NICHT blockiert, nur vermerkt (kein Response-Unterschied zu 200).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
         "400":
           description: Ungueltige Eingabe (z.B. weder accountId noch inReplyToMessageId, kein Empfaenger)
         "502":

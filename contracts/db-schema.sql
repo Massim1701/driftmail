@@ -587,7 +587,13 @@ CREATE TABLE IF NOT EXISTS outgoing_send_log (
   recipient_address TEXT NOT NULL,
   sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   time_since_draft_shown_ms INTEGER,
-  was_new_recipient BOOLEAN NOT NULL DEFAULT false
+  was_new_recipient BOOLEAN NOT NULL DEFAULT false,
+  -- [2026-09-25] WEB_INBOX.md 08.09. "Bot/Human-Missbrauchserkennung beim
+  -- Versand" jetzt umgesetzt (siehe backend/src/mail/sendAbuseDetection.ts):
+  -- sha256 von bodyText (exakter Text, kein Fuzzy-Match), Grundlage fuer
+  -- duplicate_content (dieselbe Nachricht an mehrere Empfaenger in kurzer
+  -- Zeit). NULL fuer bestehende Zeilen vor dieser Ergaenzung.
+  body_hash TEXT
 );
 
 CREATE TABLE IF NOT EXISTS send_abuse_flags (
