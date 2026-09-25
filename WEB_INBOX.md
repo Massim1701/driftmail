@@ -1344,3 +1344,8 @@ Damit ist der Icon-Satz fuer Eingang, Gesendet, Quarantaene und Papierkorb volls
 **Schatten:** weicher, dezenter Schlagschatten/Bodenschatten unter dem Flieger (wie bei den anderen drei Icons: flache Ellipse in Grau, kein harter Schatten) -- passend zum restlichen 3D-Facetten-Icon-Stil (Eingang, Quarantaene, Papierkorb).
 
 Damit ist die Form endgueltig festgelegt. Bitte NICHT die Shutterstock-Datei selbst irgendwo im Repo ablegen oder referenzieren -- nur als visuelle Beschreibung/Vorlage fuer ein neu gezeichnetes eigenes Icon nutzen.
+
+
+[2026-09-25] [offen] [GESENDET-ICON - Nachbesserung noetig] [iOS] [Bezug: Commit 701f91b, Datei ios/DriftmailApp/Assets.xcassets/FolderIconGesendet.imageset/FolderIconGesendet.png] — Massimo hat sich das gebaute Icon-Set live angeschaut (direkt im Repo als PNG geprueft). Eingang (Briefumschlag), Quarantaene (Warndreieck) und Papierkorb (echter konischer Korb mit Gitterstaeben) treffen die Spec gut, bitte unveraendert lassen.
+
+"Gesendet" ist noch zu reduziert: aktuell nur ein einfacher schmaler Pfeil/Strich in Blau, ohne die in der Spec vom 25.09. ("GESENDET-ICON - endgueltige Form bestaetigt") beschriebenen sichtbaren Faltkanten/Facetten (helle obere Flaeche, dunklere untere Rumpf-Falz-Flaeche, kurzer Heck-Zipfel). Bitte FolderIconGesendet.png (und alle @2x/@3x-Varianten im selben imageset-Ordner) ueberarbeiten: sichtbar als gefalteter Papierflieger mit mind. 2-3 erkennbaren Farbflaechen/Facetten in der bestehenden Blau-Palette (#5eb1ec/#0078d4/#106ebe), nicht nur eine einfarbige Pfeil-Silhouette. Restliche drei Icons bleiben wie sie sind.
