@@ -1982,6 +1982,32 @@ weiterhin, keine Regression seit damals (per `git log` auf
 Demo-Sync zeigt jedes Mal identisch "11 vom Server geholt, 0 neu
 importiert, 11 bereits bekannt" -- Persistenz und Dedupe funktionieren.
 
+## [2026-09-25] Korrektur: Gesendet-Icon wirkte bei echter Größe wie ein Strich -- neu proportioniert
+
+Zwischenstand von vorhin (Commit `e0b0130`, Farbanpassung auf die von
+Web/Massimo verfeinerte Spec) wurde direkt danach von Massimo am echten
+Repo-Stand als weiterhin unzureichend gemeldet (WEB_INBOX.md 25.09.
+"GESENDET-ICON - Nachbesserung noetig"): "nur ein einfacher schmaler
+Pfeil/Strich", keine erkennbaren Facetten. **Ursache:** ich hatte nur die
+Farben angepasst, nicht die Form -- die 256px-Vorschau, gegen die ich
+visuell geprüft hatte, sah nach klaren Facetten aus, aber bei der
+TATSÄCHLICHEN Anzeigegröße (24pt/24px, nicht 256px) verschwanden die
+dünnen, weit auseinandergezogenen Flügel-Facetten fast komplett -- ein
+Fehler, der genau der wiederholt in diesem Projekt dokumentierten Lehre
+entspricht: gegen die reale Größe/Umgebung prüfen, nicht gegen eine
+komfortable Vorschau.
+
+**Fix (Commit `3fb1f6c`):** komplett neu proportioniert als EIN großes,
+massives Dreieck (statt eines schmalen, tief eingeschnittenen Pfeils),
+randnah wie die anderen drei Icons, mit einer einzigen diagonalen
+Falzlinie (nicht mehr ein tiefer V-Ausschnitt, der bei kleiner Größe zu
+viel Fläche wegfrisst) plus einem kleinen dunklen Heck-Akzent. Diesmal vor
+dem Melden explizit bei 72px UND 24px (den tatsächlichen `@2x`/`@1x`-
+Ausgabegrößen des Assets) geprüft, nicht nur bei der 256px-Arbeitsgröße --
+siehe Screenshots im Session-Verlauf. `xcodebuild` **BUILD SUCCEEDED**.
+`contracts/design-tokens.json` `systemFolders.facetIconStyle.gesendet`
+entsprechend aktualisiert.
+
 ## Nächste Schritte (nicht Teil dieses Durchstichs)
 
 - Ordner umbenennen/löschen/neu sortieren in der UI (Endpunkte sind da,

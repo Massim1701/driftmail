@@ -133,9 +133,9 @@
         "colors": { "base": "#0078D4", "light": "#5EB1EC", "dark": "#106EBE" }
       },
       "gesendet": {
-        "motif": "[2026-09-25] WEB_INBOX.md 'GESENDET-ICON - endgueltige Form bestaetigt': Papierflieger nach oben-rechts (ca. 30-45 Grad), spitze Nase, ein Fluegel oben hell, Rumpf/Unterseite per diagonaler Falzlinie in zwei Facetten geteilt, hinten ein kurzer spitzer Heck-Zipfel unten (eigenes Original-Artwork nach Beschreibung -- KEINE Stockfoto-Uebernahme, siehe Eintrag).",
+        "motif": "[2026-09-25] WEB_INBOX.md 'GESENDET-ICON - endgueltige Form bestaetigt', nach Nachbesserungs-Feedback ('zu duenn/wirkt wie ein Strich bei echter Groesse') robuster neu proportioniert: EIN grosses, massives Dreieck (nose rechts, breiter Fluegel oben-links, Rumpf unten), per diagonaler Falzlinie von der Nase zur Rueckkante in zwei Facetten geteilt (kein tiefer V-Ausschnitt mehr -- der fraisst bei 24pt zu viel Substanz weg), kleiner dunkler Heck-Akzent-Keil an der Ruecklinie. Bewusst gross/randnah (wie die anderen drei Icons), damit es bei tatsaechlicher Anzeigegroesse (24pt) klar als zweifarbige Flaeche statt als duenner Pfeil erkennbar bleibt.",
         "colors": { "base": "#0078D4", "light": "#8ECBF5", "dark": "#106EBE", "darkest": "#004578" },
-        "_darkestNote": "darkest gilt nur fuer den kleinen Heck-Zipfel (staerkster Facetten-Kontrast dort), die uebrigen drei Icons kommen weiterhin mit base/light/dark aus."
+        "_darkestNote": "darkest gilt nur fuer den kleinen Heck-Akzent (staerkster Facetten-Kontrast dort), die uebrigen drei Icons kommen weiterhin mit base/light/dark aus."
       },
       "quarantaene": {
         "motif": "Warndreieck in Amber/Gelb mit dunklerem Ausrufezeichen",
