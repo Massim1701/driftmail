@@ -353,23 +353,36 @@ function ImapConnectForm({
   const [smtpSecure, setSmtpSecure] = useState(provider.smtpSecure ?? false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const isPop3 = provider.authType === "pop3";
+  const protocolLabel = isPop3 ? "POP3" : "IMAP";
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const res = await api.connectImapAccount({
-        emailAddress,
-        imapHost,
-        imapPort,
-        imapSecure,
-        imapUser: imapUser.trim() || undefined,
-        imapPassword,
-        smtpHost: smtpHost.trim() || undefined,
-        smtpPort,
-        smtpSecure,
-      });
+      // [2026-09-27] pop3-Provider (web.de) wurden bisher als provider="imap"
+      // gesendet -> Backend sprach IMAP gegen pop3.web.de (Timeout).
+      const smtp = { smtpHost: smtpHost.trim() || undefined, smtpPort, smtpSecure };
+      const res = isPop3
+        ? await api.connectPop3Account({
+            emailAddress,
+            pop3Host: imapHost,
+            pop3Port: imapPort,
+            pop3Secure: imapSecure,
+            pop3User: imapUser.trim() || undefined,
+            pop3Password: imapPassword,
+            ...smtp,
+          })
+        : await api.connectImapAccount({
+            emailAddress,
+            imapHost,
+            imapPort,
+            imapSecure,
+            imapUser: imapUser.trim() || undefined,
+            imapPassword,
+            ...smtp,
+          });
       setStoredToken(res.token);
       if (onAccountAdded) {
         onAccountAdded(res.account);
@@ -398,7 +411,7 @@ function ImapConnectForm({
           ← Anderer Anbieter
         </button>
         <h1 className="onboarding-title">{provider.label}</h1>
-        <p className="onboarding-subtitle">Verbinde dein Konto per IMAP.</p>
+        <p className="onboarding-subtitle">Verbinde dein Konto per {protocolLabel}.</p>
 
         {provider.requiresAppPassword && (
           <div className="app-password-hint">
@@ -440,7 +453,7 @@ function ImapConnectForm({
           {showAdvanced && (
             <div className="imap-advanced">
               <label className="imap-field">
-                <span>IMAP-Server</span>
+                <span>{protocolLabel}-Server</span>
                 <input type="text" required value={imapHost} onChange={(e) => setImapHost(e.target.value)} placeholder="imap.beispiel.de" />
               </label>
               <div className="imap-field-row">

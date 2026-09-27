@@ -160,6 +160,24 @@ export const api = {
       body: JSON.stringify({ provider: "imap", ...data }),
     }),
 
+  // POST /accounts mit provider="pop3" (api-spec.yaml, web.de): eigene
+  // pop3*-Feldnamen statt imap*, siehe backend/src/routes/auth.ts.
+  connectPop3Account: (data: {
+    emailAddress: string;
+    pop3Host: string;
+    pop3Port?: number;
+    pop3Secure?: boolean;
+    pop3User?: string;
+    pop3Password: string;
+    smtpHost?: string;
+    smtpPort?: number;
+    smtpSecure?: boolean;
+  }) =>
+    request<{ account: MailAccount; token: string }>("/accounts", {
+      method: "POST",
+      body: JSON.stringify({ provider: "pop3", ...data }),
+    }),
+
   listAccounts: () => request<MailAccount[]>("/accounts"),
 
   // DELETE /accounts/{accountId} (WEB_INBOX.md 21.09. "Einstellungsbereich",
