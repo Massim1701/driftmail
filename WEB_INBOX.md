@@ -1399,3 +1399,8 @@ Bitte pruefen, ob sich SF Symbols per Lizenz problemlos in App-Icons einbetten l
 Alle vorherigen Themes (Teal, Ocean Blue, Violett, Koralle, Ocean-Verlauf) werden durch diese 5 ersetzt, ausser Blau bleibt sinngemaess erhalten. Sicherheits-Warnfarben (Quarantaene-Amber, Loeschen-Rot etc.) bleiben in JEDEM Theme unveraendert/fest, werden NICHT von der gewaehlten Akzentfarbe ueberschrieben -- das gilt fuer alle 5 Optionen gleichermassen.
 
 Bitte Farbwerte fuer Gelb/Rosa/Schwarz selbst sinnvoll im Contract (design-tokens.json) festlegen (ausreichend Kontrast zu Text/Hintergrund pruefen) und in SYNC.md dokumentieren, analog zum bisherigen Theme-System.
+
+
+[2026-09-27] [offen] [BUG - Thread-Ansicht gruppiert nicht] [Web + iOS] [hohe Prioritaet, war laut frueherem Stand bereits als fertig gemeldet] — Massimo: Mails innerhalb einer Konversation (z.B. Hin- und Her-Antworten auf denselben Betreff) werden nicht zu einem Thread zusammengefasst, sondern erscheinen weiterhin als einzelne, separate Eintraege in der Nachrichtenliste. Die Thread-Ansicht (aus den 5-Komfort-Features, urspruenglich als fertig gemeldet) funktioniert offenbar nicht bzw. nicht mehr auf beiden Plattformen.
+
+Bitte reproduzieren (z.B. eine Mail beantworten und pruefen, ob Original + Antwort in der Liste zusammengefasst als ein Thread erscheinen oder als zwei separate Zeilen) und den Fehler beheben. Falls die Funktion durch die letzten Design-/Layout-Aenderungen (Drei-Spalten-Layout, Farbwechsel) unbeabsichtigt entfernt oder gebrochen wurde, bitte in SYNC.md kurz vermerken, was die Ursache war.
