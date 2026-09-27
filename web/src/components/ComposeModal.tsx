@@ -372,6 +372,13 @@ export function ComposeModal({
     setUndoSecondsLeft(null);
   }
 
+  // [2026-09-27] WEB_INBOX.md 27.09. "UX - Sofort senden Option beim Undo
+  // Send": Countdown direkt auf 0 -- der Effekt unten ruft dann denselben
+  // performSend() auf wie nach regulaerem Ablauf, kein zweiter Sendeweg.
+  function handleSendNow() {
+    setUndoSecondsLeft(0);
+  }
+
   useEffect(() => {
     if (undoSecondsLeft === null) return;
     if (undoSecondsLeft <= 0) {
@@ -593,10 +600,14 @@ export function ComposeModal({
           // per fieldset disabled oben), diese Leiste ersetzt nur die
           // normale Aktionszeile für die Dauer des Countdowns.
           <div className="undo-send-bar">
-            <span>Wird in {undoSecondsLeft}s gesendet…</span>
+            <span>{undoSecondsLeft <= 0 || sending ? "Wird gesendet…" : `Wird in ${undoSecondsLeft}s gesendet…`}</span>
             <div className="compose-modal-actions-spacer" />
-            <button type="button" className="btn btn-secondary" onClick={handleUndoSend}>
+            {/* Waehrend performSend() laeuft, ist Rueckgaengig nicht mehr moeglich. */}
+            <button type="button" className="btn btn-secondary" onClick={handleUndoSend} disabled={undoSecondsLeft <= 0 || sending}>
               Rückgängig
+            </button>
+            <button type="button" className="btn btn-primary" onClick={handleSendNow} disabled={undoSecondsLeft <= 0 || sending}>
+              Jetzt senden
             </button>
           </div>
         ) : (
