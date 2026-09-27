@@ -232,8 +232,12 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
       // Kontos aufloesen -- null, wenn kein Header vorhanden ist oder der
       // Thread-Vorgaenger nicht synchronisiert wurde (siehe inReplyTo.ts).
       const inReplyToHeaderValue = parseInReplyToHeader(mail.rawHeaders);
+      // [2026-09-27] Gesendete Kopien liegen als `sent-<Message-ID>` im Store
+      // (mail/sendMessage.ts) -- ohne den zweiten Versuch fand eine Antwort
+      // auf eine eigene gesendete Mail ihren Vorgaenger nie.
       const inReplyToMessage = inReplyToHeaderValue
-        ? await store.findMessageByHeader(account.id, inReplyToHeaderValue)
+        ? (await store.findMessageByHeader(account.id, inReplyToHeaderValue)) ??
+          (await store.findMessageByHeader(account.id, `sent-${inReplyToHeaderValue}`))
         : undefined;
       const inReplyToMessageId = inReplyToMessage?.id ?? null;
 

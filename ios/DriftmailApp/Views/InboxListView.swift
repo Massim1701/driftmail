@@ -27,6 +27,9 @@ private func groupIntoThreads(_ messages: [Message]) -> [MessageThread] {
     let byId = Dictionary(uniqueKeysWithValues: messages.map { ($0.id, $0) })
 
     func rootId(for message: Message) -> String {
+        // [2026-09-27] serverseitige Thread-ID (ueber alle Ordner) hat
+        // Vorrang, die inReplyToMessageId-Kette ist nur noch Rueckfall.
+        if let threadId = message.threadId { return threadId }
         var current = message
         var visited: Set<String> = []
         while let parentId = current.inReplyToMessageId, let parent = byId[parentId], !visited.contains(parentId) {

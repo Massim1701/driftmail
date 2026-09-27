@@ -371,6 +371,9 @@ export interface ApiMessage {
   // [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES", Punkt 4
   // "Threaded Ansicht" -- siehe mappers.ts toApiMessage()-Kommentar.
   inReplyToMessageId: string | null;
+  // [2026-09-27] Thread-Zuordnung ueber alle Ordner des Kontos, siehe
+  // mail/threads.ts. Gleiche threadId = derselbe Verlauf.
+  threadId: string;
   // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
   // ("Nudge") -- siehe mail/nudge.ts.
   awaitingReply: boolean;

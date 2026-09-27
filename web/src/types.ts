@@ -126,6 +126,10 @@ export interface Message {
   // ("Threaded Ansicht") -- vorher nur auf MessageDetail. Zeigt nur den
   // DIREKTEN Elternteil, kein volles Thread-Konzept (siehe backend/README.md).
   inReplyToMessageId: string | null;
+  // [2026-09-27] Serverseitige Thread-Zuordnung ueber alle Ordner (siehe
+  // backend/src/mail/threads.ts) -- Grundlage fuer groupMessages() in
+  // MessageList.tsx. Optional, weil der Mock-Server sie nicht liefert.
+  threadId?: string;
   // [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
   // Punkt 2 ("Nudge") -- true, wenn seit mind. 3 Tagen unbeantwortet UND
   // der Schalter (UserSettings.nudgeUnansweredEnabled) an ist. Zur Laufzeit

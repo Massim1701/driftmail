@@ -18,6 +18,13 @@ function nudgeLabel(receivedAt: string): string {
   return `Vor ${days} ${days === 1 ? "Tag" : "Tagen"} erhalten, antworten?`;
 }
 
+// [2026-09-27] WEB_INBOX.md 27.09. "BUG - Thread-Ansicht gruppiert nicht":
+// gruppiert jetzt primaer ueber die serverseitige `threadId` (ueber ALLE
+// Ordner berechnet, backend/src/mail/threads.ts) -- damit landen Original und
+// Antwort im Eingang auch dann zusammen, wenn die Kette ueber die eigene
+// gesendete Mail im Ordner Gesendet laeuft. Die inReplyToMessageId-Kette
+// unten bleibt nur noch Rueckfall fuer Backends ohne threadId (Mock-Server).
+//
 // Threaded Ansicht (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt
 // 4) -- gruppiert Nachrichten client-seitig ueber inReplyToMessageId-Ketten,
 // AUSSCHLIESSLICH innerhalb der aktuell geladenen Liste (siehe
@@ -37,6 +44,7 @@ function groupMessages(messages: Message[]): MessageGroup[] {
   const byId = new Map(messages.map((m) => [m.id, m]));
 
   function rootIdOf(start: Message): string {
+    if (start.threadId) return start.threadId;
     let current = start;
     const seen = new Set<string>([start.id]);
     while (current.inReplyToMessageId) {

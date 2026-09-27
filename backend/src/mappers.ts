@@ -114,7 +114,12 @@ export function toApiSecurityResult(s: MessageSecurityRecord): ApiSecurityResult
   };
 }
 
-export function toApiMessage(m: MessageRecord, security: MessageSecurityRecord | undefined, awaitingReply: boolean): ApiMessage {
+export function toApiMessage(
+  m: MessageRecord,
+  security: MessageSecurityRecord | undefined,
+  awaitingReply: boolean,
+  threadId: string,
+): ApiMessage {
   return {
     id: m.id,
     fromAddress: m.fromAddress,
@@ -129,6 +134,8 @@ export function toApiMessage(m: MessageRecord, security: MessageSecurityRecord |
     // seitig gruppieren zu koennen, ohne fuer jede einzeln GET /messages/:id
     // nachzuladen.
     inReplyToMessageId: m.inReplyToMessageId,
+    // [2026-09-27] siehe mail/threads.ts.
+    threadId,
     // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
     // ("Nudge") -- siehe mail/nudge.ts.
     awaitingReply,
@@ -169,9 +176,10 @@ export function toApiMessageDetail(
   awaitingReply: boolean,
   attachments: MessageAttachmentRecord[],
   links: MessageLinkRecord[],
+  threadId: string,
 ): ApiMessageDetail {
   return {
-    ...toApiMessage(m, security, awaitingReply),
+    ...toApiMessage(m, security, awaitingReply, threadId),
     bodyText: m.bodyText,
     // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": hier
     // noch der ROHE Wert -- der Aufrufer (routes/messages.ts) ersetzt ihn

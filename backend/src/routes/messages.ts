@@ -10,6 +10,7 @@ import { parseListUnsubscribeHeader, performUnsubscribe } from "../mail/listUnsu
 import { loadNudgeFolderContext, computeAwaitingReply } from "../mail/nudge";
 import { sendMessageForUser } from "../mail/sendMessage";
 import { sanitizeMailHtml } from "../mail/htmlSanitize";
+import { computeThreadIds } from "../mail/threads";
 import { DEFAULTS as PRIVACY_SETTINGS_DEFAULTS } from "./privacySettings";
 import type { ApiDraftPhishingCheckLink } from "../types";
 import type { MailAccountRecord, MessageRecord } from "../types";
@@ -137,6 +138,18 @@ messagesRouter.post("/messages/send", async (req, res) => {
 // GET /messages?folderId=&accountId= — siehe api-spec.yaml
 // CONTRACT-ÄNDERUNG (SYNC.md, Commit 734781e): Query-Param `folder` (Enum)
 // -> `folderId` (UUID, verweist auf eine Zeile in folders).
+// [2026-09-27] Thread-IDs immer ueber ALLE Nachrichten des Kontos berechnen
+// (nicht nur den angefragten Ordner), siehe mail/threads.ts.
+async function threadIdsForAccount(accountId: string): Promise<Map<string, string>> {
+  const account = await store.getMailAccount(accountId);
+  const all = await store.listMessages({ accountId });
+  return computeThreadIds(all, account?.emailAddress ?? "");
+}
+
+async function threadIdOf(message: MessageRecord): Promise<string> {
+  return (await threadIdsForAccount(message.mailAccountId)).get(message.id) ?? message.id;
+}
+
 messagesRouter.get("/messages", async (req, res) => {
   const folderId = typeof req.query.folderId === "string" ? req.query.folderId : undefined;
   let accountId = typeof req.query.accountId === "string" ? req.query.accountId : undefined;
@@ -187,12 +200,13 @@ messagesRouter.get("/messages", async (req, res) => {
     : { eingangFolderId: undefined, gesendetFolderId: undefined };
 
   const messages = await store.listMessages({ folderId, accountId, q });
+  const threadIds = accountId ? await threadIdsForAccount(accountId) : new Map<string, string>();
   res.json(
     await Promise.all(
       messages.map(async (m) => {
         const security = await store.getMessageSecurity(m.id);
         const awaitingReply = await computeAwaitingReply(m, security, nudgeEnabled, nudgeFolders);
-        return toApiMessage(m, security, awaitingReply);
+        return toApiMessage(m, security, awaitingReply, threadIds.get(m.id) ?? m.id);
       }),
     ),
   );
@@ -215,7 +229,9 @@ messagesRouter.get("/messages/:messageId", async (req, res) => {
     store.getPrivacySettings(req.userId),
   ]);
   const awaitingReply = await computeAwaitingReply(message, security, user?.nudgeUnansweredEnabled ?? true, nudgeFolders);
-  const detail = toApiMessageDetail(message, security, quarantine, !hasOtherMessage, awaitingReply, attachments, links);
+  const detail = toApiMessageDetail(
+    message, security, quarantine, !hasOtherMessage, awaitingReply, attachments, links, await threadIdOf(message),
+  );
   // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": erst
   // HIER sanitisiert (nicht schon in toApiMessageDetail/beim Speichern),
   // siehe mail/htmlSanitize.ts-Kommentar fuer die Begruendung
@@ -269,7 +285,7 @@ messagesRouter.post("/messages/:messageId/snooze", async (req, res) => {
     snoozeUser?.nudgeUnansweredEnabled ?? true,
     await loadNudgeFolderContext(updated.mailAccountId),
   );
-  res.json(toApiMessage(updated, snoozeSecurity, snoozeAwaitingReply));
+  res.json(toApiMessage(updated, snoozeSecurity, snoozeAwaitingReply, await threadIdOf(updated)));
 });
 
 // POST /messages/:messageId/unsubscribe — siehe api-spec.yaml. War im
@@ -345,7 +361,7 @@ messagesRouter.post("/messages/:messageId/move", async (req, res) => {
     movedUser?.nudgeUnansweredEnabled ?? true,
     await loadNudgeFolderContext(updated.mailAccountId),
   );
-  res.json(toApiMessage(updated, movedSecurity, movedAwaitingReply));
+  res.json(toApiMessage(updated, movedSecurity, movedAwaitingReply, await threadIdOf(updated)));
 });
 
 // DELETE /messages/:messageId — Mail in den Papierkorb verschieben (soft
@@ -376,7 +392,7 @@ messagesRouter.delete("/messages/:messageId", async (req, res) => {
   const updated = (await store.getMessage(message.id))!;
   // Papierkorb ist nie eingang/gesendet -- awaitingReply ist hier immer
   // false, keine extra Berechnung noetig (siehe mail/nudge.ts).
-  res.status(200).json(toApiMessage(updated, await store.getMessageSecurity(message.id), false));
+  res.status(200).json(toApiMessage(updated, await store.getMessageSecurity(message.id), false, await threadIdOf(updated)));
 });
 
 // DELETE /messages/:messageId/permanent — Mail endgültig löschen, siehe

@@ -18,6 +18,11 @@ struct Message: Codable, Identifiable, Hashable {
     /// "Fuenf Komfort-Features" für die bewusste Grenze). `Optional`, damit
     /// ein fehlender Schlüssel in älteren Mock-Daten nicht crasht.
     let inReplyToMessageId: String?
+    /// [2026-09-27] WEB_INBOX.md 27.09. "BUG - Thread-Ansicht gruppiert
+    /// nicht": serverseitige Thread-Zuordnung ueber ALLE Ordner des Kontos
+    /// (backend/src/mail/threads.ts). Grundlage fuer `groupIntoThreads(_:)`.
+    /// `Optional`, damit aeltere Mock-Daten ohne dieses Feld nicht crashen.
+    let threadId: String?
     /// [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
     /// ("Nudge"): true, wenn diese Nachricht seit mindestens 3 Tagen
     /// unbeantwortet ist UND der User die Erinnerung nicht deaktiviert hat.
@@ -40,7 +45,8 @@ struct Message: Codable, Identifiable, Hashable {
     init(
         id: String, fromAddress: String, fromDisplayName: String?, subject: String?, receivedAt: Date,
         folderId: String, classification: Classification, inReplyToMessageId: String?,
-        awaitingReply: Bool = false, confidentialUntil: Date? = nil, snoozedUntil: Date? = nil
+        awaitingReply: Bool = false, confidentialUntil: Date? = nil, snoozedUntil: Date? = nil,
+        threadId: String? = nil
     ) {
         self.id = id
         self.fromAddress = fromAddress
@@ -50,6 +56,7 @@ struct Message: Codable, Identifiable, Hashable {
         self.folderId = folderId
         self.classification = classification
         self.inReplyToMessageId = inReplyToMessageId
+        self.threadId = threadId
         self.awaitingReply = awaitingReply
         self.confidentialUntil = confidentialUntil
         self.snoozedUntil = snoozedUntil
@@ -65,6 +72,7 @@ struct Message: Codable, Identifiable, Hashable {
         folderId = try container.decode(String.self, forKey: .folderId)
         classification = try container.decode(Classification.self, forKey: .classification)
         inReplyToMessageId = try container.decodeIfPresent(String.self, forKey: .inReplyToMessageId)
+        threadId = try container.decodeIfPresent(String.self, forKey: .threadId)
         awaitingReply = try container.decodeIfPresent(Bool.self, forKey: .awaitingReply) ?? false
         confidentialUntil = try container.decodeIfPresent(Date.self, forKey: .confidentialUntil)
         snoozedUntil = try container.decodeIfPresent(Date.self, forKey: .snoozedUntil)

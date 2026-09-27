@@ -1515,6 +1515,17 @@ components:
             client-seitiges Gruppieren von Nachrichten in der Listenansicht
             (Eltern-Verweis nur innerhalb desselben Kontos aufloesbar, siehe
             backend/README.md).
+        threadId:
+          type: string
+          format: uuid
+          description: >
+            [2026-09-27] WEB_INBOX.md 27.09. "BUG - Thread-Ansicht gruppiert
+            nicht": serverseitige Thread-Zuordnung ueber ALLE Ordner des
+            Kontos (In-Reply-To/References-Header, Rueckfall Betreff ohne
+            Re:/AW: + gleiche Gegenseite). Gleiche threadId = derselbe
+            Verlauf, Wert = id der aeltesten Nachricht des Verlaufs.
+            Clients gruppieren die Liste hierueber statt ueber
+            inReplyToMessageId-Ketten. Siehe backend/src/mail/threads.ts.
         awaitingReply:
           type: boolean
           description: >
