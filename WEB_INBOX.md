@@ -1386,3 +1386,16 @@ Bitte bestehendes AppIcon.appiconset ersetzen. Falls es fuer Web ein eigenes Fav
 - als auch als Motiv fuer das App-Icon (Homescreen), dort ggf. als gerendertes/exportiertes PNG auf Salbei-Hintergrund noetig, da App-Icons keine SF-Symbol-Referenzen zur Laufzeit einbinden koennen -- bitte das SF-Symbol-Erscheinungsbild 1:1 als Vorlage fuer den AppIcon-Export nehmen (z.B. per Xcode/Sketch/Icon-Composer aus dem SF-Symbol exportieren und auf Salbei-Flaeche platzieren), damit Ordner-Icon und App-Icon optisch identisch wirken.
 
 Bitte pruefen, ob sich SF Symbols per Lizenz problemlos in App-Icons einbetten lassen (fuer In-App-UI ist das unproblematisch/Standard, fuers App-Icon-Set gibt es ggf. Apple-eigene Vorgaben/Restriktionen -- kurz gegenchecken, falls unklar in SYNC.md vermerken statt zu raten).
+
+
+[2026-09-27] [offen] [WAEHLBARE AKZENTFARBEN - Gruen, Gelb, Blau, Rosa, Schwarz] [Web + iOS] [ersetzt/aktualisiert die bestehende 5-Themes-Auswahl in den Einstellungen] — Massimo will dem Nutzer mehrere Akzentfarben zur Auswahl anbieten statt einer festen. Bitte die Theme-Auswahl in den Einstellungen auf folgende 5 Optionen umstellen:
+
+1. **Gruen** (neuer Standard/Default) — #3fa46a, aktive Zeile #e7f3ec/#1f2b1f (siehe Eintrag "NEUE DESIGN-RICHTUNG - Frisches Gruen" vom selben Tag)
+2. **Gelb** — kraeftiges, aber nicht grelles Gelb/Amber als Akzent (z.B. #d9a441 o.ae.), passende helle aktive-Zeile-Farbe dazu waehlen
+3. **Blau** — das bereits umgesetzte Outlook-Blau #0078d4 bleibt als Auswahloption erhalten (nicht loeschen, nur nicht mehr Default)
+4. **Rosa** — kraeftiges, klares Pink/Rosa als Akzent (z.B. #d9487a o.ae.)
+5. **Schwarz** — neutraler Akzent in Schwarz/Anthrazit (z.B. #1f1f1f) fuer Nutzer, die gar keine bunte Akzentfarbe wollen
+
+Alle vorherigen Themes (Teal, Ocean Blue, Violett, Koralle, Ocean-Verlauf) werden durch diese 5 ersetzt, ausser Blau bleibt sinngemaess erhalten. Sicherheits-Warnfarben (Quarantaene-Amber, Loeschen-Rot etc.) bleiben in JEDEM Theme unveraendert/fest, werden NICHT von der gewaehlten Akzentfarbe ueberschrieben -- das gilt fuer alle 5 Optionen gleichermassen.
+
+Bitte Farbwerte fuer Gelb/Rosa/Schwarz selbst sinnvoll im Contract (design-tokens.json) festlegen (ausreichend Kontrast zu Text/Hintergrund pruefen) und in SYNC.md dokumentieren, analog zum bisherigen Theme-System.
