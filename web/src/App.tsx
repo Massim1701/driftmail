@@ -37,6 +37,9 @@ function consumeAuthCallback(): { error: string | null } {
 
 const authCallbackResult = consumeAuthCallback();
 
+// Automatisches Nachladen der Ordner im sichtbaren Tab (siehe Effekt in App).
+const AUTO_REFRESH_INTERVAL_MS = 60_000;
+
 export default function App() {
   const [theme, setTheme] = useTheme();
   const appLock = useAppLock();
@@ -164,16 +167,23 @@ export default function App() {
     loadAccounts();
   }, [token, loadAccounts]);
 
-  const loadFolder = useCallback((folderId: string) => {
-    setListLoading(true);
+  // `silent`: fuer das automatische Nachladen unten -- keine Ladeanzeige und
+  // keine Fehlermeldung, damit die Liste alle 60s nicht flackert und ein
+  // einzelner fehlgeschlagener Hintergrund-Abruf den User nicht stoert.
+  const loadFolder = useCallback((folderId: string, { silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setListLoading(true);
     api
       .listMessages({ folderId })
       .then((msgs) => {
         setMessagesByFolder((prev) => ({ ...prev, [folderId]: msgs }));
         setError(null);
       })
-      .catch(() => setError("Mock-Server nicht erreichbar. Läuft er auf Port 4000?"))
-      .finally(() => setListLoading(false));
+      .catch(() => {
+        if (!silent) setError("Mock-Server nicht erreichbar. Läuft er auf Port 4000?");
+      })
+      .finally(() => {
+        if (!silent) setListLoading(false);
+      });
   }, []);
 
   // Ordner laden (System- und eigene) und initial den ersten sinnvollen Ordner
@@ -214,6 +224,25 @@ export default function App() {
   useEffect(() => {
     folders.forEach((f) => loadFolder(f.id));
   }, [folders, loadFolder]);
+
+  // [2026-09-27] Automatisches Nachladen: das Backend holt alle 3 Minuten
+  // neue Mail (MAIL_SYNC_INTERVAL_MINUTES), die Webseite hat das bisher erst
+  // nach Klick auf "Jetzt aktualisieren" oder Neuladen angezeigt. Jetzt alle
+  // 60s still alle Ordner neu laden, plus sofort beim Zurueckkehren in den
+  // Tab. Nur solange der Tab sichtbar ist -- im Hintergrund keine Requests.
+  useEffect(() => {
+    if (!token || !activeAccountId || folders.length === 0) return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      folders.forEach((f) => loadFolder(f.id, { silent: true }));
+    };
+    const handle = setInterval(refresh, AUTO_REFRESH_INTERVAL_MS);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      clearInterval(handle);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [token, activeAccountId, folders, loadFolder]);
 
   // Suche (siehe searchQuery-Kommentar oben): leicht entprellt (250ms),
   // damit nicht bei jedem Tastendruck ein eigener Request rausgeht. Leerer
