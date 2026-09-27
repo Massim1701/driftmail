@@ -427,6 +427,14 @@ private struct FolderRow: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 24, height: 24)
+            } else if let tint = folder.symbolTint {
+                // [2026-09-27] Gesendet: SF Symbol in Hellblau, gleiche
+                // 24x24-Flaeche wie die Facetten-Grafiken daneben.
+                Image(systemName: folder.systemImage)
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(tint)
+                    .frame(width: 24, height: 24)
             } else {
                 Image(systemName: folder.systemImage)
                     .foregroundStyle(folder.usesDangerColor ? DesignTokens.Color.danger : DesignTokens.Color.textSecondary)

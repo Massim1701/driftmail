@@ -83,11 +83,19 @@ struct Folder: Codable, Identifiable, Hashable {
     var facetIconAssetName: String? {
         switch icon {
         case "inbox": return "FolderIconEingang"
-        case "send": return "FolderIconGesendet"
         case "shield-exclamation": return "FolderIconQuarantaene"
         case "trash-2": return "FolderIconPapierkorb"
         default: return nil
         }
+    }
+
+    /// [2026-09-27] WEB_INBOX.md 25.09. "APP-ICON/GESENDET-ICON - LOESUNG
+    /// GEFUNDEN": Gesendet nutzt das SF Symbol `paperplane.fill` (siehe
+    /// `systemImage`) in Hellblau statt der handgezeichneten Facetten-Grafik
+    /// FolderIconGesendet -- das Asset ist entfernt. Nur fuer In-App-UI; fuers
+    /// App-Icon verbietet Apples SF-Symbols-Lizenz die Verwendung (SYNC.md 27.09.).
+    var symbolTint: SwiftUI.Color? {
+        icon == "send" ? SwiftUI.Color(hex: "#5EB1EC") : nil
     }
 
     /// design-tokens.json `systemFolders.defaults` marks quarantaene with
