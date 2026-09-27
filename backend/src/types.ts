@@ -456,6 +456,11 @@ export interface ApiMessageDetail extends ApiMessage {
   security: ApiSecurityResult | null;
   quarantine: ApiQuarantineInfo | null;
   canUnsubscribe: boolean;
+  // [2026-09-27] Empfaenger aus den To-/Cc-Headern (siehe mappers.ts
+  // recipientsFromHeader). Leer, wenn keine Header vorliegen (z.B. vor dem
+  // 27.09. gesendete Nachrichten, Fixture-Mails ohne To-Header).
+  to: string[];
+  cc: string[];
   // "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09.), siehe api-spec.yaml.
   isNewSender: boolean;
   // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": Anhaenge

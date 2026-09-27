@@ -143,7 +143,9 @@ export async function sendMessageForUser(userId: string, body: SendMessageInput)
       bodyHtml: null,
       receivedAt: new Date().toISOString(),
       folderId: gesendet.id,
-      rawHeaders: null,
+      // [2026-09-27] Nur To/Cc (kein Bcc), damit die Detailansicht die
+      // Empfaenger zeigen kann -- siehe mappers.ts recipientsFromHeader.
+      rawHeaders: { To: to.join(", "), ...(cc.length > 0 ? { Cc: cc.join(", ") } : {}) },
       inReplyToMessageId,
       confidentialUntil,
       snoozedUntil: null,

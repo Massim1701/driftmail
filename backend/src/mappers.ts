@@ -146,6 +146,21 @@ function toApiQuarantineInfo(q: QuarantineRecord): ApiQuarantineInfo {
   return { reason: q.reason, autoDeleteAt: q.autoDeleteAt, userReviewed: q.userReviewed };
 }
 
+// [2026-09-27] Empfaenger fuer die Detailansicht aus rawHeaders lesen, statt
+// eigener DB-Spalten. Header-Namen sind je Adapter unterschiedlich
+// geschrieben ("to" bei mailparser, "To" bei Gmail/Versand), und mailparser
+// legt Adress-Header als JSON-String ab -- deshalb case-insensitive Lookup
+// und reine Adress-Extraktion per Regex, das deckt beide Formate ab.
+const EMAIL_IN_HEADER = /[^\s<>,;:"'()[\]{}]+@[^\s<>,;:"'()[\]{}]+\.[a-z0-9-]+/gi;
+
+function recipientsFromHeader(rawHeaders: Record<string, string> | null, name: string): string[] {
+  if (!rawHeaders) return [];
+  const key = Object.keys(rawHeaders).find((k) => k.toLowerCase() === name);
+  if (!key) return [];
+  const found = rawHeaders[key].match(EMAIL_IN_HEADER) ?? [];
+  return Array.from(new Set(found.map((a) => a.toLowerCase())));
+}
+
 export function toApiMessageDetail(
   m: MessageRecord,
   security: MessageSecurityRecord | undefined,
@@ -167,6 +182,8 @@ export function toApiMessageDetail(
     security: security ? toApiSecurityResult(security) : null,
     quarantine: quarantine ? toApiQuarantineInfo(quarantine) : null,
     canUnsubscribe: parseListUnsubscribeHeader(m.rawHeaders) !== null,
+    to: recipientsFromHeader(m.rawHeaders, "to"),
+    cc: recipientsFromHeader(m.rawHeaders, "cc"),
     isNewSender,
     attachments: attachments.map(toApiMessageAttachment),
     links: links.map(toApiMessageLink),

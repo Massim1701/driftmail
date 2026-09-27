@@ -268,16 +268,21 @@ export function MessageDetailPane({
         <div className="detail-subject-row">
           <h1>{message.subject}</h1>
           <SecurityBadge classification={message.classification} />
-          <SecuritySignalBadges
-            security={message.security}
-            isNewSender={isUnknownSender}
-            onTrustSender={() => onTrustSender(message.fromAddress)}
-          />
+          {message.security && (
+            <SecuritySignalBadges
+              security={message.security}
+              isNewSender={isUnknownSender}
+              onTrustSender={() => onTrustSender(message.fromAddress)}
+            />
+          )}
         </div>
         <div className="detail-meta">
           <span>
             <strong>{message.fromDisplayName}</strong> &lt;{message.fromAddress}&gt;
           </span>
+          {/* `?? []`: der Mock-Server (mock-server/server.mjs) liefert to/cc nicht. */}
+          {(message.to ?? []).length > 0 && <span>An: {message.to.join(", ")}</span>}
+          {(message.cc ?? []).length > 0 && <span>Cc: {message.cc.join(", ")}</span>}
           <span>{formatDateTime(message.receivedAt)}</span>
         </div>
       </header>
@@ -306,12 +311,14 @@ export function MessageDetailPane({
         </div>
       )}
 
-      <section className="detail-section">
-        <button type="button" className="link-button" onClick={() => setShowDetails((v) => !v)}>
-          {showDetails ? "Sicherheits-Details ausblenden" : "Sicherheits-Details anzeigen"}
-        </button>
-        {showDetails && <SecurityDetails security={message.security} />}
-      </section>
+      {message.security && (
+        <section className="detail-section">
+          <button type="button" className="link-button" onClick={() => setShowDetails((v) => !v)}>
+            {showDetails ? "Sicherheits-Details ausblenden" : "Sicherheits-Details anzeigen"}
+          </button>
+          {showDetails && <SecurityDetails security={message.security} />}
+        </section>
+      )}
 
       <section className="detail-actions">
         {!isQuarantined && !isInTrash && (

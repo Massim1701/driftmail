@@ -207,7 +207,10 @@ export interface MessageDetail extends Message {
   // allow-same-origin) via srcdoc gerendert werden, NIE per
   // dangerouslySetInnerHTML in den normalen DOM (siehe MessageDetailPane.tsx).
   bodyHtml: string | null;
-  security: SecurityResult;
+  // [2026-09-27] `null` bei selbst gesendeten Nachrichten (Gesendet-Ordner):
+  // dafuer laeuft keine Sicherheitspruefung, backend/src/mappers.ts liefert
+  // dann null. Vorher als Pflichtfeld typisiert -> Detailansicht stuerzte ab.
+  security: SecurityResult | null;
   // [2026-09-22] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": echte
   // <a href>-Links aus bodyHtml, siehe MessageLink oben. Leeres Array bei
   // reinen Text-Mails.
@@ -216,6 +219,9 @@ export interface MessageDetail extends Message {
   // "Abmelden"-Button für POST /messages/{id}/unsubscribe angezeigt wird --
   // unabhängig von classification (siehe backend/README.md).
   canUnsubscribe: boolean;
+  // [2026-09-27] Empfaenger aus To-/Cc-Headern, leer wenn unbekannt.
+  to: string[];
+  cc: string[];
   // "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09./19.09.): true, wenn
   // es fuer dieses Konto keine andere Nachricht von derselben fromAddress
   // gibt. Kombiniert sich mit GET /trusted-senders -- Badge nur zeigen, wenn

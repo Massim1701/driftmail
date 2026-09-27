@@ -1576,7 +1576,13 @@ components:
                 wenn der User `blockRemoteImages` aktiviert hat (Default,
                 siehe `PrivacySettings`).
             security:
-              $ref: "#/components/schemas/SecurityResult"
+              allOf:
+                - $ref: "#/components/schemas/SecurityResult"
+              nullable: true
+              description: >
+                [2026-09-27] `null` bei selbst gesendeten Nachrichten
+                (Gesendet-Ordner) -- dafuer laeuft keine Sicherheitspruefung
+                (backend/src/mappers.ts). Clients muessen das abfangen.
             links:
               type: array
               items:
@@ -1597,6 +1603,21 @@ components:
                 List-Unsubscribe-Header hat (unabhaengig von classification)
                 -- steuert, ob die Client-UI den manuellen Abmelden-Button
                 zu POST /messages/{messageId}/unsubscribe anbietet.
+            to:
+              type: array
+              items:
+                type: string
+              description: >
+                [2026-09-27] Empfaenger-Adressen aus dem To-Header (klein
+                geschrieben, ohne Anzeigenamen). Leeres Array, wenn keine
+                Header vorliegen (z.B. vor dem 27.09. gesendete Nachrichten).
+            cc:
+              type: array
+              items:
+                type: string
+              description: >
+                [2026-09-27] Wie `to`, aus dem Cc-Header. Bcc wird nie
+                ausgeliefert.
             isNewSender:
               type: boolean
               description: >
