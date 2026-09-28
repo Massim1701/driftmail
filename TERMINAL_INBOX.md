@@ -167,3 +167,18 @@ Kein Blocker fuer Terminal. Alle fuenf Punkte sind unabhaengig voneinander, koen
 ---
 
 [2026-09-25] [erledigt: b93bfde] [Nachtrag zum eigenen Sammel-Eintrag oben] — Massimo hat mich (Terminal) gebeten, die fuenf Punkte oben direkt selbst umzusetzen statt auf Web zu warten. Details/Verifikation in SYNC.md 25.09. "[terminal] [F]". Kurzfassung: Punkte 1-3 umgesetzt (Domain-Autoerkennung in `OnboardingScreen.tsx`, Outlook-Token-Sync in `tokens.css`/`accentThemes.ts`, vier Facetten-Icons in neuer `facetIcons.tsx`), Punkte 4+5 brauchten keine Code-Aenderung auf Web (reines FYI bzw. bereits bestaetigt keine Regression). Falls parallel schon an einem dieser Punkte gearbeitet wurde -- bitte hier melden, bevor doppelte Arbeit entsteht.
+
+---
+
+[2026-09-28] [offen] [Track F + D -- Ergebnis Fehler-Durchlauf, eine Entscheidung fuer Web] — Massimo hat einen kompletten Fehler-Check ueber alle Module angestossen. Ergebnis:
+
+**Behoben (Track D, kein Handlungsbedarf fuer Web):** `contracts-logic` hatte 7 von 14 Tests rot. Ursache: `better-sqlite3@11` laeuft nicht unter Node 26 (lokal v26.10.0) -- kein Prebuild, und `node-gyp rebuild` scheitert ebenfalls. Auf `better-sqlite3@^13.0.3` (+ passende `@types`) gehoben, kein Code geaendert, jetzt 14/14 gruen.
+
+**Alles andere gruen:** tsc in backend/web/contracts-logic/mail-actions/security-classification ohne Fehler; Tests mail-actions 34/34, security-classification 144/144, Backend-Smoketest komplett; Mac-App Typecheck ok, iOS BUILD SUCCEEDED.
+
+**Bitte entscheiden (Track F / web/):** `oxlint` meldet 7 Warnungen (keine Fehler), der Build ist davon nicht betroffen:
+
+1. `react(only-export-components)` -- 3x: `src/components/SecurityBadge.tsx:18` und `:86`, `src/icons.tsx:127`. Dateien exportieren neben Komponenten auch Konstanten/Funktionen; stoert nur Vites Fast Refresh im Dev-Modus. Fix waere: die Nicht-Komponenten-Exporte in eigene Dateien auslagern.
+2. `react(set-state-in-effect)` -- 4x: `src/App.tsx:235`, `:290`, `:448`, `src/components/MessageDetailPane.tsx:131`. setState direkt im useEffect, loest einen zusaetzlichen Render aus. Fix waere je nach Stelle: Wert beim Rendern ableiten, State direkt initialisieren oder im ausloesenden Event setzen. Hier ist Vorsicht noetig, weil sich das Verhalten der UI aendern kann (z.B. Zuruecksetzen der Auswahl beim Ordnerwechsel).
+
+Frage an Web: Sollen wir (a) beides bereinigen, (b) nur Punkt 1 (risikolos) oder (c) so lassen? Terminal setzt um, sobald hier eine Antwort steht. Ohne Antwort bleibt alles wie es ist -- kein Blocker.
