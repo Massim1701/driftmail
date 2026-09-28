@@ -1584,7 +1584,7 @@ components:
       description: "[2026-09-28] Antwort von GET /mail-providers/discover."
       properties:
         found: { type: boolean }
-        source: { type: string, enum: [ispdb, mx, srv], nullable: true }
+        source: { type: string, enum: [ispdb, mx, srv, guess], nullable: true, description: "guess = uebliche Servernamen (imap./mail./smtp.<domain>, MX-Server) per Begruessung gefunden" }
         providerId:
           type: string
           nullable: true

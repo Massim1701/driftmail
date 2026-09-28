@@ -61,7 +61,7 @@ export function adapterForAccount(account: MailAccountRecord): MailAdapter {
   if (account.provider === "imap") {
     if (account.encryptedImapCredentials) {
       const credentials = JSON.parse(decryptCredentials(account.encryptedImapCredentials)) as ImapCredentials;
-      return new ImapAdapter(credentials);
+      return new ImapAdapter({ ...credentials, emailAddress: account.emailAddress });
     }
     const host = process.env.IMAP_HOST;
     const user = process.env.IMAP_USER;
@@ -95,7 +95,7 @@ export function adapterForAccount(account: MailAccountRecord): MailAdapter {
     // reiner echter-User-Weg, kein Demo-/Dev-Zero-Config-Pfad.
     if (account.encryptedImapCredentials) {
       const credentials = JSON.parse(decryptCredentials(account.encryptedImapCredentials)) as Pop3Credentials;
-      return new Pop3Adapter(credentials);
+      return new Pop3Adapter({ ...credentials, emailAddress: account.emailAddress });
     }
   }
   return new FixtureMailAdapter();

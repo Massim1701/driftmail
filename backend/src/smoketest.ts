@@ -32,6 +32,7 @@ import { ocrAdapter } from "./attachments";
 import { decryptCredentials, encryptBytes, encryptCredentials } from "./auth/credentialsEncryption";
 import { fixtureSentMails, registerFixtureAttachments } from "./mail/fixtureAdapter";
 import { parseAutoconfigXml } from "./mail/autodiscover";
+import { type AssistDeps, type AssistableCredentials, connectWithAssist } from "./mail/connectAssist";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Server } from "node:http";
@@ -2424,6 +2425,86 @@ async function main() {
         parsed.smtpHost === "smtp.beispiel.de" && parsed.smtpPort === 587 && parsed.smtpSecure === false && parsed.username === "localpart",
       `parseAutoconfigXml sollte IMAP/SSL waehlen, %EMAILDOMAIN% ersetzen und localpart erkennen: ${JSON.stringify(parsed)}`,
     );
+
+    // [2026-09-28] Automatisches Durchprobieren beim Verbinden
+    // (mail/connectAssist.ts), ohne Netzwerk: Server und Netzwerk-Helfer
+    // werden hier nachgestellt.
+    {
+      const base: AssistableCredentials = {
+        host: "mail.kunde.de", port: 993, secure: true, user: "max@kunde.de", password: "pw",
+        smtpHost: "mail.kunde.de", smtpPort: 587, smtpSecure: false,
+      };
+      const deps = (over: Partial<AssistDeps> = {}): AssistDeps => ({
+        reachable: async () => false,
+        isPublicHost: async () => true,
+        certNames: async () => [],
+        verifySmtp: async () => true,
+        ...over,
+      });
+      const authErr = Object.assign(new Error("Authentication failed."), { authenticationFailed: true });
+
+      // Anmeldung nur mit dem Teil vor dem "@" -> genau EIN Zusatzversuch.
+      let calls = 0;
+      const a = await connectWithAssist("imap", base, "max@kunde.de", async (c) => {
+        calls++;
+        if (c.user !== "max") throw authErr;
+      }, deps());
+      assert(a.credentials.user === "max" && calls === 2, `Assist: Anmeldename ohne @domain erwartet: ${JSON.stringify(a)} calls=${calls}`);
+
+      // Falsches Passwort: nach dem einen Zusatzversuch Schluss, Fehler kommt an.
+      calls = 0;
+      let threw = false;
+      try {
+        await connectWithAssist("imap", base, "max@kunde.de", async () => { calls++; throw authErr; }, deps());
+      } catch (err) {
+        threw = err === authErr;
+      }
+      assert(threw && calls === 2, `Assist: falsches Passwort sollte nach 2 Versuchen den Fehler werfen (calls=${calls})`);
+
+      // Zertifikat lautet auf den Hoster-Namen -> dieser Name wird genommen,
+      // Postausgang auf demselben Host zieht mit.
+      const certErr = Object.assign(new Error("Hostname/IP does not match certificate's altnames"), { code: "ERR_TLS_CERT_ALTNAME_INVALID" });
+      const b = await connectWithAssist("imap", base, "max@kunde.de", async (c) => {
+        if (c.host !== "w0123.kasserver.com") throw certErr;
+      }, deps({ certNames: async () => ["w0123.kasserver.com"] }));
+      assert(
+        b.credentials.host === "w0123.kasserver.com" && b.credentials.smtpHost === "w0123.kasserver.com",
+        `Assist: Servername laut Zertifikat erwartet: ${JSON.stringify(b.credentials)}`,
+      );
+
+      // Port 993 zu, 143 offen -> 143 nur mit Pflicht-STARTTLS.
+      const refused = Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" });
+      const d = await connectWithAssist("imap", base, "max@kunde.de", async (c) => {
+        if (c.port === 993) throw refused;
+      }, deps({ reachable: async (_h, port) => port === 143 }));
+      assert(
+        d.credentials.port === 143 && d.credentials.secure === false && d.credentials.requireStartTls === true,
+        `Assist: Ausweichen auf 143 mit Pflicht-STARTTLS erwartet: ${JSON.stringify(d.credentials)}`,
+      );
+
+      // POP3: kein Ausweichen auf eine Verbindung ohne TLS.
+      threw = false;
+      try {
+        await connectWithAssist("pop3", { ...base, port: 995 }, "max@kunde.de", async () => { throw refused; }, deps({ reachable: async () => true }));
+      } catch {
+        threw = true;
+      }
+      assert(threw, "Assist: POP3 darf nicht auf einen unverschluesselten Port ausweichen");
+
+      // Postausgang klappt nicht wie eingetragen -> smtp.<domain>:465 gefunden.
+      const e = await connectWithAssist("imap", base, "max@kunde.de", async () => {}, deps({
+        verifySmtp: async (c) => c.smtpHost === "smtp.kunde.de" && c.smtpPort === 465,
+        reachable: async (h, port) => h === "smtp.kunde.de" && port === 465,
+      }));
+      assert(
+        e.credentials.smtpHost === "smtp.kunde.de" && e.credentials.smtpPort === 465 && e.credentials.smtpSecure === true,
+        `Assist: Postausgang smtp.kunde.de:465 erwartet: ${JSON.stringify(e.credentials)}`,
+      );
+
+      // Postausgang nirgends bestaetigt -> Konto trotzdem ok, SMTP unveraendert.
+      const f = await connectWithAssist("imap", base, "max@kunde.de", async () => {}, deps({ verifySmtp: async () => false }));
+      assert(f.credentials.smtpHost === "mail.kunde.de" && f.credentials.smtpPort === 587, "Assist: SMTP-Fehlschlag darf die Kontoanlage nicht blockieren");
+    }
 
     // POST /accounts provider=imap ohne imapHost/imapPassword -> 400, kein
     // Verbindungsversuch, keine Zeile angelegt.

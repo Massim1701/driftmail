@@ -29,7 +29,7 @@ export interface ProbeResult {
   latencyMs: number | null;
 }
 
-function isPrivateAddress(ip: string): boolean {
+export function isPrivateAddress(ip: string): boolean {
   if (ip.includes(":")) {
     const v6 = ip.toLowerCase();
     if (v6.startsWith("::ffff:")) return isPrivateAddress(v6.slice(7));

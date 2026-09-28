@@ -64,6 +64,10 @@ export interface Pop3Credentials {
   smtpHost: string;
   smtpPort: number;
   smtpSecure: boolean;
+  /** Siehe ImapCredentials.smtpRequireTls. */
+  smtpRequireTls?: boolean;
+  /** Siehe ImapCredentials.emailAddress. */
+  emailAddress?: string;
 }
 
 export class Pop3Adapter implements MailAdapter {
@@ -173,10 +177,11 @@ export class Pop3Adapter implements MailAdapter {
       host: this.creds.smtpHost,
       port: this.creds.smtpPort,
       secure: this.creds.smtpSecure,
+      requireTLS: this.creds.smtpRequireTls ?? false,
       auth: { user: this.creds.user, pass: this.creds.password },
     });
     const info = await transport.sendMail({
-      from: this.creds.user,
+      from: this.creds.emailAddress ?? this.creds.user,
       to: input.to,
       cc: input.cc.length > 0 ? input.cc : undefined,
       bcc: input.bcc.length > 0 ? input.bcc : undefined,

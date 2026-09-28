@@ -5,18 +5,25 @@
 //   2. MX-Eintrag: bekannter Anbieter dahinter (z.B. Google Workspace ->
 //      Gmail-Preset), sonst ISPDB fuer die Domain des Mailservers
 //   3. DNS-SRV-Eintraege nach RFC 6186 (_imaps/_imap/_pop3s/_submission)
+//   4. [2026-09-28] Raten wie Thunderbird: imap./mail./pop3./smtp.<domain>
+//      und der MX-Server selbst, jeweils nur die Begruessung lesen
+//      (mail/probe.ts, ohne Anmeldung). Findet eigene Domains bei
+//      Hostern, die weder in der ISPDB stehen noch SRV-Eintraege haben.
 // Datenschutz: nach aussen geht nur die Domain (an die ISPDB und an DNS),
-// nie die volle Adresse. Bewusst KEIN Abruf von autoconfig.<domain> oder
-// anderen Hosts, die der Aufrufer bestimmt -- der Server soll nicht als
-// Werkzeug fuer Anfragen an beliebige (auch interne) Adressen dienen.
+// nie die volle Adresse. Bewusst KEIN HTTP-Abruf von autoconfig.<domain>.
+// Schritt 4 verbindet sich zwar mit Hosts unter der eingegebenen Domain,
+// aber nur ueber probe.ts: nur Mail-Ports, keine privaten/lokalen
+// Adressen, kurze Zeitlimits -- der Server taugt so nicht als Werkzeug
+// fuer Anfragen an beliebige (auch interne) Adressen.
 
 import { resolveMx, resolveSrv } from "node:dns/promises";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { probeMailServer } from "./probe";
 
 export interface DiscoveredSettings {
   found: boolean;
-  source: "ispdb" | "mx" | "srv" | null;
+  source: "ispdb" | "mx" | "srv" | "guess" | null;
   /** Gesetzt, wenn die Domain zu einem bekannten Preset gehoert (z.B.
    * Google Workspace -> "gmail"); der Client nimmt dann dieses Preset. */
   providerId: string | null;
@@ -110,7 +117,7 @@ async function discoverUncached(domain: string): Promise<DiscoveredSettings> {
     }
   }
 
-  return (await lookupSrv(domain)) ?? NOT_FOUND;
+  return (await lookupSrv(domain)) ?? (await guessServers(domain, mxHost)) ?? NOT_FOUND;
 }
 
 async function primaryMx(domain: string): Promise<string | null> {
@@ -228,6 +235,54 @@ async function lookupSrv(domain: string): Promise<DiscoveredSettings | null> {
     smtpSecure: outgoing ? outgoing === submissions : null,
     username: "email",
   };
+}
+
+// --- Raten (Thunderbird-Schritt "guess") -----------------------------------
+
+// Reihenfolge = Vorrang: IMAP vor POP3 (Ordner, Gelesen-Status). Eingang
+// nur mit TLS ab Verbindungsbeginn (993/995): IMAP 143 waehlt bei Bedarf
+// die Kontoanlage selbst, dann mit Pflicht-STARTTLS (mail/connectAssist.ts);
+// node-pop3 kann STARTTLS gar nicht erzwingen.
+async function guessServers(domain: string, mxHost: string | null): Promise<DiscoveredSettings | null> {
+  const hosts = (prefixes: string[]) => [...new Set([...prefixes.map((p) => `${p}.${domain}`), ...(mxHost ? [mxHost] : [])])];
+  const incoming = [
+    ...hosts(["imap", "mail"]).map((host) => ({ host, port: 993, secure: true, protocol: "imap" as const })),
+    ...hosts(["pop3", "pop", "mail"]).map((host) => ({ host, port: 995, secure: true, protocol: "pop3" as const })),
+  ];
+  const outgoing = [
+    ...hosts(["smtp", "mail"]).map((host) => ({ host, port: 465, secure: true })),
+    ...hosts(["smtp", "mail"]).map((host) => ({ host, port: 587, secure: false })),
+  ];
+  // Alle gleichzeitig pruefen (je max. 6 s), dann den ersten Treffer in
+  // Vorrang-Reihenfolge nehmen.
+  const [inUp, outUp] = await Promise.all([
+    Promise.all(incoming.map((c) => probeMailServer(c.host, c.port, c.secure).then((r) => r.ok && looksLike(c.protocol, r.greeting)))),
+    Promise.all(outgoing.map((c) => probeMailServer(c.host, c.port, c.secure).then((r) => r.ok && looksLike("smtp", r.greeting)))),
+  ]);
+  const inHit = incoming.find((_, i) => inUp[i]);
+  if (!inHit) return null;
+  const outHit = outgoing.find((_, i) => outUp[i]);
+  return {
+    found: true,
+    source: "guess",
+    providerId: null,
+    protocol: inHit.protocol,
+    imapHost: inHit.host,
+    imapPort: inHit.port,
+    imapSecure: inHit.secure,
+    smtpHost: outHit?.host ?? null,
+    smtpPort: outHit?.port ?? null,
+    smtpSecure: outHit?.secure ?? null,
+    username: "email",
+  };
+}
+
+// Nur echte Mail-Dienste zaehlen (ein offener Port allein reicht nicht).
+function looksLike(protocol: "imap" | "pop3" | "smtp", greeting: string | null): boolean {
+  if (!greeting) return false;
+  if (protocol === "imap") return /^\* (OK|PREAUTH)/i.test(greeting);
+  if (protocol === "pop3") return /^\+OK/i.test(greeting);
+  return /^220[ -]/.test(greeting);
 }
 
 function withTimeout<T>(p: Promise<T>): Promise<T> {

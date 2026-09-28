@@ -288,7 +288,7 @@ export interface MailServerProbe {
 // [2026-09-28] GET /mail-providers/discover (api-spec.yaml).
 export interface DiscoveredMailSettings {
   found: boolean;
-  source: "ispdb" | "mx" | "srv" | null;
+  source: "ispdb" | "mx" | "srv" | "guess" | null;
   providerId: string | null;
   protocol: "imap" | "pop3" | null;
   imapHost: string | null;

@@ -29,6 +29,7 @@ import { isEmailAllowed } from "../auth/allowlist";
 import { encryptCredentials } from "../auth/credentialsEncryption";
 import { createSystemFoldersForAccount, store } from "../db/store";
 import { ImapAdapter, type ImapCredentials } from "../mail/imapAdapter";
+import { type AssistableCredentials, connectWithAssist } from "../mail/connectAssist";
 import { Pop3Adapter, type Pop3Credentials } from "../mail/pop3Adapter";
 import { syncAccount } from "../mail/sync";
 import { aiAdapter } from "../ai";
@@ -55,6 +56,22 @@ const GOOGLE_OAUTH_SCOPES = [
 // erreichbar war -- vorher sah der User in beiden Faellen nur "Verbindung
 // fehlgeschlagen". `serverMessage` ist die Antwort des Mailservers (ohne
 // Passwort; node-pop3 maskiert "PASS ***" selbst).
+// [2026-09-28] Verbindungstest mit automatischem Durchprobieren typischer
+// Abweichungen (Anmeldename, Zertifikatsname, Port, Postausgang), siehe
+// mail/connectAssist.ts. Wirft wie bisher den Fehler, wenn nichts klappt.
+async function connectAssisted<C extends AssistableCredentials>(
+  protocol: "imap" | "pop3",
+  credentials: C,
+  emailAddress: string,
+  test: (c: C) => Promise<void>,
+): Promise<C> {
+  const result = await connectWithAssist(protocol, credentials, emailAddress, test);
+  if (result.adjustments.length > 0) {
+    console.log(`[auth] ${protocol.toUpperCase()} fuer ${credentials.host} automatisch angepasst: ${result.adjustments.join("; ")}`);
+  }
+  return result.credentials;
+}
+
 function describeConnectError(err: unknown, host: string) {
   const e = (err ?? {}) as { authenticationFailed?: boolean; responseText?: string; message?: string; code?: string };
   const text = (e.responseText || e.message || "").toString().slice(0, 200);
@@ -302,7 +319,7 @@ authRouter.post("/accounts", async (req, res) => {
       const smtpPort = typeof body.smtpPort === "number" ? body.smtpPort : 587;
       const smtpSecure = typeof body.smtpSecure === "boolean" ? body.smtpSecure : false;
 
-      const credentials: ImapCredentials = {
+      let credentials: ImapCredentials = {
         host: imapHost,
         port: imapPort,
         secure: imapSecure,
@@ -318,7 +335,7 @@ authRouter.post("/accounts", async (req, res) => {
       // abgelaufene Zugangsdaten werden sofort abgelehnt statt still
       // gespeichert und erst beim naechsten Sync-Versuch zu scheitern.
       try {
-        await new ImapAdapter(credentials).testConnection();
+        credentials = await connectAssisted("imap", credentials, emailAddress, (c) => new ImapAdapter(c).testConnection());
       } catch (err) {
         console.error(`[auth] IMAP-Verbindungstest fehlgeschlagen fuer ${imapHost}:`, err);
         return res.status(422).json({
@@ -346,7 +363,7 @@ authRouter.post("/accounts", async (req, res) => {
       const smtpPort = typeof body.smtpPort === "number" ? body.smtpPort : 587;
       const smtpSecure = typeof body.smtpSecure === "boolean" ? body.smtpSecure : false;
 
-      const credentials: Pop3Credentials = {
+      let credentials: Pop3Credentials = {
         host: pop3Host,
         port: pop3Port,
         secure: pop3Secure,
@@ -358,7 +375,7 @@ authRouter.post("/accounts", async (req, res) => {
       };
 
       try {
-        await new Pop3Adapter(credentials).testConnection();
+        credentials = await connectAssisted("pop3", credentials, emailAddress, (c) => new Pop3Adapter(c).testConnection());
       } catch (err) {
         console.error(`[auth] POP3-Verbindungstest fehlgeschlagen fuer ${pop3Host}:`, err);
         return res.status(422).json({
@@ -400,7 +417,7 @@ authRouter.post("/accounts", async (req, res) => {
       if (!imapHost || !imapPassword) {
         return res.status(400).json({ error: "imapHost und imapPassword sind fuer provider=imap erforderlich" });
       }
-      const credentials: ImapCredentials = {
+      let credentials: ImapCredentials = {
         host: imapHost,
         port: typeof body.imapPort === "number" ? body.imapPort : 993,
         secure: typeof body.imapSecure === "boolean" ? body.imapSecure : true,
@@ -411,7 +428,7 @@ authRouter.post("/accounts", async (req, res) => {
         smtpSecure: typeof body.smtpSecure === "boolean" ? body.smtpSecure : false,
       };
       try {
-        await new ImapAdapter(credentials).testConnection();
+        credentials = await connectAssisted("imap", credentials, emailAddress, (c) => new ImapAdapter(c).testConnection());
       } catch (err) {
         console.error(`[auth] IMAP-Verbindungstest (Update) fehlgeschlagen fuer ${imapHost}:`, err);
         return res.status(422).json({
@@ -426,7 +443,7 @@ authRouter.post("/accounts", async (req, res) => {
       if (!pop3Host || !pop3Password) {
         return res.status(400).json({ error: "pop3Host und pop3Password sind fuer provider=pop3 erforderlich" });
       }
-      const credentials: Pop3Credentials = {
+      let credentials: Pop3Credentials = {
         host: pop3Host,
         port: typeof body.pop3Port === "number" ? body.pop3Port : 995,
         secure: typeof body.pop3Secure === "boolean" ? body.pop3Secure : true,
@@ -437,7 +454,7 @@ authRouter.post("/accounts", async (req, res) => {
         smtpSecure: typeof body.smtpSecure === "boolean" ? body.smtpSecure : false,
       };
       try {
-        await new Pop3Adapter(credentials).testConnection();
+        credentials = await connectAssisted("pop3", credentials, emailAddress, (c) => new Pop3Adapter(c).testConnection());
       } catch (err) {
         console.error(`[auth] POP3-Verbindungstest (Update) fehlgeschlagen fuer ${pop3Host}:`, err);
         return res.status(422).json({

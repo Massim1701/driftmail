@@ -21,6 +21,15 @@ export interface ImapCredentials {
   smtpHost: string;
   smtpPort: number;
   smtpSecure: boolean;
+  /** [2026-09-28] Von der automatischen Einrichtung gesetzt, wenn sie auf
+   * einen Port ohne TLS ab Verbindungsbeginn ausweicht (IMAP 143, SMTP 587):
+   * dann MUSS STARTTLS klappen, sonst keine Anmeldung -- das Passwort geht
+   * nie unverschluesselt raus. Fehlt bei aelteren Konten (= wie bisher). */
+  requireStartTls?: boolean;
+  smtpRequireTls?: boolean;
+  /** Absenderadresse beim Versand; wird aus dem Konto gesetzt (mail/sync.ts),
+   * weil der Anmeldename auch nur der Teil vor dem "@" sein kann. */
+  emailAddress?: string;
 }
 
 export class ImapAdapter implements MailAdapter {
@@ -35,7 +44,12 @@ export class ImapAdapter implements MailAdapter {
       host: this.creds.host,
       port: this.creds.port,
       secure: this.creds.secure,
+      ...(this.creds.requireStartTls && !this.creds.secure ? { doSTARTTLS: true } : {}),
       auth: { user: this.creds.user, pass: this.creds.password },
+      // Standard waeren 90 s -- ein stummer Server (Firewall verwirft
+      // Pakete) liess die Kontoanlage so lange haengen, bevor das
+      // automatische Ausweichen (mail/connectAssist.ts) ueberhaupt anfing.
+      connectionTimeout: 20_000,
       logger: false,
     });
     client.on("error", (err: Error) => {
@@ -163,10 +177,11 @@ export class ImapAdapter implements MailAdapter {
       host: this.creds.smtpHost,
       port: this.creds.smtpPort,
       secure: this.creds.smtpSecure,
+      requireTLS: this.creds.smtpRequireTls ?? false,
       auth: { user: this.creds.user, pass: this.creds.password },
     });
     const info = await transport.sendMail({
-      from: this.creds.user,
+      from: this.creds.emailAddress ?? this.creds.user,
       to: input.to,
       cc: input.cc.length > 0 ? input.cc : undefined,
       // nodemailer setzt bcc korrekt nur im SMTP-Envelope (RCPT TO), nie in
