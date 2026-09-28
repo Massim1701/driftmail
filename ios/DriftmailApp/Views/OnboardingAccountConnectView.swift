@@ -508,6 +508,9 @@ private struct ImapConnectFormView: View {
         isSubmitting = true
         errorMessage = nil
         defer { isSubmitting = false }
+        // [2026-09-28] App-Passwörter werden in Vierergruppen mit
+        // Leerzeichen angezeigt, die beim Kopieren mitkommen.
+        let password = provider.requiresAppPassword ? self.password.filter { !$0.isWhitespace } : self.password
         do {
             let account: MailAccount
             let token: String

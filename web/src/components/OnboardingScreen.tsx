@@ -463,6 +463,10 @@ function ImapConnectForm({
       // [2026-09-27] pop3-Provider (web.de) wurden bisher als provider="imap"
       // gesendet -> Backend sprach IMAP gegen pop3.web.de (Timeout).
       const smtp = { smtpHost: smtpHost.trim() || undefined, smtpPort, smtpSecure };
+      // [2026-09-28] App-Passwörter zeigen Google/Yahoo in Vierergruppen mit
+      // Leerzeichen an, die beim Kopieren mitkommen -- sie gehören nicht
+      // zum Passwort.
+      const password = provider.requiresAppPassword ? imapPassword.replace(/\s+/g, "") : imapPassword;
       const res = isPop3
         ? await api.connectPop3Account({
             emailAddress,
@@ -470,7 +474,7 @@ function ImapConnectForm({
             pop3Port: imapPort,
             pop3Secure: imapSecure,
             pop3User: imapUser.trim() || undefined,
-            pop3Password: imapPassword,
+            pop3Password: password,
             ...smtp,
           })
         : await api.connectImapAccount({
@@ -479,7 +483,7 @@ function ImapConnectForm({
             imapPort,
             imapSecure,
             imapUser: imapUser.trim() || undefined,
-            imapPassword,
+            imapPassword: password,
             ...smtp,
           });
       setStoredToken(res.token);
