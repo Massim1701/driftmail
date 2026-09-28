@@ -18,6 +18,7 @@ import {
   TrashIcon,
 } from "../icons";
 import { FOLDER_ICONS } from "../folderIcons";
+import { accountBadge } from "../accountBadge";
 import { SYSTEM_FOLDER_META } from "../folderMeta";
 import { seasonFor } from "../season";
 import { SeasonalTwig } from "../seasonalTwig";
@@ -61,7 +62,6 @@ export function FolderSidebar({
   counts,
   accounts,
   activeAccountId,
-  onSwitchAccount,
   onSyncNow,
   isSyncing,
   onNewMessage,
@@ -71,6 +71,10 @@ export function FolderSidebar({
   onDeleteFolder,
   onOpenSettings,
   onAddAccount,
+  displayName,
+  onSaveDisplayName,
+  inboxCounts,
+  onSelectAccountInbox,
 }: {
   folders: Folder[];
   active: string | null;
@@ -81,7 +85,6 @@ export function FolderSidebar({
    * Konto", Umschalten passiert komplett hier in der Sidebar. */
   accounts: MailAccount[];
   activeAccountId: string | null;
-  onSwitchAccount: (accountId: string) => void;
   /** "Jetzt aktualisieren" (WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE -
    * HOECHSTE PRIORITAET", Punkt 1): löst POST /accounts/{accountId}/sync
    * aus, statt auf das automatische Backend-Intervall zu warten. */
@@ -104,6 +107,16 @@ export function FolderSidebar({
   /** [2026-09-28] Massimo: sichtbarer Knopf für weitere Konten (vorher nur
    * unter Einstellungen → Konten). Öffnet denselben Assistenten wie dort. */
   onAddAccount: () => void;
+  /** [2026-09-28] Massimo: der Name des Users steht gross oben, "driftmail"
+   * klein darunter. null = noch nicht angegeben -> sanfte Frage "Wie heisst
+   * du?" direkt an dieser Stelle. */
+  displayName: string | null;
+  onSaveDisplayName: (name: string) => void;
+  /** [2026-09-28] "zwei Eingaenge mit Logo": Anzahl im Eingang je Konto
+   * (accountId -> Anzahl), auch fuer gerade nicht geoeffnete Konten. */
+  inboxCounts: Partial<Record<string, number>>;
+  /** Oeffnet den Eingang dieses Kontos (wechselt bei Bedarf das Konto). */
+  onSelectAccountInbox: (accountId: string) => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -114,7 +127,13 @@ export function FolderSidebar({
   const season = useMemo(() => seasonFor(new Date()), []);
 
   const activeAccount = accounts.find((a) => a.id === activeAccountId) ?? accounts[0];
-  const firstCustomIndex = folders.findIndex((f) => !f.isSystem);
+  // [2026-09-28] Bei mehreren Konten stehen die Eingaenge oben je Konto
+  // (mit Kennzeichen) -- der Eingang des geoeffneten Kontos wird in der
+  // Ordnerliste darunter deshalb nicht noch einmal gezeigt.
+  const multiAccount = accounts.length > 1;
+  const eingangId = folders.find((f) => f.systemKey === "eingang")?.id ?? null;
+  const listedFolders = multiAccount ? folders.filter((f) => f.id !== eingangId) : folders;
+  const firstCustomIndex = listedFolders.findIndex((f) => !f.isSystem);
 
   function startEdit(f: Folder) {
     setEditingId(f.id);
@@ -139,8 +158,11 @@ export function FolderSidebar({
   return (
     <nav className="folder-sidebar" aria-label="Ordner">
       <div className="folder-sidebar-brand">
-        <BrandMark />
-        <span className="folder-sidebar-wordmark">driftmail</span>
+        <SidebarName displayName={displayName} onSave={onSaveDisplayName} />
+        <div className="folder-sidebar-brandline">
+          <BrandMark width={14} height={14} />
+          <span className="folder-sidebar-wordmark">driftmail</span>
+        </div>
       </div>
 
       <button type="button" className="new-message-button" onClick={onNewMessage}>
@@ -154,8 +176,50 @@ export function FolderSidebar({
         <kbd>⌘K</kbd>
       </button>
 
+      {multiAccount && (
+        <>
+          <div className="sidebar-section-label">Posteingänge</div>
+          <ul className="folder-list account-inboxes">
+            {accounts.map((a) => {
+              const badge = accountBadge(a);
+              const isActive = a.id === activeAccountId && active === eingangId;
+              const count = inboxCounts[a.id] ?? 0;
+              return (
+                <li key={a.id}>
+                  <div className={`folder-item${isActive ? " active" : ""}`}>
+                    <button
+                      type="button"
+                      className="folder-item-main account-inbox"
+                      onClick={() => onSelectAccountInbox(a.id)}
+                      aria-current={isActive ? "page" : undefined}
+                      title={a.emailAddress}
+                    >
+                      <AccountBadgeMark account={a} />
+                      <span className="account-inbox-text">
+                        <span className="folder-label">{badge.label}</span>
+                        <span className="account-inbox-address">{a.emailAddress}</span>
+                      </span>
+                      {count > 0 && <span className="folder-count">{count}</span>}
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {activeAccount && (
+            <div className="sidebar-section-label sidebar-section-label-account">
+              Ordner
+              <span className="sidebar-section-account">
+                <AccountBadgeMark account={activeAccount} size={14} />
+                {accountBadge(activeAccount).label}
+              </span>
+            </div>
+          )}
+        </>
+      )}
+
       <ul className="folder-list">
-        {folders.map((f, index) => {
+        {listedFolders.map((f, index) => {
           const meta = metaFor(f);
           const Icon = (f.systemKey ? SYSTEM_ICONS[f.systemKey] : undefined) ?? FOLDER_ICONS[f.icon] ?? FolderIcon;
           const isActive = f.id === active;
@@ -293,27 +357,10 @@ export function FolderSidebar({
 
       {activeAccount && (
         <div className="folder-sidebar-account-row">
-          <span className="account-avatar" aria-hidden="true">
-            {activeAccount.emailAddress.charAt(0).toUpperCase()}
-          </span>
-          {accounts.length > 1 ? (
-            <select
-              className="account-switcher"
-              value={activeAccountId ?? ""}
-              onChange={(e) => onSwitchAccount(e.target.value)}
-              aria-label="Konto wechseln"
-            >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.emailAddress}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <div className="folder-sidebar-account" title={activeAccount.emailAddress}>
-              {activeAccount.emailAddress}
-            </div>
-          )}
+          <AccountBadgeMark account={activeAccount} size={26} />
+          <div className="folder-sidebar-account" title={activeAccount.emailAddress}>
+            {activeAccount.emailAddress}
+          </div>
           <button
             type="button"
             className="sidebar-icon-button"
@@ -333,3 +380,67 @@ export function FolderSidebar({
   );
 }
 
+// [2026-09-28] Rundes Anbieter-Kennzeichen (siehe accountBadge.ts).
+export function AccountBadgeMark({ account, size = 22 }: { account: MailAccount; size?: number }) {
+  const badge = accountBadge(account);
+  return (
+    <span
+      className="account-badge"
+      aria-hidden="true"
+      style={{ background: badge.background, color: badge.foreground, width: size, height: size, fontSize: Math.round(size * 0.5) }}
+    >
+      {badge.letter}
+    </span>
+  );
+}
+
+// [2026-09-28] Name des Users oben in der Seitenleiste. Ohne Namen eine
+// leise Frage statt eines Formulars; ein Klick auf den Namen macht ihn
+// direkt hier aenderbar (Enter speichert, Escape bricht ab).
+function SidebarName({ displayName, onSave }: { displayName: string | null; onSave: (name: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+
+  function start() {
+    setValue(displayName ?? "");
+    setEditing(true);
+  }
+
+  function commit() {
+    const name = value.trim();
+    if (name && name !== displayName) onSave(name);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="sidebar-name-edit">
+        <input
+          className="sidebar-name-input"
+          autoFocus
+          value={value}
+          maxLength={80}
+          placeholder="Dein Name"
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") setEditing(false);
+          }}
+          aria-label="Dein Name"
+        />
+        <span className="sidebar-name-hint">So sehen dich die Empfänger deiner Mails.</span>
+      </div>
+    );
+  }
+
+  return displayName ? (
+    <button type="button" className="sidebar-name" onClick={start} title="Namen ändern">
+      {displayName}
+    </button>
+  ) : (
+    <button type="button" className="sidebar-name sidebar-name-empty" onClick={start}>
+      Wie heißt du?
+    </button>
+  );
+}

@@ -470,6 +470,10 @@ function ImapConnectForm({
   const [imapSecure, setImapSecure] = useState(provider.imapSecure ?? true);
   const [imapUser, setImapUser] = useState(initialUser);
   const [imapPassword, setImapPassword] = useState("");
+  // [2026-09-28] Name des Users -- nur bei der Ersteinrichtung gefragt
+  // (beim weiteren Konto ist er schon bekannt, siehe Seitenleiste).
+  const [displayName, setDisplayName] = useState("");
+  const askName = !onAccountAdded;
   const [showAdvanced, setShowAdvanced] = useState(provider.imapHost === null);
   const [smtpHost, setSmtpHost] = useState(provider.smtpHost ?? "");
   const [smtpPort, setSmtpPort] = useState(provider.smtpPort ?? 587);
@@ -564,6 +568,7 @@ function ImapConnectForm({
             pop3Secure: imapSecure,
             pop3User: imapUser.trim() || undefined,
             pop3Password: password,
+            displayName: askName && displayName.trim() ? displayName.trim() : undefined,
             ...smtp,
           })
         : await api.connectImapAccount({
@@ -573,6 +578,7 @@ function ImapConnectForm({
             imapSecure,
             imapUser: imapUser.trim() || undefined,
             imapPassword: password,
+            displayName: askName && displayName.trim() ? displayName.trim() : undefined,
             ...smtp,
           });
       setLogin({ ok: true, message: "Anmeldung erfolgreich." });
@@ -660,12 +666,27 @@ function ImapConnectForm({
         )}
 
         <form className="imap-form" onSubmit={handleSubmit}>
+          {askName && (
+            <label className="imap-field">
+              <span>Dein Name</span>
+              <input
+                type="text"
+                autoComplete="name"
+                autoFocus
+                maxLength={80}
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="z. B. Anna Schmidt"
+              />
+              <small className="imap-field-hint">So sehen dich die Empfänger deiner Mails.</small>
+            </label>
+          )}
           <label className="imap-field">
             <span>E-Mail-Adresse</span>
             <input
               type="email"
               required
-              autoFocus
+              autoFocus={!askName}
               value={emailAddress}
               onChange={(e) => setEmailAddress(e.target.value)}
               onBlur={(e) => syncProviderToEmail(e.target.value)}

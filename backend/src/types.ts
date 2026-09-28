@@ -66,6 +66,10 @@ export interface User {
   // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
   // ("Nudge" -- Erinnerung an unbeantwortete Mails), Default true.
   nudgeUnansweredEnabled: boolean;
+  // [2026-09-28] Massimo: Name des Users, bei der Einrichtung erfragt;
+  // steht oben in der Seitenleiste und als Absendername beim Versand
+  // ("Massimo Manca <adresse>"). null = noch nicht angegeben.
+  displayName: string | null;
   createdAt: string;
 }
 

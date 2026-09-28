@@ -1526,6 +1526,19 @@ async function main() {
     const settingsDefault = (await settingsDefaultRes.json()) as Record<string, unknown>;
     assert(settingsDefault.accentTheme === "gruen", `Default-Akzentfarbe sollte 'gruen' sein, war '${settingsDefault.accentTheme}'`);
 
+    // [2026-09-28] Anzeigename: Default null, wird bereinigt gespeichert,
+    // leer entfernt ihn wieder.
+    assert(settingsDefault.displayName === null, "displayName sollte anfangs null sein");
+    const putName = async (displayName: unknown) =>
+      (await (await fetch(`${base}/v1/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName }),
+      })).json()) as Record<string, unknown>;
+    const named = await putName('  Massimo \n "Manca" <x>  ');
+    assert(named.displayName === "Massimo Manca x", `displayName sollte bereinigt sein, war ${JSON.stringify(named.displayName)}`);
+    assert((await putName("")).displayName === null, "leerer displayName sollte ihn entfernen");
+
     const settingsInvalidRes = await fetch(`${base}/v1/settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },

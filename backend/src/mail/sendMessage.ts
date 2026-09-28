@@ -215,6 +215,7 @@ export async function sendMessageForUser(userId: string, body: SendMessageInput)
   let sentMessageId: string;
   try {
     const result = await adapter.sendMail({
+      fromName: (await store.getUserById(account.userId))?.displayName ?? null,
       to,
       cc,
       bcc,

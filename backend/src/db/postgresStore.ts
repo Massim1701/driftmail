@@ -84,6 +84,7 @@ function rowToUser(r: any): User {
     accentTheme: r.accent_theme,
     strictUnknownSenders: r.strict_unknown_senders,
     nudgeUnansweredEnabled: r.nudge_unanswered_enabled,
+    displayName: r.display_name ?? null,
     createdAt: r.created_at,
   };
 }
@@ -530,6 +531,8 @@ export class PostgresStore implements Store {
     await this.pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS nudge_unanswered_enabled BOOLEAN NOT NULL DEFAULT true
     `);
+    // [2026-09-28] Anzeigename des Users (Seitenleiste, Absendername).
+    await this.pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT`);
   }
 
   /** [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
@@ -604,16 +607,24 @@ export class PostgresStore implements Store {
 
   async updateUserSettings(
     id: string,
-    patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled">>,
+    patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled" | "displayName">>,
   ): Promise<User | undefined> {
     const { rows } = await this.pool.query(
       `UPDATE users SET
          accent_theme = COALESCE($2, accent_theme),
          strict_unknown_senders = COALESCE($3, strict_unknown_senders),
-         nudge_unanswered_enabled = COALESCE($4, nudge_unanswered_enabled)
+         nudge_unanswered_enabled = COALESCE($4, nudge_unanswered_enabled),
+         display_name = CASE WHEN $5::boolean THEN $6 ELSE display_name END
        WHERE id = $1
        RETURNING *`,
-      [id, patch.accentTheme ?? null, patch.strictUnknownSenders ?? null, patch.nudgeUnansweredEnabled ?? null],
+      [
+        id,
+        patch.accentTheme ?? null,
+        patch.strictUnknownSenders ?? null,
+        patch.nudgeUnansweredEnabled ?? null,
+        patch.displayName !== undefined,
+        patch.displayName ?? null,
+      ],
     );
     return rows[0] ? rowToUser(rows[0]) : undefined;
   }

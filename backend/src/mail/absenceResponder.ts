@@ -84,6 +84,7 @@ export async function maybeSendAbsenceResponse(
 
   try {
     await adapter.sendMail({
+      fromName: (await store.getUserById(account.userId))?.displayName ?? null,
       to: [fromAddress],
       cc: [],
       bcc: [],

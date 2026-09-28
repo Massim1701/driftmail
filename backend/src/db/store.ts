@@ -68,7 +68,7 @@ export interface Store {
   /** [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 1: erweitert um
    * strictUnknownSenders, `updateUserAccentTheme` bewusst nicht zu einer
    * zweiten near-doppelten Methode ausgebaut. */
-  updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled">>): Promise<User | undefined>;
+  updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled" | "displayName">>): Promise<User | undefined>;
   createMailAccount(input: Omit<MailAccountRecord, "id">): Promise<MailAccountRecord>;
   listMailAccounts(): Promise<MailAccountRecord[]>;
   getMailAccount(id: string): Promise<MailAccountRecord | undefined>;
@@ -401,6 +401,7 @@ export class InMemoryStore implements Store {
       accentTheme: "gruen",
       strictUnknownSenders: true,
       nudgeUnansweredEnabled: true,
+      displayName: null,
       createdAt: new Date().toISOString(),
     };
     this.users.push(user);
@@ -415,12 +416,13 @@ export class InMemoryStore implements Store {
     return this.users.find((u) => u.id === id);
   }
 
-  async updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled">>): Promise<User | undefined> {
+  async updateUserSettings(id: string, patch: Partial<Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled" | "displayName">>): Promise<User | undefined> {
     const user = await this.getUserById(id);
     if (!user) return undefined;
     if (patch.accentTheme !== undefined) user.accentTheme = patch.accentTheme;
     if (patch.strictUnknownSenders !== undefined) user.strictUnknownSenders = patch.strictUnknownSenders;
     if (patch.nudgeUnansweredEnabled !== undefined) user.nudgeUnansweredEnabled = patch.nudgeUnansweredEnabled;
+    if (patch.displayName !== undefined) user.displayName = patch.displayName;
     return user;
   }
 

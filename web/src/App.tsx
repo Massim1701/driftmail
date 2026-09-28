@@ -76,6 +76,11 @@ export default function App() {
   // activeAccountId bestimmt, welches Konto gerade angezeigt wird.
   const [accounts, setAccounts] = useState<MailAccount[]>([]);
   const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
+  // [2026-09-28] Name des Users (GET/PUT /settings displayName) und Anzahl
+  // im Eingang der gerade NICHT geoeffneten Konten (Seitenleiste zeigt
+  // jeden Eingang mit Kennzeichen, siehe FolderSidebar).
+  const [displayName, setDisplayName] = useState<string | null>(null);
+  const [otherInboxCounts, setOtherInboxCounts] = useState<Partial<Record<string, number>>>({});
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [token, setToken] = useState<string | null>(() => getStoredToken());
@@ -282,6 +287,34 @@ export default function App() {
     };
   }, [token, activeAccountId, folders, loadFolder]);
 
+  // [2026-09-28] Anzahl im Eingang der anderen Konten (Seitenleiste), beim
+  // Start, bei Kontowechsel und im selben Minutentakt wie oben.
+  useEffect(() => {
+    if (!token || accounts.length < 2) return;
+    let cancelled = false;
+    const others = accounts.filter((a) => a.id !== activeAccountId);
+    const load = async (first = false) => {
+      if (!first && document.visibilityState !== "visible") return;
+      const entries = await Promise.all(
+        others.map(async (a) => {
+          try {
+            const eingang = (await api.listFolders(a.id)).find((f) => f.systemKey === "eingang");
+            return [a.id, eingang ? (await api.listMessages({ folderId: eingang.id })).length : 0] as const;
+          } catch {
+            return [a.id, undefined] as const;
+          }
+        }),
+      );
+      if (!cancelled) setOtherInboxCounts(Object.fromEntries(entries.filter(([, n]) => n !== undefined)));
+    };
+    load(true);
+    const handle = setInterval(() => load(), AUTO_REFRESH_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+    };
+  }, [token, accounts, activeAccountId]);
+
   // Suche (siehe searchQuery-Kommentar oben): leicht entprellt (250ms),
   // damit nicht bei jedem Tastendruck ein eigener Request rausgeht. Leerer
   // Suchbegriff löscht die Ergebnisse sofort, kein Request nötig.
@@ -331,6 +364,30 @@ export default function App() {
     setSearchQuery("");
   }
 
+  // [2026-09-28] Eingang eines Kontos aus der Seitenleiste: beim geoeffneten
+  // Konto nur den Eingang waehlen, sonst das Konto wechseln (der Ordner-
+  // Lade-Effekt oeffnet dann von selbst dessen Eingang).
+  function handleSelectAccountInbox(accountId: string) {
+    if (accountId !== activeAccountId) {
+      handleSwitchAccount(accountId);
+      return;
+    }
+    const eingang = folders.find((f) => f.systemKey === "eingang");
+    if (eingang) handleSelectFolder(eingang.id);
+  }
+
+  function handleSaveDisplayName(name: string) {
+    const previous = displayName;
+    setDisplayName(name);
+    api
+      .updateSettings({ displayName: name })
+      .then((s) => setDisplayName(s.displayName ?? null))
+      .catch(() => {
+        setDisplayName(previous);
+        setError("Name konnte nicht gespeichert werden.");
+      });
+  }
+
   // "Konto hinzufügen" (WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE", Punkt
   // 2, Übergabe an Track F): öffnet denselben Onboarding-Bildschirm wie
   // beim Erst-Login, aber als Overlay über der bereits eingeloggten App
@@ -371,6 +428,7 @@ export default function App() {
       .then((s) => {
         applyAccentTheme(s.accentTheme);
         setAccentTheme(s.accentTheme);
+        setDisplayName(s.displayName ?? null);
         setStrictUnknownSenders(s.strictUnknownSenders);
       })
       .catch(() => {});
@@ -456,6 +514,15 @@ export default function App() {
     if (entwuerfeFolder) c[entwuerfeFolder.id] = drafts.length;
     return c;
   }, [folders, messagesByFolder, entwuerfeFolder, drafts]);
+
+  // [2026-09-28] Eingang je Konto: geoeffnetes Konto aus den geladenen
+  // Ordnern, die anderen aus otherInboxCounts (Effekt unten).
+  const inboxCounts = useMemo(() => {
+    const c: Partial<Record<string, number>> = { ...otherInboxCounts };
+    const eingang = folders.find((f) => f.systemKey === "eingang");
+    if (activeAccountId && eingang) c[activeAccountId] = counts[eingang.id] ?? 0;
+    return c;
+  }, [otherInboxCounts, folders, counts, activeAccountId]);
 
   const quarantaeneFolder = useMemo(() => folders.find((f) => f.systemKey === "quarantaene"), [folders]);
   const papierkorbFolder = useMemo(() => folders.find((f) => f.systemKey === "papierkorb"), [folders]);
@@ -875,7 +942,6 @@ export default function App() {
             counts={counts}
             accounts={accounts}
             activeAccountId={activeAccountId}
-            onSwitchAccount={handleSwitchAccount}
             onSyncNow={handleSyncNow}
             isSyncing={isSyncing}
             onNewMessage={handleNewMessage}
@@ -885,6 +951,10 @@ export default function App() {
             onDeleteFolder={handleDeleteFolder}
             onOpenSettings={() => setSettingsOpen(true)}
             onAddAccount={handleAddAccount}
+            displayName={displayName}
+            onSaveDisplayName={handleSaveDisplayName}
+            inboxCounts={inboxCounts}
+            onSelectAccountInbox={handleSelectAccountInbox}
           />
 
           <div className="message-column">
@@ -998,6 +1068,7 @@ export default function App() {
           onClose={() => setCompose(null)}
           onSent={handleSent}
           onDraftScheduled={loadDrafts}
+          displayName={displayName}
         />
       )}
 

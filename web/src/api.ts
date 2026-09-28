@@ -169,6 +169,8 @@ export const api = {
     imapSecure?: boolean;
     imapUser?: string;
     imapPassword: string;
+    /** [2026-09-28] Optional: Name des Users (Ersteinrichtung). */
+    displayName?: string;
     smtpHost?: string;
     smtpPort?: number;
     smtpSecure?: boolean;
@@ -187,6 +189,8 @@ export const api = {
     pop3Secure?: boolean;
     pop3User?: string;
     pop3Password: string;
+    /** [2026-09-28] Optional: Name des Users (Ersteinrichtung). */
+    displayName?: string;
     smtpHost?: string;
     smtpPort?: number;
     smtpSecure?: boolean;
@@ -385,7 +389,7 @@ export const api = {
   // backend/README.md "Einstellungsbereich".
   getSettings: () => request<UserSettings>("/settings"),
 
-  updateSettings: (data: { accentTheme?: AccentTheme; strictUnknownSenders?: boolean; nudgeUnansweredEnabled?: boolean }) =>
+  updateSettings: (data: { accentTheme?: AccentTheme; strictUnknownSenders?: boolean; nudgeUnansweredEnabled?: boolean; displayName?: string | null }) =>
     request<UserSettings>("/settings", { method: "PUT", body: JSON.stringify(data) }),
 
   // GET/PUT /privacy-settings (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 1,

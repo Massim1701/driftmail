@@ -383,3 +383,9 @@
 .check-fail .check-detail {
   color: var(--color-danger-text);
 }
+
+/* [2026-09-28] Kleiner Erklaertext unter einem Feld ("So sehen dich ..."). */
+.imap-field-hint {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}

@@ -90,6 +90,26 @@
   outline: none;
 }
 
+/* [2026-09-28] Absenderzeile mit Konto-Kennzeichen. */
+.compose-from .account-badge {
+  flex: none;
+}
+
+.compose-field .compose-from-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
+}
+
+.compose-from-value strong {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
 .compose-ccbcc-toggle {
   align-self: flex-start;
 }

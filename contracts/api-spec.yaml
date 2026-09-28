@@ -276,6 +276,7 @@ paths:
                 imapSecure: { type: boolean, description: "IMAP: Default true (implizites TLS)" }
                 imapUser: { type: string, description: "IMAP: Default = emailAddress, falls abweichend (selten)" }
                 imapPassword: { type: string, description: "IMAP: erforderlich fuer provider=imap, App-spezifisches Passwort" }
+                displayName: { type: string, description: "[2026-09-28] Optional: Name des Users aus dem Einrichtungsassistenten, setzt UserSettings.displayName" }
                 smtpHost: { type: string, description: "IMAP: optional, Default = imapHost" }
                 smtpPort: { type: integer, description: "IMAP: optional, Default 587" }
                 smtpSecure: { type: boolean, description: "IMAP: optional, Default false (STARTTLS statt implizitem TLS)" }
@@ -1401,6 +1402,13 @@ paths:
                   description: >
                     [2026-09-21] Nachtrag -- war in UserSettings bereits
                     dokumentiert, hier im PUT-Request-Body noch vergessen.
+                displayName:
+                  type: string
+                  nullable: true
+                  description: >
+                    [2026-09-28] Name des Users ("Massimo Manca"): oben in der
+                    Seitenleiste und als Absendername beim Versand. Getrimmt, ohne
+                    Steuerzeichen/<>", max. 80 Zeichen; leer oder null = entfernen.
       responses:
         "200":
           description: Gespeicherte Einstellungen
@@ -2006,6 +2014,13 @@ components:
             [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-
             Recherche" Punkt 2 ("Nudge"): Ein/Aus-Schalter fuer
             Message.awaitingReply, Default true (wie Gmail).
+        displayName:
+          type: string
+          nullable: true
+          description: >
+            [2026-09-28] Name des Users ("Massimo Manca"): oben in der
+            Seitenleiste und als Absendername beim Versand. Getrimmt, ohne
+            Steuerzeichen/<>", max. 80 Zeichen; leer oder null = entfernen.
 
     Contract:
       type: object

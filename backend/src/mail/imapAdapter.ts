@@ -209,7 +209,7 @@ export class ImapAdapter implements MailAdapter {
     });
     const from = this.creds.emailAddress ?? this.creds.user;
     const mail: Mail.Options = {
-      from,
+      from: input.fromName ? { name: input.fromName, address: from } : from,
       to: input.to,
       cc: input.cc.length > 0 ? input.cc : undefined,
       // nodemailer setzt bcc korrekt nur im SMTP-Envelope (RCPT TO), nie in

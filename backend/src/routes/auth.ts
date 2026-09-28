@@ -30,6 +30,7 @@ import { encryptCredentials } from "../auth/credentialsEncryption";
 import { createSystemFoldersForAccount, store } from "../db/store";
 import { ImapAdapter, type ImapCredentials } from "../mail/imapAdapter";
 import { type AssistableCredentials, connectWithAssist } from "../mail/connectAssist";
+import { normalizeDisplayName } from "./settings";
 import { Pop3Adapter, type Pop3Credentials } from "../mail/pop3Adapter";
 import { syncAccount } from "../mail/sync";
 import { aiAdapter } from "../ai";
@@ -467,6 +468,11 @@ authRouter.post("/accounts", async (req, res) => {
 
     account = (await store.updateMailAccount(account.id, { provider, encryptedImapCredentials })) ?? account;
   }
+
+  // [2026-09-28] Anzeigename aus dem Einrichtungsassistenten ("Wie heisst
+  // du?"), optional -- gesetzt nur, wenn mitgeschickt.
+  const displayName = normalizeDisplayName(body.displayName);
+  if (displayName !== undefined) await store.updateUserSettings(userId, { displayName });
 
   if ((await store.listFolders(account.id)).length === 0) {
     await createSystemFoldersForAccount(account.id);

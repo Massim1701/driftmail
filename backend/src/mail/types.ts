@@ -49,6 +49,9 @@ export interface FetchedMail {
 // Versand laeuft ausschliesslich ueber die Provider-API des verbundenen
 // Kontos (kein eigener Mailserver, gleiches Prinzip wie beim Lesen).
 export interface SendMailInput {
+  /** [2026-09-28] Absendername ("Massimo Manca"), aus dem Anzeigenamen des
+   * Users. Fehlt er, steht nur die Adresse im From-Header. */
+  fromName?: string | null;
   to: string[];
   cc: string[];
   // [2026-09-21] WEB_INBOX.md 21.09. "3) CC/BCC beim Verfassen" -- bcc wird

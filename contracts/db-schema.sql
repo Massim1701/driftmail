@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS users (
     -- Ein/Aus-Schalter, wie im Auftrag ausdruecklich verlangt ("manche Nutzer
     -- empfinden es als aufdringlich"). Default true, wie Gmail.
     nudge_unanswered_enabled BOOLEAN NOT NULL DEFAULT true,
+    -- [2026-09-28] Name des Users (Seitenleiste oben, Absendername beim
+    -- Versand), bei der Einrichtung erfragt. NULL = noch nicht angegeben.
+    display_name TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
 

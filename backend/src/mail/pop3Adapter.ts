@@ -181,7 +181,9 @@ export class Pop3Adapter implements MailAdapter {
       auth: { user: this.creds.user, pass: this.creds.password },
     });
     const info = await transport.sendMail({
-      from: this.creds.emailAddress ?? this.creds.user,
+      from: input.fromName
+        ? { name: input.fromName, address: this.creds.emailAddress ?? this.creds.user }
+        : this.creds.emailAddress ?? this.creds.user,
       to: input.to,
       cc: input.cc.length > 0 ? input.cc : undefined,
       bcc: input.bcc.length > 0 ? input.bcc : undefined,

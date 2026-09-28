@@ -125,6 +125,7 @@ async function main() {
 
     // 5. Versand: Absender = Kontoadresse, Kopie im Gesendet-Ordner
     await adapter.sendMail({
+      fromName: "Max Mustermann",
       to: ["anna@example.org"],
       cc: [],
       bcc: [],
@@ -134,9 +135,12 @@ async function main() {
       attachments: [],
     });
     assert(received.length === 1, "SMTP-Server sollte genau eine Mail bekommen");
-    assert(/^From: max\.mustermann@kunde\.de/m.test(received[0]), "Absender sollte die Kontoadresse sein, nicht der Anmeldename");
+    assert(
+      /^From: Max Mustermann <max\.mustermann@kunde\.de>/m.test(received[0]),
+      "Absender sollte 'Name <Kontoadresse>' sein, nicht der Anmeldename",
+    );
     assert((await count("INBOX.Gesendet")) === 1, "Kopie sollte im Gesendet-Ordner liegen");
-    console.log("✔ Versand: Absender korrekt, Kopie in 'INBOX.Gesendet'");
+    console.log("✔ Versand: Absender mit Name korrekt, Kopie in 'INBOX.Gesendet'");
 
     console.log("✔ Mailserver-Test erfolgreich");
   } finally {

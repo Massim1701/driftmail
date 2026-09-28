@@ -16,19 +16,160 @@
   overflow-y: auto;
 }
 
+/* [2026-09-28] Mit Name, Posteingaengen und Ordnern wird die Leiste laenger
+   als der Bildschirm: dann scrollt sie, statt Knoepfe zusammenzudruecken.
+   (Der Abstandhalter weiter unten darf weiter schrumpfen/wachsen.) */
+.folder-sidebar > * {
+  flex-shrink: 0;
+}
+
+/* [2026-09-28] Kopf: der Name des Users gross (Serif), darunter leise
+   "driftmail" mit kleinem Zeichen -- die App tritt zurueck, der Mensch
+   steht vorne. */
 .folder-sidebar-brand {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 2px 6px 4px;
+}
+
+.sidebar-name {
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-family-display);
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.3px;
+  color: var(--color-text-primary);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+.sidebar-name-empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  cursor: pointer;
+}
+
+.sidebar-name-empty:hover {
+  color: var(--color-text-secondary);
+}
+
+.sidebar-name:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.sidebar-name-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.sidebar-name-input {
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-display);
+  font-size: 19px;
+}
+
+.sidebar-name-input:focus {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 0;
+}
+
+.sidebar-name-hint {
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
+}
+
+.folder-sidebar-brandline {
+  display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 6px;
+  gap: 6px;
+  opacity: 0.75;
 }
 
 .folder-sidebar-wordmark {
   font-family: var(--font-family-display);
-  font-size: 21px;
+  font-size: 13px;
   font-weight: var(--font-weight-medium);
-  letter-spacing: -0.2px;
-  color: var(--color-text-primary);
+  letter-spacing: 0.1px;
+  color: var(--color-text-secondary);
+}
+
+/* [2026-09-28] Abschnitts-Ueberschriften ("Posteingaenge", "Ordner") und
+   runde Anbieter-Kennzeichen je Konto. */
+.sidebar-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 10px -2px;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.sidebar-section-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-text-secondary);
+}
+
+.account-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-family: var(--font-family);
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-surface-sidebar) 70%, transparent);
+}
+
+.folder-item-main.account-inbox {
+  height: 46px;
+}
+
+.account-inbox-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.25;
+}
+
+.account-inbox-text .folder-label {
+  max-width: 100%;
+}
+
+.account-inbox-address {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-muted);
 }
 
 .new-message-button {
@@ -354,22 +495,7 @@
   position: relative;
 }
 
-.account-avatar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--color-selected-bg);
-  color: var(--color-selected-text);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-semibold);
-}
-
-.folder-sidebar-account,
-.account-switcher {
+.folder-sidebar-account {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -378,13 +504,6 @@
   font-family: var(--font-family);
   font-size: var(--font-size-caption);
   color: var(--color-text-secondary);
-}
-
-.account-switcher {
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
 }
 
 .sidebar-icon-button {

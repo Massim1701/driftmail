@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { AiSource, AttachmentScanStatus, MailAccount, MessageDetail } from "../types";
 import { api, ApiError } from "../api";
 import { tryDraftReplyOnDevice } from "../onDeviceAi";
+import { AccountBadgeMark } from "./FolderSidebar";
 import "./ComposeModal.css";
 
 // [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
@@ -109,6 +110,7 @@ export function ComposeModal({
   onClose,
   onSent,
   onDraftScheduled,
+  displayName,
 }: {
   mode: ComposeMode;
   /** Sender-Auswahl (WEB_INBOX.md 21.09. "ERGAENZUNG"): nur relevant im
@@ -127,6 +129,8 @@ export function ComposeModal({
    * wurde tatsächlich gesendet -- onSent (das den "gesendet"-Ordner neu
    * lädt) wäre hier falsch, App.tsx lädt stattdessen die Entwürfe-Liste neu. */
   onDraftScheduled: () => void;
+  /** [2026-09-28] Name des Users fuer die sichtbare Absenderzeile. */
+  displayName: string | null;
 }) {
   const isReply = mode === "reply";
   const isForward = mode === "forward";
@@ -166,6 +170,7 @@ export function ComposeModal({
   }, [isReply, isForward, original]);
 
   const [accountId, setAccountId] = useState(defaultAccountId ?? accounts[0]?.id ?? "");
+  const fromAccount = accounts.find((a) => a.id === accountId) ?? null;
   const [to, setTo] = useState(prefill.to);
   const [cc, setCc] = useState(prefill.cc);
   const [bcc, setBcc] = useState(prefill.bcc);
@@ -459,16 +464,34 @@ export function ComposeModal({
         </div>
 
         <fieldset className="compose-fields" disabled={undoSecondsLeft !== null}>
-          {mode === "new" && accounts.length > 1 && (
-            <label className="compose-field">
+          {/* [2026-09-28] Massimo: "ich sehe nicht, womit ich antworte" --
+              die Absenderzeile steht jetzt IMMER da, mit Kennzeichen des
+              Kontos und dem eigenen Namen. Antworten gehen vom Konto der
+              Ursprungsmail raus (= dem geoeffneten), neue Mails und
+              Weiterleitungen sind bei mehreren Konten waehlbar. */}
+          {fromAccount && (
+            <label className="compose-field compose-from">
               <span>Von</span>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.emailAddress}
-                  </option>
-                ))}
-              </select>
+              <AccountBadgeMark account={fromAccount} size={20} />
+              {!isReply && accounts.length > 1 ? (
+                <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {displayName ? `${displayName} <${a.emailAddress}>` : a.emailAddress}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="compose-from-value">
+                  {displayName ? (
+                    <>
+                      <strong>{displayName}</strong> {`<${fromAccount.emailAddress}>`}
+                    </>
+                  ) : (
+                    fromAccount.emailAddress
+                  )}
+                </span>
+              )}
             </label>
           )}
           {/* Kontakt-Autovervollstaendigung (Punkt 2): ein gemeinsames

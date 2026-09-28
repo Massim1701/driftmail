@@ -12,12 +12,24 @@ export const settingsRouter = Router();
 
 const VALID_ACCENT_THEMES: AccentTheme[] = ["gruen", "gelb", "outlook_blue", "rosa", "schwarz"];
 
-function toApiSettings(user: Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled">) {
+function toApiSettings(user: Pick<User, "accentTheme" | "strictUnknownSenders" | "nudgeUnansweredEnabled" | "displayName">) {
   return {
     accentTheme: user.accentTheme,
     strictUnknownSenders: user.strictUnknownSenders,
     nudgeUnansweredEnabled: user.nudgeUnansweredEnabled,
+    displayName: user.displayName,
   };
+}
+
+// [2026-09-28] Anzeigename: getrimmt, ohne Steuerzeichen (landet im
+// From-Header), hoechstens 80 Zeichen; leer = entfernen (null).
+// `undefined` = nicht mitgeschickt, nicht aendern.
+export function normalizeDisplayName(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const clean = value.replace(/[\u0000-\u001f\u007f<>"]/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
+  return clean || null;
 }
 
 settingsRouter.get("/settings", async (req, res) => {
@@ -27,11 +39,12 @@ settingsRouter.get("/settings", async (req, res) => {
 });
 
 settingsRouter.put("/settings", async (req, res) => {
-  const body = req.body as { accentTheme?: AccentTheme; strictUnknownSenders?: boolean; nudgeUnansweredEnabled?: boolean };
+  const body = req.body as { accentTheme?: AccentTheme; strictUnknownSenders?: boolean; nudgeUnansweredEnabled?: boolean; displayName?: unknown };
+  const displayName = normalizeDisplayName(body.displayName);
   if (body.accentTheme !== undefined && !VALID_ACCENT_THEMES.includes(body.accentTheme)) {
     return res.status(400).json({ error: `accentTheme muss eines von ${VALID_ACCENT_THEMES.join(", ")} sein` });
   }
-  if (body.accentTheme === undefined && body.strictUnknownSenders === undefined && body.nudgeUnansweredEnabled === undefined) {
+  if (body.accentTheme === undefined && body.strictUnknownSenders === undefined && body.nudgeUnansweredEnabled === undefined && displayName === undefined) {
     const user = await store.getUserById(req.userId);
     if (!user) return res.status(404).json({ error: "User nicht gefunden" });
     return res.json(toApiSettings(user));
@@ -40,6 +53,7 @@ settingsRouter.put("/settings", async (req, res) => {
     accentTheme: body.accentTheme,
     strictUnknownSenders: body.strictUnknownSenders,
     nudgeUnansweredEnabled: body.nudgeUnansweredEnabled,
+    displayName,
   });
   if (!updated) return res.status(404).json({ error: "User nicht gefunden" });
   res.json(toApiSettings(updated));

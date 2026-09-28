@@ -63,7 +63,7 @@ const AI_IMPLEMENTED_PROVIDERS = ["anthropic", "openai"];
 // dieser Mock-Server war beim Drei-Spalten-Layout-Umbau noch nicht
 // nachgezogen).
 // [2026-09-28] Redesign: fuenf Themes, Default "gruen" (wie backend/src/routes/settings.ts).
-let userSettings = { accentTheme: "gruen", strictUnknownSenders: true, nudgeUnansweredEnabled: true };
+let userSettings = { accentTheme: "gruen", strictUnknownSenders: true, nudgeUnansweredEnabled: true, displayName: null };
 const ACCENT_THEME_VALUES = ["gruen", "gelb", "outlook_blue", "rosa", "schwarz"];
 
 // GET/PUT /privacy-settings (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 1,
@@ -825,6 +825,8 @@ const server = createServer(async (req, res) => {
           body.strictUnknownSenders !== undefined ? body.strictUnknownSenders : userSettings.strictUnknownSenders,
         nudgeUnansweredEnabled:
           body.nudgeUnansweredEnabled !== undefined ? body.nudgeUnansweredEnabled : userSettings.nudgeUnansweredEnabled,
+        displayName:
+          body.displayName !== undefined ? (String(body.displayName ?? "").trim().slice(0, 80) || null) : userSettings.displayName,
       };
       return send(res, 200, userSettings);
     }

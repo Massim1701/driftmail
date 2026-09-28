@@ -10,6 +10,15 @@ export const accounts = [
     emailAddress: "massimo@example.com",
     syncStatus: "ok",
   },
+  // [2026-09-28] Zweites Konto, damit die Seitenleiste mit mehreren
+  // Eingaengen (je Konto mit Kennzeichen) im Mock sichtbar ist. Der Mock
+  // liefert fuer beide Konten dieselben Ordner.
+  {
+    id: "a1000000-0000-0000-0000-000000000002",
+    provider: "imap",
+    emailAddress: "massimo@gmx.de",
+    syncStatus: "ok",
+  },
 ];
 
 // ---- Ordner ----
