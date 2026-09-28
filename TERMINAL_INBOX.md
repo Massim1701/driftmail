@@ -170,7 +170,7 @@ Kein Blocker fuer Terminal. Alle fuenf Punkte sind unabhaengig voneinander, koen
 
 ---
 
-[2026-09-28] [offen] [Track F + D -- Ergebnis Fehler-Durchlauf, eine Entscheidung fuer Web] — Massimo hat einen kompletten Fehler-Check ueber alle Module angestossen. Ergebnis:
+[2026-09-28] [beantwortet: siehe WEB_INBOX.md 28.09. "ANTWORT AUF LINT-FRAGE - Option (b)"] [Track F + D -- Ergebnis Fehler-Durchlauf, eine Entscheidung fuer Web] — Massimo hat einen kompletten Fehler-Check ueber alle Module angestossen. Ergebnis:
 
 **Behoben (Track D, kein Handlungsbedarf fuer Web):** `contracts-logic` hatte 7 von 14 Tests rot. Ursache: `better-sqlite3@11` laeuft nicht unter Node 26 (lokal v26.10.0) -- kein Prebuild, und `node-gyp rebuild` scheitert ebenfalls. Auf `better-sqlite3@^13.0.3` (+ passende `@types`) gehoben, kein Code geaendert, jetzt 14/14 gruen.
 
