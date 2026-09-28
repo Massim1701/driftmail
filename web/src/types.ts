@@ -269,6 +269,25 @@ export interface MailProvider {
   // Provider abdeckt (siehe contracts/mail-providers.json "domains"-Note).
   // "other_imap" hat bewusst eine leere Liste.
   domains: string[];
+  // [2026-09-28] Einrichtungshinweis je Anbieter (null = keiner) und ob der
+  // OAuth-Weg auf diesem Server eingerichtet ist (nur vom Server gesetzt).
+  setupHint?: string | null;
+  oauthAvailable?: boolean;
+}
+
+// [2026-09-28] GET /mail-providers/discover (api-spec.yaml).
+export interface DiscoveredMailSettings {
+  found: boolean;
+  source: "ispdb" | "mx" | "srv" | null;
+  providerId: string | null;
+  protocol: "imap" | "pop3" | null;
+  imapHost: string | null;
+  imapPort: number | null;
+  imapSecure: boolean | null;
+  smtpHost: string | null;
+  smtpPort: number | null;
+  smtpSecure: boolean | null;
+  username: "email" | "localpart" | null;
 }
 
 // GET/POST /drafts, PATCH/DELETE /drafts/{id} (WEB_INBOX.md 09.09.

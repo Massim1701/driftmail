@@ -17,6 +17,7 @@ import type {
   AttachmentScanStatus,
   Contract,
   DataBreachFinding,
+  DiscoveredMailSettings,
   Draft,
   DraftPhishingCheckResult,
   Folder,
@@ -139,6 +140,10 @@ export const api = {
   // Auswahlbildschirm") -- oeffentlich (kein Token noetig, security: [] im
   // Contract), treibt die Provider-Karten + IMAP-Preset-Vorbefuellung.
   listMailProviders: () => request<MailProvider[]>("/mail-providers"),
+  // [2026-09-28] Servereinstellungen für unbekannte Domains ermitteln, nur
+  // die Domain wird übertragen.
+  discoverMailSettings: (domain: string) =>
+    request<DiscoveredMailSettings>(`/mail-providers/discover?domain=${encodeURIComponent(domain)}`),
 
   // POST /accounts mit provider="imap" (api-spec.yaml): Login/Registrierungs-
   // Weg fuer Anbieter ohne OAuth (iCloud/GMX/web.de/generisches IMAP).

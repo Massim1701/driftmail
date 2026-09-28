@@ -44,7 +44,7 @@ struct OnboardingAccountConnectView: View {
     private enum Step {
         case enterEmail
         case pickProviderManually
-        case imapForm(MailProvider, initialEmail: String)
+        case imapForm(MailProvider, initialEmail: String, initialUser: String = "")
     }
 
     @State private var step: Step = .enterEmail
@@ -58,6 +58,8 @@ struct OnboardingAccountConnectView: View {
     /// Formular vorbefuellen, statt immer im komplett leeren generischen
     /// Formular zu landen.
     @State private var unavailableProvider: MailProvider?
+    /// [2026-09-28] Automatische Erkennung für unbekannte Domains läuft.
+    @State private var isDiscovering = false
 
     private let connectClient = RemoteAPIClient()
 
@@ -67,10 +69,11 @@ struct OnboardingAccountConnectView: View {
             emailEntry
         case .pickProviderManually:
             providerPicker
-        case .imapForm(let provider, let initialEmail):
+        case .imapForm(let provider, let initialEmail, let initialUser):
             ImapConnectFormView(
                 provider: provider,
                 initialEmail: initialEmail,
+                initialUser: initialUser,
                 client: connectClient,
                 onBack: { step = .enterEmail },
                 onConnected: onConnected
@@ -132,13 +135,13 @@ struct OnboardingAccountConnectView: View {
                 Button {
                     continueFromEmail()
                 } label: {
-                    Text("Weiter")
+                    Text(isDiscovering ? "Suche Servereinstellungen…" : "Weiter")
                         .frame(maxWidth: .infinity)
                         .font(.system(size: DesignTokens.Typography.Size.bodyLarge, weight: .medium))
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(DesignTokens.Color.accent)
-                .disabled(!email.contains("@"))
+                .disabled(!email.contains("@") || isDiscovering)
 
                 Button("Anbieter manuell auswählen") { step = .pickProviderManually }
                     .font(.system(size: DesignTokens.Typography.Size.small))
@@ -150,14 +153,14 @@ struct OnboardingAccountConnectView: View {
         }
         .background(DesignTokens.Color.surfacePage)
         .task { await loadProviders() }
-        .alert(unavailableProvider.map { "\($0.label) auf iOS noch nicht verfügbar" } ?? "", isPresented: Binding(
+        .alert(unavailableProvider.map { "\($0.label) ist noch nicht verfügbar" } ?? "", isPresented: Binding(
             get: { unavailableProvider != nil },
             set: { if !$0 { unavailableProvider = nil } }
         )) {
             Button("Trotzdem per IMAP versuchen") { proceedWithFallbackImap() }
             Button("Verstanden", role: .cancel) {}
         } message: {
-            Text("Der Login läuft über einen Browser-Redirect, dessen Rücksprungziel serverseitig aktuell fest auf den Web-Client zeigt (siehe SYNC.md, Offene Frage an Track A). Du kannst es trotzdem über den generischen IMAP-Weg versuchen, falls dein Anbieter das zulässt, oder ein anderes Konto verwenden.")
+            Text(unavailableProvider?.setupHint ?? "Du kannst es trotzdem über den allgemeinen IMAP-Weg versuchen, falls dein Anbieter das zulässt, oder ein anderes Konto verwenden.")
         }
     }
 
@@ -183,21 +186,44 @@ struct OnboardingAccountConnectView: View {
         guard trimmed.contains("@") else { return }
 
         guard let match = matchedProvider(for: trimmed) else {
-            // Unbekannte Endung: sauberer Fallback auf generisches IMAP,
-            // kein Fehler, keine Sackgasse (WEB_INBOX.md 21.09. Punkt 3).
+            // [2026-09-28] Unbekannte Endung: erst automatisch erkennen
+            // (GET /mail-providers/discover), sonst wie bisher ohne Fehler
+            // ins generische Formular (WEB_INBOX.md 21.09. Punkt 3).
+            Task { await discoverAndContinue(email: trimmed) }
+            return
+        }
+        continueWith(match, email: trimmed)
+    }
+
+    /// [2026-09-28] Gmail (OAuth, aber mit IMAP-Presets) geht auf iOS direkt
+    /// ins Formular mit App-Passwort -- die Google-Anmeldung kann hier nicht
+    /// zurückspringen. Nur Anbieter ohne Passwort-Weg (Outlook) bekommen
+    /// die Erklärung mit "Trotzdem per IMAP versuchen".
+    private func continueWith(_ provider: MailProvider, email: String, user: String = "") {
+        guard provider.usableWithPassword else {
+            unavailableProvider = provider
+            return
+        }
+        step = .imapForm(provider.asImapFallback, initialEmail: email, initialUser: user)
+    }
+
+    private func discoverAndContinue(email trimmed: String) async {
+        guard let at = trimmed.lastIndex(of: "@") else { return }
+        let localPart = String(trimmed[..<at])
+        let domain = trimmed[trimmed.index(after: at)...].lowercased()
+        isDiscovering = true
+        defer { isDiscovering = false }
+        guard let found = try? await connectClient.discoverMailSettings(domain: domain), found.found else {
             step = .imapForm(fallbackImapProvider, initialEmail: trimmed)
             return
         }
-        if match.authType == .oauth || match.comingSoon {
-            // Gmail ist auf iOS erkannt, aber ungefixt nicht funktional
-            // (siehe bestehende Grenze weiter unten); Outlook/Yahoo sind
-            // serverseitig noch gar nicht angebunden (comingSoon). Beides
-            // wird hier gleich behandelt: erklären + Fallback anbieten,
-            // statt den User ins Leere laufen zu lassen.
-            unavailableProvider = match
-            return
+        if let id = found.providerId, let preset = providers.first(where: { $0.id == id }) {
+            continueWith(preset, email: trimmed)
+        } else if found.imapHost != nil {
+            step = .imapForm(.discovered(domain: domain, settings: found), initialEmail: trimmed, initialUser: found.username == "localpart" ? localPart : "")
+        } else {
+            step = .imapForm(fallbackImapProvider, initialEmail: trimmed)
         }
-        step = .imapForm(match, initialEmail: trimmed)
     }
 
     /// [2026-09-25] "passe die App auf googlemail.com an": Gmail hat (siehe
@@ -253,11 +279,7 @@ struct OnboardingAccountConnectView: View {
 
     private func select(_ provider: MailProvider) {
         guard !provider.comingSoon else { return }
-        if provider.authType == .oauth {
-            unavailableProvider = provider
-            return
-        }
-        step = .imapForm(provider, initialEmail: email.trimmingCharacters(in: .whitespaces))
+        continueWith(provider, email: email.trimmingCharacters(in: .whitespaces))
     }
 
     private func loadProviders() async {
@@ -284,7 +306,7 @@ private struct ProviderRow: View {
                     Text(provider.label)
                         .font(.system(size: DesignTokens.Typography.Size.body, weight: .medium))
                         .foregroundStyle(provider.comingSoon ? DesignTokens.Color.textMuted : DesignTokens.Color.textPrimary)
-                    Text(provider.comingSoon ? "demnächst" : provider.authType == .oauth ? "Anmelden" : provider.authType == .pop3 ? "POP3 verbinden" : "IMAP verbinden")
+                    Text(provider.comingSoon ? "demnächst" : provider.authType == .oauth ? (provider.imapHost != nil ? "Mit App-Passwort" : "Anmelden") : provider.authType == .pop3 ? "POP3 verbinden" : "IMAP verbinden")
                         .font(.system(size: DesignTokens.Typography.Size.caption))
                         .foregroundStyle(DesignTokens.Color.textMuted)
                 }
@@ -350,12 +372,13 @@ private struct ImapConnectFormView: View {
     /// `initialEmail`: die auf dem vorigen Schritt (`enterEmail`) bereits
     /// eingegebene Adresse -- WEB_INBOX.md 21.09. "kein unnötiger
     /// Extra-Schritt" heißt auch: nicht nochmal von vorn tippen lassen.
-    init(provider: MailProvider, initialEmail: String = "", client: RemoteAPIClient, onBack: @escaping () -> Void, onConnected: @escaping (MailAccount, String) -> Void) {
+    init(provider: MailProvider, initialEmail: String = "", initialUser: String = "", client: RemoteAPIClient, onBack: @escaping () -> Void, onConnected: @escaping (MailAccount, String) -> Void) {
         self.provider = provider
         self.client = client
         self.onBack = onBack
         self.onConnected = onConnected
         _emailAddress = State(initialValue: initialEmail)
+        _imapUser = State(initialValue: initialUser)
         _showAdvanced = State(initialValue: provider.imapHost == nil)
         _connectionProtocol = State(initialValue: provider.authType == .pop3 ? .pop3 : .imap)
         _imapHost = State(initialValue: provider.imapHost ?? "")
@@ -377,10 +400,10 @@ private struct ImapConnectFormView: View {
                 .listRowInsets(EdgeInsets())
             }
 
-            if provider.requiresAppPassword {
+            if provider.requiresAppPassword || provider.setupHint != nil {
                 Section {
                     VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
-                        Text("\(provider.label) verlangt ein App-spezifisches Passwort statt deines normalen Kontopassworts.")
+                        Text(provider.setupHint ?? "\(provider.label) verlangt ein App-spezifisches Passwort statt deines normalen Kontopassworts.")
                             .font(.system(size: DesignTokens.Typography.Size.small))
                         if let helpUrl = provider.appPasswordHelpUrl, let url = URL(string: helpUrl) {
                             Link("Anleitung für \(provider.label)", destination: url)

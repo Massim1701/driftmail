@@ -34,13 +34,22 @@
 //    hier "falsche Adresse/falsches App-Passwort", nicht ein generischer
 //    Netzwerkfehler.
 //
+// [2026-09-28] Weitere Anbieter + Gmail ohne Google-Projekt: meldet der
+// Server `oauthAvailable=false` (kein Google-Client eingerichtet -- vorher
+// hing die Anmeldung dann an einem 503), geht Gmail direkt in den
+// IMAP-Weg mit App-Passwort (Presets aus mail-providers.json). Unbekannte
+// Domains fragen zuerst GET /mail-providers/discover (ISPDB/MX/SRV) und
+// füllen das Formular damit vor; passt die Domain zu einem bekannten
+// Anbieter (z.B. Google Workspace), wird dessen Preset genommen.
+// `setupHint` erscheint als Hinweis über dem Formular.
+//
 // Fallback-Liste: falls GET /mail-providers (noch) nicht erreichbar ist
 // (z.B. älterer Mock-Server ohne diese Route), bleibt wenigstens Gmail
 // nutzbar, damit der Login-Weg nicht komplett blockiert.
 
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, googleLoginUrl, setStoredToken } from "../api";
-import type { MailAccount, MailProvider } from "../types";
+import type { DiscoveredMailSettings, MailAccount, MailProvider } from "../types";
 import "./OnboardingScreen.css";
 import { BrandMark } from "../icons";
 import { seasonFor } from "../season";
@@ -93,6 +102,30 @@ const OTHER_IMAP_FALLBACK: MailProvider = {
   domains: [],
 };
 
+// Oauth-Anbieter, deren OAuth-Weg hier nicht nutzbar ist, aber IMAP-Presets
+// haben (Gmail), als IMAP-Anbieter behandeln.
+function asImapProvider(p: MailProvider): MailProvider {
+  return p.authType === "oauth" ? { ...p, authType: "imap", requiresAppPassword: true } : p;
+}
+
+// Ergebnis der automatischen Erkennung als Formular-Preset.
+function discoveredProvider(domain: string, d: DiscoveredMailSettings, base: MailProvider): MailProvider {
+  return {
+    ...base,
+    id: "discovered",
+    label: domain,
+    authType: d.protocol === "pop3" ? "pop3" : "imap",
+    imapHost: d.imapHost,
+    imapPort: d.imapPort,
+    imapSecure: d.imapSecure,
+    smtpHost: d.smtpHost,
+    smtpPort: d.smtpPort,
+    smtpSecure: d.smtpSecure,
+    setupHint:
+      "Die Servereinstellungen wurden automatisch erkannt. Falls dein Anbieter ein App-Passwort verlangt, verwende dieses statt deines normalen Passworts.",
+  };
+}
+
 export function OnboardingScreen({
   error,
   onConnected,
@@ -118,6 +151,8 @@ export function OnboardingScreen({
   const [providersError, setProvidersError] = useState(false);
   const [selected, setSelected] = useState<MailProvider | null>(null);
   const [prefillEmail, setPrefillEmail] = useState("");
+  const [prefillUser, setPrefillUser] = useState("");
+  const [discovering, setDiscovering] = useState(false);
 
   // [2026-09-25] Domain-Matching (siehe Kommentarblock oben): "email" ist
   // der neue Standard-Einstieg, "list" der bisherige manuelle Auswahlweg
@@ -133,48 +168,88 @@ export function OnboardingScreen({
       .catch(() => setProvidersError(true));
   }, []);
 
+  const otherImap = providers.find((p) => p.id === "other_imap") ?? OTHER_IMAP_FALLBACK;
+
+  // Google-Login nur, wenn der Server ihn eingerichtet hat -- und (wie
+  // bisher) nicht zum Anhängen eines weiteren Kontos.
+  function oauthUsable(p: MailProvider): boolean {
+    return p.authType === "oauth" && !p.comingSoon && p.oauthAvailable === true && mode === "login";
+  }
+
   function selectProvider(p: MailProvider) {
-    if (p.comingSoon || p.authType === "oauth") return;
+    if (p.comingSoon) return;
+    if (p.authType === "oauth") {
+      if (oauthUsable(p) || !p.imapHost) return;
+      p = asImapProvider(p);
+    }
     setPrefillEmail("");
+    setPrefillUser("");
     setSelected(p);
   }
 
-  function handleEmailSubmit(e: FormEvent) {
-    e.preventDefault();
-    const trimmed = emailInput.trim();
-    const domain = trimmed.split("@")[1]?.toLowerCase();
-    if (!domain) return;
-    const match = providers.find((p) => p.domains.includes(domain));
-    if (!match) {
-      // Unbekannte Domain -> ohne Fehlermeldung direkt in den generischen
-      // IMAP-Fallback, Adresse durchgereicht (Fall 4).
-      setPrefillEmail(trimmed);
-      setSelected(providers.find((p) => p.id === "other_imap") ?? OTHER_IMAP_FALLBACK);
-      return;
-    }
-    // Gleiche Einschränkung wie im bisherigen Listen-Weg unten: Gmail-OAuth
-    // kann noch kein weiteres Konto an einen bestehenden Login anhängen.
-    const unavailableForAddAccount = mode === "addAccount" && match.authType === "oauth" && !match.comingSoon;
-    if (match.comingSoon || unavailableForAddAccount) {
+  function openForm(p: MailProvider, email: string, user = "") {
+    setPrefillEmail(email);
+    setPrefillUser(user);
+    setSelected(p);
+  }
+
+  // Bekannter Anbieter (per Domain oder per automatischer Erkennung).
+  function continueWithProvider(match: MailProvider, email: string) {
+    if (match.comingSoon) {
       setDomainNotice({ provider: match, kind: "unavailable" });
       return;
     }
     if (match.authType === "oauth") {
-      // Anders als bei iOS ist Gmail-OAuth auf Web echt nutzbar (kein
-      // technischer Fallback nötig) -- trotzdem kein automatischer Redirect
-      // ohne Klick, siehe Hinweis-Rendering unten (Fall 3).
-      setDomainNotice({ provider: match, kind: "oauth" });
+      if (oauthUsable(match)) {
+        // Kein automatischer Redirect ohne Klick (Fall 3), der Hinweis
+        // bietet zusätzlich den App-Passwort-Weg an.
+        setDomainNotice({ provider: match, kind: "oauth" });
+      } else if (match.imapHost) {
+        openForm(asImapProvider(match), email);
+      } else {
+        setDomainNotice({ provider: match, kind: "unavailable" });
+      }
       return;
     }
     // Bekannte, nutzbare imap/pop3-Domain -> direkt ins Formular (Fall 1).
-    setPrefillEmail(trimmed);
-    setSelected(match);
+    openForm(match, email);
+  }
+
+  async function handleEmailSubmit(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = emailInput.trim();
+    const [localPart, rawDomain] = trimmed.split("@");
+    const domain = rawDomain?.toLowerCase();
+    if (!domain) return;
+    const match = providers.find((p) => p.domains.includes(domain));
+    if (match) {
+      continueWithProvider(match, trimmed);
+      return;
+    }
+    // Unbekannte Domain (Fall 4): erst automatisch erkennen, sonst ohne
+    // Fehlermeldung in den generischen IMAP-Fallback.
+    setDiscovering(true);
+    try {
+      const found = await api.discoverMailSettings(domain);
+      const preset = found.providerId ? providers.find((p) => p.id === found.providerId) : undefined;
+      if (preset) {
+        continueWithProvider(preset, trimmed);
+      } else if (found.found && found.imapHost) {
+        openForm(discoveredProvider(domain, found, otherImap), trimmed, found.username === "localpart" ? localPart : "");
+      } else {
+        openForm(otherImap, trimmed);
+      }
+    } catch {
+      openForm(otherImap, trimmed);
+    } finally {
+      setDiscovering(false);
+    }
   }
 
   function tryImapAnyway(provider: MailProvider) {
-    setPrefillEmail(emailInput.trim());
     setDomainNotice(null);
-    setSelected(providers.find((p) => p.id === "other_imap") ?? provider);
+    // Mit eigenen IMAP-Presets (Gmail) direkt dorthin, sonst generisch.
+    openForm(provider.imapHost ? asImapProvider(provider) : otherImap, emailInput.trim());
   }
 
   if (selected) {
@@ -182,9 +257,11 @@ export function OnboardingScreen({
       <ImapConnectForm
         provider={selected}
         initialEmail={prefillEmail}
+        initialUser={prefillUser}
         onBack={() => {
           setSelected(null);
           setPrefillEmail("");
+          setPrefillUser("");
         }}
         onConnected={onConnected}
         onAccountAdded={onAccountAdded}
@@ -220,6 +297,11 @@ export function OnboardingScreen({
                 <a className="onboarding-button" href={googleLoginUrl()}>
                   Weiter mit Google
                 </a>
+                {domainNotice.provider.imapHost && (
+                  <button type="button" className="link-button" onClick={() => tryImapAnyway(domainNotice.provider)}>
+                    Stattdessen mit App-Passwort verbinden
+                  </button>
+                )}
               </>
             ) : (
               <>
@@ -228,6 +310,7 @@ export function OnboardingScreen({
                     ? `${domainNotice.provider.label} ist als eigener Anmeldeweg noch nicht verfügbar.`
                     : `${domainNotice.provider.label} kann aktuell nicht als weiteres Konto angehängt werden.`}
                 </p>
+                {domainNotice.provider.setupHint && <p className="app-password-hint">{domainNotice.provider.setupHint}</p>}
                 <button type="button" className="onboarding-button" onClick={() => tryImapAnyway(domainNotice.provider)}>
                   Trotzdem per IMAP versuchen
                 </button>
@@ -258,8 +341,8 @@ export function OnboardingScreen({
                   placeholder="du@beispiel.de"
                 />
               </label>
-              <button type="submit" className="onboarding-button">
-                Weiter
+              <button type="submit" className="onboarding-button" disabled={discovering}>
+                {discovering ? "Suche Servereinstellungen…" : "Weiter"}
               </button>
             </form>
             <button type="button" className="link-button" onClick={() => setStep("list")}>
@@ -282,7 +365,11 @@ export function OnboardingScreen({
                 // Deshalb hier bewusst deaktiviert statt einen kaputten/
                 // verwirrenden Flow zu starten, der den aktuellen Login
                 // stillschweigend ersetzen könnte.
-                const gmailUnavailableForAddAccount = mode === "addAccount" && p.authType === "oauth" && !p.comingSoon;
+                // [2026-09-28] Mit IMAP-Presets (Gmail) bleibt der Anbieter
+                // trotzdem nutzbar, dann eben per App-Passwort.
+                const oauthViaImap = p.authType === "oauth" && !p.comingSoon && !oauthUsable(p) && p.imapHost !== null;
+                const gmailUnavailableForAddAccount =
+                  mode === "addAccount" && p.authType === "oauth" && !p.comingSoon && !oauthViaImap;
                 const disabled = p.comingSoon || gmailUnavailableForAddAccount;
                 const cardContent = (
                   <>
@@ -292,9 +379,13 @@ export function OnboardingScreen({
                         ? "demnächst"
                         : gmailUnavailableForAddAccount
                           ? "noch nicht für weitere Konten"
-                          : p.authType === "oauth"
-                            ? "Anmelden"
-                            : "IMAP verbinden"}
+                          : oauthViaImap
+                            ? "Mit App-Passwort"
+                            : p.authType === "oauth"
+                              ? "Anmelden"
+                              : p.authType === "pop3"
+                                ? "POP3 verbinden"
+                                : "IMAP verbinden"}
                     </span>
                   </>
                 );
@@ -302,7 +393,7 @@ export function OnboardingScreen({
                 // Modus): echter Browser-Redirect per <a href>, kein
                 // programmatischer window.location-Sprung -- kein `fetch`,
                 // das wäre für einen Redirect zu Google falsch.
-                if (!p.comingSoon && p.authType === "oauth" && !gmailUnavailableForAddAccount) {
+                if (oauthUsable(p)) {
                   return (
                     <a key={p.id} className="provider-card" href={googleLoginUrl()}>
                       {cardContent}
@@ -332,6 +423,7 @@ export function OnboardingScreen({
 function ImapConnectForm({
   provider,
   initialEmail = "",
+  initialUser = "",
   onBack,
   onConnected,
   onAccountAdded,
@@ -341,6 +433,9 @@ function ImapConnectForm({
    * meist schon fest -- kein erneutes Eintippen nötig. Leer beim manuellen
    * Listen-Weg (dort ist die Adresse noch nicht bekannt). */
   initialEmail?: string;
+  /** Vorbefüllter Anmeldename, z.B. nur der Teil vor dem "@", wenn die
+   * automatische Erkennung das meldet. */
+  initialUser?: string;
   onBack: () => void;
   onConnected: (token: string) => void;
   onAccountAdded?: (account: MailAccount) => void;
@@ -349,7 +444,7 @@ function ImapConnectForm({
   const [imapHost, setImapHost] = useState(provider.imapHost ?? "");
   const [imapPort, setImapPort] = useState(provider.imapPort ?? 993);
   const [imapSecure, setImapSecure] = useState(provider.imapSecure ?? true);
-  const [imapUser, setImapUser] = useState("");
+  const [imapUser, setImapUser] = useState(initialUser);
   const [imapPassword, setImapPassword] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(provider.imapHost === null);
   const [smtpHost, setSmtpHost] = useState(provider.smtpHost ?? "");
@@ -418,7 +513,19 @@ function ImapConnectForm({
         <h1 className="onboarding-title">{provider.label}</h1>
         <p className="onboarding-subtitle">Verbinde dein Konto per {protocolLabel}.</p>
 
-        {provider.requiresAppPassword && (
+        {provider.setupHint ? (
+          <div className="app-password-hint">
+            {provider.setupHint}
+            {provider.appPasswordHelpUrl && (
+              <>
+                {" "}
+                <a href={provider.appPasswordHelpUrl} target="_blank" rel="noreferrer">
+                  Anleitung
+                </a>
+              </>
+            )}
+          </div>
+        ) : provider.requiresAppPassword && (
           <div className="app-password-hint">
             {provider.label} verlangt ein App-spezifisches Passwort statt deines normalen Kontopassworts.
             {provider.appPasswordHelpUrl && (

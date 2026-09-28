@@ -1,8 +1,9 @@
 {
   "meta": {
     "note": "Track 0 Contract (WEB_INBOX.md 15.09., 'ECHTE LUECKE ENTDECKT' -- Provider-Support). Served at runtime via GET /mail-providers (backend/src/routes/mailProviders.ts) so onboarding UIs (Track C/F) don't have to hardcode presets per platform. authType 'oauth' providers use the existing GET /auth/google/start-style redirect flow (currently only Gmail is wired up); authType 'imap' providers use POST /accounts with imapHost/imapPort/imapSecure/imapUser/imapPassword. appPasswordHelpUrl values are best-effort official provider documentation links -- verify they still resolve before surfacing them in a shipped UI.",
-    "order": "Reihenfolge laut WEB_INBOX.md 15.09.: Gmail-OAuth zuerst (fertig), danach IMAP-Passwort-Weg (GMX/web.de/iCloud/generisch, fertig 19.09.), Outlook/Yahoo-OAuth koennen warten (comingSoon: true, kein eigenes Provider-Projekt bei Microsoft/Yahoo eingerichtet).",
-    "domains": "[2026-09-25] WEB_INBOX.md 21.09. 'Anbieter automatisch aus E-Mail-Adresse erkennen': jeder Provider traegt jetzt `domains` (Kleinbuchstaben, ohne '@') fuer client-seitiges Domain-Matching der eingegebenen Adresse. `other_imap` hat bewusst eine leere Liste -- das ist der Fallback fuer JEDE nicht erkannte Domain, kein eigenes Matching noetig/moeglich."
+    "order": "Reihenfolge laut WEB_INBOX.md 15.09.: Gmail-OAuth zuerst (fertig), danach IMAP-Passwort-Weg (GMX/web.de/iCloud/generisch, fertig 19.09.), Outlook/Yahoo-OAuth koennen warten (comingSoon: true, kein eigenes Provider-Projekt bei Microsoft/Yahoo eingerichtet). [2026-09-28] Yahoo auf IMAP mit App-Passwort umgestellt (kein OAuth noetig), neu: T-Online, freenet, IONOS/1&1, Posteo, mailbox.org, AOL. Outlook bleibt comingSoon: Microsoft hat Passwort-Anmeldung per IMAP fuer private Konten abgeschaltet, nur OAuth moeglich.",
+    "domains": "[2026-09-25] WEB_INBOX.md 21.09. 'Anbieter automatisch aus E-Mail-Adresse erkennen': jeder Provider traegt jetzt `domains` (Kleinbuchstaben, ohne '@') fuer client-seitiges Domain-Matching der eingegebenen Adresse. `other_imap` hat bewusst eine leere Liste -- das ist der Fallback fuer JEDE nicht erkannte Domain, kein eigenes Matching noetig/moeglich.",
+    "setupHint": "[2026-09-28] Kurzer, sachlicher Einrichtungshinweis je Anbieter (Du-Form), vom Client ueber dem Verbindungsformular angezeigt. null = kein Hinweis."
   },
   "providers": [
     {
@@ -18,22 +19,28 @@
       "smtpSecure": false,
       "requiresAppPassword": true,
       "appPasswordHelpUrl": "https://support.google.com/accounts/answer/185833",
-      "domains": ["gmail.com", "googlemail.com"],
-      "_imapNote": "[2026-09-25] Massimo: 'passe die App auf googlemail.com an' -- Gmail-OAuth ist auf iOS nicht funktional (siehe ios/README.md 21.09. 'Bewusste Grenze'), authType bleibt 'oauth' (der Web-Client nutzt weiterhin echten Google-Login), aber diese IMAP/SMTP-Werte dienen iOS als Vorbefuellung fuer den erklaerten IMAP-Fallback (App-Passwort noetig, Gmail-IMAP muss in den Google-Kontoeinstellungen aktiviert sein)."
+      "domains": [
+        "gmail.com",
+        "googlemail.com"
+      ],
+      "_imapNote": "[2026-09-25] Massimo: 'passe die App auf googlemail.com an' -- Gmail-OAuth ist auf iOS nicht funktional (siehe ios/README.md 21.09. 'Bewusste Grenze'), authType bleibt 'oauth' (der Web-Client nutzt weiterhin echten Google-Login), aber diese IMAP/SMTP-Werte dienen iOS als Vorbefuellung fuer den erklaerten IMAP-Fallback (App-Passwort noetig, Gmail-IMAP muss in den Google-Kontoeinstellungen aktiviert sein).",
+      "setupHint": "Gmail braucht ein App-Passwort: In deinem Google-Konto die Bestätigung in zwei Schritten einschalten und dann unter „App-Passwörter“ eines für driftmail erstellen. Dein normales Google-Passwort funktioniert hier nicht."
     },
     {
       "id": "outlook",
       "label": "Outlook / Microsoft 365",
       "authType": "oauth",
       "comingSoon": true,
-      "domains": ["outlook.com", "hotmail.com", "live.com", "msn.com"]
-    },
-    {
-      "id": "yahoo",
-      "label": "Yahoo",
-      "authType": "oauth",
-      "comingSoon": true,
-      "domains": ["yahoo.com", "yahoo.de"]
+      "domains": [
+        "outlook.com",
+        "outlook.de",
+        "hotmail.com",
+        "hotmail.de",
+        "live.com",
+        "live.de",
+        "msn.com"
+      ],
+      "setupHint": "Microsoft erlaubt für Outlook.com und Hotmail keine Anmeldung per Passwort mehr, nur noch über eine eigene Microsoft-Anmeldung. Die ist in driftmail noch nicht eingerichtet."
     },
     {
       "id": "icloud",
@@ -48,7 +55,12 @@
       "smtpSecure": false,
       "requiresAppPassword": true,
       "appPasswordHelpUrl": "https://support.apple.com/en-us/102654",
-      "domains": ["icloud.com", "me.com", "mac.com"]
+      "domains": [
+        "icloud.com",
+        "me.com",
+        "mac.com"
+      ],
+      "setupHint": "iCloud braucht ein app-spezifisches Passwort: Auf account.apple.com unter „Anmelden und Sicherheit“ → „App-spezifische Passwörter“ eines erstellen."
     },
     {
       "id": "gmx",
@@ -61,9 +73,15 @@
       "smtpHost": "mail.gmx.net",
       "smtpPort": 587,
       "smtpSecure": false,
-      "requiresAppPassword": true,
+      "requiresAppPassword": false,
       "appPasswordHelpUrl": "https://hilfe.gmx.net",
-      "domains": ["gmx.de", "gmx.net", "gmx.at", "gmx.ch"]
+      "domains": [
+        "gmx.de",
+        "gmx.net",
+        "gmx.at",
+        "gmx.ch"
+      ],
+      "setupHint": "Einmalig in GMX unter Einstellungen → „POP3/IMAP Abruf“ den Zugriff über IMAP erlauben. Dann dein GMX-Passwort (bei Zwei-Faktor-Schutz ein App-Passwort) verwenden."
     },
     {
       "id": "web_de",
@@ -76,9 +94,166 @@
       "smtpHost": "smtp.web.de",
       "smtpPort": 587,
       "smtpSecure": false,
-      "requiresAppPassword": true,
+      "requiresAppPassword": false,
       "appPasswordHelpUrl": "https://hilfe.web.de",
-      "domains": ["web.de"]
+      "domains": [
+        "web.de"
+      ],
+      "setupHint": "Einmalig in web.de unter Einstellungen → „POP3/IMAP Abruf“ den Zugriff erlauben. Dann dein web.de-Passwort (bei Zwei-Faktor-Schutz ein App-Passwort) verwenden."
+    },
+    {
+      "id": "yahoo",
+      "label": "Yahoo",
+      "authType": "imap",
+      "comingSoon": false,
+      "imapHost": "imap.mail.yahoo.com",
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": "smtp.mail.yahoo.com",
+      "smtpPort": 465,
+      "smtpSecure": true,
+      "requiresAppPassword": true,
+      "appPasswordHelpUrl": "https://help.yahoo.com/kb/SLN15241.html",
+      "domains": [
+        "yahoo.com",
+        "yahoo.de",
+        "ymail.com",
+        "rocketmail.com"
+      ],
+      "setupHint": "Yahoo braucht ein App-Passwort: In den Yahoo-Kontoeinstellungen unter „Kontosicherheit“ → „App-Passwort generieren“ eines für driftmail erstellen."
+    },
+    {
+      "id": "t_online",
+      "label": "T-Online",
+      "authType": "imap",
+      "comingSoon": false,
+      "imapHost": "secureimap.t-online.de",
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": "securesmtp.t-online.de",
+      "smtpPort": 465,
+      "smtpSecure": true,
+      "requiresAppPassword": false,
+      "appPasswordHelpUrl": "https://www.telekom.de/hilfe/festnetz-internet-tv/e-mail/e-mail-passwort",
+      "domains": [
+        "t-online.de",
+        "magenta.de"
+      ],
+      "setupHint": "T-Online braucht dein E-Mail-Passwort, nicht das Passwort deines Telekom-Logins. Du legst es im Telekom Kundencenter unter „E-Mail-Passwort“ fest."
+    },
+    {
+      "id": "freenet",
+      "label": "freenet",
+      "authType": "imap",
+      "comingSoon": false,
+      "imapHost": "mx.freenet.de",
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": "mx.freenet.de",
+      "smtpPort": 587,
+      "smtpSecure": false,
+      "requiresAppPassword": false,
+      "appPasswordHelpUrl": null,
+      "domains": [
+        "freenet.de"
+      ],
+      "setupHint": "Einmalig in freenet Mail unter Einstellungen den Abruf per IMAP/POP3 aktivieren, dann dein freenet-Passwort verwenden."
+    },
+    {
+      "id": "ionos",
+      "label": "IONOS / 1&1",
+      "authType": "imap",
+      "comingSoon": false,
+      "imapHost": "imap.ionos.de",
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": "smtp.ionos.de",
+      "smtpPort": 587,
+      "smtpSecure": false,
+      "requiresAppPassword": false,
+      "appPasswordHelpUrl": null,
+      "domains": [
+        "online.de",
+        "onlinehome.de",
+        "1und1.de"
+      ],
+      "setupHint": "Dein normales Passwort des E-Mail-Postfachs (nicht das Passwort des IONOS-Kundenkontos)."
+    },
+    {
+      "id": "posteo",
+      "label": "Posteo",
+      "authType": "imap",
+      "comingSoon": false,
+      "imapHost": "posteo.de",
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": "posteo.de",
+      "smtpPort": 587,
+      "smtpSecure": false,
+      "requiresAppPassword": false,
+      "appPasswordHelpUrl": null,
+      "domains": [
+        "posteo.de",
+        "posteo.net",
+        "posteo.at",
+        "posteo.ch",
+        "posteo.eu",
+        "posteo.org",
+        "posteo.me",
+        "posteo.uk",
+        "posteo.us",
+        "posteo.nl",
+        "posteo.be",
+        "posteo.dk",
+        "posteo.es",
+        "posteo.fi",
+        "posteo.fr",
+        "posteo.it",
+        "posteo.jp",
+        "posteo.se",
+        "posteo.cl",
+        "posteo.com.br",
+        "posteo.co",
+        "posteo.mx"
+      ],
+      "setupHint": "Dein normales Posteo-Passwort."
+    },
+    {
+      "id": "mailbox_org",
+      "label": "mailbox.org",
+      "authType": "imap",
+      "comingSoon": false,
+      "imapHost": "imap.mailbox.org",
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": "smtp.mailbox.org",
+      "smtpPort": 465,
+      "smtpSecure": true,
+      "requiresAppPassword": false,
+      "appPasswordHelpUrl": null,
+      "domains": [
+        "mailbox.org"
+      ],
+      "setupHint": "Dein normales mailbox.org-Passwort (bei Zwei-Faktor-Schutz ein App-Passwort)."
+    },
+    {
+      "id": "aol",
+      "label": "AOL",
+      "authType": "imap",
+      "comingSoon": false,
+      "imapHost": "imap.aol.com",
+      "imapPort": 993,
+      "imapSecure": true,
+      "smtpHost": "smtp.aol.com",
+      "smtpPort": 465,
+      "smtpSecure": true,
+      "requiresAppPassword": true,
+      "appPasswordHelpUrl": "https://help.aol.com/articles/Create-and-manage-app-password",
+      "domains": [
+        "aol.com",
+        "aol.de"
+      ],
+      "setupHint": "AOL braucht ein App-Passwort: In den AOL-Kontoeinstellungen unter „Kontosicherheit“ eines für driftmail erstellen."
     },
     {
       "id": "other_imap",
@@ -93,7 +268,8 @@
       "smtpSecure": false,
       "requiresAppPassword": false,
       "appPasswordHelpUrl": null,
-      "domains": []
+      "domains": [],
+      "setupHint": null
     }
   ]
 }

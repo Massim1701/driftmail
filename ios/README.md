@@ -2050,6 +2050,17 @@ dem Contract-Update auch auf `Message` (fehlender Schlüssel -> `false`).
 Wahl pro Konto in UserDefaults (`driftmail.inboxTab`), Standard "Alle".
 Gebaut, im Simulator noch nicht von Hand angesehen.
 
+## [2026-09-28] Mehr Anbieter, Gmail per App-Passwort, automatische Erkennung
+
+`OnboardingAccountConnectView`: Anbieter mit OAuth, aber IMAP-Presets
+(Gmail), gehen direkt ins Formular mit App-Passwort
+(`MailProvider.asImapFallback`); nur Anbieter ohne Passwort-Weg (Outlook)
+zeigen die Erklärung. Unbekannte Domains fragen
+`RemoteAPIClient.discoverMailSettings(domain:)` und füllen das Formular
+vor (`MailProvider.discovered`). `setupHint` erscheint im Formular.
+`MailProvider.mocked` entspricht wieder `contracts/mail-providers.json`.
+Gebaut, im Simulator nicht durchgetippt.
+
 ## Nächste Schritte (nicht Teil dieses Durchstichs)
 
 - Ordner umbenennen/löschen/neu sortieren in der UI (Endpunkte sind da,

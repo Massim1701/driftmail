@@ -31,6 +31,7 @@ import { domainReputationLookup, extractIbanCandidates, ibanHistoryCheck } from 
 import { ocrAdapter } from "./attachments";
 import { decryptCredentials, encryptBytes, encryptCredentials } from "./auth/credentialsEncryption";
 import { fixtureSentMails, registerFixtureAttachments } from "./mail/fixtureAdapter";
+import { parseAutoconfigXml } from "./mail/autodiscover";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Server } from "node:http";
@@ -2394,6 +2395,34 @@ async function main() {
     assert(
       otherImapProvider?.authType === "imap" && otherImapProvider?.imapHost === null,
       "other_imap sollte authType=imap mit imapHost=null liefern (User trägt selbst ein)",
+    );
+
+    // [2026-09-28] oauthAvailable: ohne GMAIL_CLIENT_ID/_SECRET/Redirect-URI
+    // (Smoketest-Umgebung) false -> Clients nehmen fuer Gmail den IMAP-Weg.
+    assert(gmailProvider?.oauthAvailable === false, "gmail.oauthAvailable sollte ohne Google-Konfiguration false sein");
+    assert(gmailProvider?.imapHost === "imap.gmail.com", "gmail sollte IMAP-Presets fuer den App-Passwort-Weg liefern");
+    const yahooProvider = providers.find((p) => p.id === "yahoo");
+    assert(yahooProvider?.authType === "imap" && yahooProvider?.comingSoon === false, "yahoo sollte jetzt per IMAP nutzbar sein");
+    assert(providers.every((p) => "setupHint" in p), "jeder Provider sollte ein setupHint-Feld haben (ggf. null)");
+
+    // GET /mail-providers/discover: ungueltige Domain -> 400 ohne Netzwerk-
+    // Abfrage; der XML-Parser wird ohne Netzwerk gegen ein ISPDB-Beispiel
+    // geprueft (IMAP vor POP3, SSL vor STARTTLS, %EMAILDOMAIN% ersetzt).
+    const badDiscover = await globalThis.fetch(`${base}/v1/mail-providers/discover?domain=${encodeURIComponent("localhost")}`);
+    assert(badDiscover.status === 400, "discover sollte eine Domain ohne Punkt mit 400 ablehnen");
+    const parsed = parseAutoconfigXml(
+      `<clientConfig><emailProvider id="x">
+        <incomingServer type="pop3"><hostname>pop.%EMAILDOMAIN%</hostname><port>995</port><socketType>SSL</socketType><username>%EMAILADDRESS%</username></incomingServer>
+        <incomingServer type="imap"><hostname>imap.%EMAILDOMAIN%</hostname><port>143</port><socketType>STARTTLS</socketType><username>%EMAILLOCALPART%</username></incomingServer>
+        <incomingServer type="imap"><hostname>imap.%EMAILDOMAIN%</hostname><port>993</port><socketType>SSL</socketType><username>%EMAILLOCALPART%</username></incomingServer>
+        <outgoingServer type="smtp"><hostname>smtp.beispiel.de</hostname><port>587</port><socketType>STARTTLS</socketType><username>%EMAILADDRESS%</username></outgoingServer>
+      </emailProvider></clientConfig>`,
+      "kunde.de",
+    );
+    assert(
+      parsed?.protocol === "imap" && parsed.imapHost === "imap.kunde.de" && parsed.imapPort === 993 && parsed.imapSecure === true &&
+        parsed.smtpHost === "smtp.beispiel.de" && parsed.smtpPort === 587 && parsed.smtpSecure === false && parsed.username === "localpart",
+      `parseAutoconfigXml sollte IMAP/SSL waehlen, %EMAILDOMAIN% ersetzen und localpart erkennen: ${JSON.stringify(parsed)}`,
     );
 
     // POST /accounts provider=imap ohne imapHost/imapPassword -> 400, kein

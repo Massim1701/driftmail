@@ -246,8 +246,25 @@ const server = createServer(async (req, res) => {
   // GET /mail-providers -- oeffentlich (kein Token-Check im Mock-Server
   // ohnehin, siehe POST /accounts-Kommentar unten), treibt den
   // OnboardingScreen (WEB_INBOX.md 19.09. "Onboarding: Provider-Auswahl").
+  // [2026-09-28] oauthAvailable wie im Backend; der Mock hat einen eigenen
+  // Schein-Google-Login, deshalb standardmaessig true. MOCK_OAUTH=off testet
+  // den Gmail-per-App-Passwort-Weg.
   if (req.method === "GET" && parts.length === 1 && parts[0] === "mail-providers") {
-    return send(res, 200, mailProviders);
+    const oauthOn = process.env.MOCK_OAUTH !== "off";
+    return send(res, 200, mailProviders.map((p) => ({ ...p, oauthAvailable: oauthOn && p.authType === "oauth" && p.id === "gmail" })));
+  }
+  // [2026-09-28] GET /mail-providers/discover -- feste Beispiele statt echter
+  // DNS-/ISPDB-Abfragen: firma-beispiel.de (ISPDB-Treffer), workspace-
+  // beispiel.de (MX bei Google -> gmail), alles andere nicht gefunden.
+  if (req.method === "GET" && parts.length === 2 && parts[0] === "mail-providers" && parts[1] === "discover") {
+    const domain = (url.searchParams.get("domain") ?? "").toLowerCase();
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return send(res, 400, { error: "ungültige Domain" });
+    const none = { found: false, source: null, providerId: null, protocol: null, imapHost: null, imapPort: null, imapSecure: null, smtpHost: null, smtpPort: null, smtpSecure: null, username: null };
+    if (domain === "workspace-beispiel.de") return send(res, 200, { ...none, found: true, source: "mx", providerId: "gmail" });
+    if (domain === "firma-beispiel.de") {
+      return send(res, 200, { found: true, source: "ispdb", providerId: null, protocol: "imap", imapHost: "imap.firma-beispiel.de", imapPort: 993, imapSecure: true, smtpHost: "smtp.firma-beispiel.de", smtpPort: 465, smtpSecure: true, username: "localpart" });
+    }
+    return send(res, 200, none);
   }
 
   // GET /accounts

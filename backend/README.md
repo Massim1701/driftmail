@@ -2681,6 +2681,17 @@ Nachricht dieser Adresse im Konto -- dieselbe Regel wie
 `hasOtherMessageFromAddress` in der Detailansicht (inkl. gesnoozter
 Mails). Smoketest prüft die Listen-Werte.
 
+## Mail-Anbieter: oauthAvailable und automatische Erkennung -- [2026-09-28] Nachtrag
+
+`GET /mail-providers` ergänzt je Anbieter `oauthAvailable` (Gmail: true nur
+mit `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET` und
+`GOOGLE_OAUTH_REDIRECT_URI`). `GET /mail-providers/discover?domain=`
+(`mail/autodiscover.ts`, vor dem Login erreichbar, 30/min je IP):
+Thunderbird-ISPDB -> MX (bekannter Anbieter -> `providerId`, sonst ISPDB
+der Mailserver-Domain) -> DNS-SRV nach RFC 6186. Nach außen geht nur die
+Domain. Bewusst kein Abruf von `autoconfig.<domain>` o.ä., damit der
+Server keine Anfragen an vom Aufrufer bestimmte Hosts stellt.
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war

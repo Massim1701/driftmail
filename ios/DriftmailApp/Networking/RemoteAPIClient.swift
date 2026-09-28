@@ -60,6 +60,16 @@ struct RemoteAPIClient: APIClient {
         try await get("/mail-providers")
     }
 
+    /// [2026-09-28] `GET /mail-providers/discover?domain=` -- ebenfalls vor
+    /// dem Login. Nur die Domain wird übertragen, nie die Adresse. Nur hier
+    /// (nicht im `APIClient`-Protokoll), weil ausschließlich das Onboarding
+    /// es braucht, und das nutzt immer diesen Client.
+    func discoverMailSettings(domain: String) async throws -> DiscoveredMailSettings {
+        var components = URLComponents(url: baseURL.appendingPathComponent("/mail-providers/discover"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [.init(name: "domain", value: domain)]
+        return try await get(components.url!)
+    }
+
     /// `POST /accounts` (`provider=imap`) — ebenfalls unauthenticated.
     /// Eigene Status-Code-Behandlung wie bei `sendMessage`, weil 422
     /// (Zugangsdaten falsch) und 403 (nicht freigeschaltet) aussagekräftige,

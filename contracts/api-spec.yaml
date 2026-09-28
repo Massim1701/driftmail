@@ -99,6 +99,33 @@ paths:
                 items:
                   $ref: "#/components/schemas/MailProvider"
 
+  /mail-providers/discover:
+    get:
+      summary: >
+        [2026-09-28] Servereinstellungen fuer eine Domain automatisch
+        ermitteln, die in GET /mail-providers nicht vorkommt (eigene
+        Domains, kleinere Anbieter). Reihenfolge: Thunderbird-ISPDB, MX-
+        Eintrag (bekannter Anbieter dahinter -> providerId, z.B. Google
+        Workspace -> gmail), DNS-SRV nach RFC 6186. Nur die Domain wird
+        uebergeben, nie die Adresse. Laeuft vor dem Login, `security: []`,
+        max. 30 Anfragen pro Minute und IP (sonst 429).
+      security: []
+      parameters:
+        - name: domain
+          in: query
+          required: true
+          schema: { type: string }
+          description: Domain-Teil der Adresse, Kleinbuchstaben, ohne "@".
+      responses:
+        "200":
+          description: Ergebnis; `found=false`, wenn nichts ermittelt wurde.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscoveredMailSettings"
+        "400": { description: Ungueltige Domain }
+        "429": { description: Zu viele Anfragen }
+
   /link-check:
     get:
       summary: >
@@ -1484,6 +1511,44 @@ components:
         requiresAppPassword: { type: boolean }
         appPasswordHelpUrl: { type: string, nullable: true }
         domains: { type: array, items: { type: string } }
+        setupHint:
+          type: string
+          nullable: true
+          description: >
+            [2026-09-28] Kurzer Einrichtungshinweis (Du-Form), z.B. "IMAP in
+            den Einstellungen erlauben" oder "App-Passwort erstellen". null
+            = kein Hinweis.
+        oauthAvailable:
+          type: boolean
+          description: >
+            [2026-09-28] Nur vom Server gesetzt (nicht in
+            mail-providers.json): true, wenn der OAuth-Weg auf diesem Server
+            eingerichtet ist (Gmail: Google-Client + Redirect-URI). Bei
+            false nutzen Clients fuer einen oauth-Provider mit imapHost den
+            IMAP-Weg mit App-Passwort.
+
+    DiscoveredMailSettings:
+      type: object
+      description: "[2026-09-28] Antwort von GET /mail-providers/discover."
+      properties:
+        found: { type: boolean }
+        source: { type: string, enum: [ispdb, mx, srv], nullable: true }
+        providerId:
+          type: string
+          nullable: true
+          description: Gesetzt, wenn ein bekanntes Preset passt -- der Client nimmt dann dieses Preset statt der Einzelwerte.
+        protocol: { type: string, enum: [imap, pop3], nullable: true }
+        imapHost: { type: string, nullable: true, description: "Eingangsserver (bei protocol=pop3 der POP3-Server)" }
+        imapPort: { type: integer, nullable: true }
+        imapSecure: { type: boolean, nullable: true, description: "true = TLS ab Verbindungsbeginn, false = STARTTLS" }
+        smtpHost: { type: string, nullable: true }
+        smtpPort: { type: integer, nullable: true }
+        smtpSecure: { type: boolean, nullable: true }
+        username:
+          type: string
+          enum: [email, localpart]
+          nullable: true
+          description: "localpart = Anmeldename ist nur der Teil vor dem @"
 
     TrustedSender:
       type: object

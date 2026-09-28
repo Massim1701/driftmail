@@ -49,7 +49,7 @@ const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
 ];
 
-function googleOAuthConfigured(): boolean {
+export function googleOAuthConfigured(): boolean {
   return Boolean(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET && process.env.GOOGLE_OAUTH_REDIRECT_URI);
 }
 

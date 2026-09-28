@@ -1207,6 +1207,18 @@ Absender" = der Rest. `isNewSender` steht seit dem 28.09. auch auf
 dazu "Eingang: …". Der Mock-Server berechnet `isNewSender` wie das
 Backend (keine andere Mail derselben Adresse).
 
+## Anbieter, Gmail per App-Passwort, automatische Erkennung
+
+[2026-09-28] `OnboardingScreen.tsx`: Gmail nutzt den Google-Login nur, wenn
+`GET /mail-providers` `oauthAvailable=true` meldet, sonst direkt das
+IMAP-Formular mit App-Passwort (mit OAuth zusätzlich als Link "Stattdessen
+mit App-Passwort verbinden"). Unbekannte Domains fragen
+`GET /mail-providers/discover` und füllen das Formular vor; passt ein
+bekannter Anbieter (z.B. Google Workspace), wird dessen Preset genommen.
+`setupHint` steht über dem Formular. Mock-Server: `MOCK_OAUTH=off npm run
+mock` testet Gmail ohne OAuth; Discover-Beispiele `firma-beispiel.de`
+(erkannt) und `workspace-beispiel.de` (Gmail).
+
 ## Projektstruktur
 
 ```
