@@ -16,10 +16,10 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | 0 — Contracts | contracts/ | fertig | 2026-09-08 |
 | A — Backend | backend/ | fertig (inkl. echter Track-B-Integration) | 2026-09-19 |
 | B — Sicherheits-Klassifikation | security-classification/ | fertig | 2026-09-19 |
-| C — iOS App | ios/ | fertig | 2026-09-25 |
+| C — iOS App | ios/ | fertig (Redesign "ruhig & warm" steht noch aus) | 2026-09-28 |
 | D — Vertrag & Reminder | contracts-logic/ | fertig | 2026-09-08 |
 | E — Antwort & Signatur | mail-actions/ | fertig | 2026-09-09 |
-| F — Web-Fallback-UI | web/ | fertig | 2026-09-21 |
+| F — Web-Fallback-UI | web/ | fertig (Redesign "ruhig & warm" umgesetzt) | 2026-09-28 |
 
 Status-Werte: offen · in arbeit · fertig · blockiert
 
@@ -175,6 +175,11 @@ Jede Änderung an einer Datei in contracts/ kommt hier rein, auch klein. Andere 
 **[2026-09-08] [terminal] [0] — Umgesetzt** (Commit `734781e`): Die oben angekündigte Ordner-Umstellung war Stunden lang nur angekündigt, nicht in den Contract-Dateien. Jetzt tatsächlich umgesetzt in `db-schema.sql`/`api-spec.yaml`/`design-tokens.json` wie beschrieben. Track A/C/F werden jetzt entsprechend angepasst (laufende Arbeit, siehe Track-Branches).
 
 **[2026-09-08] [terminal] [A] — Kleine Contract-Ergänzung:** `api-spec.yaml`, `POST /messages/draft/phishing-check` bekommt ein neues, optionales Request-Feld `recipientAddress` (String, nullable) — Grundlage für den neuen Empfänger-Reputations-Lookup (siehe Änderungsprotokoll oben, "vier externe Lookups"). Fehlendes Feld/kein Bruch bestehender Aufrufer (rein additiv, optional) — laut der Regel oben ("Kleinere Ergänzungen ... können weiter direkt umgesetzt und im Nachhinein dokumentiert werden") direkt umgesetzt.
+
+**[2026-09-28] [terminal] [0] — Redesign "ruhig & warm" + fünf Akzentfarben** (Commit `f41c021`, auf Auftrag WEB_INBOX.md 27.09. "WAEHLBARE AKZENTFARBEN" und Massimos Freigabe des Design-Entwurfs):
+- **design-tokens.json:** neue Palette hell/dunkel, Sicherheitsfarben mit eigenen Dunkel-Werten, Typografie (Web Instrument Sans + Fraunces, iOS System + New York), Radien 10/14, `accentThemes` jetzt fünf Themes mit getrennten Hell/Dunkel-Werten, neuer Block `seasonalTwig`.
+- **api-spec.yaml / db-schema.sql:** `accentTheme`-Enum `gruen | gelb | outlook_blue | rosa | schwarz`, DEFAULT `gruen`. Alte Werte (teal, ocean_blue, violett, koralle, ocean_verlauf) werden nicht mehr akzeptiert (400) und in Postgres einmalig auf `gruen` migriert.
+- **Betrifft Track C (iOS):** Enum bereits angepasst und tolerant gegen unbekannte Werte, aber ungebaut. **Betrifft Track A:** umgesetzt. Details im Änderungsprotokoll unten (28.09. "Web-Redesign").
 
 ## Offene Fragen
 
