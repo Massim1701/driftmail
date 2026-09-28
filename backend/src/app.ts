@@ -1,3 +1,4 @@
+import { join, resolve } from "node:path";
 import express from "express";
 import { cors } from "./middleware/cors";
 import { accountsRouter } from "./routes/accounts";
@@ -110,6 +111,21 @@ export function createApp() {
 
   // Betriebs-/Test-Hilfsmittel, kein Contract-Bestandteil.
   app.use(internalRouter);
+
+  // [2026-09-28] Lokaler Betrieb auf Massimos Mac (SYNC.md 28.09. "Lokaler
+  // Server"): ist WEB_DIST_DIR gesetzt, liefert das Backend den gebauten
+  // Web-Client (web/dist) gleich mit aus -- Web-App und API unter derselben
+  // Adresse (kein CORS, eine Adresse fuer die Mac-App). Alle GET-Anfragen
+  // ausserhalb von /v1, die keine Datei treffen, bekommen index.html
+  // (Client-Routen wie /auth/callback). Ohne die Variable unveraendert.
+  const webDist = process.env.WEB_DIST_DIR ? resolve(process.env.WEB_DIST_DIR) : null;
+  if (webDist) {
+    app.use(express.static(webDist));
+    app.use((req, res, next) => {
+      if (req.method !== "GET" || req.path.startsWith("/v1/")) return next();
+      res.sendFile(join(webDist, "index.html"));
+    });
+  }
 
   app.use((req, res) => {
     res.status(404).json({ error: `unbekannte Route: ${req.method} ${req.path}` });
