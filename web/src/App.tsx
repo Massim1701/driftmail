@@ -755,6 +755,7 @@ export default function App() {
     cmds.push({ id: "new", group: "Allgemein", label: "Neue Nachricht", keywords: "schreiben compose", run: handleNewMessage });
     cmds.push({ id: "sync", group: "Allgemein", label: "Jetzt aktualisieren", keywords: "abrufen sync", run: handleSyncNow });
     cmds.push({ id: "settings", group: "Allgemein", label: "Einstellungen öffnen", run: () => setSettingsOpen(true) });
+    cmds.push({ id: "addAccount", group: "Allgemein", label: "Konto hinzufügen", keywords: "mail konto verbinden weiteres", run: handleAddAccount });
 
     for (const f of folders) {
       cmds.push({
@@ -874,6 +875,7 @@ export default function App() {
             onRenameFolder={handleRenameFolder}
             onDeleteFolder={handleDeleteFolder}
             onOpenSettings={() => setSettingsOpen(true)}
+            onAddAccount={handleAddAccount}
           />
 
           <div className="message-column">

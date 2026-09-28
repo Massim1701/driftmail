@@ -70,6 +70,7 @@ export function FolderSidebar({
   onRenameFolder,
   onDeleteFolder,
   onOpenSettings,
+  onAddAccount,
 }: {
   folders: Folder[];
   active: string | null;
@@ -100,6 +101,9 @@ export function FolderSidebar({
    * gebündelten SettingsModal in App.tsx. [2026-09-28] Hell/Dunkel/System
    * lebt seit dem Redesign ebenfalls dort (Abschnitt "Ansicht"). */
   onOpenSettings: () => void;
+  /** [2026-09-28] Massimo: sichtbarer Knopf für weitere Konten (vorher nur
+   * unter Einstellungen → Konten). Öffnet denselben Assistenten wie dort. */
+  onAddAccount: () => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -281,6 +285,11 @@ export function FolderSidebar({
 
       <div className="folder-sidebar-spacer" />
       <SeasonalTwig season={season} className="folder-sidebar-twig" />
+
+      <button type="button" className="folder-create-toggle sidebar-add-account" onClick={onAddAccount}>
+        <PlusIcon />
+        Konto hinzufügen
+      </button>
 
       {activeAccount && (
         <div className="folder-sidebar-account-row">
