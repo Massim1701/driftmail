@@ -1,7 +1,7 @@
 {
   "meta": {
     "note": "Track 0 Contract (WEB_INBOX.md 15.09., 'ECHTE LUECKE ENTDECKT' -- Provider-Support). Served at runtime via GET /mail-providers (backend/src/routes/mailProviders.ts) so onboarding UIs (Track C/F) don't have to hardcode presets per platform. authType 'oauth' providers use the existing GET /auth/google/start-style redirect flow (currently only Gmail is wired up); authType 'imap' providers use POST /accounts with imapHost/imapPort/imapSecure/imapUser/imapPassword. appPasswordHelpUrl values are best-effort official provider documentation links -- verify they still resolve before surfacing them in a shipped UI.",
-    "order": "Reihenfolge laut WEB_INBOX.md 15.09.: Gmail-OAuth zuerst (fertig), danach IMAP-Passwort-Weg (GMX/web.de/iCloud/generisch, fertig 19.09.), Outlook/Yahoo-OAuth koennen warten (comingSoon: true, kein eigenes Provider-Projekt bei Microsoft/Yahoo eingerichtet). [2026-09-28] Yahoo auf IMAP mit App-Passwort umgestellt (kein OAuth noetig), neu: T-Online, freenet, IONOS/1&1, Posteo, mailbox.org, AOL. Outlook bleibt comingSoon: Microsoft hat Passwort-Anmeldung per IMAP fuer private Konten abgeschaltet, nur OAuth moeglich.",
+    "order": "Reihenfolge laut WEB_INBOX.md 15.09.: Gmail-OAuth zuerst (fertig), danach IMAP-Passwort-Weg (GMX/web.de/iCloud/generisch, fertig 19.09.), Outlook/Yahoo-OAuth koennen warten (comingSoon: true, kein eigenes Provider-Projekt bei Microsoft/Yahoo eingerichtet). [2026-09-28] Yahoo auf IMAP mit App-Passwort umgestellt (kein OAuth noetig), neu: T-Online, freenet, IONOS/1&1, Posteo, mailbox.org, AOL. Outlook bleibt comingSoon: Microsoft hat Passwort-Anmeldung per IMAP fuer private Konten abgeschaltet, nur OAuth moeglich. [2026-09-28] web.de von POP3 auf IMAP (imap.web.de:993) umgestellt, wie Apple Mail es verbindet (Massimo: 'mach das wie das Mail-Programm von macOS'). POP3 bleibt fuer unbekannte Server waehlbar.",
     "domains": "[2026-09-25] WEB_INBOX.md 21.09. 'Anbieter automatisch aus E-Mail-Adresse erkennen': jeder Provider traegt jetzt `domains` (Kleinbuchstaben, ohne '@') fuer client-seitiges Domain-Matching der eingegebenen Adresse. `other_imap` hat bewusst eine leere Liste -- das ist der Fallback fuer JEDE nicht erkannte Domain, kein eigenes Matching noetig/moeglich.",
     "setupHint": "[2026-09-28] Kurzer, sachlicher Einrichtungshinweis je Anbieter (Du-Form), vom Client ueber dem Verbindungsformular angezeigt. null = kein Hinweis."
   },
@@ -86,10 +86,10 @@
     {
       "id": "web_de",
       "label": "web.de",
-      "authType": "pop3",
+      "authType": "imap",
       "comingSoon": false,
-      "imapHost": "pop3.web.de",
-      "imapPort": 995,
+      "imapHost": "imap.web.de",
+      "imapPort": 993,
       "imapSecure": true,
       "smtpHost": "smtp.web.de",
       "smtpPort": 587,
@@ -99,7 +99,7 @@
       "domains": [
         "web.de"
       ],
-      "setupHint": "Einmalig in web.de unter Einstellungen → „POP3/IMAP Abruf“ den Zugriff erlauben. Dann dein web.de-Passwort (bei Zwei-Faktor-Schutz ein App-Passwort) verwenden."
+      "setupHint": "Einmalig in web.de unter Einstellungen → „POP3/IMAP Abruf“ den Zugriff erlauben. Dann dein normales web.de-Passwort verwenden."
     },
     {
       "id": "yahoo",
