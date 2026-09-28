@@ -1449,3 +1449,31 @@ Falls dafuer eine Contract-Ergaenzung noetig ist (z.B. Weiterleiten mit vorhande
 **Fuer beide, wichtigste Regel:** Das Backend bleibt die Wahrheit, der Cache ist nur eine Spiegelung. Wird eine Mail spaeter als gefaehrlich erkannt, in die Quarantaene verschoben oder geloescht, muss der Client das uebernehmen (Eintrag aktualisieren oder entfernen). Der Sicherheitsstatus einer Mail wird beim Oeffnen (online) immer frisch vom Backend geholt. Offline zeigt der Cache nur den zuletzt bekannten Stand, klar als "Stand vom ..." gekennzeichnet, nie eine veraltete Entwarnung als aktuelle Gewissheit.
 
 Hinweis: Eine Ergaenzung der Datenschutzerklaerung (Speicherung auf dem Geraet, verschluesselt, jederzeit loeschbar) ist vorgemerkt, aber NICHT Teil dieses Auftrags (driftware-Repo, wird separat entschieden). Kein Contract-Bruch erwartet; falls der Cache ein Aenderungs-Kennzeichen vom Backend braucht (z.B. updatedAt/ETag pro Mail), bitte kurz im Contract vermerken.
+
+
+[2026-09-28] [offen] [WILLKOMMENSBILDSCHIRM - wechselnde Schutz-Tipps] [Web + iOS, überall wo dieser Bildschirm existiert] — Massimo hat den Willkommens-/Anmeldebildschirm gezeigt (dunkelgrün, Blätter, Überschrift "Deine Mails. Ruhig sortiert, gut geschützt." mit Untertext "Verdächtiges landet in der Quarantäne, Zusammenfassungen entstehen auf deinem Gerät, wenn es das unterstützt."). Wunsch: "Hier immer wechselnde Tipps zum Schutz einbauen."
+
+**Umsetzung:**
+- Überschrift und Untertext bleiben unverändert. Darunter ein kleiner Tipp-Bereich mit dezentem Label "Schutz-Tipp" (Akzentfarbe) und dem Tipp-Text (sekundäre Textfarbe, 1-2 Sätze). Nur auf diesem Bildschirm.
+- Wechsel automatisch etwa alle 10 Sekunden mit sanftem Überblenden. Start mit einem zufälligen Tipp pro Besuch, danach gemischte Reihenfolge ohne Wiederholung, bis alle einmal gezeigt wurden. Web: Pause, solange Maus oder Tastaturfokus darüber ist. Bei "Bewegung reduzieren" (prefers-reduced-motion bzw. iOS-Einstellung) kein Überblenden, nur Wechsel. Kleiner Text-Button "Nächster Tipp" zum manuellen Weiterblättern. Für Screenreader kein automatisches Vorlesen bei jedem Wechsel (aria-live aus), der aktuelle Tipp bleibt aber lesbar.
+- Das Layout darf beim Wechsel nicht springen: feste Mindesthöhe für zwei Zeilen Tipp-Text.
+- Ton: ruhig, sachlich, Du-Form, keine Alarmwörter, keine Warnfarbe Rot (passt zum Versprechen "ruhig").
+- Die Tipps liegen zentral in EINER Datei, die Web und iOS gemeinsam nutzen (z.B. contracts/protection-tips.json oder gleichwertig, Ort wählt Code), damit Ergänzungen an einer Stelle reichen.
+
+**Startliste (mit echten Umlauten so in die App übernehmen):**
+1. Seriöse Firmen fragen per Mail nie nach deinem Passwort oder deiner PIN.
+2. Deine Bank fragt nie per Mail nach einer TAN.
+3. Zeitdruck ist die häufigste Betrugsmasche. „Sofort handeln“ heißt meist: erst recht in Ruhe prüfen.
+4. Bankverbindung geändert? Ruf den Absender unter einer Nummer an, die du selbst kennst, nicht unter der aus der Mail.
+5. Prüfe die Adresse hinter dem angezeigten Namen. Der Name lässt sich leicht fälschen.
+6. Bevor du klickst: Halte den Link gedrückt (Handy) oder fahre mit der Maus darüber (Computer), dann siehst du das echte Ziel.
+7. „Zustellung fehlgeschlagen“, aber du erwartest kein Paket? Tippe nicht auf den Link, sondern sieh in der App des Paketdienstes nach.
+8. Unerwartete Rechnung im Anhang? Nicht öffnen, sondern beim Absender nachfragen.
+9. Einen QR-Code in einer Mail scannst du besser nicht. Gib die Adresse lieber selbst im Browser ein.
+10. Aktiviere die Zwei-Faktor-Anmeldung bei deinem Mail-Anbieter. Sie schützt auch, wenn dein Passwort einmal bekannt wird.
+11. Nutze für jedes Konto ein eigenes Passwort, am besten mit einem Passwortmanager.
+12. Halte Handy und Computer aktuell. Viele Sicherheitslücken werden nur durch Updates geschlossen.
+13. Ein Gewinn, obwohl du nie mitgespielt hast? Dann hat dich niemand ausgewählt.
+14. Unsicher? Frag jemanden, dem du vertraust, bevor du klickst.
+
+Ergänzungen später jederzeit möglich. Kein Contract-Bruch, reine UI- und Inhaltsergänzung.
