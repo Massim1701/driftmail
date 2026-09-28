@@ -419,6 +419,9 @@ private struct ImapConnectFormView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 SecureField(provider.requiresAppPassword ? "App-Passwort" : "Passwort", text: $password)
+                    // Kein Vorschlag des gespeicherten Kontopassworts aus dem
+                    // Schlüsselbund, wenn ein App-Passwort gebraucht wird.
+                    .textContentType(provider.requiresAppPassword ? .oneTimeCode : .password)
             }
 
             // [2026-09-22] Massimo: "die App muss erkennen ob POP oder IMAP,
@@ -511,6 +514,13 @@ private struct ImapConnectFormView: View {
         // [2026-09-28] App-Passwörter werden in Vierergruppen mit
         // Leerzeichen angezeigt, die beim Kopieren mitkommen.
         let password = provider.requiresAppPassword ? self.password.filter { !$0.isWhitespace } : self.password
+        // Google-App-Passwörter haben immer genau 16 Buchstaben, alles andere
+        // ist fast sicher das normale Google-Passwort (oft automatisch
+        // ausgefüllt).
+        if provider.id == "gmail" && password.count != 16 {
+            errorMessage = "Ein Google-App-Passwort hat genau 16 Buchstaben, eingegeben sind \(password.count) Zeichen. Wahrscheinlich ist das dein normales Google-Passwort. Bitte das App-Passwort von myaccount.google.com/apppasswords einfügen."
+            return
+        }
         do {
             let account: MailAccount
             let token: String
