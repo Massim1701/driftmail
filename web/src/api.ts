@@ -141,6 +141,9 @@ export const api = {
   // Auswahlbildschirm") -- oeffentlich (kein Token noetig, security: [] im
   // Contract), treibt die Provider-Karten + IMAP-Preset-Vorbefuellung.
   listMailProviders: () => request<MailProvider[]>("/mail-providers"),
+  // [2026-09-28] Google-Anmeldung für ein WEITERES Konto: liefert die
+  // Google-URL mit einmaligem state, der den angemeldeten User kennt.
+  googleLinkUrl: () => request<{ url: string }>("/auth/google/link", { method: "POST", body: JSON.stringify({ client: "web" }) }),
   // [2026-09-28] Servereinstellungen für unbekannte Domains ermitteln, nur
   // die Domain wird übertragen.
   // [2026-09-28] Testverbindung (nur Begrüßung lesen, keine Anmeldung).

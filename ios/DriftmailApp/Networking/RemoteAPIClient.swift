@@ -60,6 +60,24 @@ struct RemoteAPIClient: APIClient {
         try await get("/mail-providers")
     }
 
+    /// [2026-09-28] Google-Anmeldung wie in Apple Mail (siehe
+    /// `GoogleSignIn`): Start-URL für die Erst-Anmeldung, Rücksprung in die
+    /// App über `driftmail://`.
+    var googleSignInStartURL: URL {
+        var components = URLComponents(url: baseURL.appendingPathComponent("/auth/google/start"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [.init(name: "client", value: "ios")]
+        return components.url!
+    }
+
+    /// `POST /auth/google/link` -- Google-URL, um ein WEITERES Konto an den
+    /// angemeldeten User zu hängen (braucht den Session-Token).
+    func googleLinkURL() async throws -> URL {
+        struct Body: Encodable { let client = "ios" }
+        struct Response: Decodable { let url: URL }
+        let response: Response = try await post("/auth/google/link", body: Body())
+        return response.url
+    }
+
     /// [2026-09-28] `GET /mail-providers/discover?domain=` -- ebenfalls vor
     /// dem Login. Nur die Domain wird übertragen, nie die Adresse. Nur hier
     /// (nicht im `APIClient`-Protokoll), weil ausschließlich das Onboarding

@@ -62,6 +62,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   userinfo_failed: "Kontodaten konnten nicht von Google abgerufen werden.",
   email_not_verified: "Diese Google-Adresse ist nicht verifiziert.",
   not_allowlisted: "Diese E-Mail-Adresse ist für driftmail (noch) nicht freigeschaltet.",
+  invalid_state: "Die Anmeldung bei Google ist abgelaufen. Bitte noch einmal auf „Weiter mit Google“ klicken.",
 };
 
 const FALLBACK_PROVIDERS: MailProvider[] = [
@@ -170,10 +171,24 @@ export function OnboardingScreen({
 
   const otherImap = providers.find((p) => p.id === "other_imap") ?? OTHER_IMAP_FALLBACK;
 
-  // Google-Login nur, wenn der Server ihn eingerichtet hat -- und (wie
-  // bisher) nicht zum Anhängen eines weiteren Kontos.
+  // Google-Login, sobald der Server ihn eingerichtet hat -- seit 28.09.
+  // auch zum Anhängen eines weiteren Kontos (POST /auth/google/link).
   function oauthUsable(p: MailProvider): boolean {
-    return p.authType === "oauth" && !p.comingSoon && p.oauthAvailable === true && mode === "login";
+    return p.authType === "oauth" && !p.comingSoon && p.oauthAvailable === true;
+  }
+
+  const [googleStarting, setGoogleStarting] = useState(false);
+  async function startGoogle() {
+    if (mode === "login") {
+      window.location.href = googleLoginUrl();
+      return;
+    }
+    setGoogleStarting(true);
+    try {
+      window.location.href = (await api.googleLinkUrl()).url;
+    } catch {
+      setGoogleStarting(false);
+    }
   }
 
   function selectProvider(p: MailProvider) {
@@ -293,11 +308,11 @@ export function OnboardingScreen({
             {domainNotice.kind === "oauth" ? (
               <>
                 <p className="onboarding-subtitle">
-                  Diese Adresse gehört zu {domainNotice.provider.label}. Melde dich mit deinem Google-Konto an.
+                  Diese Adresse gehört zu {domainNotice.provider.label}. Melde dich im Fenster von Google mit deinem normalen Passwort an.
                 </p>
-                <a className="onboarding-button" href={googleLoginUrl()}>
-                  Weiter mit Google
-                </a>
+                <button type="button" className="onboarding-button" onClick={startGoogle} disabled={googleStarting}>
+                  {googleStarting ? "Öffne Google…" : "Weiter mit Google"}
+                </button>
                 {domainNotice.provider.imapHost && (
                   <button type="button" className="link-button" onClick={() => tryImapAnyway(domainNotice.provider)}>
                     Stattdessen mit App-Passwort verbinden
@@ -369,8 +384,7 @@ export function OnboardingScreen({
                 // [2026-09-28] Mit IMAP-Presets (Gmail) bleibt der Anbieter
                 // trotzdem nutzbar, dann eben per App-Passwort.
                 const oauthViaImap = p.authType === "oauth" && !p.comingSoon && !oauthUsable(p) && p.imapHost !== null;
-                const gmailUnavailableForAddAccount =
-                  mode === "addAccount" && p.authType === "oauth" && !p.comingSoon && !oauthViaImap;
+                const gmailUnavailableForAddAccount = p.authType === "oauth" && !p.comingSoon && !oauthUsable(p) && !oauthViaImap;
                 const disabled = p.comingSoon || gmailUnavailableForAddAccount;
                 const cardContent = (
                   <>
@@ -379,7 +393,7 @@ export function OnboardingScreen({
                       {p.comingSoon
                         ? "demnächst"
                         : gmailUnavailableForAddAccount
-                          ? "noch nicht für weitere Konten"
+                          ? "nicht verfügbar"
                           : oauthViaImap
                             ? "Mit App-Passwort"
                             : p.authType === "oauth"
@@ -396,9 +410,9 @@ export function OnboardingScreen({
                 // das wäre für einen Redirect zu Google falsch.
                 if (oauthUsable(p)) {
                   return (
-                    <a key={p.id} className="provider-card" href={googleLoginUrl()}>
+                    <button key={p.id} type="button" className="provider-card" onClick={startGoogle}>
                       {cardContent}
-                    </a>
+                    </button>
                   );
                 }
                 return (

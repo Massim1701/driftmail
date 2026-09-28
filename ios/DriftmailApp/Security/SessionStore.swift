@@ -1,3 +1,5 @@
+import UIKit
+import AuthenticationServices
 import Foundation
 import Security
 
@@ -55,5 +57,53 @@ enum SessionStore {
             kSecAttrAccount as String: account,
         ]
         SecItemDelete(query as CFDictionary)
+    }
+}
+
+/// [2026-09-28] Massimo: Gmail so einfach wie in Apple Mail -- Google-Fenster,
+/// normales Passwort, fertig. Öffnet die Google-Anmeldung im System-Browser-
+/// Fenster (`ASWebAuthenticationSession`, dasselbe Fenster, das auch andere
+/// Apps nutzen; driftmail sieht das Passwort nie). Das Backend springt nach
+/// der Anmeldung auf `driftmail://auth/callback?token=...&account=...`
+/// zurück (siehe backend routes/auth.ts, `client=ios`). Das Schema muss
+/// dafür NICHT in der Info.plist registriert sein -- die Session fängt den
+/// Rücksprung selbst ab.
+@MainActor
+final class GoogleSignIn: NSObject, ASWebAuthenticationPresentationContextProviding {
+    enum Failure: Error {
+        case cancelled
+        case server(String)
+    }
+
+    private var session: ASWebAuthenticationSession?
+
+    /// Liefert (Session-Token, Konto-ID) aus dem Rücksprung.
+    func signIn(startURL: URL) async throws -> (token: String, accountId: String?) {
+        let callback: URL = try await withCheckedThrowingContinuation { continuation in
+            let session = ASWebAuthenticationSession(url: startURL, callbackURLScheme: "driftmail") { url, error in
+                if let url {
+                    continuation.resume(returning: url)
+                } else if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {
+                    continuation.resume(throwing: Failure.cancelled)
+                } else {
+                    continuation.resume(throwing: error ?? Failure.cancelled)
+                }
+            }
+            session.presentationContextProvider = self
+            session.prefersEphemeralWebBrowserSession = false
+            self.session = session
+            session.start()
+        }
+        let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        if let token = items.first(where: { $0.name == "token" })?.value {
+            return (token, items.first(where: { $0.name == "account" })?.value)
+        }
+        throw Failure.server(items.first(where: { $0.name == "error" })?.value ?? "unknown")
+    }
+
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.keyWindow }
+            .first ?? ASPresentationAnchor()
     }
 }

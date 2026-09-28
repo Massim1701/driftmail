@@ -22,6 +22,7 @@
 // wie beim Gmail-Sync-Adapter selbst) -- unterliegt jetzt aber ebenfalls der
 // Allowlist, sonst waere sie nur eine halbe Absicherung.
 
+import { randomBytes } from "node:crypto";
 import { Router } from "express";
 import { google } from "googleapis";
 import { isEmailAllowed } from "../auth/allowlist";
@@ -84,14 +85,29 @@ function frontendUrl(): string {
   return process.env.FRONTEND_URL ?? "http://localhost:5173";
 }
 
-authRouter.get("/auth/google/start", (req, res) => {
-  if (!googleOAuthConfigured()) {
-    return res
-      .status(503)
-      .json({ error: "Google-OAuth ist nicht konfiguriert (GMAIL_CLIENT_ID/GMAIL_CLIENT_SECRET/GOOGLE_OAUTH_REDIRECT_URI fehlen)" });
-  }
+// [2026-09-28] Massimo: Gmail soll so einfach sein wie in Apple Mail --
+// Google-Fenster, Passwort, fertig; auch als WEITERES Konto und in der
+// iOS-App. Dafuer traegt jeder Start einen einmaligen `state` mit, der
+// (a) gefaelschte Ruecksprunge abwehrt, (b) bei "Konto hinzufuegen" den
+// bereits angemeldeten User kennt, ohne dessen Session-Token in eine URL
+// zu schreiben, und (c) sagt, wohin zurueckgesprungen wird (Web oder die
+// App ueber driftmail://). 10 Minuten gueltig, nur im Speicher.
+type OAuthClientKind = "web" | "ios";
+const oauthStates = new Map<string, { linkUserId: string | null; client: OAuthClientKind; expires: number }>();
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+const IOS_CALLBACK = "driftmail://auth/callback";
+
+function newOAuthState(linkUserId: string | null, client: OAuthClientKind): string {
+  const now = Date.now();
+  for (const [k, v] of oauthStates) if (v.expires < now) oauthStates.delete(k);
+  const state = randomBytes(24).toString("base64url");
+  oauthStates.set(state, { linkUserId, client, expires: now + OAUTH_STATE_TTL_MS });
+  return state;
+}
+
+function googleAuthUrl(state: string): string {
   const client = buildGoogleOAuthClient();
-  const url = client.generateAuthUrl({
+  return client.generateAuthUrl({
     // "offline" + "consent" erzwingen ein refresh_token bei JEDEM Login,
     // nicht nur beim allerersten Consent -- ohne "consent" liefert Google
     // bei einer bereits erteilten Zustimmung kein refresh_token erneut,
@@ -100,15 +116,49 @@ authRouter.get("/auth/google/start", (req, res) => {
     access_type: "offline",
     prompt: "consent",
     scope: GOOGLE_OAUTH_SCOPES,
+    state,
   });
-  res.redirect(url);
+}
+
+function oauthNotConfigured(res: import("express").Response) {
+  return res
+    .status(503)
+    .json({ error: "Google-OAuth ist nicht konfiguriert (GMAIL_CLIENT_ID/GMAIL_CLIENT_SECRET/GOOGLE_OAUTH_REDIRECT_URI fehlen)" });
+}
+
+// Erst-Anmeldung: GET /auth/google/start[?client=ios]
+authRouter.get("/auth/google/start", (req, res) => {
+  if (!googleOAuthConfigured()) return oauthNotConfigured(res);
+  const client: OAuthClientKind = req.query.client === "ios" ? "ios" : "web";
+  res.redirect(googleAuthUrl(newOAuthState(null, client)));
+});
+
+// Weiteres Konto: POST /auth/google/link (Bearer-Token des angemeldeten
+// Users, Body {client?: "web"|"ios"}) -> {url}; der Client oeffnet die URL.
+authRouter.post("/auth/google/link", async (req, res) => {
+  if (!googleOAuthConfigured()) return oauthNotConfigured(res);
+  const authHeader = req.header("authorization");
+  const bearer = authHeader?.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : null;
+  const session = bearer ? await store.getSessionByToken(bearer) : undefined;
+  if (!session || new Date(session.expiresAt).getTime() < Date.now()) {
+    return res.status(401).json({ error: "Anmeldung erforderlich" });
+  }
+  const client: OAuthClientKind = req.body?.client === "ios" ? "ios" : "web";
+  res.json({ url: googleAuthUrl(newOAuthState(session.userId, client)) });
 });
 
 authRouter.get("/auth/google/callback", async (req, res) => {
-  const redirectWithError = (reason: string) => res.redirect(`${frontendUrl()}/auth/callback?error=${encodeURIComponent(reason)}`);
+  const stateKey = typeof req.query.state === "string" ? req.query.state : "";
+  const pending = oauthStates.get(stateKey);
+  if (pending) oauthStates.delete(stateKey);
+  const target = pending?.client === "ios" ? IOS_CALLBACK : `${frontendUrl()}/auth/callback`;
+  const redirectWithError = (reason: string) => res.redirect(`${target}?error=${encodeURIComponent(reason)}`);
 
   if (!googleOAuthConfigured()) {
     return redirectWithError("oauth_not_configured");
+  }
+  if (!pending || pending.expires < Date.now()) {
+    return redirectWithError(req.query.error === "access_denied" ? "missing_code" : "invalid_state");
   }
   const code = typeof req.query.code === "string" ? req.query.code : null;
   if (!code) {
@@ -147,8 +197,16 @@ authRouter.get("/auth/google/callback", async (req, res) => {
     return redirectWithError("not_allowlisted");
   }
 
-  let user = await store.getUserByEmail(email);
-  if (!user) user = await store.createUser(email);
+  // "Konto hinzufuegen": an den angemeldeten User haengen, sonst wie bisher
+  // ueber die Google-Adresse anmelden/registrieren.
+  let userId: string;
+  if (pending.linkUserId) {
+    userId = pending.linkUserId;
+  } else {
+    let user = await store.getUserByEmail(email);
+    if (!user) user = await store.createUser(email);
+    userId = user.id;
+  }
 
   // [2026-09-19] Fund: die Spalte heisst "encrypted_oauth_token", enthielt
   // aber bisher den rohen Refresh-Token unverschluesselt -- der Spaltenname
@@ -156,10 +214,12 @@ authRouter.get("/auth/google/callback", async (req, res) => {
   // auth/credentialsEncryption.ts Kopfkommentar). Ab hier echt verschluesselt.
   const encryptedRefreshToken = tokens.refresh_token ? encryptCredentials(tokens.refresh_token) : null;
 
-  let account = await store.getMailAccountByUserId(user.id);
+  // Konto dieser Google-Adresse beim User suchen (ein User kann mehrere
+  // Konten haben, vorher wurde immer das erste genommen).
+  let account = (await store.listMailAccountsByUserId(userId)).find((a) => a.emailAddress.toLowerCase() === email!.toLowerCase());
   if (!account) {
     account = await store.createMailAccount({
-      userId: user.id,
+      userId,
       provider: "gmail",
       emailAddress: email,
       encryptedOauthToken: encryptedRefreshToken,
@@ -177,8 +237,8 @@ authRouter.get("/auth/google/callback", async (req, res) => {
     await createSystemFoldersForAccount(account.id);
   }
 
-  const session = await store.createSession(user.id);
-  res.redirect(`${frontendUrl()}/auth/callback?token=${encodeURIComponent(session.token)}`);
+  const session = await store.createSession(userId);
+  res.redirect(`${target}?token=${encodeURIComponent(session.token)}&account=${encodeURIComponent(account.id)}`);
 });
 
 authRouter.post("/accounts", async (req, res) => {

@@ -61,7 +61,15 @@ struct OnboardingAccountConnectView: View {
     /// [2026-09-28] Automatische Erkennung für unbekannte Domains läuft.
     @State private var isDiscovering = false
 
-    private let connectClient = RemoteAPIClient()
+    /// [2026-09-28] Beim Hinzufügen eines weiteren Kontos den gespeicherten
+    /// Session-Token mitschicken -- ohne ihn legte der Server das neue Konto
+    /// bei einem NEUEN, leeren User an statt beim angemeldeten.
+    private var connectClient: RemoteAPIClient {
+        RemoteAPIClient(token: mode == .addAccount ? SessionStore.loadToken() : nil)
+    }
+    @State private var googleSignIn = GoogleSignIn()
+    @State private var isSigningInWithGoogle = false
+    @State private var googleError: String?
 
     var body: some View {
         switch step {
@@ -143,6 +151,17 @@ struct OnboardingAccountConnectView: View {
                 .tint(DesignTokens.Color.accent)
                 .disabled(!email.contains("@") || isDiscovering)
 
+                if let googleError {
+                    Text(googleError)
+                        .font(.system(size: DesignTokens.Typography.Size.small))
+                        .foregroundStyle(DesignTokens.Color.dangerText)
+                        .multilineTextAlignment(.center)
+                }
+                if isSigningInWithGoogle {
+                    ProgressView("Warte auf Google…")
+                        .font(.system(size: DesignTokens.Typography.Size.small))
+                }
+
                 Button("Anbieter manuell auswählen") { step = .pickProviderManually }
                     .font(.system(size: DesignTokens.Typography.Size.small))
             }
@@ -200,11 +219,42 @@ struct OnboardingAccountConnectView: View {
     /// zurückspringen. Nur Anbieter ohne Passwort-Weg (Outlook) bekommen
     /// die Erklärung mit "Trotzdem per IMAP versuchen".
     private func continueWith(_ provider: MailProvider, email: String, user: String = "") {
+        // [2026-09-28] Wie Apple Mail: ist die Google-Anmeldung auf dem
+        // Server eingerichtet, direkt das Google-Fenster öffnen.
+        if provider.authType == .oauth && provider.oauthAvailable && !provider.comingSoon {
+            Task { await signInWithGoogle() }
+            return
+        }
         guard provider.usableWithPassword else {
             unavailableProvider = provider
             return
         }
         step = .imapForm(provider.asImapFallback, initialEmail: email, initialUser: user)
+    }
+
+    private func signInWithGoogle() async {
+        isSigningInWithGoogle = true
+        googleError = nil
+        defer { isSigningInWithGoogle = false }
+        do {
+            let client = connectClient
+            let startURL = mode == .addAccount ? try await client.googleLinkURL() : client.googleSignInStartURL
+            let result = try await googleSignIn.signIn(startURL: startURL)
+            let accounts = try await RemoteAPIClient(token: result.token).fetchAccounts()
+            guard let account = accounts.first(where: { $0.id == result.accountId }) ?? accounts.first else {
+                googleError = "Die Anmeldung hat geklappt, das Konto wurde aber nicht gefunden. Bitte erneut versuchen."
+                return
+            }
+            onConnected(account, result.token)
+        } catch GoogleSignIn.Failure.cancelled {
+            // Fenster vom User geschlossen -- still zurück.
+        } catch GoogleSignIn.Failure.server(let code) {
+            googleError = code == "not_allowlisted"
+                ? "Diese E-Mail-Adresse ist für driftmail (noch) nicht freigeschaltet."
+                : "Die Anmeldung bei Google hat nicht geklappt (\(code)). Bitte erneut versuchen."
+        } catch {
+            googleError = "Google-Anmeldung konnte nicht gestartet werden. Ist der driftmail-Server erreichbar?"
+        }
     }
 
     private func discoverAndContinue(email trimmed: String) async {
@@ -306,7 +356,7 @@ private struct ProviderRow: View {
                     Text(provider.label)
                         .font(.system(size: DesignTokens.Typography.Size.body, weight: .medium))
                         .foregroundStyle(provider.comingSoon ? DesignTokens.Color.textMuted : DesignTokens.Color.textPrimary)
-                    Text(provider.comingSoon ? "demnächst" : provider.authType == .oauth ? (provider.imapHost != nil ? "Mit App-Passwort" : "Anmelden") : provider.authType == .pop3 ? "POP3 verbinden" : "IMAP verbinden")
+                    Text(provider.comingSoon ? "demnächst" : provider.authType == .oauth ? (provider.oauthAvailable ? "Mit Google anmelden" : provider.imapHost != nil ? "Mit App-Passwort" : "Anmelden") : provider.authType == .pop3 ? "POP3 verbinden" : "IMAP verbinden")
                         .font(.system(size: DesignTokens.Typography.Size.caption))
                         .foregroundStyle(DesignTokens.Color.textMuted)
                 }

@@ -27,16 +27,18 @@ import "./App.css";
 // window.location-Parsing statt einer echten Route. Läuft außerhalb der
 // Komponente, damit es garantiert vor dem ersten Render passiert (die
 // erste request()-Anfrage in App.tsx braucht den Token bereits).
-function consumeAuthCallback(): { error: string | null } {
-  if (window.location.pathname !== "/auth/callback") return { error: null };
+function consumeAuthCallback(): { error: string | null; accountId: string | null } {
+  if (window.location.pathname !== "/auth/callback") return { error: null, accountId: null };
   const params = new URLSearchParams(window.location.search);
   const token = params.get("token");
   const error = params.get("error");
+  // [2026-09-28] Nach "Konto hinzufügen" per Google direkt ins neue Konto.
+  const accountId = params.get("account");
   if (token) setStoredToken(token);
   // URL säubern (kein Token/Error mehr sichtbar, kein erneutes Verarbeiten
   // bei einem Reload), zurück zur Startseite.
   window.history.replaceState(null, "", "/");
-  return { error: token ? null : (error ?? "token_exchange_failed") };
+  return { error: token ? null : (error ?? "token_exchange_failed"), accountId: token ? accountId : null };
 }
 
 const authCallbackResult = consumeAuthCallback();
@@ -174,7 +176,14 @@ export default function App() {
       .listAccounts()
       .then((accs) => {
         setAccounts(accs);
-        setActiveAccountId((prev) => (prev && accs.some((a) => a.id === prev) ? prev : (accs[0]?.id ?? null)));
+        const fromCallback = authCallbackResult.accountId;
+        setActiveAccountId((prev) =>
+          prev && accs.some((a) => a.id === prev)
+            ? prev
+            : fromCallback && accs.some((a) => a.id === fromCallback)
+              ? fromCallback
+              : (accs[0]?.id ?? null),
+        );
         setError(null);
         return accs;
       })
