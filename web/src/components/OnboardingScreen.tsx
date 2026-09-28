@@ -258,6 +258,7 @@ export function OnboardingScreen({
         provider={selected}
         initialEmail={prefillEmail}
         initialUser={prefillUser}
+        providers={providers}
         onBack={() => {
           setSelected(null);
           setPrefillEmail("");
@@ -424,6 +425,7 @@ function ImapConnectForm({
   provider,
   initialEmail = "",
   initialUser = "",
+  providers = [],
   onBack,
   onConnected,
   onAccountAdded,
@@ -436,10 +438,17 @@ function ImapConnectForm({
   /** Vorbefüllter Anmeldename, z.B. nur der Teil vor dem "@", wenn die
    * automatische Erkennung das meldet. */
   initialUser?: string;
+  /** [2026-09-28] Alle bekannten Anbieter: ändert der User im Formular die
+   * Adresse auf die Domain eines ANDEREN Anbieters (z.B. im Gmail-Formular
+   * eine web.de-Adresse), werden dessen Servereinstellungen übernommen --
+   * vorher ging die Anmeldung dann weiter an den alten Server. */
+  providers?: MailProvider[];
   onBack: () => void;
   onConnected: (token: string) => void;
   onAccountAdded?: (account: MailAccount) => void;
 }) {
+  const [activeProvider, setActiveProvider] = useState(provider);
+  provider = activeProvider;
   const [emailAddress, setEmailAddress] = useState(initialEmail);
   const [imapHost, setImapHost] = useState(provider.imapHost ?? "");
   const [imapPort, setImapPort] = useState(provider.imapPort ?? 993);
@@ -453,10 +462,37 @@ function ImapConnectForm({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const isPop3 = provider.authType === "pop3";
+
+  // Passt die Adresse zu einem anderen bekannten Anbieter mit Passwort-Weg,
+  // dessen Einstellungen übernehmen. Gibt den dann gültigen Anbieter zurück.
+  function syncProviderToEmail(address: string): MailProvider {
+    const domain = address.trim().split("@")[1]?.toLowerCase();
+    if (!domain || provider.domains.includes(domain)) return provider;
+    const match = providers.find((p) => p.domains.includes(domain));
+    if (!match || match.id === provider.id || match.comingSoon || !match.imapHost) return provider;
+    const next = asImapProvider(match);
+    setActiveProvider(next);
+    setImapHost(next.imapHost ?? "");
+    setImapPort(next.imapPort ?? 993);
+    setImapSecure(next.imapSecure ?? true);
+    setSmtpHost(next.smtpHost ?? "");
+    setSmtpPort(next.smtpPort ?? 587);
+    setSmtpSecure(next.smtpSecure ?? false);
+    setImapUser("");
+    return next;
+  }
   const protocolLabel = isPop3 ? "POP3" : "IMAP";
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    const effective = syncProviderToEmail(emailAddress);
+    if (effective !== provider) {
+      // Anbieter hat gewechselt: Formular zeigt jetzt die richtigen
+      // Einstellungen und ggf. einen anderen Hinweis -- kurz Bescheid geben
+      // statt mit halb aktualisierten Werten zu senden.
+      setSubmitError(`Die Adresse gehört zu ${effective.label}. Die Einstellungen wurden angepasst, bitte noch einmal auf „Verbinden“ klicken.`);
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -552,6 +588,7 @@ function ImapConnectForm({
               autoFocus
               value={emailAddress}
               onChange={(e) => setEmailAddress(e.target.value)}
+              onBlur={(e) => syncProviderToEmail(e.target.value)}
               placeholder="du@beispiel.de"
             />
           </label>
