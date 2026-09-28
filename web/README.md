@@ -888,7 +888,8 @@ sondern als kleine, funktionale Ergaenzung: ein dezenter `⌘K`-Hinweis in
 der Sidebar (`.cmdk-hint`, `FolderSidebar.tsx`) plus ein echter globaler
 `keydown`-Listener in `App.tsx`, der bei Cmd/Ctrl+K das bestehende
 Suchfeld fokussiert (`searchInputRef`) -- kein neues UI-Konzept, nur ein
-Shortcut auf eine bereits vorhandene Funktion.
+Shortcut auf eine bereits vorhandene Funktion. [2026-09-28] Überholt:
+Cmd/Ctrl+K öffnet jetzt die Befehlspalette, siehe "Befehlspalette (⌘K)".
 
 **Bewusste Grenze:** der Auftrag nennt einen "dezenten Ungelesen-Punkt
 links" als Teil der kompakten Listenzeile. Dafuer gibt es aktuell **keine
@@ -1157,6 +1158,43 @@ danach zum Vergleich geoeffnet und zeigt weiterhin unveraendert das alte
   nachrüstbar). Ausführlich in `ios/README.md` (Punkt 6 der "6 Sicherheits-
   Ergänzungen") und `SYNC.md` 19.09.
 
+## Befehlspalette (⌘K)
+
+[2026-09-28] WEB_INBOX.md 27.09. "VIER FEATURES NACH SUPERHUMAN-VORBILD"
+Punkt 1. Cmd/Ctrl+K (oder der Such-Knopf in der Sidebar) öffnet
+`components/CommandPalette.tsx`: ein Eingabefeld, das Befehle filtert
+und ab zwei Zeichen zusätzlich kontoweit Mails sucht (bis zu 5 Treffer
+plus "Alle Mails mit … anzeigen", das an die normale Suchansicht
+übergibt). Pfeiltasten + Enter, Esc oder Klick daneben schließt, Cmd+K
+schaltet um. Filter: jedes eingegebene Wort muss in Label, Gruppe oder
+Suchbegriffen vorkommen, Umlaute/Akzente egal ("spater" findet "Später").
+
+Befehle baut `App.tsx` (`buildPaletteCommands()`), weil dort Auswahl,
+Ordner und Handler liegen:
+- **Diese Mail** (nur mit geöffneter Mail): Antworten (nicht im Spam),
+  Weiterleiten, Absender vertrauen (nur bei neuem Absender), Später
+  erinnern (die drei Presets aus `snooze.ts`, dieselben wie im Menü der
+  Detailansicht), In Quarantäne verschieben, Löschen,
+  "Verschieben nach: <Ordner>" (ohne Entwürfe/Gesendet, Quarantäne und
+  Papierkorb haben eigene Befehle).
+- **Allgemein:** Neue Nachricht, Jetzt aktualisieren, Einstellungen.
+- **Gehe zu:** jeder Ordner (mit Zähler), bei mehreren Konten Kontowechsel.
+- **Ansicht:** Hell/Dunkel/System und die fünf Akzentfarben (speichert
+  per `PUT /settings`, bei Fehler zurück auf die vorige Farbe).
+
+Aktionen nutzen dieselben API-Aufrufe und Nachlade-Handler wie die Knöpfe
+in der Detailansicht. Keine Mail-Inhalte im Browser-Speicher, die
+Suchtreffer leben nur im Arbeitsspeicher der offenen Palette.
+
+**Tests:** `tsc -b`/`oxlint` ohne neue Warnungen. Per Headless-Chrome
+(Chrome DevTools Protocol, Skript im Scratchpad) gegen den Mock-Server:
+Cmd+K öffnet mit Fokus im Feld, Filter "verschieb pap" / "akzent rosa"
+treffen genau den erwarteten Befehl, Enter auf Akzentfarbe setzt die
+CSS-Variablen, Mailsuche "gehalt" findet die Gehaltsabrechnung,
+Pfeil runter wechselt die Auswahl, Esc schließt, "Später erinnern: In 1
+Stunde" entfernt die Mail serverseitig aus dem Eingang, "Gehe zu: Spam"
+wechselt den Ordner. Hell/Dunkel per Screenshot geprüft.
+
 ## Projektstruktur
 
 ```
@@ -1178,6 +1216,7 @@ web/
       AppLockGate.tsx/.css        Sperrbildschirm-Wrapper für useAppLock
       FolderSidebar.tsx/.css   Ordner-Nav: laden/anlegen/umbenennen/löschen
       MessageList.tsx/.css
+      CommandPalette.tsx/.css  Befehlspalette (⌘K)
       DraftList.tsx/.css       "entwuerfe"-Ordner: Liste + Löschen (GET/DELETE /drafts)
       MessageDetailPane.tsx/.css   inkl. Senden + Anhang-Upload
       SecurityBadge.tsx/.css

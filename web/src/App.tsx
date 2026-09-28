@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, getStoredToken, setStoredToken } from "./api";
-import type { AbsenceResponder, Draft, Folder, MailAccount, Message, MessageDetail } from "./types";
+import type { AbsenceResponder, AccentTheme, Draft, Folder, MailAccount, Message, MessageDetail } from "./types";
 import { FolderSidebar } from "./components/FolderSidebar";
 import { MessageList } from "./components/MessageList";
 import { DraftList } from "./components/DraftList";
@@ -11,10 +11,12 @@ import { ComposeModal, type ComposeMode } from "./components/ComposeModal";
 import { AiSettingsModal } from "./components/AiSettingsModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { AbsenceResponderBanner } from "./components/AbsenceResponderBanner";
-import { applyAccentTheme } from "./accentThemes";
+import { CommandPalette, type PaletteCommand } from "./components/CommandPalette";
+import { ACCENT_THEMES, applyAccentTheme } from "./accentThemes";
+import { SNOOZE_PRESET_LABELS, snoozePresetDate, type SnoozePreset } from "./snooze";
 import { SEASON_EMPTY_LINE, seasonFor } from "./season";
 import { SeasonalTwig } from "./seasonalTwig";
-import { useTheme } from "./useTheme";
+import { useTheme, type ThemeChoice } from "./useTheme";
 import { useAppLock } from "./useAppLock";
 import "./App.css";
 
@@ -122,16 +124,18 @@ export default function App() {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // [2026-09-21] WEB_INBOX.md "DESIGN-RICHTUNG" Punkt 5: Cmd/Ctrl+K
-  // fokussiert das bestehende Suchfeld (Ergaenzung zum Sidebar-Hinweis,
-  // siehe FolderSidebar.tsx .cmdk-hint) -- kein eigenes
-  // Befehlspaletten-Overlay, ausdruecklich "kein Muss fuer den ersten
-  // Entwurf".
+  // [2026-09-28] WEB_INBOX.md 27.09. Superhuman Punkt 1: Cmd/Ctrl+K öffnet
+  // (und schließt) die Befehlspalette, siehe CommandPalette.tsx. Vorher
+  // fokussierte das Kürzel nur das Suchfeld.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  // Nur für die Palette ("Akzentfarbe: …" zeigt die aktuelle Wahl);
+  // SettingsModal lädt beim Öffnen weiterhin selbst.
+  const [accentTheme, setAccentTheme] = useState<AccentTheme>("gruen");
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        setPaletteOpen((open) => !open);
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -334,6 +338,7 @@ export default function App() {
       .getSettings()
       .then((s) => {
         applyAccentTheme(s.accentTheme);
+        setAccentTheme(s.accentTheme);
         setStrictUnknownSenders(s.strictUnknownSenders);
       })
       .catch(() => {});
@@ -602,6 +607,160 @@ export default function App() {
       .catch(() => setError("Planung konnte nicht aufgehoben werden."));
   }
 
+  // [2026-09-28] Befehlspalette: Aktionen auf die gewählte Mail laufen über
+  // dieselben API-Aufrufe und Nachlade-Handler wie die Knöpfe in
+  // MessageDetailPane.tsx.
+  function runMessageAction(action: Promise<unknown>, onDone: () => void, failure: string) {
+    action.then(onDone).catch(() => setError(failure));
+  }
+
+  function handleAccentThemeChange(next: AccentTheme) {
+    const previous = accentTheme;
+    applyAccentTheme(next);
+    setAccentTheme(next);
+    api.updateSettings({ accentTheme: next }).catch(() => {
+      applyAccentTheme(previous);
+      setAccentTheme(previous);
+      setError("Akzentfarbe konnte nicht gespeichert werden.");
+    });
+  }
+
+  // Treffer aus der Palette kann in einem anderen Ordner liegen: dorthin
+  // wechseln, damit Liste und Detailansicht zusammenpassen.
+  function handleOpenFromPalette(message: Message) {
+    if (folders.some((f) => f.id === message.folderId)) setActiveFolder(message.folderId);
+    setSearchQuery("");
+    handleSelectMessage(message.id);
+  }
+
+  function buildPaletteCommands(): PaletteCommand[] {
+    const cmds: PaletteCommand[] = [];
+    const m = selectedDetail;
+    if (m) {
+      const inSpam = spamFolder?.id === m.folderId;
+      const inQuarantine = quarantaeneFolder?.id === m.folderId;
+      const inTrash = papierkorbFolder?.id === m.folderId;
+      const group = "Diese Mail";
+      if (!inSpam) cmds.push({ id: "reply", group, label: "Antworten", run: () => handleReply(m) });
+      cmds.push({ id: "forward", group, label: "Weiterleiten", keywords: "fwd", run: () => handleForward(m) });
+      if (m.isNewSender && !trustedSenderAddresses.has(m.fromAddress)) {
+        cmds.push({
+          id: "trust",
+          group,
+          label: "Absender vertrauen",
+          hint: m.fromAddress,
+          keywords: "whitelist bekannt",
+          run: () => handleTrustSender(m.fromAddress),
+        });
+      }
+      for (const preset of Object.keys(SNOOZE_PRESET_LABELS) as SnoozePreset[]) {
+        cmds.push({
+          id: `snooze:${preset}`,
+          group,
+          label: `Später erinnern: ${SNOOZE_PRESET_LABELS[preset]}`,
+          keywords: "snooze zurückstellen",
+          run: () =>
+            runMessageAction(
+              api.snoozeMessage(m.id, snoozePresetDate(preset)),
+              () => handleSnoozed(m.id),
+              "Erinnerung konnte nicht gesetzt werden.",
+            ),
+        });
+      }
+      if (!inQuarantine && !inTrash) {
+        cmds.push({
+          id: "quarantine",
+          group,
+          label: "In Quarantäne verschieben",
+          keywords: "gefährlich phishing",
+          run: () =>
+            runMessageAction(
+              api.quarantineMessage(m.id),
+              () => handleQuarantined(m.id),
+              "Nachricht konnte nicht in Quarantäne verschoben werden.",
+            ),
+        });
+      }
+      if (!inTrash) {
+        cmds.push({
+          id: "delete",
+          group,
+          label: "Löschen",
+          keywords: "papierkorb entfernen",
+          run: () =>
+            runMessageAction(api.deleteMessage(m.id), () => handleDeleted(m.id), "Nachricht konnte nicht gelöscht werden."),
+        });
+      }
+      // Entwürfe/Gesendet sind keine sinnvollen Ziele, Quarantäne und
+      // Papierkorb haben oben eigene Befehle.
+      const noMoveTargets = new Set(["entwuerfe", "gesendet", "quarantaene", "papierkorb"]);
+      for (const f of folders) {
+        if (f.id === m.folderId || (f.systemKey && noMoveTargets.has(f.systemKey))) continue;
+        cmds.push({
+          id: `move:${f.id}`,
+          group: "Verschieben",
+          label: `Verschieben nach: ${f.name}`,
+          keywords: "ordner",
+          run: () =>
+            runMessageAction(
+              api.moveMessage(m.id, f.id),
+              () => handleMoved(m.id, f.id),
+              "Nachricht konnte nicht verschoben werden.",
+            ),
+        });
+      }
+    }
+
+    cmds.push({ id: "new", group: "Allgemein", label: "Neue Nachricht", keywords: "schreiben compose", run: handleNewMessage });
+    cmds.push({ id: "sync", group: "Allgemein", label: "Jetzt aktualisieren", keywords: "abrufen sync", run: handleSyncNow });
+    cmds.push({ id: "settings", group: "Allgemein", label: "Einstellungen öffnen", run: () => setSettingsOpen(true) });
+
+    for (const f of folders) {
+      cmds.push({
+        id: `goto:${f.id}`,
+        group: "Gehe zu",
+        label: `Gehe zu: ${f.name}`,
+        keywords: "ordner springen öffnen",
+        hint: counts[f.id] ? String(counts[f.id]) : undefined,
+        run: () => handleSelectFolder(f.id),
+      });
+    }
+    if (accounts.length > 1) {
+      for (const a of accounts) {
+        if (a.id === activeAccountId) continue;
+        cmds.push({
+          id: `account:${a.id}`,
+          group: "Gehe zu",
+          label: `Konto wechseln: ${a.emailAddress}`,
+          run: () => handleSwitchAccount(a.id),
+        });
+      }
+    }
+
+    const themeLabels: Record<ThemeChoice, string> = { hell: "Hell", dunkel: "Dunkel", system: "Wie das System" };
+    for (const choice of ["hell", "dunkel", "system"] as ThemeChoice[]) {
+      cmds.push({
+        id: `theme:${choice}`,
+        group: "Ansicht",
+        label: `Ansicht: ${themeLabels[choice]}`,
+        keywords: "theme modus dark light",
+        hint: theme === choice ? "aktiv" : undefined,
+        run: () => setTheme(choice),
+      });
+    }
+    for (const t of ACCENT_THEMES) {
+      cmds.push({
+        id: `accent:${t.id}`,
+        group: "Ansicht",
+        label: `Akzentfarbe: ${t.label}`,
+        keywords: "theme farbe",
+        hint: accentTheme === t.id ? "aktiv" : undefined,
+        run: () => handleAccentThemeChange(t.id),
+      });
+    }
+    return cmds;
+  }
+
   // [2026-09-10] echter Google-Login: ohne Token keine Anfragen an die API
   // (die würden ohnehin alle mit 401 scheitern) -- stattdessen der
   // OnboardingScreen (Provider-Auswahl + IMAP-Formular, WEB_INBOX.md 19.09.).
@@ -654,7 +813,7 @@ export default function App() {
             onSyncNow={handleSyncNow}
             isSyncing={isSyncing}
             onNewMessage={handleNewMessage}
-            onOpenSearch={() => searchInputRef.current?.focus()}
+            onOpenSearch={() => setPaletteOpen(true)}
             onCreateFolder={handleCreateFolder}
             onRenameFolder={handleRenameFolder}
             onDeleteFolder={handleDeleteFolder}
@@ -748,6 +907,19 @@ export default function App() {
           onClose={() => setCompose(null)}
           onSent={handleSent}
           onDraftScheduled={loadDrafts}
+        />
+      )}
+
+      {paletteOpen && (
+        <CommandPalette
+          commands={buildPaletteCommands()}
+          accountId={activeAccountId}
+          onOpenMessage={handleOpenFromPalette}
+          onShowAllResults={(q) => {
+            setSearchQuery(q);
+            searchInputRef.current?.focus();
+          }}
+          onClose={() => setPaletteOpen(false)}
         />
       )}
 

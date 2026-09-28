@@ -3,6 +3,7 @@ import type { AttachmentScanStatus, Folder, MailSummary, MessageDetail } from ".
 import { api } from "../api";
 import { trySummarizeOnDevice } from "../onDeviceAi";
 import { BrandMark, ReplyIcon, ShieldExclamationIcon, SparkleIcon, Trash2Icon } from "../icons";
+import { SNOOZE_PRESET_LABELS, snoozePresetDate, type SnoozePreset } from "../snooze";
 import { SecurityBadge, SecurityDetails, SecuritySignalBadges } from "./SecurityBadge";
 import "./MessageDetailPane.css";
 
@@ -22,24 +23,6 @@ function scanStatusLabel(status: AttachmentScanStatus): string {
     case "scan_failed":
       return "Prüfung fehlgeschlagen — gesperrt";
   }
-}
-
-// [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze") --
-// ein paar sinnvolle Presets statt ausschließlich freier Datumsauswahl,
-// analog zu Gmail/Superhuman.
-function snoozePresetDate(preset: "1h" | "tomorrow" | "nextWeek"): string {
-  const now = new Date();
-  if (preset === "1h") return new Date(now.getTime() + 60 * 60 * 1000).toISOString();
-  if (preset === "tomorrow") {
-    const d = new Date(now);
-    d.setDate(d.getDate() + 1);
-    d.setHours(8, 0, 0, 0);
-    return d.toISOString();
-  }
-  const d = new Date(now);
-  d.setDate(d.getDate() + 7);
-  d.setHours(8, 0, 0, 0);
-  return d.toISOString();
 }
 
 // [2026-09-21] KORREKTUR (TERMINAL_INBOX.md 21.09.): drei statt zwei
@@ -306,15 +289,11 @@ export function MessageDetailPane({
           </button>
           {snoozeMenuOpen && (
             <div className="snooze-menu">
-              <button type="button" onClick={() => handleSnooze(snoozePresetDate("1h"))}>
-                In 1 Stunde
-              </button>
-              <button type="button" onClick={() => handleSnooze(snoozePresetDate("tomorrow"))}>
-                Morgen früh
-              </button>
-              <button type="button" onClick={() => handleSnooze(snoozePresetDate("nextWeek"))}>
-                Nächste Woche
-              </button>
+              {(Object.keys(SNOOZE_PRESET_LABELS) as SnoozePreset[]).map((preset) => (
+                <button key={preset} type="button" onClick={() => handleSnooze(snoozePresetDate(preset))}>
+                  {SNOOZE_PRESET_LABELS[preset]}
+                </button>
+              ))}
             </div>
           )}
         </div>
