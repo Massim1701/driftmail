@@ -41,6 +41,28 @@ function consumeAuthCallback(): { error: string | null } {
 
 const authCallbackResult = consumeAuthCallback();
 
+// [2026-09-28] WEB_INBOX.md 27.09. Superhuman Punkt 2: Eingang nach
+// Vertrauen aufgeteilt. "Bekannt" = früherer Kontakt (isNewSender=false)
+// oder auf der Whitelist, "Neue Absender" = der Rest. Die Wahl ist eine
+// reine Ansichts-Einstellung und wird pro Konto im localStorage gemerkt
+// (keine Mail-Inhalte).
+type InboxTab = "alle" | "bekannt" | "neu";
+const INBOX_TAB_STORAGE_KEY = "driftmail.inboxTab";
+const INBOX_TABS: { id: InboxTab; label: string }[] = [
+  { id: "alle", label: "Alle" },
+  { id: "bekannt", label: "Bekannt" },
+  { id: "neu", label: "Neue Absender" },
+];
+
+function readInboxTabs(): Record<string, InboxTab> {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(INBOX_TAB_STORAGE_KEY) ?? "{}");
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, InboxTab>) : {};
+  } catch {
+    return {};
+  }
+}
+
 // Automatisches Nachladen der Ordner im sichtbaren Tab (siehe Effekt in App).
 const AUTO_REFRESH_INTERVAL_MS = 60_000;
 
@@ -79,6 +101,7 @@ export default function App() {
   // MessageDetail.isNewSender fuer die "Neuer Absender"-Badge (siehe
   // MessageDetailPane/SecuritySignalBadges) -- als Set fuer O(1)-Lookup.
   const [trustedSenderAddresses, setTrustedSenderAddresses] = useState<Set<string>>(new Set());
+  const [inboxTabs, setInboxTabs] = useState<Record<string, InboxTab>>(readInboxTabs);
 
   // GET/PUT /settings (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"
   // Punkt 1, "Unbekannte Absender streng behandeln") -- lebt hier (nicht nur
@@ -416,7 +439,7 @@ export default function App() {
     if (entwuerfeFolder) loadDrafts();
   }, [entwuerfeFolder, loadDrafts]);
 
-  const currentMessages = (activeFolder && messagesByFolder[activeFolder]) || [];
+  const folderMessages = (activeFolder && messagesByFolder[activeFolder]) || [];
 
   const counts = useMemo(() => {
     const c: Partial<Record<string, number>> = {};
@@ -579,10 +602,28 @@ export default function App() {
   }
 
   const activeFolderDef = folders.find((f) => f.id === activeFolder) ?? null;
+  const inboxTab: InboxTab = (activeAccountId && inboxTabs[activeAccountId]) || "alle";
+  const isKnownSender = (m: Message) => !m.isNewSender || trustedSenderAddresses.has(m.fromAddress);
+  const knownCount = folderMessages.filter(isKnownSender).length;
+  const isEingangFolder = activeFolderDef?.systemKey === "eingang";
+  const currentMessages =
+    !isEingangFolder || inboxTab === "alle"
+      ? folderMessages
+      : folderMessages.filter((m) => (inboxTab === "bekannt") === isKnownSender(m));
+
+  function handleInboxTabChange(tab: InboxTab) {
+    if (!activeAccountId) return;
+    const next = { ...inboxTabs, [activeAccountId]: tab };
+    setInboxTabs(next);
+    try {
+      localStorage.setItem(INBOX_TAB_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Ohne localStorage gilt die Wahl nur bis zum Neuladen.
+    }
+  }
   const isQuarantineFolder = activeFolderDef?.systemKey === "quarantaene";
   const isPapierkorbFolder = activeFolderDef?.systemKey === "papierkorb";
   const isEntwuerfeFolder = activeFolderDef?.systemKey === "entwuerfe";
-  const isEingangFolder = activeFolderDef?.systemKey === "eingang";
   const isSearching = searchQuery.trim().length > 0;
 
   function handleDeleteDraft(id: string) {
@@ -725,6 +766,21 @@ export default function App() {
         run: () => handleSelectFolder(f.id),
       });
     }
+    const eingang = folders.find((f) => f.systemKey === "eingang");
+    if (eingang) {
+      for (const t of INBOX_TABS) {
+        cmds.push({
+          id: `inboxTab:${t.id}`,
+          group: "Gehe zu",
+          label: `Eingang: ${t.label}`,
+          keywords: "tab bekannt neu vertrauen",
+          run: () => {
+            handleSelectFolder(eingang.id);
+            handleInboxTabChange(t.id);
+          },
+        });
+      }
+    }
     if (accounts.length > 1) {
       for (const a of accounts) {
         if (a.id === activeAccountId) continue;
@@ -830,6 +886,26 @@ export default function App() {
                 )}
               </span>
             </div>
+            {isEingangFolder && !isSearching && (
+              <div className="inbox-tabs" role="tablist" aria-label="Eingang filtern">
+                {INBOX_TABS.map((t) => {
+                  const count = t.id === "bekannt" ? knownCount : t.id === "neu" ? folderMessages.length - knownCount : null;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={inboxTab === t.id}
+                      className={inboxTab === t.id ? "inbox-tab inbox-tab-active" : "inbox-tab"}
+                      onClick={() => handleInboxTabChange(t.id)}
+                    >
+                      {t.label}
+                      {count ? <span className="inbox-tab-count">{count}</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             {/* Suche (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN",
                 Punkt 2): kontoweit, ersetzt bei nicht-leerem Suchbegriff die
                 Ordner-/Entwürfe-Ansicht darunter (siehe searchQuery-Kommentar
@@ -865,9 +941,13 @@ export default function App() {
                 selectedId={selectedId}
                 onSelect={handleSelectMessage}
                 loading={listLoading && currentMessages.length === 0}
-                emptyContent={isEingangFolder ? <InboxEmptyState /> : undefined}
+                emptyContent={isEingangFolder && folderMessages.length === 0 ? <InboxEmptyState /> : undefined}
                 emptyLabel={
-                  isQuarantineFolder
+                  isEingangFolder && inboxTab === "neu"
+                    ? "Keine Mails von neuen Absendern."
+                    : isEingangFolder && inboxTab === "bekannt"
+                      ? "Keine Mails von bekannten Absendern."
+                      : isQuarantineFolder
                     ? "Keine Nachrichten in Quarantäne."
                     : isPapierkorbFolder
                       ? "Papierkorb ist leer."

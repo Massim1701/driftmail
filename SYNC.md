@@ -181,6 +181,8 @@ Jede Änderung an einer Datei in contracts/ kommt hier rein, auch klein. Andere 
 - **api-spec.yaml / db-schema.sql:** `accentTheme`-Enum `gruen | gelb | outlook_blue | rosa | schwarz`, DEFAULT `gruen`. Alte Werte (teal, ocean_blue, violett, koralle, ocean_verlauf) werden nicht mehr akzeptiert (400) und in Postgres einmalig auf `gruen` migriert.
 - **Betrifft Track C (iOS):** Enum bereits angepasst und tolerant gegen unbekannte Werte, aber ungebaut. **Betrifft Track A:** umgesetzt. Details im Änderungsprotokoll unten (28.09. "Web-Redesign").
 
+**[2026-09-28] [terminal] [0] — Kleine Ergänzung: `isNewSender` von `MessageDetail` nach `Message` verschoben** (api-spec.yaml). `MessageDetail` erbt es unverändert (kein Bruch für bestehende Clients), `GET /messages` liefert es jetzt zusätzlich in der Liste. Grund: Eingangs-Tabs "Bekannt"/"Neue Absender" (WEB_INBOX.md 27.09. Superhuman Punkt 2). Backend, Web und iOS umgesetzt.
+
 ## Offene Fragen
 
 Fragen, die ein Track nicht selbst entscheiden kann, weil sie einen Contract oder eine plattformübergreifende Entscheidung betreffen.
@@ -1329,3 +1331,12 @@ Weiter offen: Superhuman-Punkte 1–3, iOS Liste/Detail/leerer Eingang von Hand 
 - Snooze-Presets nach `web/src/snooze.ts` gezogen (Detailansicht und Palette teilen sie).
 - Kein Contract-Change, kein Mail-Inhalt im Browser-Speicher. iOS laut Auftrag nicht nötig; die Mac-App bekommt die Palette automatisch (lädt den Web-Client vom lokalen Server, `web/dist` ist neu gebaut).
 - **Verifiziert:** `tsc`/`oxlint` ohne neue Warnungen; per Headless-Chrome gegen den Mock-Server alle Befehlsarten durchgespielt (Details `web/README.md` "Befehlspalette (⌘K)"). **Offen:** Superhuman-Punkte 2 (Tabs nach Absender-Vertrauen) und 3 (Kurz-Zusammenfassung + Antwort-Chips).
+
+[2026-09-28] [terminal] [0 + A + F + C] — **Eingangs-Tabs nach Absender-Vertrauen** ("Alle" | "Bekannt" | "Neue Absender"), WEB_INBOX.md 27.09. "VIER FEATURES NACH SUPERHUMAN-VORBILD" Punkt 2.
+- **Regel (Web und iOS gleich):** "Bekannt" = früherer Kontakt (`isNewSender=false`) oder Absender auf der Whitelist; "Neue Absender" = der Rest. Keine neue Klassifikation, nur die bestehenden Signale. Quarantäne bleibt eigener Ordner. Standard "Alle", die Wahl wird pro Konto gemerkt (Web localStorage `driftmail.inboxTab`, iOS UserDefaults gleicher Name; reine Ansichts-Einstellung, keine Mail-Inhalte). Threads bleiben gruppiert (gefiltert wird je Nachricht, dann gruppiert).
+- **Contract:** `isNewSender` jetzt auf `Message` (siehe "Contract-Änderungen").
+- **Backend (A):** `GET /messages` zählt einmal pro Anfrage je Absender (`store.countMessagesByFromAddress`, In-Memory + Postgres `GROUP BY`) statt einer Abfrage pro Mail; Detail/Snooze/Verschieben nutzen `hasOtherMessageFromAddress` wie bisher. Smoketest um die Listen-Werte erweitert, grün in-memory und gegen frische Postgres-DB.
+- **Web (F):** Unterstrich-Tabs unter dem Eingangs-Titel mit Zählern, eigene Leerzustände je Tab, "Absender vertrauen" verschiebt sofort nach "Bekannt". Befehlspalette hat zusätzlich "Eingang: Alle/Bekannt/Neue Absender". Mock-Server berechnet `isNewSender` jetzt wie das Backend (vorher fest in einer Fixture). Per Headless-Chrome geprüft: Filter, Zähler, Merken über Neuladen, Vertrauen, keine Tabs in anderen Ordnern, Screenshot hell/dunkel.
+- **iOS (C):** `Message.isNewSender` (fehlt der Schlüssel: `false`), Segment-Auswahl oben im Eingang (`InboxListView`), lädt die Whitelist beim Öffnen des Eingangs. BUILD SUCCEEDED. **Nicht geprüft:** Darstellung/Bedienung im Simulator (Tippen hier nicht automatisierbar) -- bitte beim Durchklicken mit ansehen.
+- Lokaler Server neu gebaut und neu gestartet, `web/dist` neu gebaut (Browser + Mac-App haben die Tabs).
+- **Offen aus dem Superhuman-Auftrag:** nur noch Punkt 3 (Ein-Zeilen-Zusammenfassung + Antwort-Chips, lokal).

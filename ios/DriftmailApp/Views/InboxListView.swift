@@ -52,6 +52,41 @@ private func groupIntoThreads(_ messages: [Message]) -> [MessageThread] {
         .sorted { $0.newest.receivedAt > $1.newest.receivedAt }
 }
 
+/// [2026-09-28] WEB_INBOX.md 27.09. Superhuman Punkt 2: Eingang nach
+/// Vertrauen aufgeteilt, gleiche Regel wie Web (App.tsx): "Bekannt" =
+/// früherer Kontakt (`isNewSender == false`) oder auf der Whitelist,
+/// "Neue Absender" = der Rest. Die Wahl wird pro Konto in UserDefaults
+/// gemerkt (reine Ansichts-Einstellung, keine Mail-Inhalte).
+enum InboxTab: String, CaseIterable, Identifiable {
+    case alle, bekannt, neu
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .alle: return "Alle"
+        case .bekannt: return "Bekannt"
+        case .neu: return "Neue Absender"
+        }
+    }
+
+    private static let storageKey = "driftmail.inboxTab"
+
+    static func stored(for accountId: String?) -> InboxTab {
+        guard let accountId,
+              let raw = (UserDefaults.standard.dictionary(forKey: storageKey) as? [String: String])?[accountId]
+        else { return .alle }
+        return InboxTab(rawValue: raw) ?? .alle
+    }
+
+    func store(for accountId: String?) {
+        guard let accountId else { return }
+        var all = (UserDefaults.standard.dictionary(forKey: Self.storageKey) as? [String: String]) ?? [:]
+        all[accountId] = rawValue
+        UserDefaults.standard.set(all, forKey: Self.storageKey)
+    }
+}
+
 struct InboxListView: View {
     let folder: Folder
 
@@ -70,7 +105,20 @@ struct InboxListView: View {
     /// der Abruf fehlgeschlagen ist -- dann zeigt die Liste "Stand vom ...".
     @State private var offlineSince: Date?
 
-    private var threads: [MessageThread] { groupIntoThreads(messages) }
+    @State private var inboxTab: InboxTab = .alle
+
+    private var showsInboxTabs: Bool { folder.systemKey == .eingang }
+
+    private func isKnownSender(_ message: Message) -> Bool {
+        !message.isNewSender || environment.trustedSenderAddresses.contains(message.fromAddress)
+    }
+
+    private var visibleMessages: [Message] {
+        guard showsInboxTabs, inboxTab != .alle else { return messages }
+        return messages.filter { (inboxTab == .bekannt) == isKnownSender($0) }
+    }
+
+    private var threads: [MessageThread] { groupIntoThreads(visibleMessages) }
 
     var body: some View {
         List {
@@ -79,6 +127,20 @@ struct InboxListView: View {
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
+            }
+
+            if showsInboxTabs {
+                Picker("Eingang filtern", selection: $inboxTab) {
+                    ForEach(InboxTab.allCases) { tab in
+                        Text(tab.label).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .onChange(of: inboxTab) { _, newValue in
+                    newValue.store(for: environment.activeAccountId)
+                }
             }
 
             if folder.systemKey == .quarantaene && !messages.isEmpty {
@@ -92,7 +154,7 @@ struct InboxListView: View {
                 // [2026-09-28] WEB_INBOX.md 27.09. Punkt 4: leerer Eingang
                 // mit dem saisonalen Zweig (sanft animiert, "Bewegung
                 // reduzieren" -> statisch). Andere Ordner bleiben schlicht.
-                if folder.systemKey == .eingang {
+                if showsInboxTabs {
                     InboxEmptyStateView()
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
@@ -104,6 +166,15 @@ struct InboxListView: View {
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                 }
+            }
+
+            if !messages.isEmpty && visibleMessages.isEmpty {
+                ContentUnavailableCompat(
+                    title: inboxTab == .neu ? "Keine Mails von neuen Absendern" : "Keine Mails von bekannten Absendern",
+                    systemImage: inboxTab == .neu ? "person.badge.plus" : "person.2"
+                )
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
 
             ForEach(threads) { thread in
@@ -147,6 +218,8 @@ struct InboxListView: View {
             }
         }
         .task {
+            inboxTab = InboxTab.stored(for: environment.activeAccountId)
+            await environment.loadTrustedSenders()
             await load()
         }
         .refreshable {

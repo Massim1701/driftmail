@@ -1300,6 +1300,13 @@ async function main() {
       secondMessageDetail.isNewSender === false,
       "die zweite Nachricht selbst sollte ebenfalls isNewSender=false liefern (die erste existiert bereits)",
     );
+    // [2026-09-28] isNewSender auch in GET /messages (Eingangs-Tabs):
+    // gleiche Werte wie in der Detailansicht, per Sammel-Zaehlung berechnet.
+    const listForNewSender = (await (await fetch(`${base}/v1/messages?accountId=${account.id}`)).json()) as Record<string, unknown>[];
+    const listFixture1 = listForNewSender.find((m) => m.id === fixture1!.id);
+    const listFixture4 = listForNewSender.find((m) => m.id === fixture4!.id);
+    assert(listFixture1?.isNewSender === true, "GET /messages sollte fuer Fixture 1 (einzige Mail des Absenders) isNewSender=true liefern");
+    assert(listFixture4?.isNewSender === false, "GET /messages sollte fuer Fixture 4 nach der zweiten Mail isNewSender=false liefern");
 
     // 3) IBAN-Historie: eine wiederholte IBAN vom selben Absender gilt NICHT
     // mehr als neu (der Sync-Lauf oben hat die IBAN aus Fixture 2 bereits

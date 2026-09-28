@@ -1552,6 +1552,19 @@ components:
             Verlauf, Wert = id der aeltesten Nachricht des Verlaufs.
             Clients gruppieren die Liste hierueber statt ueber
             inReplyToMessageId-Ketten. Siehe backend/src/mail/threads.ts.
+        isNewSender:
+          type: boolean
+          description: >
+            "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09.): true,
+            wenn es fuer dieses Konto keine andere Nachricht von
+            derselben fromAddress gibt. Zur Laufzeit abgeleitet, kein
+            Ruecktausch bei spaeter eintreffender aelterer Mail. Ergaenzt
+            sich mit GET /trusted-senders -- die Client-UI kombiniert
+            beides (Badge nur bei isNewSender=true UND Absender nicht
+            auf der Whitelist). [2026-09-28] von MessageDetail nach
+            Message verschoben (WEB_INBOX.md 27.09. Superhuman Punkt 2,
+            Eingangs-Tabs "Bekannt"/"Neue Absender" brauchen es in der
+            Liste); MessageDetail erbt es unveraendert.
         awaitingReply:
           type: boolean
           description: >
@@ -1655,16 +1668,6 @@ components:
               description: >
                 [2026-09-27] Wie `to`, aus dem Cc-Header. Bcc wird nie
                 ausgeliefert.
-            isNewSender:
-              type: boolean
-              description: >
-                "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09.): true,
-                wenn es fuer dieses Konto keine andere Nachricht von
-                derselben fromAddress gibt. Zur Laufzeit abgeleitet, kein
-                Ruecktausch bei spaeter eintreffender aelterer Mail. Ergaenzt
-                sich mit GET /trusted-senders -- die Client-UI kombiniert
-                beides (Badge nur bei isNewSender=true UND Absender nicht
-                auf der Whitelist).
             attachments:
               type: array
               items:

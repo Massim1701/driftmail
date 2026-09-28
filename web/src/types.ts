@@ -136,6 +136,12 @@ export interface Message {
   // der Schalter (UserSettings.nudgeUnansweredEnabled) an ist. Zur Laufzeit
   // abgeleitet, kein eigenes Feld im Backend-Schema.
   awaitingReply: boolean;
+  // "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09./19.09.): true, wenn
+  // es fuer dieses Konto keine andere Nachricht von derselben fromAddress
+  // gibt. Kombiniert sich mit GET /trusted-senders -- Badge nur zeigen, wenn
+  // isNewSender=true UND Absender nicht auf der Whitelist (siehe api-spec.yaml).
+  // [2026-09-28] von MessageDetail hierher (Eingangs-Tabs in der Liste).
+  isNewSender: boolean;
   // [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
   // Punkt 3 ("Vertraulicher Modus") -- nur bei selbst gesendeten Nachrichten
   // gesetzt. Nach Ablauf wird bodyText serverseitig geloescht (siehe
@@ -227,11 +233,6 @@ export interface MessageDetail extends Message {
   // [2026-09-27] Empfaenger aus To-/Cc-Headern, leer wenn unbekannt.
   to: string[];
   cc: string[];
-  // "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09./19.09.): true, wenn
-  // es fuer dieses Konto keine andere Nachricht von derselben fromAddress
-  // gibt. Kombiniert sich mit GET /trusted-senders -- Badge nur zeigen, wenn
-  // isNewSender=true UND Absender nicht auf der Whitelist (siehe api-spec.yaml).
-  isNewSender: boolean;
   // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan".
   attachments: MessageAttachment[];
 }

@@ -150,6 +150,11 @@ export interface Store {
    * Zur Laufzeit abgeleitet, kein eigenes Feld/Cache -- siehe
    * routes/messages.ts. Case-insensitiver Adressvergleich. */
   hasOtherMessageFromAddress(mailAccountId: string, fromAddress: string, excludingMessageId: string): Promise<boolean>;
+  /** [2026-09-28] Anzahl Nachrichten je (kleingeschriebener) fromAddress im
+   * Konto, inkl. gesnoozter -- dieselbe Grundlage wie
+   * hasOtherMessageFromAddress, aber fuer die ganze Liste in EINER Abfrage
+   * (isNewSender in GET /messages). */
+  countMessagesByFromAddress(mailAccountId: string): Promise<Map<string, number>>;
   /** "Nudge" (WEB_INBOX.md 21.09. "DREI WEITERE FEATURES..." Punkt 2):
    * true, wenn es in `folderId` eine Nachricht gibt, deren
    * inReplyToMessageId auf `messageId` zeigt. Siehe mail/nudge.ts. */
@@ -666,6 +671,16 @@ export class InMemoryStore implements Store {
     return this.messages.some(
       (m) => m.mailAccountId === mailAccountId && m.id !== excludingMessageId && m.fromAddress.toLowerCase() === normalized,
     );
+  }
+
+  async countMessagesByFromAddress(mailAccountId: string): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    for (const m of this.messages) {
+      if (m.mailAccountId !== mailAccountId) continue;
+      const key = m.fromAddress.toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
   }
 
   // ----- Quarantäne -----

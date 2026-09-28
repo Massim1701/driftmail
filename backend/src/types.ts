@@ -378,6 +378,10 @@ export interface ApiMessage {
   threadId: string;
   // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
   // ("Nudge") -- siehe mail/nudge.ts.
+  // "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09.), siehe api-spec.yaml.
+  // [2026-09-28] von ApiMessageDetail hierher (Eingangs-Tabs brauchen es in
+  // der Liste).
+  isNewSender: boolean;
   awaitingReply: boolean;
   // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
   // ("Vertraulicher Modus") -- siehe MessageRecord-Kommentar.
@@ -466,8 +470,6 @@ export interface ApiMessageDetail extends ApiMessage {
   // 27.09. gesendete Nachrichten, Fixture-Mails ohne To-Header).
   to: string[];
   cc: string[];
-  // "Erster Kontakt"-Kennzeichnung (WEB_INBOX.md 15.09.), siehe api-spec.yaml.
-  isNewSender: boolean;
   // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan": Anhaenge
   // dieser Nachricht, bereits gescannt (siehe mail/incomingAttachments.ts
   // fuer eingehende, routes/attachments.ts fuer beim Senden hochgeladene).

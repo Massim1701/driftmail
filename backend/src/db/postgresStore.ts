@@ -997,6 +997,14 @@ export class PostgresStore implements Store {
     return rows.length > 0;
   }
 
+  async countMessagesByFromAddress(mailAccountId: string): Promise<Map<string, number>> {
+    const { rows } = await this.pool.query<{ address: string; n: string }>(
+      "SELECT LOWER(from_address) AS address, COUNT(*) AS n FROM messages WHERE mail_account_id = $1 GROUP BY LOWER(from_address)",
+      [mailAccountId],
+    );
+    return new Map(rows.map((r) => [r.address, Number(r.n)]));
+  }
+
   // ----- Quarantäne -----
 
   async quarantineMessage(messageId: string, reason: string): Promise<QuarantineRecord> {

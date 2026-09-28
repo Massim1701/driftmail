@@ -2040,6 +2040,16 @@ keine Verhaltensänderung beabsichtigt) läuft über denselben Code-Pfad wie
 vorher, nur über einen anderen SwiftUI-Mechanismus (`principal`-
 Toolbar-Item statt `navigationTitle`-String) umgesetzt.
 
+## [2026-09-28] Eingangs-Tabs nach Absender-Vertrauen
+
+WEB_INBOX.md 27.09. Superhuman Punkt 2, gleiche Regel wie Web:
+Segment-Auswahl "Alle" | "Bekannt" | "Neue Absender" oben im Eingang
+(`InboxListView`, `enum InboxTab`). "Bekannt" = `Message.isNewSender ==
+false` oder Adresse in `trustedSenderAddresses`. `isNewSender` steht seit
+dem Contract-Update auch auf `Message` (fehlender Schlüssel -> `false`).
+Wahl pro Konto in UserDefaults (`driftmail.inboxTab`), Standard "Alle".
+Gebaut, im Simulator noch nicht von Hand angesehen.
+
 ## Nächste Schritte (nicht Teil dieses Durchstichs)
 
 - Ordner umbenennen/löschen/neu sortieren in der UI (Endpunkte sind da,

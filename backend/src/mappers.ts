@@ -119,6 +119,7 @@ export function toApiMessage(
   security: MessageSecurityRecord | undefined,
   awaitingReply: boolean,
   threadId: string,
+  isNewSender: boolean,
 ): ApiMessage {
   return {
     id: m.id,
@@ -138,6 +139,7 @@ export function toApiMessage(
     threadId,
     // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2
     // ("Nudge") -- siehe mail/nudge.ts.
+    isNewSender,
     awaitingReply,
     // [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 3
     // ("Vertraulicher Modus"). `m.bodyText` ist zu diesem Zeitpunkt schon
@@ -179,7 +181,7 @@ export function toApiMessageDetail(
   threadId: string,
 ): ApiMessageDetail {
   return {
-    ...toApiMessage(m, security, awaitingReply, threadId),
+    ...toApiMessage(m, security, awaitingReply, threadId, isNewSender),
     bodyText: m.bodyText,
     // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies": hier
     // noch der ROHE Wert -- der Aufrufer (routes/messages.ts) ersetzt ihn
@@ -192,7 +194,6 @@ export function toApiMessageDetail(
     canUnsubscribe: parseListUnsubscribeHeader(m.rawHeaders) !== null,
     to: recipientsFromHeader(m.rawHeaders, "to"),
     cc: recipientsFromHeader(m.rawHeaders, "cc"),
-    isNewSender,
     attachments: attachments.map(toApiMessageAttachment),
     links: links.map(toApiMessageLink),
   };

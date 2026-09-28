@@ -1195,6 +1195,18 @@ Pfeil runter wechselt die Auswahl, Esc schließt, "Später erinnern: In 1
 Stunde" entfernt die Mail serverseitig aus dem Eingang, "Gehe zu: Spam"
 wechselt den Ordner. Hell/Dunkel per Screenshot geprüft.
 
+## Eingangs-Tabs nach Absender-Vertrauen
+
+[2026-09-28] WEB_INBOX.md 27.09. Superhuman Punkt 2. Nur im Eingang und
+nicht während einer Suche: "Alle" | "Bekannt" | "Neue Absender" unter dem
+Titel (`App.tsx`, Stil `.inbox-tabs` in `App.css`). "Bekannt" =
+`isNewSender=false` oder Adresse in `GET /trusted-senders`, "Neue
+Absender" = der Rest. `isNewSender` steht seit dem 28.09. auch auf
+`Message` (Liste). Die Wahl wird pro Konto in localStorage
+(`driftmail.inboxTab`) gemerkt, Standard "Alle". Die Befehlspalette hat
+dazu "Eingang: …". Der Mock-Server berechnet `isNewSender` wie das
+Backend (keine andere Mail derselben Adresse).
+
 ## Projektstruktur
 
 ```

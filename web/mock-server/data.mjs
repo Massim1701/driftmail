@@ -281,10 +281,6 @@ export const messages = [
     receivedAt: "2026-09-05T09:03:00Z",
     folderId: EINGANG,
     security: securityOk(),
-    // [2026-09-21] WEB_INBOX.md 19.09. "Neuer Absender"-Badge: einziger
-    // Absender in den Fixtures ohne vorherige Nachricht -- realistisches
-    // Beispiel fuer isNewSender=true trotz classification="safe".
-    isNewSender: true,
     bodyText:
       "Sehr geehrter Herr Manca,\n\ndie besprochenen Unterlagen liegen zur Unterschrift bereit. Bitte vereinbaren Sie einen Termin in unserer Kanzlei.\n\nMit freundlichen Grüßen\nNotariat Weber",
   },
@@ -577,6 +573,13 @@ function classificationOf(msg) {
 // awaitingReply:true ausgeliefert werden -- Default true (Server-Default,
 // siehe server.mjs userSettings), nur der GET /messages-Listen-Handler
 // übergibt den tatsächlichen userSettings.nudgeUnansweredEnabled-Wert.
+// "Erster Kontakt" wie backend hasOtherMessageFromAddress(): keine andere
+// Nachricht derselben Adresse (der Mock kennt nur ein Konto).
+function isNewSender(msg) {
+  const address = msg.fromAddress.toLowerCase();
+  return !messages.some((m) => m.id !== msg.id && m.fromAddress.toLowerCase() === address);
+}
+
 export function messageSummary(msg, opts = {}) {
   const nudgeEnabled = opts.nudgeEnabled !== false;
   // Message-Schema (ohne bodyText/security)
@@ -592,6 +595,9 @@ export function messageSummary(msg, opts = {}) {
     // Ansicht") -- vorher nur in messageDetail() gespiegelt.
     inReplyToMessageId: msg.inReplyToMessageId ?? null,
     awaitingReply: nudgeEnabled && msg.awaitingReplyCandidate === true,
+    // [2026-09-28] seit dem Contract-Update auch in der Liste (Eingangs-Tabs),
+    // wie im Backend zur Laufzeit gezaehlt statt fest in den Fixtures.
+    isNewSender: isNewSender(msg),
     confidentialUntil: msg.confidentialUntil ?? null,
     // "5 Wettbewerbs-Luecken" Punkt 5 ("Snooze").
     snoozedUntil: msg.snoozedUntil ?? null,
@@ -628,7 +634,6 @@ export function messageDetail(msg, opts = {}) {
     links: msg.links ?? [],
     security: msg.security,
     canUnsubscribe: msg.hasListUnsubscribe === true,
-    isNewSender: msg.isNewSender === true,
     attachments: (msg.attachments ?? []).map(messageAttachmentSummary),
   };
 }

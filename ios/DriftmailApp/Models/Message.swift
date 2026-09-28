@@ -41,12 +41,18 @@ struct Message: Codable, Identifiable, Hashable {
     /// `GET /messages` nicht auf -- dieses Feld ist deshalb praktisch nur
     /// über `GET /messages/{id}` direkt sichtbar (siehe api-spec.yaml).
     let snoozedUntil: Date?
+    /// [2026-09-28] "Erster Kontakt" jetzt auch in der Liste (Contract:
+    /// von `MessageDetail` nach `Message` verschoben) -- Grundlage der
+    /// Eingangs-Tabs "Bekannt"/"Neue Absender" (WEB_INBOX.md 27.09.
+    /// Superhuman Punkt 2). Fehlt der Schlüssel (älterer Server/Cache),
+    /// gilt `false`, die Mail landet dann unter "Bekannt".
+    let isNewSender: Bool
 
     init(
         id: String, fromAddress: String, fromDisplayName: String?, subject: String?, receivedAt: Date,
         folderId: String, classification: Classification, inReplyToMessageId: String?,
         awaitingReply: Bool = false, confidentialUntil: Date? = nil, snoozedUntil: Date? = nil,
-        threadId: String? = nil
+        threadId: String? = nil, isNewSender: Bool = false
     ) {
         self.id = id
         self.fromAddress = fromAddress
@@ -60,6 +66,7 @@ struct Message: Codable, Identifiable, Hashable {
         self.awaitingReply = awaitingReply
         self.confidentialUntil = confidentialUntil
         self.snoozedUntil = snoozedUntil
+        self.isNewSender = isNewSender
     }
 
     init(from decoder: Decoder) throws {
@@ -76,6 +83,7 @@ struct Message: Codable, Identifiable, Hashable {
         awaitingReply = try container.decodeIfPresent(Bool.self, forKey: .awaitingReply) ?? false
         confidentialUntil = try container.decodeIfPresent(Date.self, forKey: .confidentialUntil)
         snoozedUntil = try container.decodeIfPresent(Date.self, forKey: .snoozedUntil)
+        isNewSender = try container.decodeIfPresent(Bool.self, forKey: .isNewSender) ?? false
     }
 }
 
@@ -255,7 +263,8 @@ struct MessageDetail: Codable, Identifiable, Hashable {
             inReplyToMessageId: inReplyToMessageId,
             awaitingReply: awaitingReply,
             confidentialUntil: confidentialUntil,
-            snoozedUntil: snoozedUntil
+            snoozedUntil: snoozedUntil,
+            isNewSender: isNewSender
         )
     }
 

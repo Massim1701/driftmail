@@ -2671,6 +2671,16 @@ fehl. Das ist ein eigenständiges Test-Infrastruktur-Thema (eigene
 Test-Datenbank nötig), außerhalb des Umfangs dieses Nachtrags -- Fix
 zurückgenommen, hier nur dokumentiert, damit es nicht verloren geht.
 
+## Eingangs-Tabs: isNewSender in der Liste -- [2026-09-28] Nachtrag
+
+`GET /messages` liefert `isNewSender` jetzt auf jeder Nachricht (Contract:
+von `MessageDetail` nach `Message` verschoben). Berechnet mit einer
+einzigen Zählabfrage je Anfrage (`store.countMessagesByFromAddress`,
+Postgres `GROUP BY LOWER(from_address)`), `true` bei höchstens einer
+Nachricht dieser Adresse im Konto -- dieselbe Regel wie
+`hasOtherMessageFromAddress` in der Detailansicht (inkl. gesnoozter
+Mails). Smoketest prüft die Listen-Werte.
+
 ## Annahmen (nicht selbst im Contract entscheidbar, siehe SYNC.md)
 
 - ~~`contracts/db-schema.sql` ist Postgres-DDL, aber ein DB-Server war
