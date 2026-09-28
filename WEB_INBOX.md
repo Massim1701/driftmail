@@ -1438,3 +1438,14 @@ Bitte Reihenfolge selbst einteilen (Empfehlung: 2, 4, 1, 3), pro Punkt in SYNC.m
 - Anhaenge der Originalmail werden mitgenommen. Als gesperrt eingestufte Anhaenge (scan_status malicious/blocked_type) NICHT mitschicken.
 - Senden ueber den bestehenden Compose-/Undo-Send-Ablauf, KEIN Auto-Send.
 Falls dafuer eine Contract-Ergaenzung noetig ist (z.B. Weiterleiten mit vorhandenen Anhaengen), bitte kurz in SYNC.md vermerken.
+
+
+[2026-09-27] [offen] [ENTSCHEIDUNG - Lokaler Mail-Cache] [iOS + Web] [beantwortet die offene Frage vom 19.09. in SYNC.md "Offene Fragen", bitte dort als beantwortet markieren] — Entscheidung von Massimo (nach Empfehlung von Web-Claude): iOS bekommt einen lokalen Mail-Cache, Web bekommt KEINEN persistenten Cache.
+
+**iOS:** lokaler Cache mit Core Data (bzw. gleichwertig, Wahl liegt bei Track C). Muss verschluesselt sein: iOS Data Protection auf den Cache-Dateien (so streng wie mit Hintergrundabruf vereinbar, gewaehlte Schutzklasse kurz in SYNC.md begruenden) UND vom iCloud-/iTunes-Backup ausnehmen (isExcludedFromBackup), damit Mail-Inhalte nicht ueber ein Backup in die Cloud gelangen. Umfang klein halten: Kopfzeilen und Text der juengsten Mails (Vorschlag: letzte Wochen bzw. begrenzte Anzahl, Grenze in SYNC.md nennen), Anhaenge NICHT dauerhaft cachen, nur bei Bedarf laden. Beim Abmelden, Konto-Entfernen und "Alles zuruecksetzen" wird der Cache vollstaendig geloescht. Nutzen: sofort sichtbare Liste, Lesen ohne Netz, Grundlage fuer die lokalen KI-Funktionen (Zusammenfassung, Antwortvorschlaege, Suche).
+
+**Web:** KEIN IndexedDB und KEIN localStorage fuer Mail-Inhalte (IndexedDB ist im Browser nicht verschluesselt und waere bei Schadsoftware auf dem Rechner oder einer Sicherheitsluecke in der Web-App lesbar). Erlaubt ist nur ein Cache im Arbeitsspeicher der laufenden Sitzung, der beim Neuladen frisch vom Backend kommt. Die bestehende Regel fuer Tokens (localStorage) bleibt unveraendert. Ein verschluesselter Web-Cache kann spaeter separat entschieden werden.
+
+**Fuer beide, wichtigste Regel:** Das Backend bleibt die Wahrheit, der Cache ist nur eine Spiegelung. Wird eine Mail spaeter als gefaehrlich erkannt, in die Quarantaene verschoben oder geloescht, muss der Client das uebernehmen (Eintrag aktualisieren oder entfernen). Der Sicherheitsstatus einer Mail wird beim Oeffnen (online) immer frisch vom Backend geholt. Offline zeigt der Cache nur den zuletzt bekannten Stand, klar als "Stand vom ..." gekennzeichnet, nie eine veraltete Entwarnung als aktuelle Gewissheit.
+
+Hinweis: Eine Ergaenzung der Datenschutzerklaerung (Speicherung auf dem Geraet, verschluesselt, jederzeit loeschbar) ist vorgemerkt, aber NICHT Teil dieses Auftrags (driftware-Repo, wird separat entschieden). Kein Contract-Bruch erwartet; falls der Cache ein Aenderungs-Kennzeichen vom Backend braucht (z.B. updatedAt/ETag pro Mail), bitte kurz im Contract vermerken.
