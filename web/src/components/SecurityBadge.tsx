@@ -15,7 +15,7 @@ export interface SecuritySignal {
   tone: "warning" | "danger";
 }
 
-export function securitySignalsFor(
+function securitySignalsFor(
   security: Pick<SecurityResult, "displayNameSpoofingDetected" | "replyToMismatchDetected" | "ibanChangedInThread">,
   options: { isNewSender: boolean } = { isNewSender: false },
 ): SecuritySignal[] {
@@ -83,7 +83,7 @@ const LABEL: Record<Classification, string> = {
   phishing: "Phishing-Verdacht",
 };
 
-export function classificationTone(c: Classification): "success" | "warning" | "danger" {
+function classificationTone(c: Classification): "success" | "warning" | "danger" {
   if (c === "safe") return "success";
   if (c === "unclear") return "warning";
   return "danger"; // spam | phishing

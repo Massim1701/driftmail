@@ -2,7 +2,7 @@
 // Nur die Icon-Keys, die contracts/design-tokens.json unter "folders" nutzt,
 // plus ein paar UI-Icons für Aktionen.
 
-import type { ReactElement, SVGProps } from "react";
+import type { SVGProps } from "react";
 
 function Svg(props: SVGProps<SVGSVGElement>) {
   return (
@@ -118,23 +118,6 @@ export function PlusIcon(props: SVGProps<SVGSVGElement>) {
     </Svg>
   );
 }
-
-// FOLDER_ICONS: Icon-Keys aus contracts/design-tokens.json "systemFolders.defaults[].icon"
-// (inbox/file-pencil/send/shield-exclamation/trash/trash-2, "receipt"/"star"
-// bleiben für Bestands-/eigene Ordner wie "Rechnungen" nutzbar) plus "folder"
-// aus "customFolder.defaultIcon" für benutzerdefinierte Ordner ohne eigenes
-// Icon. [2026-09-10] Ordner-Umbau (WEB_INBOX.md 09.09.): file-pencil/send neu.
-export const FOLDER_ICONS: Record<string, (p: SVGProps<SVGSVGElement>) => ReactElement> = {
-  star: StarIcon,
-  inbox: InboxIcon,
-  receipt: ReceiptIcon,
-  "shield-exclamation": ShieldExclamationIcon,
-  trash: TrashIcon,
-  "trash-2": Trash2Icon,
-  folder: FolderIcon,
-  "file-pencil": FileTextIcon,
-  send: SendIcon,
-};
 
 export function CheckShieldIcon(props: SVGProps<SVGSVGElement>) {
   return (

@@ -5,7 +5,6 @@ import {
   BrandMark,
   ComposeIcon,
   FileTextIcon,
-  FOLDER_ICONS,
   FolderIcon,
   InboxIcon,
   PencilIcon,
@@ -18,6 +17,7 @@ import {
   Trash2Icon,
   TrashIcon,
 } from "../icons";
+import { FOLDER_ICONS } from "../folderIcons";
 import { SYSTEM_FOLDER_META } from "../folderMeta";
 import { seasonFor } from "../season";
 import { SeasonalTwig } from "../seasonalTwig";
