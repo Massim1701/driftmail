@@ -1,0 +1,53 @@
+/* [2026-09-28] Saisonaler Zweig, siehe seasonalTwig.tsx. Bewegung nur mit
+   .animated (leerer Eingang) und nur ohne prefers-reduced-motion --
+   WEB_INBOX.md 27.09. Punkt 4: "dezent, kein Konfetti, reduced-motion
+   beachten (dann statisch)". */
+
+.seasonal-twig {
+  display: block;
+  overflow: visible;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .seasonal-twig.animated .twig-sway {
+    transform-box: view-box;
+    transform-origin: 8px 90px;
+    animation: twig-sway 6s ease-in-out infinite alternate;
+  }
+
+  .seasonal-twig.animated .twig-fall {
+    animation: twig-fall 7s ease-in-out infinite;
+  }
+
+  .seasonal-twig.animated .twig-swing {
+    transform-box: view-box;
+    transform-origin: 66px 50px;
+    animation: twig-swing 4s ease-in-out infinite alternate;
+  }
+
+  .seasonal-twig.animated .twig-bloom {
+    animation: twig-bloom 1.4s ease-out both;
+  }
+}
+
+@keyframes twig-sway {
+  from { transform: rotate(-1.2deg); }
+  to { transform: rotate(1.2deg); }
+}
+
+@keyframes twig-fall {
+  0% { transform: translate(0, 0); opacity: 0; }
+  15% { opacity: 0.9; }
+  85% { opacity: 0.9; }
+  100% { transform: translate(-6px, 22px); opacity: 0; }
+}
+
+@keyframes twig-swing {
+  from { transform: rotate(-4deg); }
+  to { transform: rotate(4deg); }
+}
+
+@keyframes twig-bloom {
+  from { transform: scale(0.2); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}

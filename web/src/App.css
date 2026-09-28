@@ -33,36 +33,46 @@
   flex: 1;
 }
 
+/* [2026-09-28] Redesign "ruhig & warm": Listen-Spalte als eigene, leicht
+   abgesetzte Fläche, Ordnername in der Serif-Schrift. */
 .message-column {
-  width: 320px;
+  width: 404px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--color-border);
-  background: var(--color-surface-page);
+  background: var(--color-surface-list);
 }
 
 .message-column-header {
   display: flex;
   align-items: baseline;
-  gap: var(--space-sm);
-  padding: var(--space-lg) var(--space-md) var(--space-sm);
+  gap: 10px;
+  padding: 26px 22px 12px;
 }
 
 .message-column-header h2 {
   margin: 0;
-  font-size: var(--font-size-heading);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-title);
   font-weight: var(--font-weight-medium);
+  letter-spacing: -0.3px;
 }
 
 .message-column-count {
+  flex-shrink: 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-small);
 }
 
 .message-search-input {
-  margin: 0 var(--space-md) var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
+  margin: 0 22px var(--space-md);
+  height: 38px;
+  padding: 0 var(--space-md);
   font-family: var(--font-family);
   font-size: var(--font-size-small);
   color: var(--color-text-primary);
@@ -72,12 +82,17 @@
   outline: none;
 }
 
+.message-search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
 .message-search-input:focus {
   border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 22%, transparent);
 }
 
 .app-error {
-  margin: 0 var(--space-md) var(--space-sm);
+  margin: 0 22px var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--color-danger) 12%, transparent);

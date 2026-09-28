@@ -60,7 +60,8 @@ export interface AiSettings {
 // Default-Theme (WEB_INBOX.md 24.09. "DESIGN-RICHTUNG PRAEZISIERT"), "teal"
 // bleibt als wählbare Alternative erhalten (kein Nutzer verliert eine
 // bereits getroffene Wahl).
-export type AccentTheme = "outlook_blue" | "teal" | "ocean_blue" | "violett" | "koralle" | "ocean_verlauf";
+// [2026-09-28] Redesign: fuenf Themes, Default "gruen" (siehe accentThemes.ts).
+export type AccentTheme = "gruen" | "gelb" | "outlook_blue" | "rosa" | "schwarz";
 
 export interface UserSettings {
   accentTheme: AccentTheme;

@@ -1,9 +1,10 @@
 .message-list {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: var(--space-xs) 10px var(--space-md);
   display: flex;
   flex-direction: column;
+  gap: 2px;
   overflow-y: auto;
   flex: 1;
 }
@@ -15,64 +16,113 @@
   text-align: center;
 }
 
-/* [2026-09-21] WEB_INBOX.md "DESIGN-RICHTUNG" Punkt 2: kompakte
-   Listenzeilen statt Karten -- kein Rahmen/Schatten pro Zeile mehr, nur
-   eine duenne Trennlinie zur naechsten Zeile. Die Akzentfarbe bleibt fuer
-   die ausgewaehlte Zeile reserviert (ausdruecklich erlaubt, siehe
-   "ERGAENZUNG zur Design-Richtung"), aber als schlanker linker Balken
-   statt Vollrahmen+Schatten -- die einzige verbleibende Farbe pro Zeile
-   bleiben damit die Sicherheits-Badges. */
+/* [2026-09-28] Redesign "ruhig & warm": Zeilen als weich gerundete Flächen
+   mit Avatar statt durchgehender Trennlinien; die ausgewählte Zeile trägt
+   das Theme-Farbpaar (color.selected). Kräftige Farben bleiben den
+   Sicherheits-Badges vorbehalten. */
 .message-row {
   width: 100%;
   display: flex;
-  flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
-  padding: var(--space-sm) var(--space-md);
+  gap: var(--space-md);
+  padding: var(--space-md);
   border: none;
-  border-bottom: 1px solid var(--color-border-subtle);
+  border-radius: 12px;
   background: transparent;
   text-align: left;
   cursor: pointer;
   font-family: var(--font-family);
+  color: var(--color-text-primary);
 }
 
 .message-row:hover {
-  background: var(--color-surface-card);
+  background: color-mix(in srgb, var(--color-text-primary) 4%, transparent);
 }
 
-/* [2026-09-25] Outlook-Vorgabe (WEB_INBOX.md 24.09. "DESIGN-RICHTUNG
-   PRAEZISIERT"): "Ausgewaehlte/aktive Listenzeile: Hintergrund #deecf9,
-   Text #004578" -- eigenes Farbpaar (color.selected) statt des vorherigen
-   schlanken linken Akzent-Balkens. */
+.message-row:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: -2px;
+}
+
 .message-row.active {
   background: var(--color-selected-bg);
+}
+
+.message-avatar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ruhige, feste Avatar-Töne (hell / dunkel) */
+.message-avatar.tone-1 { background: #E4E9DF; color: #2A5E40; }
+.message-avatar.tone-2 { background: #E6E4F0; color: #4B4577; }
+.message-avatar.tone-3 { background: #F5DFCF; color: #7A4B26; }
+.message-avatar.tone-4 { background: #E1EAEE; color: #2D5566; }
+.message-avatar.tone-5 { background: #F3E0E6; color: #7A3550; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="hell"]) .message-avatar.tone-1 { background: #22332A; color: #BFE5CD; }
+  :root:not([data-theme="hell"]) .message-avatar.tone-2 { background: #2A2740; color: #C9C3F0; }
+  :root:not([data-theme="hell"]) .message-avatar.tone-3 { background: #3A2A1E; color: #EFC9A6; }
+  :root:not([data-theme="hell"]) .message-avatar.tone-4 { background: #1E2F37; color: #B3D3E0; }
+  :root:not([data-theme="hell"]) .message-avatar.tone-5 { background: #3A2330; color: #EDB8CB; }
+}
+:root[data-theme="dunkel"] .message-avatar.tone-1 { background: #22332A; color: #BFE5CD; }
+:root[data-theme="dunkel"] .message-avatar.tone-2 { background: #2A2740; color: #C9C3F0; }
+:root[data-theme="dunkel"] .message-avatar.tone-3 { background: #3A2A1E; color: #EFC9A6; }
+:root[data-theme="dunkel"] .message-avatar.tone-4 { background: #1E2F37; color: #B3D3E0; }
+:root[data-theme="dunkel"] .message-avatar.tone-5 { background: #3A2330; color: #EDB8CB; }
+
+.message-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.message-row-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.message-from {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .message-row.active .message-from {
   color: var(--color-selected-text);
 }
 
-.message-row-top {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  gap: var(--space-sm);
-}
-
-.message-from {
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.message-thread-count {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
 .message-date {
+  flex-shrink: 0;
   font-size: var(--font-size-caption);
   color: var(--color-text-muted);
-  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .message-subject {
@@ -81,15 +131,23 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  width: 100%;
+}
+
+.message-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
 }
 
 /* Threaded Ansicht (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES"
    Punkt 4) -- nur sichtbar, wenn eine Gruppe mehr als eine Nachricht hat. */
 .message-thread-toggle {
-  margin: 0 var(--space-md) 0 calc(var(--space-md) + var(--space-lg));
+  margin: 0 0 2px 60px;
   padding: 2px var(--space-sm);
   border: none;
+  border-radius: 8px;
   background: none;
   font-family: var(--font-family);
   font-size: var(--font-size-caption);
@@ -99,23 +157,60 @@
   align-self: flex-start;
 }
 
+.message-thread-toggle:hover {
+  background: color-mix(in srgb, var(--color-text-primary) 5%, transparent);
+}
+
 .message-thread-older {
   list-style: none;
-  margin: 0 0 0 var(--space-lg);
-  padding: 0;
+  margin: 0 0 var(--space-xs) 28px;
+  padding: 0 0 0 var(--space-sm);
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
+  gap: 2px;
   border-left: 2px solid var(--color-border);
 }
 
 /* [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
-   Punkt 2 ("Nudge") -- bewusst neutral/gedaempft, kein Akzent/Warnfarbe:
-   ist ein Hinweis, keine Sicherheitswarnung (Design-Richtung: "genau EIN
-   Akzent pro Ansicht", reserviert fuer Sicherheits-Badges). */
+   Punkt 2 ("Nudge") -- bewusst neutral, kein Akzent/Warnfarbe: ist ein
+   Hinweis, keine Sicherheitswarnung. [2026-09-28] als ruhiger Chip. */
 .message-nudge-hint {
-  margin-top: 2px;
-  font-size: var(--font-size-caption);
-  color: var(--color-text-muted);
-  font-style: italic;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  font-size: 11.5px;
+  font-weight: var(--font-weight-medium);
+}
+
+/* [2026-09-28] WEB_INBOX.md 27.09. Punkt 4: leerer Eingang mit dem
+   saisonalen Zweig statt leerer Fläche. */
+.inbox-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  text-align: center;
+}
+
+.inbox-empty-twig {
+  width: 200px;
+  height: 160px;
+}
+
+.inbox-empty-title {
+  margin: var(--space-sm) 0 0;
+  font-family: var(--font-family-display);
+  font-size: 24px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.inbox-empty-line {
+  margin: 0;
+  font-size: var(--font-size-body);
+  color: var(--color-text-secondary);
 }

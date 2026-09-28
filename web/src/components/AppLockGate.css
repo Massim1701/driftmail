@@ -51,7 +51,7 @@
   border-radius: var(--radius-control);
   border: 1px solid transparent;
   background: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent);
   cursor: pointer;
 }
 

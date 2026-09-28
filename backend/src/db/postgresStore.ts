@@ -499,24 +499,29 @@ export class PostgresStore implements Store {
     if (!exists[0]?.reg) return; // frische DB -- CREATE TABLE unten legt die Spalten gleich mit an
 
     await this.pool.query(`
-      ALTER TABLE users ADD COLUMN IF NOT EXISTS accent_theme TEXT NOT NULL DEFAULT 'teal'
-        CHECK (accent_theme IN ('teal', 'ocean_blue', 'violett', 'koralle', 'ocean_verlauf'))
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS accent_theme TEXT NOT NULL DEFAULT 'gruen'
+        CHECK (accent_theme IN ('gruen', 'gelb', 'outlook_blue', 'rosa', 'schwarz'))
     `);
-    // [2026-09-25] WEB_INBOX.md 24.09. "DESIGN-RICHTUNG PRAEZISIERT -
-    // Outlook-inspiriert": neue waehlbare Akzentfarbe 'outlook_blue', UND
-    // neuer Standard-Akzent fuer neue Konten (ersetzt 'teal' als DEFAULT --
-    // bestehende Nutzer behalten ihre bereits gespeicherte Wahl, dieser
-    // Schritt aendert nur den DEFAULT fuer zukuenftige INSERTs, kein
-    // UPDATE bestehender Zeilen). Auf bereits migrierten DBs greift die
-    // obige ADD COLUMN IF NOT EXISTS nicht mehr (Spalte existiert schon),
-    // deshalb Constraint/Default hier explizit nachziehen, gleiches
-    // DROP/ADD-CONSTRAINT-Muster wie migrateUnsubscribeActionsStatusCheck.
-    await this.pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_accent_theme_check`);
-    await this.pool.query(`
-      ALTER TABLE users ADD CONSTRAINT users_accent_theme_check
-        CHECK (accent_theme IN ('teal', 'ocean_blue', 'violett', 'koralle', 'ocean_verlauf', 'outlook_blue'))
-    `);
-    await this.pool.query(`ALTER TABLE users ALTER COLUMN accent_theme SET DEFAULT 'outlook_blue'`);
+    // [2026-09-28] Redesign "ruhig & warm" + WEB_INBOX.md 27.09. "WAEHLBARE
+    // AKZENTFARBEN": fuenf Themes (gruen/gelb/outlook_blue/rosa/schwarz),
+    // Default 'gruen'. EINMALIGER Umzug: alle Bestandswerte -- auch der
+    // bisherige Default 'outlook_blue', der praktisch nie bewusst gewaehlt
+    // wurde -- gehen auf 'gruen'. Erkennungsmerkmal "schon migriert" ist die
+    // neue Constraint selbst (enthaelt 'gruen'); ohne diese Sperre wuerde
+    // jeder Serverstart eine spaeter bewusst gewaehlte Farbe zuruecksetzen.
+    // Loest die fruehere 'outlook_blue'-Migration vom 25.09. ab.
+    const { rows: accentCheck } = await this.pool.query<{ def: string }>(
+      `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = 'users_accent_theme_check'`,
+    );
+    if (!accentCheck[0]?.def.includes("'gruen'")) {
+      await this.pool.query(`ALTER TABLE users DROP CONSTRAINT IF EXISTS users_accent_theme_check`);
+      await this.pool.query(`UPDATE users SET accent_theme = 'gruen'`);
+      await this.pool.query(`
+        ALTER TABLE users ADD CONSTRAINT users_accent_theme_check
+          CHECK (accent_theme IN ('gruen', 'gelb', 'outlook_blue', 'rosa', 'schwarz'))
+      `);
+      await this.pool.query(`ALTER TABLE users ALTER COLUMN accent_theme SET DEFAULT 'gruen'`);
+    }
     await this.pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS strict_unknown_senders BOOLEAN NOT NULL DEFAULT true
     `);

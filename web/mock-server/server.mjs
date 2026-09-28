@@ -62,8 +62,9 @@ const AI_IMPLEMENTED_PROVIDERS = ["anthropic", "openai"];
 // settings.ts VALID_ACCENT_THEMES hat das bereits seit Commit 701f91b,
 // dieser Mock-Server war beim Drei-Spalten-Layout-Umbau noch nicht
 // nachgezogen).
-let userSettings = { accentTheme: "outlook_blue", strictUnknownSenders: true, nudgeUnansweredEnabled: true };
-const ACCENT_THEME_VALUES = ["outlook_blue", "teal", "ocean_blue", "violett", "koralle", "ocean_verlauf"];
+// [2026-09-28] Redesign: fuenf Themes, Default "gruen" (wie backend/src/routes/settings.ts).
+let userSettings = { accentTheme: "gruen", strictUnknownSenders: true, nudgeUnansweredEnabled: true };
+const ACCENT_THEME_VALUES = ["gruen", "gelb", "outlook_blue", "rosa", "schwarz"];
 
 // GET/PUT /privacy-settings (WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 1,
 // "Tracking-Pixel-Blockierung") -- Default false wie im echten Backend

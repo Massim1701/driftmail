@@ -207,3 +207,68 @@ export function SettingsIcon(props: SVGProps<SVGSVGElement>) {
     </Svg>
   );
 }
+
+// [2026-09-28] Redesign "ruhig & warm": einheitliche Linien-Icons auch für
+// die System-Ordner (ersetzt die Facetten-Icons auf Web), plus Such- und
+// Schreib-Icons für die neue Sidebar.
+export function BanIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M6 6l12 12" />
+    </Svg>
+  );
+}
+
+export function SearchIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20.5 20.5 16 16" />
+    </Svg>
+  );
+}
+
+export function ComposeIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M12 20h8.5" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </Svg>
+  );
+}
+
+export function ReplyIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M9 17l-5-5 5-5" />
+      <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+    </Svg>
+  );
+}
+
+export function SparkleIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <Svg {...props}>
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+    </Svg>
+  );
+}
+
+/** App-Logo (Schild mit Umschlag, gleiche Form wie web/public/favicon.svg),
+ * Schild in --color-brand. */
+export function BrandMark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 120 120" width="26" height="26" aria-hidden="true" {...props}>
+      <path
+        d="M60 18 L94 30 V58 C94 80 78 94 60 102 C42 94 26 80 26 58 V30 Z"
+        fill="var(--color-brand)"
+        stroke="var(--color-brand)"
+        strokeWidth="6"
+        strokeLinejoin="round"
+      />
+      <rect x="41" y="47" width="38" height="27" rx="4" fill="#ffffff" />
+      <path d="M44.5 50.5 L60 61.5 L75.5 50.5" fill="none" stroke="var(--color-brand)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}

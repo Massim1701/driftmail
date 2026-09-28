@@ -42,6 +42,9 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, googleLoginUrl, setStoredToken } from "../api";
 import type { MailAccount, MailProvider } from "../types";
 import "./OnboardingScreen.css";
+import { BrandMark } from "../icons";
+import { seasonFor } from "../season";
+import { SeasonalTwig } from "../seasonalTwig";
 
 const ERROR_MESSAGES: Record<string, string> = {
   oauth_not_configured: "Google-Anmeldung ist auf diesem Server noch nicht konfiguriert.",
@@ -191,13 +194,14 @@ export function OnboardingScreen({
 
   return (
     <div className="onboarding-shell">
+      <OnboardingHero />
       <div className="onboarding-card">
         {mode === "addAccount" && onCancel && (
           <button type="button" className="onboarding-back" onClick={onCancel}>
             ← Abbrechen
           </button>
         )}
-        <h1 className="onboarding-title">driftmail</h1>
+        <h1 className="onboarding-title">Konto verbinden</h1>
         <p className="onboarding-subtitle">
           {mode === "addAccount" ? "Welches weitere Konto möchtest du verbinden?" : "Wähle dein E-Mail-Konto, um loszulegen."}
         </p>
@@ -406,6 +410,7 @@ function ImapConnectForm({
 
   return (
     <div className="onboarding-shell">
+      <OnboardingHero />
       <div className="onboarding-card">
         <button type="button" className="onboarding-back" onClick={onBack}>
           ← Anderer Anbieter
@@ -495,5 +500,23 @@ function ImapConnectForm({
         </form>
       </div>
     </div>
+  );
+}
+
+// [2026-09-28] Redesign "ruhig & warm": ruhige linke Bildseite mit Logo,
+// Leitsatz und dem saisonalen Zweig; auf schmalen Bildschirmen ausgeblendet.
+function OnboardingHero() {
+  return (
+    <aside className="onboarding-hero" aria-hidden="true">
+      <div className="onboarding-hero-brand">
+        <BrandMark width={34} height={34} />
+        <span>driftmail</span>
+      </div>
+      <SeasonalTwig season={seasonFor(new Date())} className="onboarding-hero-twig" />
+      <div className="onboarding-hero-text">
+        <p className="onboarding-hero-claim">Deine Mails. Ruhig sortiert, gut geschützt.</p>
+        <p className="onboarding-hero-sub">Verdächtiges landet in der Quarantäne, Zusammenfassungen entstehen auf deinem Gerät, wenn es das unterstützt.</p>
+      </div>
+    </aside>
   );
 }

@@ -185,3 +185,37 @@
   color: var(--color-text-muted);
   line-height: 1.5;
 }
+
+/* [2026-09-28] Redesign: Hell/Dunkel/System aus der Sidebar hierher
+   umgezogen, als Segment-Schalter über den Akzentfarben. */
+.theme-switch {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 3px;
+  margin-bottom: var(--space-md);
+  border-radius: var(--radius-control);
+  background: var(--color-border-subtle);
+}
+
+.theme-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.theme-switch button.active {
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-soft);
+}

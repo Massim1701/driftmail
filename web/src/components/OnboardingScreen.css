@@ -1,37 +1,103 @@
+/* [2026-09-28] Redesign "ruhig & warm": zweigeteilt -- links ruhige
+   Bildseite (Logo, Leitsatz, saisonaler Zweig), rechts das Formular ohne
+   eigenen Kasten direkt auf der Seite. */
 .onboarding-shell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: minmax(360px, 520px) 1fr;
   min-height: 100vh;
   width: 100vw;
   background: var(--color-surface-page);
   color: var(--color-text-primary);
-  padding: var(--space-lg);
   box-sizing: border-box;
 }
 
-.onboarding-card {
+.onboarding-hero {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  padding: 56px;
+  background: color-mix(in srgb, var(--color-brand) 10%, var(--color-surface-sidebar));
+}
+
+.onboarding-hero-brand {
+  display: flex;
+  align-items: center;
   gap: var(--space-md);
+  font-family: var(--font-family-display);
+  font-size: 26px;
+  font-weight: var(--font-weight-medium);
+  position: relative;
+}
+
+.onboarding-hero-twig {
+  position: absolute;
+  right: -90px;
+  top: 22%;
+  width: 440px;
+  height: 352px;
+  opacity: 0.85;
+}
+
+.onboarding-hero-text {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 360px;
+}
+
+.onboarding-hero-claim {
+  margin: 0;
+  font-family: var(--font-family-display);
+  font-size: 40px;
+  line-height: 1.15;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.6px;
+}
+
+.onboarding-hero-sub {
+  margin: 0;
+  font-size: var(--font-size-body-lg);
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.onboarding-card {
+  align-self: center;
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
   padding: var(--space-xl);
-  border-radius: var(--radius-card);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-card);
-  text-align: center;
+  text-align: left;
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
 }
 
 .onboarding-title {
   margin: 0;
-  font-size: var(--font-size-heading);
+  font-family: var(--font-family-display);
+  font-size: 30px;
   font-weight: var(--font-weight-medium);
+  letter-spacing: -0.3px;
+}
+
+@media (max-width: 900px) {
+  .onboarding-shell {
+    grid-template-columns: 1fr;
+    padding: var(--space-lg);
+  }
+  .onboarding-hero {
+    display: none;
+  }
 }
 
 .onboarding-subtitle {
   margin: 0;
-  font-size: var(--font-size-body);
+  font-size: var(--font-size-body-lg);
+  line-height: 1.5;
   color: var(--color-text-secondary);
 }
 
@@ -47,7 +113,7 @@
 .onboarding-hint {
   font-size: var(--font-size-small);
   color: var(--color-text-secondary);
-  background: var(--color-surface-page);
+  background: var(--color-surface-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   padding: var(--space-sm) var(--space-md);
@@ -65,10 +131,10 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
-  padding: var(--space-sm) var(--space-md);
-  border-radius: var(--radius-control);
+  padding: 10px 14px;
+  border-radius: 12px;
   border: 1px solid var(--color-border);
-  background: var(--color-surface-page);
+  background: var(--color-surface-card);
   color: var(--color-text-primary);
   font-family: var(--font-family);
   cursor: pointer;
@@ -147,10 +213,11 @@
 .imap-field input[type="email"],
 .imap-field input[type="password"],
 .imap-field input[type="number"] {
-  padding: var(--space-sm);
-  border-radius: var(--radius-control);
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 12px;
   border: 1px solid var(--color-border);
-  background: var(--color-surface-page);
+  background: var(--color-surface-card);
   color: var(--color-text-primary);
   font-family: var(--font-family);
   font-size: var(--font-size-body);
@@ -178,13 +245,14 @@
   align-items: center;
   justify-content: center;
   font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-medium);
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-control);
+  height: 46px;
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-semibold);
+  padding: 0 var(--space-xl);
+  border-radius: 12px;
   border: 1px solid transparent;
   background: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent);
   cursor: pointer;
   text-decoration: none;
 }
@@ -197,7 +265,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  align-items: center;
+  align-items: flex-start;
 }
 
 .onboarding-button:hover:not(:disabled) {
@@ -207,4 +275,16 @@
 .onboarding-button:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.imap-field input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 22%, transparent);
+}
+
+.onboarding-button:focus-visible,
+.provider-card:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
 }

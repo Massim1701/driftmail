@@ -1,9 +1,26 @@
-import { useState, type FormEvent } from "react";
-import type { Folder, MailAccount } from "../types";
-import { FOLDER_ICONS, FolderIcon, MoonIcon, PencilIcon, PlusIcon, RefreshIcon, SendIcon, SettingsIcon, SunIcon, SystemIcon, TrashIcon } from "../icons";
-import { FACET_ICONS } from "../facetIcons";
+import { Fragment, useMemo, useState, type FormEvent } from "react";
+import type { Folder, MailAccount, SystemFolderKey } from "../types";
+import {
+  BanIcon,
+  BrandMark,
+  ComposeIcon,
+  FileTextIcon,
+  FOLDER_ICONS,
+  FolderIcon,
+  InboxIcon,
+  PencilIcon,
+  PlusIcon,
+  RefreshIcon,
+  SearchIcon,
+  SendIcon,
+  SettingsIcon,
+  ShieldExclamationIcon,
+  Trash2Icon,
+  TrashIcon,
+} from "../icons";
 import { SYSTEM_FOLDER_META } from "../folderMeta";
-import type { ThemeChoice } from "../useTheme";
+import { seasonFor } from "../season";
+import { SeasonalTwig } from "../seasonalTwig";
 import "./FolderSidebar.css";
 
 function metaFor(folder: Folder) {
@@ -12,6 +29,21 @@ function metaFor(folder: Folder) {
   }
   return { renamable: true };
 }
+
+// [2026-09-28] Redesign "ruhig & warm": einheitliche Linien-Icons für alle
+// System-Ordner (die Facetten-Icons vom 25.09. entfallen auf Web), Spam
+// bekommt ein eigenes Verbots-Symbol statt des Papierkorbs, damit Spam und
+// Papierkorb nicht gleich aussehen. Eigene Ordner behalten ihr Icon aus
+// GET /folders.
+const SYSTEM_ICONS: Record<SystemFolderKey, typeof FolderIcon> = {
+  eingang: InboxIcon,
+  entwuerfe: FileTextIcon,
+  gesendet: SendIcon,
+  sonstiges: FolderIcon,
+  quarantaene: ShieldExclamationIcon,
+  spam: BanIcon,
+  papierkorb: Trash2Icon,
+};
 
 // [2026-09-15] WEB_INBOX.md 10.09. "kleine UX-Ergänzung": "Rechnungen" als
 // Ordnername ist negativ behaftet (klingt nach Kosten/Schulden) und deckt
@@ -30,12 +62,10 @@ export function FolderSidebar({
   accounts,
   activeAccountId,
   onSwitchAccount,
-  onAddAccount,
   onSyncNow,
   isSyncing,
   onNewMessage,
-  theme,
-  onThemeChange,
+  onOpenSearch,
   onCreateFolder,
   onRenameFolder,
   onDeleteFolder,
@@ -51,7 +81,6 @@ export function FolderSidebar({
   accounts: MailAccount[];
   activeAccountId: string | null;
   onSwitchAccount: (accountId: string) => void;
-  onAddAccount: () => void;
   /** "Jetzt aktualisieren" (WEB_INBOX.md 21.09. "SEHR WICHTIGE LUECKE -
    * HOECHSTE PRIORITAET", Punkt 1): löst POST /accounts/{accountId}/sync
    * aus, statt auf das automatische Backend-Intervall zu warten. */
@@ -61,20 +90,27 @@ export function FolderSidebar({
    * echten Live-Test entdeckt": fehlender Compose-Button) -- öffnet den
    * ComposeModal in App.tsx im "new"-Modus. */
   onNewMessage: () => void;
-  theme: ThemeChoice;
-  onThemeChange: (t: ThemeChoice) => void;
+  /** [2026-09-28] Redesign: Such-Knopf mit ⌘K-Hinweis fokussiert das
+   * bestehende Suchfeld über der Liste (gleiche Wirkung wie ⌘K). */
+  onOpenSearch: () => void;
   onCreateFolder: (name: string) => void;
   onRenameFolder: (folderId: string, name: string) => void;
   onDeleteFolder: (folderId: string) => void;
   /** [2026-09-21] WEB_INBOX.md 21.09. "Einstellungsbereich": öffnet den
-   * neuen gebündelten SettingsModal in App.tsx -- App-Sperre und
-   * KI-Einstellungen leben jetzt dort, nicht mehr hier direkt in der
-   * Sidebar (siehe SettingsModal.tsx). */
+   * gebündelten SettingsModal in App.tsx. [2026-09-28] Hell/Dunkel/System
+   * lebt seit dem Redesign ebenfalls dort (Abschnitt "Ansicht"). */
   onOpenSettings: () => void;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [creating, setCreating] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  // Beim Laden der Sidebar einmal bestimmt -- ein Saisonwechsel mitten in
+  // einer offenen Sitzung wird beim nächsten Neuladen sichtbar.
+  const season = useMemo(() => seasonFor(new Date()), []);
+
+  const activeAccount = accounts.find((a) => a.id === activeAccountId) ?? accounts[0];
+  const firstCustomIndex = folders.findIndex((f) => !f.isSystem);
 
   function startEdit(f: Folder) {
     setEditingId(f.id);
@@ -93,71 +129,35 @@ export function FolderSidebar({
     if (!name) return;
     onCreateFolder(name);
     setNewFolderName("");
+    setCreating(false);
   }
 
   return (
     <nav className="folder-sidebar" aria-label="Ordner">
       <div className="folder-sidebar-brand">
-        <span className="brand-dot" aria-hidden="true" />
-        driftmail
+        <BrandMark />
+        <span className="folder-sidebar-wordmark">driftmail</span>
       </div>
 
       <button type="button" className="new-message-button" onClick={onNewMessage}>
-        <SendIcon />
+        <ComposeIcon />
         Neue Nachricht
       </button>
 
-      {accounts.length > 0 && (
-        <div className="folder-sidebar-account-row">
-          {accounts.length > 1 ? (
-            <select
-              className="account-switcher"
-              value={activeAccountId ?? ""}
-              onChange={(e) => onSwitchAccount(e.target.value)}
-              aria-label="Konto wechseln"
-            >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.emailAddress}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <div className="folder-sidebar-account" title={accounts[0].emailAddress}>{accounts[0].emailAddress}</div>
-          )}
-          <button
-            type="button"
-            className="sync-now-button"
-            onClick={onSyncNow}
-            disabled={isSyncing}
-            title="Jetzt nach neuer Mail suchen"
-            aria-label="Jetzt aktualisieren"
-          >
-            <RefreshIcon className={isSyncing ? "spinning" : undefined} />
-          </button>
-          <button type="button" className="sync-now-button" onClick={onAddAccount} title="Konto hinzufügen" aria-label="Konto hinzufügen">
-            <PlusIcon />
-          </button>
-        </div>
-      )}
-
-      <div className="cmdk-hint" aria-hidden="true">
-        <kbd>⌘</kbd>
-        <kbd>K</kbd>
-        Suche
-      </div>
+      <button type="button" className="sidebar-search-button" onClick={onOpenSearch}>
+        <SearchIcon />
+        <span className="sidebar-search-label">Suchen</span>
+        <kbd>⌘K</kbd>
+      </button>
 
       <ul className="folder-list">
-        {folders.map((f) => {
+        {folders.map((f, index) => {
           const meta = metaFor(f);
-          // [2026-09-25] TERMINAL_INBOX.md 25.09. Punkt 3: die vier
-          // Facetten-Icons (fest eingefärbt) haben Vorrang vor den
-          // einfarbigen Stroke-Icons, nur für ihre jeweiligen System-Ordner
-          // -- siehe facetIcons.tsx-Kommentar zum Contract-Umfang.
-          const FacetIcon = f.systemKey ? FACET_ICONS[f.systemKey] : undefined;
-          const Icon = FOLDER_ICONS[f.icon] ?? FolderIcon;
+          const Icon = (f.systemKey ? SYSTEM_ICONS[f.systemKey] : undefined) ?? FOLDER_ICONS[f.icon] ?? FolderIcon;
           const isActive = f.id === active;
           const isEditing = editingId === f.id;
+          const count = counts[f.id] ?? 0;
+          const divider = index === firstCustomIndex && index > 0 ? <li className="folder-divider" aria-hidden="true" /> : null;
 
           if (isEditing) {
             return (
@@ -179,117 +179,148 @@ export function FolderSidebar({
           }
 
           return (
-            <li key={f.id}>
-              <div
-                className={`folder-item${isActive ? " active" : ""}${meta.colorRole === "danger" ? " danger" : ""}${meta.muted ? " muted" : ""}`}
-              >
-                <button
-                  type="button"
-                  className="folder-item-main"
-                  onClick={() => onSelect(f.id)}
-                  aria-current={isActive ? "page" : undefined}
+            <Fragment key={f.id}>
+              {divider}
+              <li>
+                <div
+                  className={`folder-item${isActive ? " active" : ""}${meta.colorRole === "danger" ? " warning" : ""}${meta.muted ? " muted" : ""}`}
                 >
-                  {FacetIcon ? <FacetIcon className="folder-item-icon-facet" width={20} height={20} /> : <Icon />}
-                  <span className="folder-label" title={f.name}>{f.name}</span>
-                  <span className="folder-count">{counts[f.id] ?? 0}</span>
-                </button>
-                {meta.renamable && (
                   <button
                     type="button"
-                    className="folder-action"
-                    title="Umbenennen"
-                    aria-label={`${f.name} umbenennen`}
-                    onClick={() => startEdit(f)}
+                    className="folder-item-main"
+                    onClick={() => onSelect(f.id)}
+                    aria-current={isActive ? "page" : undefined}
                   >
-                    <PencilIcon />
+                    <Icon className="folder-item-icon" width={18} height={18} />
+                    <span className="folder-label" title={f.name}>{f.name}</span>
+                    {count > 0 && <span className="folder-count">{count}</span>}
                   </button>
-                )}
-                {!f.isSystem && (
-                  <button
-                    type="button"
-                    className="folder-action folder-action-danger"
-                    title="Löschen"
-                    aria-label={`${f.name} löschen`}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          `Ordner "${f.name}" wirklich löschen? Enthaltene Nachrichten wandern nach "Sonstiges".`
-                        )
-                      ) {
-                        onDeleteFolder(f.id);
-                      }
-                    }}
-                  >
-                    <TrashIcon />
-                  </button>
-                )}
-              </div>
-            </li>
+                  {(meta.renamable || !f.isSystem) && (
+                  <span className="folder-actions">
+                    {meta.renamable && (
+                      <button
+                        type="button"
+                        className="folder-action"
+                        title="Umbenennen"
+                        aria-label={`${f.name} umbenennen`}
+                        onClick={() => startEdit(f)}
+                      >
+                        <PencilIcon />
+                      </button>
+                    )}
+                    {!f.isSystem && (
+                      <button
+                        type="button"
+                        className="folder-action folder-action-danger"
+                        title="Löschen"
+                        aria-label={`${f.name} löschen`}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Ordner "${f.name}" wirklich löschen? Enthaltene Nachrichten wandern nach "Sonstiges".`
+                            )
+                          ) {
+                            onDeleteFolder(f.id);
+                          }
+                        }}
+                      >
+                        <TrashIcon />
+                      </button>
+                    )}
+                  </span>
+                  )}
+                </div>
+              </li>
+            </Fragment>
           );
         })}
       </ul>
 
-      {!newFolderName && (
-        <div className="folder-create-suggestions" role="group" aria-label="Namensvorschläge für neuen Ordner">
-          {FOLDER_NAME_SUGGESTIONS.map((suggestion) => (
-            <button
-              key={suggestion}
-              type="button"
-              className="folder-create-suggestion"
-              onClick={() => setNewFolderName(suggestion)}
-            >
-              {suggestion}
+      {creating ? (
+        <div className="folder-create-block">
+          <form className="folder-create" onSubmit={submitNewFolder}>
+            <input
+              type="text"
+              placeholder="Name des Ordners"
+              value={newFolderName}
+              autoFocus
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setCreating(false);
+                  setNewFolderName("");
+                }
+              }}
+              aria-label="Name für neuen Ordner"
+            />
+            <button type="submit" title="Ordner anlegen" aria-label="Ordner anlegen" disabled={!newFolderName.trim()}>
+              <PlusIcon />
             </button>
-          ))}
+          </form>
+          {!newFolderName && (
+            <div className="folder-create-suggestions" role="group" aria-label="Namensvorschläge für neuen Ordner">
+              {FOLDER_NAME_SUGGESTIONS.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  className="folder-create-suggestion"
+                  onClick={() => setNewFolderName(suggestion)}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <button type="button" className="folder-create-toggle" onClick={() => setCreating(true)}>
+          <PlusIcon />
+          Ordner anlegen
+        </button>
+      )}
+
+      <div className="folder-sidebar-spacer" />
+      <SeasonalTwig season={season} className="folder-sidebar-twig" />
+
+      {activeAccount && (
+        <div className="folder-sidebar-account-row">
+          <span className="account-avatar" aria-hidden="true">
+            {activeAccount.emailAddress.charAt(0).toUpperCase()}
+          </span>
+          {accounts.length > 1 ? (
+            <select
+              className="account-switcher"
+              value={activeAccountId ?? ""}
+              onChange={(e) => onSwitchAccount(e.target.value)}
+              aria-label="Konto wechseln"
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.emailAddress}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="folder-sidebar-account" title={activeAccount.emailAddress}>
+              {activeAccount.emailAddress}
+            </div>
+          )}
+          <button
+            type="button"
+            className="sidebar-icon-button"
+            onClick={onSyncNow}
+            disabled={isSyncing}
+            title="Jetzt nach neuer Mail suchen"
+            aria-label="Jetzt aktualisieren"
+          >
+            <RefreshIcon className={isSyncing ? "spinning" : undefined} />
+          </button>
+          <button type="button" className="sidebar-icon-button" onClick={onOpenSettings} title="Einstellungen" aria-label="Einstellungen">
+            <SettingsIcon />
+          </button>
         </div>
       )}
-      <form className="folder-create" onSubmit={submitNewFolder}>
-        <input
-          type="text"
-          placeholder="Neuer Ordner…"
-          value={newFolderName}
-          onChange={(e) => setNewFolderName(e.target.value)}
-          aria-label="Name für neuen Ordner"
-        />
-        <button type="submit" title="Ordner anlegen" aria-label="Ordner anlegen" disabled={!newFolderName.trim()}>
-          <PlusIcon />
-        </button>
-      </form>
-
-      <div className="theme-switch" role="group" aria-label="Theme">
-        <button
-          type="button"
-          className={theme === "hell" ? "active" : ""}
-          onClick={() => onThemeChange("hell")}
-          title="Hell"
-          aria-label="Helles Theme"
-        >
-          <SunIcon />
-        </button>
-        <button
-          type="button"
-          className={theme === "dunkel" ? "active" : ""}
-          onClick={() => onThemeChange("dunkel")}
-          title="Dunkel"
-          aria-label="Dunkles Theme"
-        >
-          <MoonIcon />
-        </button>
-        <button
-          type="button"
-          className={theme === "system" ? "active" : ""}
-          onClick={() => onThemeChange("system")}
-          title="System"
-          aria-label="Systemeinstellung"
-        >
-          <SystemIcon />
-        </button>
-      </div>
-
-      <button type="button" className="settings-entry-button" onClick={onOpenSettings}>
-        <SettingsIcon />
-        Einstellungen
-      </button>
     </nav>
   );
 }
+

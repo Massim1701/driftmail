@@ -68,7 +68,7 @@ final class AppEnvironment: ObservableObject {
     /// bereits als `@EnvironmentObject` beobachten, bei jeder
     /// `applyAccentTheme()`-Aenderung automatisch neu zeichnen -- siehe
     /// `DesignTokens.Color.accent`-Kommentar.
-    @Published private(set) var accentTheme: AccentTheme = .teal
+    @Published private(set) var accentTheme: AccentTheme = .gruen
 
     /// [2026-09-21] Session-Bootstrap: `RemoteAPIClient` nur, wenn bereits
     /// ein Token in der Keychain liegt (vorherige Verbindung), sonst wie
@@ -281,7 +281,7 @@ final class AppEnvironment: ObservableObject {
     /// `accentTheme` (`@Published`) in one place -- every caller (load and
     /// save alike) goes through this, so the two never drift apart.
     private func applyAccentTheme(_ theme: AccentTheme) {
-        DesignTokens.Color.accent = SwiftUI.Color(hex: theme.accentHex)
+        DesignTokens.Color.accent = theme.color
         accentTheme = theme
     }
 

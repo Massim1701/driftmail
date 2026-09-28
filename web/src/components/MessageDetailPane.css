@@ -1,25 +1,51 @@
+/* [2026-09-28] Redesign "ruhig & warm": Detail als hellste Fläche,
+   Aktionen oben als Leiste (Antworten hervorgehoben, Quarantäne/Löschen
+   rechts abgesetzt), Betreff in der Serif-Schrift, Karten weich gerundet. */
 .detail-pane {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
-  padding: var(--space-xl);
+  gap: 22px;
+  padding: 0 40px 40px;
   overflow-y: auto;
+  background: var(--color-surface-card);
+}
+
+.detail-pane > :not(.detail-actions) {
+  max-width: 760px;
 }
 
 .detail-empty {
   align-items: center;
   justify-content: center;
+  gap: var(--space-md);
   color: var(--color-text-muted);
   font-size: var(--font-size-body);
+}
+
+.detail-empty p {
+  margin: 0;
+}
+
+.detail-empty-mark {
+  opacity: 0.35;
 }
 
 .detail-header {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
-  padding-bottom: var(--space-lg);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--space-md);
+}
+
+.detail-subject {
+  margin: 0;
+  font-family: var(--font-family-display);
+  font-size: 27px;
+  line-height: 1.25;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.3px;
+  color: var(--color-text-primary);
 }
 
 /* [2026-09-21] WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-FEATURES" Punkt 1
@@ -38,36 +64,53 @@
 .detail-subject-row {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 
-.detail-subject-row h1 {
-  margin: 0;
-  font-size: var(--font-size-heading);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
+.detail-subject-row:empty {
+  display: none;
 }
 
 .detail-meta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   font-size: var(--font-size-small);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
+}
+
+.detail-sender {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  font-size: var(--font-size-body);
+  color: var(--color-text-primary);
+}
+
+.detail-sender strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+.detail-sender-address {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
 }
 
 .quarantine-notice {
-  padding: var(--space-md);
+  padding: 14px var(--space-lg);
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  background: var(--color-danger-bg);
   color: var(--color-danger-text);
   font-size: var(--font-size-small);
+  line-height: 1.5;
   border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
 }
 
 .trash-notice {
-  padding: var(--space-md);
+  padding: 14px var(--space-lg);
+  line-height: 1.5;
   border-radius: var(--radius-card);
   background: var(--color-surface-card);
   color: var(--color-text-secondary);
@@ -111,10 +154,21 @@
 }
 
 .detail-actions {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
-  gap: var(--space-sm);
   flex-wrap: wrap;
   align-items: center;
+  gap: 6px;
+  margin: 0 -40px;
+  padding: var(--space-lg) 40px;
+  background: var(--color-surface-card);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.detail-actions-spacer {
+  flex: 1;
 }
 
 .unsubscribe-status {
@@ -127,13 +181,23 @@
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 36px;
   font-family: var(--font-family);
   font-size: var(--font-size-small);
   font-weight: var(--font-weight-medium);
-  padding: var(--space-sm) var(--space-md);
+  padding: 0 12px;
   border-radius: var(--radius-control);
   border: 1px solid transparent;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
 }
 
 .btn:disabled {
@@ -148,13 +212,13 @@
 }
 
 .btn-secondary:hover:not(:disabled) {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-text-muted) 60%, transparent);
+  background: var(--color-surface-subtle);
 }
 
 .btn-danger-outline {
   background: transparent;
-  border-color: var(--color-danger);
+  border-color: color-mix(in srgb, var(--color-danger) 45%, transparent);
   color: var(--color-danger-text);
 }
 
@@ -164,7 +228,7 @@
 
 .btn-danger {
   background: var(--color-danger);
-  color: white;
+  color: var(--color-on-danger);
 }
 
 .btn-danger:hover:not(:disabled) {
@@ -173,14 +237,20 @@
 
 .btn-primary {
   background: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent);
+  font-weight: var(--font-weight-semibold);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 88%, black);
 }
 
 .move-select {
+  height: 36px;
   font-family: var(--font-family);
   font-size: var(--font-size-small);
   font-weight: var(--font-weight-medium);
-  padding: var(--space-sm) var(--space-md);
+  padding: 0 var(--space-md);
   border-radius: var(--radius-control);
   border: 1px solid var(--color-border);
   background: var(--color-surface-card);
@@ -196,27 +266,28 @@
 .detail-card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
-  padding: var(--space-md);
+  gap: 10px;
+  padding: var(--space-lg) 18px;
   border-radius: var(--radius-card);
   border: 1px solid var(--color-border);
-  background: var(--color-surface-card);
+  background: var(--color-surface-subtle);
 }
 
 .detail-card-title {
   font-size: var(--font-size-small);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-selected-text);
 }
 
 .detail-card p {
   margin: 0;
-  font-size: var(--font-size-body);
+  font-size: var(--font-size-body-lg);
+  line-height: 1.5;
   color: var(--color-text-primary);
 }
 
 .summary-action {
-  color: var(--color-warning) !important;
+  color: var(--color-warning-text) !important;
   font-weight: var(--font-weight-medium);
 }
 
@@ -246,7 +317,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
+  padding: 10px var(--space-md);
   border-radius: var(--radius-control);
   background: var(--color-surface-page);
   border: 1px solid var(--color-border);
@@ -290,7 +361,7 @@
   background: var(--color-surface-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-float);
   overflow: hidden;
 }
 
@@ -325,7 +396,7 @@
 .detail-body {
   font-size: var(--font-size-body-lg);
   color: var(--color-text-primary);
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 .detail-body p {
@@ -355,4 +426,24 @@
   border-radius: var(--radius-card);
   background: #ffffff;
   color-scheme: light;
+}
+
+/* [2026-09-28] Quarantäne/Löschen als ruhige Symbol-Knöpfe rechts in der
+   Aktionsleiste; Farbe erst beim Hover (feste Sicherheits-Farbrollen). */
+.btn-icon {
+  width: 36px;
+  padding: 0;
+  justify-content: center;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+
+.btn-warning-ghost:hover:not(:disabled) {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.btn-danger-ghost:hover:not(:disabled) {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }

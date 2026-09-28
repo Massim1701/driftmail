@@ -10,6 +10,10 @@
 -- Outlook-inspiriert": 'outlook_blue' als neuer Wert + neuer DEFAULT
 -- (ersetzt 'teal'), siehe postgresStore.ts fuer die Migration bestehender
 -- DBs (DROP/ADD CONSTRAINT + ALTER COLUMN SET DEFAULT).
+-- [2026-09-28] Redesign + WEB_INBOX.md 27.09. "WAEHLBARE AKZENTFARBEN": fuenf
+-- Werte, DEFAULT 'gruen'. Alle Bestandswerte (auch der bisherige Default
+-- outlook_blue) werden EINMALIG auf 'gruen' migriert, Blau bleibt waehlbar; siehe
+-- postgresStore.ts migrateUsersAccentTheme().
 -- [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 1 ("Unbekannte
 -- Absender streng behandeln"): strict_unknown_senders neu, Default true
 -- (wie im Auftrag vorgegeben). Tabelle war schon von echtem Code
@@ -18,7 +22,7 @@
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
-    accent_theme TEXT NOT NULL DEFAULT 'outlook_blue' CHECK (accent_theme IN ('teal', 'ocean_blue', 'violett', 'koralle', 'ocean_verlauf', 'outlook_blue')),
+    accent_theme TEXT NOT NULL DEFAULT 'gruen' CHECK (accent_theme IN ('gruen', 'gelb', 'outlook_blue', 'rosa', 'schwarz')),
     strict_unknown_senders BOOLEAN NOT NULL DEFAULT true,
     -- [2026-09-21] "DREI WEITERE FEATURES - Gmail-Recherche" Punkt 2 ("Nudge"):
     -- Ein/Aus-Schalter, wie im Auftrag ausdruecklich verlangt ("manche Nutzer

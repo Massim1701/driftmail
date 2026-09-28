@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AttachmentScanStatus, Folder, MailSummary, MessageDetail } from "../types";
 import { api } from "../api";
 import { trySummarizeOnDevice } from "../onDeviceAi";
+import { BrandMark, ReplyIcon, ShieldExclamationIcon, SparkleIcon, Trash2Icon } from "../icons";
 import { SecurityBadge, SecurityDetails, SecuritySignalBadges } from "./SecurityBadge";
 import "./MessageDetailPane.css";
 
@@ -154,7 +155,12 @@ export function MessageDetailPane({
     return <div className="detail-pane detail-empty">Lade Nachricht…</div>;
   }
   if (!message) {
-    return <div className="detail-pane detail-empty">Wähle eine Nachricht aus der Liste.</div>;
+    return (
+      <div className="detail-pane detail-empty">
+        <BrandMark className="detail-empty-mark" width={56} height={56} />
+        <p>Wähle eine Nachricht aus der Liste.</p>
+      </div>
+    );
   }
 
   const isQuarantined = quarantaeneFolderId !== null && message.folderId === quarantaeneFolderId;
@@ -264,90 +270,7 @@ export function MessageDetailPane({
 
   return (
     <div className="detail-pane">
-      <header className={`detail-header${strictUnknownSenders && isUnknownSender ? " detail-header-unknown-sender" : ""}`}>
-        <div className="detail-subject-row">
-          <h1>{message.subject}</h1>
-          <SecurityBadge classification={message.classification} />
-          {message.security && (
-            <SecuritySignalBadges
-              security={message.security}
-              isNewSender={isUnknownSender}
-              onTrustSender={() => onTrustSender(message.fromAddress)}
-            />
-          )}
-        </div>
-        <div className="detail-meta">
-          <span>
-            <strong>{message.fromDisplayName}</strong> &lt;{message.fromAddress}&gt;
-          </span>
-          {/* `?? []`: der Mock-Server (mock-server/server.mjs) liefert to/cc nicht. */}
-          {(message.to ?? []).length > 0 && <span>An: {message.to.join(", ")}</span>}
-          {(message.cc ?? []).length > 0 && <span>Cc: {message.cc.join(", ")}</span>}
-          <span>{formatDateTime(message.receivedAt)}</span>
-        </div>
-      </header>
-
-      {isQuarantined && (
-        <div className="quarantine-notice">
-          Diese Nachricht liegt in Quarantäne — sie wird automatisch nach 30 Tagen gelöscht,
-          falls sie nicht geprüft wird. Öffne nur Links oder Anhänge, wenn du dir absolut sicher bist.
-        </div>
-      )}
-
-      {isInTrash && (
-        <div className="trash-notice">
-          Diese Nachricht liegt im Papierkorb. Verschiebe sie über „In Ordner verschieben…“ zurück
-          oder lösche sie endgültig — anders als bei Quarantäne gibt es hier keine automatische Frist.
-        </div>
-      )}
-
-      {/* [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-
-          Recherche" Punkt 3 ("Vertraulicher Modus"). */}
-      {message.confidentialUntil && (
-        <div className="quarantine-notice">
-          {confidentialExpired
-            ? "Diese Nachricht war vertraulich und ist inzwischen abgelaufen — der Text wurde serverseitig gelöscht."
-            : `Vertraulich bis ${formatDateTime(message.confidentialUntil)} — danach wird der Text automatisch gelöscht.`}
-        </div>
-      )}
-
-      {message.security && (
-        <section className="detail-section">
-          <button type="button" className="link-button" onClick={() => setShowDetails((v) => !v)}>
-            {showDetails ? "Sicherheits-Details ausblenden" : "Sicherheits-Details anzeigen"}
-          </button>
-          {showDetails && <SecurityDetails security={message.security} />}
-        </section>
-      )}
-
-      <section className="detail-actions">
-        {!isQuarantined && !isInTrash && (
-          <button type="button" className="btn btn-danger-outline" onClick={handleQuarantine} disabled={quarantining}>
-            {quarantining ? "Verschiebe…" : "In Quarantäne verschieben"}
-          </button>
-        )}
-        {!isInTrash && (
-          <button type="button" className="btn btn-danger-outline" onClick={handleDelete} disabled={deleting}>
-            {deleting ? "Verschiebe…" : "Löschen"}
-          </button>
-        )}
-        {isInTrash && (
-          <button
-            type="button"
-            className="btn btn-danger"
-            onClick={handlePermanentDelete}
-            disabled={permanentlyDeleting}
-          >
-            {permanentlyDeleting ? "Lösche…" : "Endgültig löschen"}
-          </button>
-        )}
-        {/* Label-Umbenennung (zuletzt WEB_INBOX.md 21.09. "KLEINE LABEL-
-            AENDERUNG", davor WEB_INBOX.md 09.09. "Ordner-Umbau-Eintrags",
-            Punkt 2): reine UI-Textänderung, das Feld heißt technisch
-            weiterhin summaryText. */}
-        <button type="button" className="btn btn-secondary" onClick={loadSummary} disabled={summaryLoading}>
-          {summaryLoading ? "Fasse zusammen…" : "Check Mail"}
-        </button>
+      <section className="detail-actions" aria-label="Aktionen">
         {/* Antworten/Weiterleiten öffnen den gemeinsamen ComposeModal in
             App.tsx (siehe onReply/onForward-Kommentar oben). WEB_INBOX.md
             09.09. "KORREKTUR der letzten Regel" weiterhin gültig: Antworten
@@ -358,12 +281,21 @@ export function MessageDetailPane({
             Weiterleiten (WEB_INBOX.md 21.09. "DREI WEITERE
             GRUNDFUNKTIONEN") ist unabhängig davon immer sinnvoll. */}
         {!isInSpam && (
-          <button type="button" className="btn btn-secondary" onClick={() => onReply(message)}>
+          <button type="button" className="btn btn-primary" onClick={() => onReply(message)}>
+            <ReplyIcon />
             Antworten
           </button>
         )}
         <button type="button" className="btn btn-secondary" onClick={() => onForward(message)}>
           Weiterleiten
+        </button>
+        {/* Label-Umbenennung (zuletzt WEB_INBOX.md 21.09. "KLEINE LABEL-
+            AENDERUNG", davor WEB_INBOX.md 09.09. "Ordner-Umbau-Eintrags",
+            Punkt 2): reine UI-Textänderung, das Feld heißt technisch
+            weiterhin summaryText. */}
+        <button type="button" className="btn btn-secondary" onClick={loadSummary} disabled={summaryLoading}>
+          <SparkleIcon />
+          {summaryLoading ? "Fasse zusammen…" : "Check Mail"}
         </button>
         {/* [2026-09-21] WEB_INBOX.md "5 Wettbewerbs-Luecken" Punkt 5
             ("Snooze") -- ein paar sinnvolle Presets statt nur freier
@@ -411,7 +343,7 @@ export function MessageDetailPane({
           }}
           aria-label="In anderen Ordner verschieben"
         >
-          <option value="">{moving ? "Verschiebe…" : "In Ordner verschieben…"}</option>
+          <option value="">{moving ? "Verschiebe…" : "Verschieben…"}</option>
           {folders
             .filter((f) => f.id !== message.folderId)
             .map((f) => (
@@ -420,7 +352,100 @@ export function MessageDetailPane({
               </option>
             ))}
         </select>
+        <span className="detail-actions-spacer" />
+        {!isQuarantined && !isInTrash && (
+          <button
+            type="button"
+            className="btn btn-icon btn-warning-ghost"
+            onClick={handleQuarantine}
+            disabled={quarantining}
+            title="In Quarantäne verschieben"
+            aria-label="In Quarantäne verschieben"
+          >
+            <ShieldExclamationIcon width={18} height={18} />
+          </button>
+        )}
+        {!isInTrash && (
+          <button
+            type="button"
+            className="btn btn-icon btn-danger-ghost"
+            onClick={handleDelete}
+            disabled={deleting}
+            title="Löschen (in den Papierkorb)"
+            aria-label="Löschen"
+          >
+            <Trash2Icon width={18} height={18} />
+          </button>
+        )}
+        {isInTrash && (
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={handlePermanentDelete}
+            disabled={permanentlyDeleting}
+          >
+            {permanentlyDeleting ? "Lösche…" : "Endgültig löschen"}
+          </button>
+        )}
       </section>
+
+      <header className={`detail-header${strictUnknownSenders && isUnknownSender ? " detail-header-unknown-sender" : ""}`}>
+        <h1 className="detail-subject">{message.subject}</h1>
+        <div className="detail-subject-row">
+          <SecurityBadge classification={message.classification} />
+          {message.security && (
+            <SecuritySignalBadges
+              security={message.security}
+              isNewSender={isUnknownSender}
+              onTrustSender={() => onTrustSender(message.fromAddress)}
+            />
+          )}
+        </div>
+        <div className="detail-meta">
+          <span className="detail-sender">
+            <strong>{message.fromDisplayName || message.fromAddress}</strong>
+            {message.fromDisplayName && <span className="detail-sender-address">{message.fromAddress}</span>}
+          </span>
+          {/* `?? []`: der Mock-Server (mock-server/server.mjs) liefert to/cc nicht. */}
+          {(message.to ?? []).length > 0 && <span>An: {message.to.join(", ")}</span>}
+          {(message.cc ?? []).length > 0 && <span>Cc: {message.cc.join(", ")}</span>}
+          <span>{formatDateTime(message.receivedAt)}</span>
+        </div>
+      </header>
+
+      {isQuarantined && (
+        <div className="quarantine-notice">
+          Diese Nachricht liegt in Quarantäne — sie wird automatisch nach 30 Tagen gelöscht,
+          falls sie nicht geprüft wird. Öffne nur Links oder Anhänge, wenn du dir absolut sicher bist.
+        </div>
+      )}
+
+      {isInTrash && (
+        <div className="trash-notice">
+          Diese Nachricht liegt im Papierkorb. Verschiebe sie über „Verschieben…“ zurück
+          oder lösche sie endgültig — anders als bei Quarantäne gibt es hier keine automatische Frist.
+        </div>
+      )}
+
+      {/* [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-
+          Recherche" Punkt 3 ("Vertraulicher Modus"). */}
+      {message.confidentialUntil && (
+        <div className="quarantine-notice">
+          {confidentialExpired
+            ? "Diese Nachricht war vertraulich und ist inzwischen abgelaufen — der Text wurde serverseitig gelöscht."
+            : `Vertraulich bis ${formatDateTime(message.confidentialUntil)} — danach wird der Text automatisch gelöscht.`}
+        </div>
+      )}
+
+      {message.security && (
+        <section className="detail-section">
+          <button type="button" className="link-button" onClick={() => setShowDetails((v) => !v)}>
+            {showDetails ? "Sicherheits-Details ausblenden" : "Sicherheits-Details anzeigen"}
+          </button>
+          {showDetails && <SecurityDetails security={message.security} />}
+        </section>
+      )}
+
 
       {summary && (
         <section className="detail-card">

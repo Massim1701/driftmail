@@ -27,7 +27,9 @@ enum DesignTokens {
         // Outlook-inspiriert": Default-Akzent auf Microsoft-Blau umgestellt
         // (ersetzt das vorherige Teal), siehe contracts/design-tokens.json
         // `color.accent` + `AccentTheme.outlookBlue`.
-        static var accent = SwiftUI.Color(hex: "#0078D4")
+        // [2026-09-28] Redesign: Default `AccentTheme.gruen` (hell/dunkel
+        // dynamisch), siehe Models/UserSettings.swift.
+        static var accent = AccentTheme.gruen.color
         // dangerBg (Hintergrund fuer "Pruefen"-Badges) auf die neue,
         // kraeftigere Fluent-Rotvariante umgestellt; warning/success
         // bewusst UNVERAENDERT gelassen (vom Auftrag nicht erwaehnt).

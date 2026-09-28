@@ -52,7 +52,9 @@ export interface AiPreferenceRecord {
 // [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09.,
 // "Ansicht: Akzentfarben-Auswahl") -- siehe contracts/design-tokens.json
 // color.accentThemes fuer die 5 moeglichen Werte.
-export type AccentTheme = "teal" | "ocean_blue" | "violett" | "koralle" | "ocean_verlauf" | "outlook_blue";
+// [2026-09-28] Redesign: fuenf Themes, Default "gruen" (WEB_INBOX.md 27.09.
+// "WAEHLBARE AKZENTFARBEN"); alte Werte werden in postgresStore.ts migriert.
+export type AccentTheme = "gruen" | "gelb" | "outlook_blue" | "rosa" | "schwarz";
 
 export interface User {
   id: string;

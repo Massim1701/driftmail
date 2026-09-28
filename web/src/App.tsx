@@ -12,6 +12,8 @@ import { AiSettingsModal } from "./components/AiSettingsModal";
 import { SettingsModal } from "./components/SettingsModal";
 import { AbsenceResponderBanner } from "./components/AbsenceResponderBanner";
 import { applyAccentTheme } from "./accentThemes";
+import { SEASON_EMPTY_LINE, seasonFor } from "./season";
+import { SeasonalTwig } from "./seasonalTwig";
 import { useTheme } from "./useTheme";
 import { useAppLock } from "./useAppLock";
 import "./App.css";
@@ -575,6 +577,7 @@ export default function App() {
   const isQuarantineFolder = activeFolderDef?.systemKey === "quarantaene";
   const isPapierkorbFolder = activeFolderDef?.systemKey === "papierkorb";
   const isEntwuerfeFolder = activeFolderDef?.systemKey === "entwuerfe";
+  const isEingangFolder = activeFolderDef?.systemKey === "eingang";
   const isSearching = searchQuery.trim().length > 0;
 
   function handleDeleteDraft(id: string) {
@@ -648,12 +651,10 @@ export default function App() {
             accounts={accounts}
             activeAccountId={activeAccountId}
             onSwitchAccount={handleSwitchAccount}
-            onAddAccount={handleAddAccount}
             onSyncNow={handleSyncNow}
             isSyncing={isSyncing}
             onNewMessage={handleNewMessage}
-            theme={theme}
-            onThemeChange={setTheme}
+            onOpenSearch={() => searchInputRef.current?.focus()}
             onCreateFolder={handleCreateFolder}
             onRenameFolder={handleRenameFolder}
             onDeleteFolder={handleDeleteFolder}
@@ -664,7 +665,10 @@ export default function App() {
             <div className="message-column-header">
               <h2>{isSearching ? `Suche: „${searchQuery.trim()}“` : (activeFolderDef?.name ?? "—")}</h2>
               <span className="message-column-count">
-                {isSearching ? searchResults.length : isEntwuerfeFolder ? drafts.length : currentMessages.length}
+                {columnCountLabel(
+                  isSearching ? searchResults.length : isEntwuerfeFolder ? drafts.length : currentMessages.length,
+                  isSearching ? "search" : isQuarantineFolder ? "quarantine" : "default",
+                )}
               </span>
             </div>
             {/* Suche (WEB_INBOX.md 21.09. "DREI WEITERE GRUNDFUNKTIONEN",
@@ -702,6 +706,7 @@ export default function App() {
                 selectedId={selectedId}
                 onSelect={handleSelectMessage}
                 loading={listLoading && currentMessages.length === 0}
+                emptyContent={isEingangFolder ? <InboxEmptyState /> : undefined}
                 emptyLabel={
                   isQuarantineFolder
                     ? "Keine Nachrichten in Quarantäne."
@@ -760,9 +765,32 @@ export default function App() {
           onStrictUnknownSendersChange={handleStrictUnknownSendersChange}
           onAbsenceResponderChange={setAbsenceResponder}
           onOpenAiSettings={() => setAiSettingsOpen(true)}
+          theme={theme}
+          onThemeChange={setTheme}
           onClose={() => setSettingsOpen(false)}
         />
       )}
     </AppLockGate>
+  );
+}
+
+// [2026-09-28] Redesign: Zähler im Spaltenkopf als kurzer Text statt nackter
+// Zahl.
+function columnCountLabel(count: number, kind: "search" | "quarantine" | "default"): string {
+  if (kind === "search") return count === 1 ? "1 Treffer" : `${count} Treffer`;
+  if (kind === "quarantine") return `${count} zurückgehalten`;
+  return count === 1 ? "1 Nachricht" : `${count} Nachrichten`;
+}
+
+// [2026-09-28] WEB_INBOX.md 27.09. Punkt 4: leerer Eingang mit dem
+// saisonalen Zweig (sanft animiert, prefers-reduced-motion -> statisch).
+function InboxEmptyState() {
+  const season = seasonFor(new Date());
+  return (
+    <div className="inbox-empty">
+      <SeasonalTwig season={season} animated className="inbox-empty-twig" />
+      <p className="inbox-empty-title">Alles erledigt.</p>
+      <p className="inbox-empty-line">{SEASON_EMPTY_LINE[season]}</p>
+    </div>
   );
 }

@@ -1299,7 +1299,7 @@ paths:
             schema:
               type: object
               properties:
-                accentTheme: { type: string, enum: [teal, ocean_blue, violett, koralle, ocean_verlauf] }
+                accentTheme: { type: string, enum: [gruen, gelb, outlook_blue, rosa, schwarz] }
                 strictUnknownSenders: { type: boolean }
                 nudgeUnansweredEnabled:
                   type: boolean
@@ -1815,12 +1815,14 @@ components:
       properties:
         accentTheme:
           type: string
-          enum: [teal, ocean_blue, violett, koralle, ocean_verlauf]
+          enum: [gruen, gelb, outlook_blue, rosa, schwarz]
           description: >
             Nur die neutrale Akzentfarbe (Buttons, Links, ausgewählte
             Zeile, aktiver Ordner) -- siehe design-tokens.json
             color.accentThemes. danger/warning/success bleiben fest für
-            alle User.
+            alle User. [2026-09-28] Fuenf Themes, Default gruen; alte Werte
+            (teal, ocean_blue, violett, koralle, ocean_verlauf) werden
+            serverseitig auf gruen migriert und nicht mehr akzeptiert.
         strictUnknownSenders:
           type: boolean
           description: >

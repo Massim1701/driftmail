@@ -1,13 +1,40 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { Message } from "../types";
 import { SecurityBadge } from "./SecurityBadge";
 import "./MessageList.css";
 
+// [2026-09-28] Redesign: ruhigeres Datum -- heute nur Uhrzeit, in den
+// letzten sechs Tagen der Wochentag, sonst Tag.Monat.
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) +
-    " · " +
-    d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (d.getTime() >= startOfToday) {
+    return d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  }
+  if (d.getTime() >= startOfToday - 6 * 24 * 3600 * 1000) {
+    return d.toLocaleDateString("de-DE", { weekday: "short" });
+  }
+  return d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" });
+}
+
+// [2026-09-28] Redesign: Avatar mit Initialen statt reiner Textzeile. Farbe
+// je Absender stabil aus einer kleinen, ruhigen Palette (keine Akzentfarbe,
+// damit Sicherheits-Badges die einzigen kräftigen Farben in der Liste
+// bleiben).
+const AVATAR_TONES = ["tone-1", "tone-2", "tone-3", "tone-4", "tone-5"];
+
+function initialsFor(name: string): string {
+  const words = name.replace(/[<>"]/g, "").split(/[\s@._-]+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+function toneFor(key: string): string {
+  let h = 0;
+  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_TONES[h % AVATAR_TONES.length];
 }
 
 // [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
@@ -80,24 +107,37 @@ function MessageRow({
   message,
   selectedId,
   onSelect,
+  threadCount,
 }: {
   message: Message;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  threadCount?: number;
 }) {
+  const sender = message.fromDisplayName || message.fromAddress;
   return (
     <button
       type="button"
       className={`message-row${message.id === selectedId ? " active" : ""}`}
       onClick={() => onSelect(message.id)}
     >
-      <div className="message-row-top">
-        <span className="message-from">{message.fromDisplayName || message.fromAddress}</span>
-        <span className="message-date">{formatDate(message.receivedAt)}</span>
-      </div>
-      <div className="message-subject">{message.subject}</div>
-      {message.classification !== "safe" && <SecurityBadge classification={message.classification} compact />}
-      {message.awaitingReply && <div className="message-nudge-hint">{nudgeLabel(message.receivedAt)}</div>}
+      <span className={`message-avatar ${toneFor(message.fromAddress)}`} aria-hidden="true">
+        {initialsFor(sender)}
+      </span>
+      <span className="message-row-body">
+        <span className="message-row-top">
+          <span className="message-from">{sender}</span>
+          {threadCount && threadCount > 1 ? <span className="message-thread-count">{threadCount}</span> : null}
+          <span className="message-date">{formatDate(message.receivedAt)}</span>
+        </span>
+        <span className="message-subject">{message.subject}</span>
+        {(message.classification !== "safe" || message.awaitingReply) && (
+          <span className="message-row-tags">
+            {message.classification !== "safe" && <SecurityBadge classification={message.classification} compact />}
+            {message.awaitingReply && <span className="message-nudge-hint">{nudgeLabel(message.receivedAt)}</span>}
+          </span>
+        )}
+      </span>
     </button>
   );
 }
@@ -108,12 +148,16 @@ export function MessageList({
   onSelect,
   loading,
   emptyLabel,
+  emptyContent,
 }: {
   messages: Message[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   loading: boolean;
   emptyLabel: string;
+  /** [2026-09-28] Ersetzt emptyLabel, z.B. der saisonale Leerzustand im
+   * Eingang (WEB_INBOX.md 27.09. Punkt 4). */
+  emptyContent?: ReactNode;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const groups = useMemo(() => groupMessages(messages), [messages]);
@@ -122,7 +166,7 @@ export function MessageList({
     return <div className="message-list-status">Lade Nachrichten…</div>;
   }
   if (messages.length === 0) {
-    return <div className="message-list-status">{emptyLabel}</div>;
+    return emptyContent ?? <div className="message-list-status">{emptyLabel}</div>;
   }
   return (
     <ul className="message-list">
@@ -130,7 +174,7 @@ export function MessageList({
         const isExpanded = expanded.has(g.primary.id);
         return (
           <li key={g.primary.id}>
-            <MessageRow message={g.primary} selectedId={selectedId} onSelect={onSelect} />
+            <MessageRow message={g.primary} selectedId={selectedId} onSelect={onSelect} threadCount={g.older.length + 1} />
             {g.older.length > 0 && (
               <>
                 <button

@@ -730,17 +730,7 @@ private struct SettingsView: View {
     @ViewBuilder
     private func accentSwatch(for theme: AccentTheme) -> some View {
         ZStack {
-            if let gradientHexes = theme.gradientHexes {
-                Circle().fill(
-                    LinearGradient(
-                        colors: gradientHexes.map { SwiftUI.Color(hex: $0) },
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            } else {
-                Circle().fill(SwiftUI.Color(hex: theme.accentHex))
-            }
+            Circle().fill(theme.color)
             if environment.accentTheme == theme {
                 Image(systemName: "checkmark")
                     .font(.system(size: 12, weight: .bold))

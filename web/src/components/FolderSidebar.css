@@ -1,33 +1,34 @@
+/* [2026-09-28] Redesign "ruhig & warm": eigene, warm getönte Sidebar-Fläche
+   (--color-surface-sidebar), Logo + Serif-Wortmarke, Such-Knopf mit ⌘K,
+   einheitliche Linien-Icons, Zähler nur wenn > 0, Konto + Einstellungen
+   unten, saisonaler Zweig als Deko darüber. Breite 188 -> 252px, damit
+   Ordnernamen wie "Dokumente" nicht mehr abgeschnitten werden. */
 .folder-sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
-  /* [2026-09-21] WEB_INBOX.md "DESIGN-RICHTUNG": "sehr schmale, reduzierte
-     Sidebar -- nur Ordnernamen mit kleinem Icon, kein visuelles
-     Uebergewicht" (Superhuman-Referenz). Vorher 220px. */
-  width: 188px;
+  width: 252px;
   flex-shrink: 0;
-  background: var(--color-surface-card);
-  border-right: 1px solid var(--color-border);
-  padding: var(--space-md) var(--space-sm);
-  gap: var(--space-md);
+  background: var(--color-surface-sidebar);
+  padding: var(--space-xl) 14px var(--space-lg);
+  gap: 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .folder-sidebar-brand {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text-primary);
-  padding: 0 var(--space-sm);
+  gap: 10px;
+  padding: 0 6px;
 }
 
-.brand-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--color-accent);
-  flex-shrink: 0;
+.folder-sidebar-wordmark {
+  font-family: var(--font-family-display);
+  font-size: 21px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.2px;
+  color: var(--color-text-primary);
 }
 
 .new-message-button {
@@ -35,15 +36,14 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
+  height: 42px;
   font-family: var(--font-family);
   font-size: var(--font-size-body);
-  font-weight: var(--font-weight-medium);
-  color: white;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-on-accent);
   background: var(--color-accent);
   border: none;
-  border-radius: var(--radius-control);
-  padding: var(--space-sm) var(--space-md);
-  margin: calc(-1 * var(--space-sm)) 0 0;
+  border-radius: 12px;
   cursor: pointer;
 }
 
@@ -51,66 +51,47 @@
   background: color-mix(in srgb, var(--color-accent) 88%, black);
 }
 
-.folder-sidebar-account-row {
+.new-message-button:focus-visible,
+.sidebar-search-button:focus-visible,
+.folder-item-main:focus-visible,
+.sidebar-icon-button:focus-visible,
+.folder-create-toggle:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+.sidebar-search-button {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  margin-top: calc(-1 * var(--space-md));
-  padding: 0 var(--space-sm);
-}
-
-.folder-sidebar-account {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--font-size-caption);
-  color: var(--color-text-muted);
-}
-
-.account-switcher {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--font-family);
-  font-size: var(--font-size-caption);
-  color: var(--color-text-muted);
-  background: transparent;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-.sync-now-button {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
+  gap: var(--space-sm);
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
-  border: none;
-  background: transparent;
+  background: color-mix(in srgb, var(--color-surface-card) 55%, transparent);
   color: var(--color-text-muted);
+  font-family: var(--font-family);
+  font-size: var(--font-size-small);
   cursor: pointer;
 }
 
-.sync-now-button:hover:not(:disabled) {
-  background: var(--color-surface-page);
-  color: var(--color-accent);
+.sidebar-search-button:hover {
+  color: var(--color-text-primary);
+  border-color: color-mix(in srgb, var(--color-text-muted) 45%, transparent);
 }
 
-.sync-now-button:disabled {
-  cursor: default;
+.sidebar-search-label {
+  flex: 1;
+  text-align: left;
 }
 
-.sync-now-button .spinning {
-  animation: sync-now-spin 0.8s linear infinite;
-}
-
-@keyframes sync-now-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.sidebar-search-button kbd {
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--color-border-subtle);
+  color: var(--color-text-secondary);
 }
 
 .folder-list {
@@ -120,7 +101,14 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.folder-divider {
+  height: 1px;
+  margin: 8px 10px;
+  background: var(--color-border);
 }
 
 .folder-item {
@@ -129,7 +117,7 @@
   align-items: center;
   gap: 2px;
   border-radius: var(--radius-control);
-  color: var(--color-text-secondary);
+  color: var(--color-text-primary);
 }
 
 .folder-item-main {
@@ -137,8 +125,9 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm);
+  gap: var(--space-md);
+  height: 38px;
+  padding: 0 10px;
   border-radius: var(--radius-control);
   border: none;
   background: transparent;
@@ -149,36 +138,47 @@
   text-align: left;
 }
 
-/* [2026-09-25] TERMINAL_INBOX.md 25.09. Punkt 3: die vier Facetten-Icons
-   (facetIcons.tsx) bringen ihre Farbe fest mit -- anders als die
-   currentColor-Stroke-Icons in icons.tsx dürfen sie beim Hover/Active der
-   Zeile NICHT die Textfarbe annehmen, deshalb kein `color: inherit`-Erbe
-   hier nötig, nur der Größen-Fixpunkt. */
-.folder-item-icon-facet {
+.folder-item-icon {
   flex-shrink: 0;
+  color: var(--color-text-secondary);
 }
 
 .folder-item:hover {
-  background: var(--color-surface-page);
-  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-text-primary) 5%, transparent);
 }
 
-/* [2026-09-25] Outlook-Vorgabe (WEB_INBOX.md 24.09. "DESIGN-RICHTUNG
-   PRAEZISIERT"): eigenes Hintergrund-/Textfarbpaar für die aktive Zeile
-   (color.selected) statt einer transparenten Akzentfläche. */
 .folder-item.active {
   background: var(--color-selected-bg);
   color: var(--color-selected-text);
-  font-weight: var(--font-weight-medium);
+  font-weight: var(--font-weight-semibold);
 }
 
-.folder-item.danger.active {
-  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
-  color: var(--color-danger-text);
+.folder-item.active .folder-item-icon {
+  color: var(--color-selected-text);
+}
+
+/* Quarantäne: feste Warnfarbe, unabhängig vom Akzent-Theme */
+.folder-item.warning .folder-item-icon,
+.folder-item.warning .folder-count {
+  color: var(--color-warning);
+}
+
+.folder-item.warning .folder-count {
+  font-weight: var(--font-weight-semibold);
+}
+
+.folder-item.warning.active {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.folder-item.warning.active .folder-item-icon,
+.folder-item.warning.active .folder-count {
+  color: var(--color-warning-text);
 }
 
 .folder-item.muted:not(.active) {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
 .folder-label {
@@ -190,8 +190,9 @@
 
 .folder-count {
   font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
   color: var(--color-text-muted);
-  min-width: 1.5em;
+  min-width: 22px;
   text-align: right;
 }
 
@@ -204,9 +205,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-control);
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   border: none;
   background: transparent;
   color: var(--color-text-muted);
@@ -230,13 +231,79 @@
 
 .folder-rename-input {
   width: 100%;
-  padding: var(--space-sm);
+  height: 38px;
+  padding: 0 10px;
   border-radius: var(--radius-control);
   border: 1px solid var(--color-accent);
   background: var(--color-surface-card);
   color: var(--color-text-primary);
   font-family: var(--font-family);
   font-size: var(--font-size-body);
+}
+
+.folder-create-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: none;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--color-text-muted);
+  font-family: var(--font-family);
+  font-size: var(--font-size-small);
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+}
+
+.folder-create-toggle:hover {
+  color: var(--color-text-primary);
+}
+
+.folder-create-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  position: relative;
+  z-index: 1;
+}
+
+.folder-create {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.folder-create input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-small);
+}
+
+.folder-create button {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  border-radius: var(--radius-control);
+  border: none;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  cursor: pointer;
+}
+
+.folder-create button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .folder-create-suggestions {
@@ -261,115 +328,141 @@
   color: var(--color-accent);
 }
 
-.folder-create {
-  display: flex;
-  gap: var(--space-xs);
-}
-
-.folder-create input {
+.folder-sidebar-spacer {
   flex: 1;
-  min-width: 0;
-  padding: var(--space-sm);
-  border-radius: var(--radius-control);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-page);
-  color: var(--color-text-primary);
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
+  min-height: 96px;
 }
 
-.folder-create button {
+/* Saisonaler Zweig: reine Deko rechts unten über der Kontozeile,
+   klickt nicht mit (pointer-events) und liegt unter der Ordnerliste. */
+.folder-sidebar-twig {
+  position: absolute;
+  right: -10px;
+  bottom: 64px;
+  width: 132px;
+  height: 106px;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.folder-sidebar-account-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 10px 4px 0 6px;
+  border-top: 1px solid var(--color-border);
+  position: relative;
+}
+
+.account-avatar {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  border-radius: var(--radius-control);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--color-selected-bg);
+  color: var(--color-selected-text);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+}
+
+.folder-sidebar-account,
+.account-switcher {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+}
+
+.account-switcher {
+  background: transparent;
   border: none;
-  background: var(--color-accent);
-  color: white;
+  padding: 0;
   cursor: pointer;
 }
 
-.folder-create button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.theme-switch {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-page);
-  border: 1px solid var(--color-border);
-  align-self: flex-start;
-}
-
-.theme-switch button {
+.sidebar-icon-button {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   border: none;
   background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.theme-switch button.active {
-  background: var(--color-surface-card);
-  color: var(--color-accent);
-}
-
-/* [2026-09-21] WEB_INBOX.md "DESIGN-RICHTUNG" Punkt 5: dezenter Hinweis auf
-   Cmd/Ctrl+K (fokussiert das bestehende Suchfeld, siehe App.tsx) --
-   Ergaenzung zum Suchfeld selbst, kein eigenes Befehlspaletten-Overlay
-   (ausdruecklich "kein Muss fuer den ersten Entwurf"). */
-.cmdk-hint {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 var(--space-sm);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-caption);
-}
-
-.cmdk-hint kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 3px;
-  border-radius: 4px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-page);
-  font-family: inherit;
-  font-size: 10px;
-  line-height: 1;
-}
-
-/* [2026-09-21] WEB_INBOX.md 21.09. "Einstellungsbereich": App-Sperre und
-   KI-Einstellungen sind in den neuen SettingsModal umgezogen (siehe
-   SettingsModal.css für .app-lock-toggle-error) -- hier nur noch der eine
-   Einstiegspunkt. */
-.settings-entry-button {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  align-self: flex-start;
-  background: none;
-  border: none;
-  padding: 0 var(--space-sm);
   color: var(--color-text-secondary);
-  font-size: var(--font-size-small);
-  font-family: var(--font-family);
   cursor: pointer;
 }
 
-.settings-entry-button:hover {
-  color: var(--color-accent);
+.sidebar-icon-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text-primary) 7%, transparent);
+  color: var(--color-text-primary);
+}
+
+.sidebar-icon-button:disabled {
+  cursor: default;
+}
+
+.sidebar-icon-button .spinning {
+  animation: sync-now-spin 0.8s linear infinite;
+}
+
+@keyframes sync-now-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .folder-sidebar {
+    width: 100%;
+  }
+  .folder-sidebar-twig,
+  .folder-sidebar-spacer {
+    display: none;
+  }
+}
+
+/* Umbenennen/Löschen liegen beim Hover über dem Zähler, statt dauerhaft
+   Platz zu belegen -- sonst stehen die Zähler je nach Ordnertyp versetzt. */
+.folder-item {
+  position: relative;
+}
+
+.folder-actions {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 2px;
+  padding-left: 6px;
+  border-radius: 8px;
+  background: var(--color-surface-sidebar);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.folder-item.active .folder-actions {
+  background: var(--color-selected-bg);
+}
+
+.folder-item:hover .folder-actions,
+.folder-actions:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.folder-actions .folder-action {
+  opacity: 1;
+}
+
+.folder-item:hover:not(.active) .folder-actions {
+  background: color-mix(in srgb, var(--color-text-primary) 5%, var(--color-surface-sidebar));
 }

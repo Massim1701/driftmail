@@ -8,67 +8,167 @@
     ]
   },
   "color": {
-    "accent": "#0078D4",
+    "accent": "#3FA46A",
     "accentThemes": [
-      { "id": "outlook_blue", "label": "Outlook-Blau", "accent": "#0078D4" },
-      { "id": "teal", "label": "Teal", "accent": "#1D9E75" },
-      { "id": "ocean_blue", "label": "Ocean Blue", "accent": "#378ADD" },
-      { "id": "violett", "label": "Violett", "accent": "#7F77DD" },
-      { "id": "koralle", "label": "Koralle", "accent": "#D85A30" },
-      { "id": "ocean_verlauf", "label": "Ocean-Verlauf", "accent": "#378ADD", "gradient": ["#378ADD", "#1D9E75"] }
+      {
+        "id": "gruen",
+        "label": "Grün",
+        "light": {
+          "accent": "#3FA46A",
+          "accentStrong": "#2A7D50",
+          "onAccent": "#FFFFFF",
+          "selectedBg": "#E7F3EC",
+          "selectedText": "#1E5A3B"
+        },
+        "dark": {
+          "accent": "#5CC08A",
+          "accentStrong": "#3FA46A",
+          "onAccent": "#0C1A11",
+          "selectedBg": "#1F2B1F",
+          "selectedText": "#BFE5CD"
+        }
+      },
+      {
+        "id": "gelb",
+        "label": "Gelb",
+        "light": {
+          "accent": "#D9A441",
+          "accentStrong": "#8A6415",
+          "onAccent": "#FFFFFF",
+          "selectedBg": "#FBF1DC",
+          "selectedText": "#6B4A0E"
+        },
+        "dark": {
+          "accent": "#E6B85C",
+          "accentStrong": "#D9A441",
+          "onAccent": "#1A1305",
+          "selectedBg": "#2E2512",
+          "selectedText": "#F0D59A"
+        }
+      },
+      {
+        "id": "outlook_blue",
+        "label": "Blau",
+        "light": {
+          "accent": "#0078D4",
+          "accentStrong": "#0067B8",
+          "onAccent": "#FFFFFF",
+          "selectedBg": "#DEECF9",
+          "selectedText": "#004578"
+        },
+        "dark": {
+          "accent": "#4BA3E8",
+          "accentStrong": "#3A93DA",
+          "onAccent": "#06121C",
+          "selectedBg": "#13283A",
+          "selectedText": "#B9DBF6"
+        }
+      },
+      {
+        "id": "rosa",
+        "label": "Rosa",
+        "light": {
+          "accent": "#D9487A",
+          "accentStrong": "#B8325F",
+          "onAccent": "#FFFFFF",
+          "selectedBg": "#FBE4EC",
+          "selectedText": "#7A1E40"
+        },
+        "dark": {
+          "accent": "#EC7AA0",
+          "accentStrong": "#E0628C",
+          "onAccent": "#1C0710",
+          "selectedBg": "#34161F",
+          "selectedText": "#F6C2D3"
+        }
+      },
+      {
+        "id": "schwarz",
+        "label": "Schwarz",
+        "light": {
+          "accent": "#1F1F1F",
+          "accentStrong": "#1F1F1F",
+          "onAccent": "#FFFFFF",
+          "selectedBg": "#E9E8E3",
+          "selectedText": "#1F1F1F"
+        },
+        "dark": {
+          "accent": "#E6E6E0",
+          "accentStrong": "#E6E6E0",
+          "onAccent": "#141414",
+          "selectedBg": "#2A2A28",
+          "selectedText": "#F0F0EA"
+        }
+      }
     ],
-    "_accentThemesNote": "WEB_INBOX.md 21.09. 'ERGAENZUNG zur Design-Richtung': waehlbare Akzentfarben, Default seit 24.09. 'outlook_blue' (== color.accent oben, WEB_INBOX.md 24.09. 'DESIGN-RICHTUNG PRAEZISIERT - Outlook-inspiriert', ersetzt den vorherigen Teal-Default). Das alte 'teal' bleibt als waehlbare Alternative erhalten, nicht entfernt (kein Nutzer verliert eine bereits getroffene Wahl). NUR die neutrale Akzentfarbe (Buttons, Links, ausgewaehlte Zeile, aktiver Ordner) ist waehlbar -- danger/warning/success bleiben FEST fuer alle User, sind bewusst NICHT Teil dieser Liste (Sicherheits-Farbrollen duerfen ihre Eindeutigkeit nicht verlieren).",
-    "danger": "#A4262C",
-    "dangerBg": "#FDE7E9",
-    "dangerText": "#A4262C",
-    "warning": "#EF9F27",
-    "success": "#1D9E75",
-    "selected": {
-      "background": "#DEECF9",
-      "text": "#004578",
-      "_note": "WEB_INBOX.md 24.09. Outlook-Design: Hintergrund/Textfarbe fuer die ausgewaehlte/aktive Listenzeile bzw. den aktiven Ordner -- eigenes Farbpaar statt nur accent-mit-Opacity, weil Outlook hier einen eigenen helleren Ton nutzt statt einer transparenten Akzentflaeche."
+    "_accentThemesNote": "[2026-09-28] WEB_INBOX.md 27.09. 'WAEHLBARE AKZENTFARBEN - Gruen, Gelb, Blau, Rosa, Schwarz' + Redesign 'ruhig & warm' (28.09.): fuenf Themes ersetzen die bisherigen sechs (teal/ocean_blue/violett/koralle/ocean_verlauf entfallen, Bestandswerte werden serverseitig auf 'gruen' migriert). 'outlook_blue' behaelt seine ID, heisst in der UI jetzt nur 'Blau'. Default 'gruen'. Je Theme getrennte Werte fuer hell/dunkel: accent = Markenfarbe fuer Logo, Zweig-Deko und Fokusring (auf hellem Grund bei Gruen/Gelb unter 3:1, daher NICHT fuer bedeutungstragende Elemente); accentStrong = Buttons, Ungelesen-Punkt, aktives Ordner-Icon, Links, onAccent = Textfarbe darauf (Kontrast >= 4.5:1 geprueft, deshalb ist accentStrong bei Gruen/Gelb dunkler als accent); selectedBg/selectedText = aktive Zeile / aktiver Ordner. danger/warning/success bleiben FEST fuer alle Themes (Sicherheits-Farbrollen).",
+    "danger": "#B3261E",
+    "dangerBg": "#FBE9E7",
+    "dangerText": "#A1231B",
+    "warning": "#B7791F",
+    "warningBg": "#F6E7C8",
+    "warningText": "#7A5212",
+    "success": "#2A7D50",
+    "dangerDark": {
+      "danger": "#E5605A",
+      "dangerBg": "#2E1918",
+      "dangerText": "#F2B8B5",
+      "warning": "#E0A84A",
+      "warningBg": "#33280F",
+      "warningText": "#F0C877",
+      "success": "#5CC08A"
     },
     "light": {
-      "surfacePage": "#FFFFFF",
-      "surfaceCard": "#FAF9F8",
-      "textPrimary": "#201F1E",
-      "textSecondary": "#605E5C",
-      "textMuted": "#A19F9D",
-      "border": "#E1DFDD",
-      "borderSubtle": "#F3F2F1"
+      "surfacePage": "#F6F4EE",
+      "surfaceSidebar": "#EEECE3",
+      "surfaceList": "#FBFAF6",
+      "surfaceCard": "#FFFFFF",
+      "surfaceSubtle": "#F4F7F1",
+      "textPrimary": "#1F2A24",
+      "textSecondary": "#4A554E",
+      "textMuted": "#626C65",
+      "border": "#E3E0D6",
+      "borderSubtle": "#EEEBE3"
     },
     "dark": {
-      "surfacePage": "#141414",
-      "surfaceCard": "#1E1E1E",
-      "textPrimary": "#FAFAF8",
-      "textSecondary": "rgba(255,255,255,0.75)",
-      "textMuted": "rgba(255,255,255,0.4)",
-      "border": "#2A2A2A",
-      "borderSubtle": "#242424"
+      "surfacePage": "#121714",
+      "surfaceSidebar": "#0E1310",
+      "surfaceList": "#141A16",
+      "surfaceCard": "#181F1B",
+      "surfaceSubtle": "#18211C",
+      "textPrimary": "#E9EEE8",
+      "textSecondary": "#C9D1CA",
+      "textMuted": "#909B93",
+      "border": "#26302A",
+      "borderSubtle": "#1F2722"
     },
-    "_lightDarkNote": "WEB_INBOX.md 24.09.: Farbwerte fuer 'light' auf die Outlook/Fluent-Palette umgestellt (reines Weiss + abgesetzte Ordner-Leiste/Karten in #FAF9F8, staerkere/dezentere Trennlinie getrennt als border/borderSubtle). 'dark' bewusst UNVERAENDERT gelassen -- der Auftrag spezifiziert nur den hellen Modus, ein Dark-Mode-Pendant zur neuen Palette wurde nicht vorgegeben."
+    "_lightDarkNote": "[2026-09-28] Redesign 'ruhig & warm' (Entwurf von Massimo freigegeben): warmes Elfenbein statt reinem Weiss, Sidebar/Liste/Detail als drei abgestufte Flaechen (surfaceSidebar/surfaceList/surfaceCard). Dunkel neu mit leicht gruenlich getoenten Flaechen statt neutralem Grau. textMuted auf beiden Flaechen >= 4.5:1."
   },
   "typography": {
     "fontFamily": "system-ui",
-    "fontFamilyWeb": "'Segoe UI', system-ui",
-    "_fontFamilyNote": "WEB_INBOX.md 24.09.: 'Segoe UI' als primaere Schriftfamilie auf Web (mit System-Font-Fallback, siehe fontFamilyWeb), auf iOS bewusst weiterhin die System-Schrift (SF Pro) -- Massimo: 'Ziel ist der Fluent-Charakter, nicht Pixel-Kopie', keine Segoe-Emulation auf iOS noetig.",
+    "fontFamilyWeb": "'Instrument Sans', system-ui",
+    "fontFamilyDisplayWeb": "'Fraunces', Georgia, serif",
+    "fontFamilyDisplayIos": "New York (Font.Design.serif)",
+    "_fontFamilyNote": "[2026-09-28] Redesign: Web-Fliesstext Instrument Sans, Ueberschriften/Logo Fraunces (beide lokal gebuendelt via @fontsource, kein Google-Fonts-Abruf zur Laufzeit -- Datenschutz). iOS: System-Schrift, Ueberschriften in der eingebauten Serif-Variante (New York), kein eigener Font-Import noetig.",
     "sizes": {
-      "caption": 11,
-      "small": 12,
-      "body": 13,
-      "bodyLarge": 14,
-      "heading": 15
+      "caption": 12,
+      "small": 13,
+      "body": 14,
+      "bodyLarge": 15,
+      "heading": 17,
+      "title": 28
     },
     "weights": {
       "regular": 400,
-      "medium": 500
+      "medium": 500,
+      "semibold": 600
     }
   },
   "radius": {
-    "control": 4,
-    "card": 4,
+    "control": 10,
+    "card": 14,
     "pill": 20,
-    "_note": "WEB_INBOX.md 24.09. Outlook-Design: 'dezente Rundung (4px), keine starken Schatten' -- control/card von vormals 8/12 auf 4 reduziert, pill (Badges/Avatare, vollstaendig rund) unveraendert."
+    "_note": "[2026-09-28] Redesign 'ruhig & warm': weichere Rundung (Buttons/Eingaben 10, Karten 14) statt der 4px aus dem Outlook-Entwurf."
   },
   "spacing": {
     "xs": 4,
@@ -130,24 +230,117 @@
       "shadowEllipse": "#E1DFDD",
       "eingang": {
         "motif": "Briefumschlag, hellere Flap-Flaeche oben, zwei dunklere Seiten-Facetten",
-        "colors": { "base": "#0078D4", "light": "#5EB1EC", "dark": "#106EBE" }
+        "colors": {
+          "base": "#0078D4",
+          "light": "#5EB1EC",
+          "dark": "#106EBE"
+        }
       },
       "gesendet": {
         "motif": "[2026-09-25] WEB_INBOX.md 'GESENDET-ICON - endgueltige Form bestaetigt', nach Nachbesserungs-Feedback ('zu duenn/wirkt wie ein Strich bei echter Groesse') robuster neu proportioniert: EIN grosses, massives Dreieck (nose rechts, breiter Fluegel oben-links, Rumpf unten), per diagonaler Falzlinie von der Nase zur Rueckkante in zwei Facetten geteilt (kein tiefer V-Ausschnitt mehr -- der fraisst bei 24pt zu viel Substanz weg), kleiner dunkler Heck-Akzent-Keil an der Ruecklinie. Bewusst gross/randnah (wie die anderen drei Icons), damit es bei tatsaechlicher Anzeigegroesse (24pt) klar als zweifarbige Flaeche statt als duenner Pfeil erkennbar bleibt.",
-        "colors": { "base": "#0078D4", "light": "#8ECBF5", "dark": "#106EBE", "darkest": "#004578" },
+        "colors": {
+          "base": "#0078D4",
+          "light": "#8ECBF5",
+          "dark": "#106EBE",
+          "darkest": "#004578"
+        },
         "_darkestNote": "darkest gilt nur fuer den kleinen Heck-Akzent (staerkster Facetten-Kontrast dort), die uebrigen drei Icons kommen weiterhin mit base/light/dark aus."
       },
       "quarantaene": {
         "motif": "Warndreieck in Amber/Gelb mit dunklerem Ausrufezeichen",
-        "colors": { "base": "#F0A800", "light": "#FFCB5C", "dark": "#7A4D00" }
+        "colors": {
+          "base": "#F0A800",
+          "light": "#FFCB5C",
+          "dark": "#7A4D00"
+        }
       },
       "papierkorb": {
         "motif": "Echter Papierkorb, leicht konisch (oben breiter als unten), sichtbare vertikale Gitterstaebe -- explizit KEINE eckige Muelltonne",
-        "colors": { "base": "#A19F9D", "light": "#C8C6C4", "dark": "#8A8886" }
-      }
+        "colors": {
+          "base": "#A19F9D",
+          "light": "#C8C6C4",
+          "dark": "#8A8886"
+        }
+      },
+      "_webNote": "[2026-09-28] Web nutzt die Facetten-Icons seit dem Redesign nicht mehr (einheitliche Linien-Icons, Quarantaene in warning). iOS weiterhin, bis das iOS-Redesign folgt."
     }
   },
   "customFolder": {
     "defaultIcon": "folder"
+  },
+  "seasonalTwig": {
+    "_note": "[2026-09-28] Massimo: der botanische Zweig (Sidebar, Anmeldung, leerer Eingang) wechselt mit der Jahreszeit. Feste Farben je Saison, folgt NICHT der Akzentfarbe (sonst waere Herbstlaub bei Akzent Blau blau). Zeitraum nach lokalem Datum, Grenzen inklusive.",
+    "seasons": [
+      {
+        "id": "fruehling",
+        "label": "Frühling",
+        "from": "03-01",
+        "to": "05-31",
+        "motif": "Kirschblütenzweig",
+        "colors": [
+          "#F7CDD8",
+          "#D97A96",
+          "#CFE5B8",
+          "#7A5A44"
+        ],
+        "emptyLine": "Draußen blüht es gerade."
+      },
+      {
+        "id": "sommer",
+        "label": "Sommer",
+        "from": "06-01",
+        "to": "08-31",
+        "motif": "Blätterzweig mit Gänseblümchen",
+        "colors": [
+          "#A9D48E",
+          "#4E8A3E",
+          "#E8B23A",
+          "#FFFFFF"
+        ],
+        "emptyLine": "Ab in die Sonne."
+      },
+      {
+        "id": "herbst",
+        "label": "Herbst",
+        "from": "09-01",
+        "to": "11-30",
+        "motif": "Ahornblätter, eins fällt",
+        "colors": [
+          "#B5472A",
+          "#D08A3A",
+          "#8C5A2E",
+          "#7A5230"
+        ],
+        "emptyLine": "Zeit für einen Tee."
+      },
+      {
+        "id": "weihnachten",
+        "label": "Weihnachten",
+        "from": "12-01",
+        "to": "12-26",
+        "motif": "Tannenzweig mit roter Kugel",
+        "colors": [
+          "#245A3C",
+          "#3E7D56",
+          "#B8322F",
+          "#C9A94E"
+        ],
+        "emptyLine": "Schöne Feiertage."
+      },
+      {
+        "id": "winter",
+        "label": "Winter",
+        "from": "12-27",
+        "to": "02-29",
+        "motif": "Kahler Zweig mit Schnee",
+        "colors": [
+          "#6E625A",
+          "#FFFFFF",
+          "#B8C7D1",
+          "#7FA3BA"
+        ],
+        "emptyLine": "Bleib schön warm."
+      }
+    ]
   }
 }

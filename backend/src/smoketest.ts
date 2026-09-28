@@ -1378,27 +1378,27 @@ async function main() {
     const settingsDefaultRes = await fetch(`${base}/v1/settings`);
     assert(settingsDefaultRes.status === 200, "GET /v1/settings sollte 200 liefern");
     const settingsDefault = (await settingsDefaultRes.json()) as Record<string, unknown>;
-    assert(settingsDefault.accentTheme === "outlook_blue", `Default-Akzentfarbe sollte 'outlook_blue' sein, war '${settingsDefault.accentTheme}'`);
+    assert(settingsDefault.accentTheme === "gruen", `Default-Akzentfarbe sollte 'gruen' sein, war '${settingsDefault.accentTheme}'`);
 
     const settingsInvalidRes = await fetch(`${base}/v1/settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accentTheme: "pink" }),
+      body: JSON.stringify({ accentTheme: "teal" }),
     });
     assert(settingsInvalidRes.status === 400, "PUT /v1/settings mit ungültigem accentTheme sollte 400 liefern");
 
     const settingsSetRes = await fetch(`${base}/v1/settings`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accentTheme: "ocean_verlauf" }),
+      body: JSON.stringify({ accentTheme: "rosa" }),
     });
     assert(settingsSetRes.status === 200, "PUT /v1/settings mit gültigem accentTheme sollte 200 liefern");
     const settingsSet = (await settingsSetRes.json()) as Record<string, unknown>;
-    assert(settingsSet.accentTheme === "ocean_verlauf", "PUT /v1/settings sollte den neuen Wert zurückgeben");
+    assert(settingsSet.accentTheme === "rosa", "PUT /v1/settings sollte den neuen Wert zurückgeben");
 
     const settingsAfterRes = await fetch(`${base}/v1/settings`);
     const settingsAfter = (await settingsAfterRes.json()) as Record<string, unknown>;
-    assert(settingsAfter.accentTheme === "ocean_verlauf", "GET /v1/settings sollte die gespeicherte Änderung widerspiegeln");
+    assert(settingsAfter.accentTheme === "rosa", "GET /v1/settings sollte die gespeicherte Änderung widerspiegeln");
 
     // strictUnknownSenders (WEB_INBOX.md 21.09. "FUENF NEUE KOMFORT-
     // FEATURES" Punkt 1): Default true, unabhängig von accentTheme änderbar.
@@ -1412,7 +1412,7 @@ async function main() {
     const settingsStrictOff = (await settingsStrictOffRes.json()) as Record<string, unknown>;
     assert(settingsStrictOff.strictUnknownSenders === false, "strictUnknownSenders sollte auf false gesetzt worden sein");
     assert(
-      settingsStrictOff.accentTheme === "ocean_verlauf",
+      settingsStrictOff.accentTheme === "rosa",
       "accentTheme sollte durch das reine strictUnknownSenders-Update unangetastet bleiben",
     );
 

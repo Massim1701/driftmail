@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { AbsenceResponder, AccentTheme, DataBreachFinding, MailAccount, PrivacySettings } from "../types";
 import { api, ApiError } from "../api";
 import { ACCENT_THEMES, applyAccentTheme } from "../accentThemes";
+import { MoonIcon, SunIcon, SystemIcon } from "../icons";
+import type { ThemeChoice } from "../useTheme";
 import "./ComposeModal.css";
 import "./SettingsModal.css";
 
@@ -23,6 +25,8 @@ export function SettingsModal({
   onStrictUnknownSendersChange,
   onAbsenceResponderChange,
   onOpenAiSettings,
+  theme,
+  onThemeChange,
   onClose,
 }: {
   accounts: MailAccount[];
@@ -50,6 +54,10 @@ export function SettingsModal({
    * dortige (von diesem Dialog unabhängige) Banner sofort mitzieht. */
   onAbsenceResponderChange: (updated: AbsenceResponder) => void;
   onOpenAiSettings: () => void;
+  /** [2026-09-28] Redesign: Hell/Dunkel/System ist aus der Sidebar hierher
+   * in den Abschnitt "Ansicht" umgezogen (neben die Akzentfarbe). */
+  theme: ThemeChoice;
+  onThemeChange: (t: ThemeChoice) => void;
   onClose: () => void;
 }) {
   const [accentTheme, setAccentTheme] = useState<AccentTheme | null>(null);
@@ -351,6 +359,27 @@ export function SettingsModal({
 
           <section className="settings-section">
             <h3 className="settings-section-title">Ansicht</h3>
+            <div className="theme-switch" role="radiogroup" aria-label="Erscheinungsbild">
+              {(
+                [
+                  ["hell", "Hell", SunIcon],
+                  ["dunkel", "Dunkel", MoonIcon],
+                  ["system", "System", SystemIcon],
+                ] as const
+              ).map(([value, label, Icon]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={theme === value}
+                  className={theme === value ? "active" : ""}
+                  onClick={() => onThemeChange(value)}
+                >
+                  <Icon />
+                  {label}
+                </button>
+              ))}
+            </div>
             {accentLoading ? (
               <p>Lade…</p>
             ) : (
@@ -363,7 +392,7 @@ export function SettingsModal({
                       role="radio"
                       aria-checked={accentTheme === t.id}
                       className={`accent-swatch${accentTheme === t.id ? " active" : ""}`}
-                      style={{ background: t.gradient ? `linear-gradient(135deg, ${t.gradient[0]}, ${t.gradient[1]})` : t.accent }}
+                      style={{ background: t.light.brand }}
                       onClick={() => handleSelectAccent(t.id)}
                       title={t.label}
                       aria-label={t.label}

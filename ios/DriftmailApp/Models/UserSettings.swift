@@ -1,4 +1,6 @@
 import Foundation
+import SwiftUI
+import UIKit
 
 /// [2026-09-21] "Einstellungsbereich"-Auftrag (WEB_INBOX.md 21.09. "NEUER
 /// AUFTRAG - Einstellungsbereich + Info-Seite"): mirrors
@@ -10,48 +12,64 @@ import Foundation
 /// this enum -- an earlier Massimo decision keeps those fixed for every
 /// user so the existing security-warning system never loses its clarity.
 enum AccentTheme: String, Codable, CaseIterable, Identifiable {
-    /// [2026-09-25] WEB_INBOX.md 24.09. "DESIGN-RICHTUNG PRAEZISIERT -
-    /// Outlook-inspiriert": neuer Standard-Akzent (ersetzt `.teal` als
-    /// Default fuer neue Konten, siehe backend/src/db/postgresStore.ts
-    /// Migration + contracts/db-schema.sql). `.teal` bleibt als waehlbare
-    /// Alternative bestehen, kein Nutzer verliert eine bereits getroffene
-    /// Wahl.
+    /// [2026-09-28] Redesign "ruhig & warm" + WEB_INBOX.md 27.09. "WAEHLBARE
+    /// AKZENTFARBEN": fuenf Themes, `.gruen` ist Default. Die frueheren
+    /// Werte (teal/ocean_blue/violett/koralle/ocean_verlauf) migriert das
+    /// Backend auf `gruen`; `init(from:)` unten faengt trotzdem jeden
+    /// unbekannten Wert ab, damit ein neuer Server-Wert nie das Laden der
+    /// Einstellungen bricht. Werte 1:1 aus design-tokens.json
+    /// `color.accentThemes[].light/.dark.accentStrong`.
+    case gruen
+    case gelb
     case outlookBlue = "outlook_blue"
-    case teal
-    case oceanBlue = "ocean_blue"
-    case violett
-    case koralle
-    case oceanVerlauf = "ocean_verlauf"
+    case rosa
+    case schwarz
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .outlookBlue: return "Outlook-Blau"
-        case .teal: return "Teal"
-        case .oceanBlue: return "Ocean Blue"
-        case .violett: return "Violett"
-        case .koralle: return "Koralle"
-        case .oceanVerlauf: return "Ocean-Verlauf"
+        case .gruen: return "Grün"
+        case .gelb: return "Gelb"
+        case .outlookBlue: return "Blau"
+        case .rosa: return "Rosa"
+        case .schwarz: return "Schwarz"
         }
     }
 
+    /// Hell-Modus: Flaeche fuer Buttons mit weissem Text (>= 4.5:1).
     var accentHex: String {
         switch self {
-        case .outlookBlue: return "#0078D4"
-        case .teal: return "#1D9E75"
-        case .oceanBlue: return "#378ADD"
-        case .violett: return "#7F77DD"
-        case .koralle: return "#D85A30"
-        case .oceanVerlauf: return "#378ADD"
+        case .gruen: return "#2A7D50"
+        case .gelb: return "#8A6415"
+        case .outlookBlue: return "#0067B8"
+        case .rosa: return "#B8325F"
+        case .schwarz: return "#1F1F1F"
         }
     }
 
-    /// Only `.oceanVerlauf` is a two-stop gradient (matches
-    /// design-tokens.json `color.accentThemes[].gradient`); every other
-    /// theme is a flat color, so this is `nil` for those.
-    var gradientHexes: [String]? {
-        self == .oceanVerlauf ? ["#378ADD", "#1D9E75"] : nil
+    /// Dunkel-Modus-Gegenstueck (sonst waere z.B. Schwarz auf dunklem Grund
+    /// unsichtbar).
+    var accentHexDark: String {
+        switch self {
+        case .gruen: return "#5CC08A"
+        case .gelb: return "#E6B85C"
+        case .outlookBlue: return "#4BA3E8"
+        case .rosa: return "#EC7AA0"
+        case .schwarz: return "#E6E6E0"
+        }
+    }
+
+    /// Passt sich Hell/Dunkel automatisch an.
+    var color: SwiftUI.Color {
+        let light = UIColor(SwiftUI.Color(hex: accentHex))
+        let dark = UIColor(SwiftUI.Color(hex: accentHexDark))
+        return SwiftUI.Color(UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+    }
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AccentTheme(rawValue: raw) ?? .gruen
     }
 }
 
