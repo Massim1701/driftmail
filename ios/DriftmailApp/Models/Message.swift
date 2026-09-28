@@ -182,6 +182,11 @@ struct MessageDetail: Codable, Identifiable, Hashable {
     /// `MessageDetailView` -- laut Auftrag "optional/nice-to-have", der
     /// Haupt-Fokus ist sicheres Rendern von `bodyHtml`).
     let links: [MessageLink]
+    /// [2026-09-27/28] `MessageDetail.to`/`cc` (api-spec.yaml, aus den
+    /// To-/Cc-Headern; Bcc wird nie ausgeliefert). Leer, wenn der Server sie
+    /// nicht liefert (Mock-Server, aeltere gesendete Nachrichten).
+    let to: [String]
+    let cc: [String]
 
     init(
         id: String, fromAddress: String, fromDisplayName: String?, subject: String?, receivedAt: Date,
@@ -189,7 +194,8 @@ struct MessageDetail: Codable, Identifiable, Hashable {
         security: SecurityResult?,
         canUnsubscribe: Bool, isNewSender: Bool, inReplyToMessageId: String?,
         awaitingReply: Bool = false, confidentialUntil: Date? = nil, snoozedUntil: Date? = nil,
-        attachments: [MessageAttachment] = [], links: [MessageLink] = []
+        attachments: [MessageAttachment] = [], links: [MessageLink] = [],
+        to: [String] = [], cc: [String] = []
     ) {
         self.id = id
         self.fromAddress = fromAddress
@@ -209,6 +215,8 @@ struct MessageDetail: Codable, Identifiable, Hashable {
         self.snoozedUntil = snoozedUntil
         self.attachments = attachments
         self.links = links
+        self.to = to
+        self.cc = cc
     }
 
     init(from decoder: Decoder) throws {
@@ -231,6 +239,8 @@ struct MessageDetail: Codable, Identifiable, Hashable {
         snoozedUntil = try container.decodeIfPresent(Date.self, forKey: .snoozedUntil)
         attachments = try container.decodeIfPresent([MessageAttachment].self, forKey: .attachments) ?? []
         links = try container.decodeIfPresent([MessageLink].self, forKey: .links) ?? []
+        to = try container.decodeIfPresent([String].self, forKey: .to) ?? []
+        cc = try container.decodeIfPresent([String].self, forKey: .cc) ?? []
     }
 
     var asMessage: Message {

@@ -30,61 +30,66 @@ enum DesignTokens {
         // [2026-09-28] Redesign: Default `AccentTheme.gruen` (hell/dunkel
         // dynamisch), siehe Models/UserSettings.swift.
         static var accent = AccentTheme.gruen.color
-        // dangerBg (Hintergrund fuer "Pruefen"-Badges) auf die neue,
-        // kraeftigere Fluent-Rotvariante umgestellt; warning/success
-        // bewusst UNVERAENDERT gelassen (vom Auftrag nicht erwaehnt).
-        static let danger = SwiftUI.Color(hex: "#A4262C")
-        static let dangerBg = SwiftUI.Color(hex: "#FDE7E9")
-        static let dangerText = SwiftUI.Color(hex: "#A4262C")
-        static let warning = SwiftUI.Color(hex: "#EF9F27")
-        static let success = SwiftUI.Color(hex: "#1D9E75")
-        /// Hintergrund/Text der ausgewaehlten/aktiven Zeile bzw. des aktiven
-        /// Ordners (design-tokens.json `color.selected`) -- eigenes Paar
-        /// statt einer transparenten Akzentflaeche, wie im Outlook-Vorbild.
-        static let selectedBackground = SwiftUI.Color(hex: "#DEECF9")
-        static let selectedText = SwiftUI.Color(hex: "#004578")
+        /// [2026-09-28] Redesign "ruhig & warm": Markenfarbe fuer Logo,
+        /// Zweig-Deko und Fokus -- NICHT fuer Text/Buttons (bei Gruen/Gelb
+        /// auf hellem Grund unter 3:1), dafuer ist `accent` da.
+        static var brand = AccentTheme.gruen.brandColor
+        /// Hintergrund/Text der ausgewaehlten Zeile bzw. des aktiven Ordners,
+        /// folgt dem Akzent-Theme (design-tokens.json
+        /// `accentThemes[].selectedBg/selectedText`).
+        static var selectedBackground = AccentTheme.gruen.selectedBackground
+        static var selectedText = AccentTheme.gruen.selectedText
 
-        // Light/dark resolved dynamically via SwiftUI.Color(light:dark:) below,
-        // matching design-tokens.json "color.light" / "color.dark". "dark"
-        // bewusst unveraendert gelassen (der Outlook-Auftrag spezifiziert nur
-        // den hellen Modus).
-        static let surfacePage = SwiftUI.Color(
-            light: "#FFFFFF", dark: "#141414"
-        )
-        static let surfaceCard = SwiftUI.Color(
-            light: "#FAF9F8", dark: "#1E1E1E"
-        )
-        static let textPrimary = SwiftUI.Color(
-            light: "#201F1E", dark: "#FAFAF8"
-        )
-        static let textSecondary = SwiftUI.Color(
-            light: "#605E5C", darkOpacity: (white: 1, opacity: 0.75)
-        )
-        static let textMuted = SwiftUI.Color(
-            light: "#A19F9D", darkOpacity: (white: 1, opacity: 0.4)
-        )
-        static let border = SwiftUI.Color(
-            light: "#E1DFDD", dark: "#2A2A2A"
-        )
-        static let borderSubtle = SwiftUI.Color(
-            light: "#F3F2F1", dark: "#242424"
-        )
+        // [2026-09-28] Sicherheits-Farbrollen: fest fuer alle Themes, jetzt
+        // mit eigenen Dunkel-Werten (design-tokens.json `danger*`,
+        // `warning*`, `dangerDark`).
+        static let danger = SwiftUI.Color(light: "#B3261E", dark: "#E5605A")
+        static let dangerBg = SwiftUI.Color(light: "#FBE9E7", dark: "#2E1918")
+        static let dangerText = SwiftUI.Color(light: "#A1231B", dark: "#F2B8B5")
+        static let warning = SwiftUI.Color(light: "#B7791F", dark: "#E0A84A")
+        static let warningBg = SwiftUI.Color(light: "#F6E7C8", dark: "#33280F")
+        static let warningText = SwiftUI.Color(light: "#7A5212", dark: "#F0C877")
+        static let success = SwiftUI.Color(light: "#2A7D50", dark: "#5CC08A")
+
+        // [2026-09-28] Redesign "ruhig & warm": warmes Elfenbein statt Weiss,
+        // gruenlich getoentes Dunkel (design-tokens.json `color.light/.dark`).
+        static let surfacePage = SwiftUI.Color(light: "#F6F4EE", dark: "#121714")
+        static let surfaceSidebar = SwiftUI.Color(light: "#EEECE3", dark: "#0E1310")
+        static let surfaceList = SwiftUI.Color(light: "#FBFAF6", dark: "#141A16")
+        static let surfaceCard = SwiftUI.Color(light: "#FFFFFF", dark: "#181F1B")
+        static let surfaceSubtle = SwiftUI.Color(light: "#F4F7F1", dark: "#18211C")
+        static let textPrimary = SwiftUI.Color(light: "#1F2A24", dark: "#E9EEE8")
+        static let textSecondary = SwiftUI.Color(light: "#4A554E", dark: "#C9D1CA")
+        static let textMuted = SwiftUI.Color(light: "#626C65", dark: "#909B93")
+        static let border = SwiftUI.Color(light: "#E3E0D6", dark: "#26302A")
+        static let borderSubtle = SwiftUI.Color(light: "#EEEBE3", dark: "#1F2722")
     }
 
     enum Typography {
         static let fontFamily = "system-ui" // -> .system() font on iOS
 
+        // [2026-09-28] Redesign: etwas groesser (design-tokens.json
+        // typography.sizes), plus `title` fuer die Serif-Ueberschriften.
         enum Size {
-            static let caption: CGFloat = 11
-            static let small: CGFloat = 12
-            static let body: CGFloat = 13
-            static let bodyLarge: CGFloat = 14
-            static let heading: CGFloat = 15
+            static let caption: CGFloat = 12
+            static let small: CGFloat = 13
+            static let body: CGFloat = 15
+            static let bodyLarge: CGFloat = 16
+            static let heading: CGFloat = 17
+            static let title: CGFloat = 28
         }
 
         enum Weight {
-            static let regular: SwiftUI.Font.Weight = .regular // 400
-            static let medium: SwiftUI.Font.Weight = .medium   // 500
+            static let regular: SwiftUI.Font.Weight = .regular   // 400
+            static let medium: SwiftUI.Font.Weight = .medium     // 500
+            static let semibold: SwiftUI.Font.Weight = .semibold // 600
+        }
+
+        /// [2026-09-28] Ueberschriften in der eingebauten Serif-Schrift
+        /// (New York), Gegenstueck zu Fraunces auf Web -- kein eigener
+        /// Font-Import noetig (design-tokens.json `fontFamilyDisplayIos`).
+        static func display(_ size: CGFloat, weight: SwiftUI.Font.Weight = .medium) -> SwiftUI.Font {
+            .system(size: size, weight: weight, design: .serif)
         }
     }
 
@@ -92,8 +97,9 @@ enum DesignTokens {
         // [2026-09-25] WEB_INBOX.md 24.09. Outlook-Design: "dezente Rundung
         // (4px), keine starken Schatten" -- control/card von vormals 8/12
         // auf 4 reduziert (Fluent-Stil statt Card-Schatten-Optik).
-        static let control: CGFloat = 4
-        static let card: CGFloat = 4
+        // [2026-09-28] Redesign "ruhig & warm": weichere Rundung (10/14).
+        static let control: CGFloat = 10
+        static let card: CGFloat = 14
         static let pill: CGFloat = 20
     }
 

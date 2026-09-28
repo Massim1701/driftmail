@@ -379,6 +379,8 @@ struct ComposeView: View {
         case .forward(let original):
             subject = Self.prefixedSubject(original.subject, prefix: "Fwd:")
             bodyText = Self.quotedBody(for: original)
+            // WEB_INBOX.md 27.09. "Weiterleiten": Fokus direkt auf "An".
+            DispatchQueue.main.async { focusedField = .to }
         }
     }
 
@@ -395,22 +397,26 @@ struct ComposeView: View {
         return formatter
     }()
 
-    /// **Grenze, bewusst so belassen** (wie auf Web): Original-Anhänge
-    /// werden NICHT automatisch mitgenommen (WEB_INBOX.md nannte das
-    /// explizit "optional") -- der User kann aber über den normalen
-    /// "Anhang"-Weg neue Anhänge auswählen.
+    /// **Grenze:** Original-Anhänge werden noch NICHT mitgenommen -- das
+    /// Backend verschickt derzeit überhaupt keine Anhänge (siehe SYNC.md
+    /// 28.09. "Anhänge werden nie verschickt"). [2026-09-28] WEB_INBOX.md
+    /// 27.09. "Weiterleiten": Zitat enthält jetzt auch "An:" (und "Cc:").
     private static func quotedBody(for original: MessageDetail) -> String {
         let fromLine = original.fromDisplayName.map { "\($0) <\(original.fromAddress)>" } ?? original.fromAddress
-        return [
+        let lines: [String] = [
             "",
             "",
             "---- Weitergeleitete Nachricht ----",
             "Von: \(fromLine)",
             "Datum: \(quoteDateFormatter.string(from: original.receivedAt))",
             "Betreff: \(original.subject ?? "")",
+        ] + (original.to.isEmpty ? [] : ["An: \(original.to.joined(separator: ", "))"])
+          + (original.cc.isEmpty ? [] : ["Cc: \(original.cc.joined(separator: ", "))"])
+          + [
             "",
             original.bodyText ?? "",
-        ].joined(separator: "\n")
+        ]
+        return lines.joined(separator: "\n")
     }
 
     private static func addressList(from raw: String) -> [String] {

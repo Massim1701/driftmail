@@ -287,6 +287,9 @@ final class AppEnvironment: ObservableObject {
     /// save alike) goes through this, so the two never drift apart.
     private func applyAccentTheme(_ theme: AccentTheme) {
         DesignTokens.Color.accent = theme.color
+        DesignTokens.Color.brand = theme.brandColor
+        DesignTokens.Color.selectedBackground = theme.selectedBackground
+        DesignTokens.Color.selectedText = theme.selectedText
         accentTheme = theme
     }
 

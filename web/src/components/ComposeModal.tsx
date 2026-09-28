@@ -153,6 +153,10 @@ export function ComposeModal({
         `Von: ${original.fromDisplayName ? `${original.fromDisplayName} <${original.fromAddress}>` : original.fromAddress}`,
         `Datum: ${formatDateTime(original.receivedAt)}`,
         `Betreff: ${original.subject}`,
+        // [2026-09-28] WEB_INBOX.md 27.09. "Weiterleiten": auch An/Cc zitieren.
+        // `?? []`: der Mock-Server liefert to/cc nicht.
+        ...((original.to ?? []).length > 0 ? [`An: ${original.to.join(", ")}`] : []),
+        ...((original.cc ?? []).length > 0 ? [`Cc: ${original.cc.join(", ")}`] : []),
         "",
         original.bodyText ?? "",
       ].join("\n");

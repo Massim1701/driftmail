@@ -96,7 +96,9 @@ actor MailCache {
             confidentialUntil: detail.confidentialUntil,
             snoozedUntil: detail.snoozedUntil,
             attachments: detail.attachments,
-            links: []
+            links: [],
+            to: detail.to,
+            cc: detail.cc
         )
         write(Snapshot(savedAt: Date(), value: textOnly), to: detailURL(messageId: detail.id))
         pruneDetails()

@@ -67,6 +67,44 @@ enum AccentTheme: String, Codable, CaseIterable, Identifiable {
         return SwiftUI.Color(UIColor { $0.userInterfaceStyle == .dark ? dark : light })
     }
 
+    /// Logo/Deko-Farbe (design-tokens.json `accentThemes[].light/.dark.brand`,
+    /// im Contract als `accent`).
+    var brandColor: SwiftUI.Color {
+        switch self {
+        case .gruen: return Self.dynamic("#3FA46A", "#5CC08A")
+        case .gelb: return Self.dynamic("#D9A441", "#E6B85C")
+        case .outlookBlue: return Self.dynamic("#0078D4", "#4BA3E8")
+        case .rosa: return Self.dynamic("#D9487A", "#EC7AA0")
+        case .schwarz: return Self.dynamic("#1F1F1F", "#E6E6E0")
+        }
+    }
+
+    var selectedBackground: SwiftUI.Color {
+        switch self {
+        case .gruen: return Self.dynamic("#E7F3EC", "#1F2B1F")
+        case .gelb: return Self.dynamic("#FBF1DC", "#2E2512")
+        case .outlookBlue: return Self.dynamic("#DEECF9", "#13283A")
+        case .rosa: return Self.dynamic("#FBE4EC", "#34161F")
+        case .schwarz: return Self.dynamic("#E9E8E3", "#2A2A28")
+        }
+    }
+
+    var selectedText: SwiftUI.Color {
+        switch self {
+        case .gruen: return Self.dynamic("#1E5A3B", "#BFE5CD")
+        case .gelb: return Self.dynamic("#6B4A0E", "#F0D59A")
+        case .outlookBlue: return Self.dynamic("#004578", "#B9DBF6")
+        case .rosa: return Self.dynamic("#7A1E40", "#F6C2D3")
+        case .schwarz: return Self.dynamic("#1F1F1F", "#F0F0EA")
+        }
+    }
+
+    private static func dynamic(_ light: String, _ dark: String) -> SwiftUI.Color {
+        let l = UIColor(SwiftUI.Color(hex: light))
+        let d = UIColor(SwiftUI.Color(hex: dark))
+        return SwiftUI.Color(UIColor { $0.userInterfaceStyle == .dark ? d : l })
+    }
+
     init(from decoder: Decoder) throws {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = AccentTheme(rawValue: raw) ?? .gruen
