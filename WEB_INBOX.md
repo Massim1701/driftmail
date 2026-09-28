@@ -1408,3 +1408,12 @@ Bitte reproduzieren (z.B. eine Mail beantworten und pruefen, ob Original + Antwo
 
 
 [2026-09-27] [erledigt: Web umgesetzt, iOS nicht noetig -- siehe SYNC.md 27.09. "Jetzt senden"] [UX - Sofort senden Option beim Undo Send] [Web + iOS] — Massimo: beim "Undo Send" (Sende-Verzoegerung, aktuell fest 8 Sekunden Wartezeit bevor die Mail wirklich rausgeht) soll es eine Option geben, sofort zu senden, ohne die vollen 8 Sekunden abwarten zu muessen. Bitte in der Undo-Send-Anzeige (der Hinweis/Countdown, der nach dem Absenden kurz erscheint) einen Button/Link "Jetzt senden" ergaenzen, der die Mail sofort tatsaechlich verschickt statt die restliche Wartezeit abzuwarten. Der normale "Rueckgaengig"-Button bleibt daneben bestehen. Kein Contract-Bruch, reine UX-Ergaenzung zur bestehenden Undo-Send-Funktion.
+
+
+[2026-09-27] [offen] [APP-ICON - Entscheidung: Motiv B2 Schild mit Umschlag] [iOS, Web-Favicon falls vorhanden] [Antwort auf die blockierte Frage in SYNC.md 27.09. "App-Icon: offene Frage", Option (b) andere Motiv] — Massimo hat nach Ansicht von vier Skizzen entschieden: das App-Icon (AppIcon.appiconset) zeigt NICHT mehr den Papierflieger, sondern ein SCHILD MIT UMSCHLAG. Damit entfaellt das SF-Symbol-Lizenzproblem fuer das App-Icon. Das Gesendet-Ordner-Icon in der App bleibt unveraendert SF Symbol paperplane.fill (In-App-UI, lizenzrechtlich Standard).
+
+**Motiv (Skizze aus dem Chat, viewBox 120x120):** gruenes Schild (#3fa46a, spitz zulaufender Wappen-Umriss: Pfad M60 18 L94 30 V58 C94 80 78 94 60 102 C42 94 26 80 26 58 V30 Z) auf leicht salbeigruenem, abgerundetem Quadrat-Hintergrund (#dce6d6). Im Schild mittig ein weisser Briefumschlag (Rechteck ca. x42 y48 Breite 36 Hoehe 26, Ecken-Radius 3) mit V-foermiger Klappenlinie in Gruen (#3fa46a, Strichstaerke ca. 2.4). Die Skizze ist nur eine grobe Richtung: Proportionen, Kantenstaerke und Abstaende bitte fuer die echte Icon-Groesse sauber ausarbeiten (Schild und Umschlag gut lesbar auch bei 60pt/180px).
+
+**WICHTIG (Lizenz):** Schild und Umschlag als EIGENE Vektorformen zeichnen, NICHT als Export von SF-Symbol-Glyphen (shield.fill, envelope.fill o.ae.) -- Apple verbietet SF Symbols und "substantially or confusingly similar" Glyphen in App-Icons.
+
+Umfang: AppIcon.appiconset ersetzen (1024px Master plus alle von Xcode benoetigten Groessen). Falls die Web-App ein Favicon/PWA-Icon hat, dasselbe Motiv dort verwenden. Der aeltere Auftrag "APP-ICON (Homescreen) - Papierflieger auf Salbei-Hintergrund" und dessen SF-Symbol-Export-Teil gelten damit als ueberholt.
