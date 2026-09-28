@@ -1477,3 +1477,19 @@ Hinweis: Eine Ergaenzung der Datenschutzerklaerung (Speicherung auf dem Geraet, 
 14. Unsicher? Frag jemanden, dem du vertraust, bevor du klickst.
 
 Ergänzungen später jederzeit möglich. Kein Contract-Bruch, reine UI- und Inhaltsergänzung.
+
+
+[2026-09-28] [offen] [BILD-ASSETS EINBAUEN - App-Icon, Lilien-Ranke, Blüten-Zustände] [iOS + Web + Mac] — Massimo hat drei extern erzeugte Bilder freigegeben (mit ChatGPT nach eigenen Prompts erzeugt, Eigenmaterial, kein Stockmaterial). Sie werden von Massimo lokal im Ordner design-assets/ (Repo-Wurzel) mit den ORIGINALNAMEN abgelegt und sind beim Schreiben dieses Eintrags noch NICHT im Repo. Bitte zuerst prüfen, ob der Ordner und die drei Dateien da sind; falls nicht, in TERMINAL_INBOX.md/SYNC.md melden statt zu raten. Danach Dateien wie unten umbenennen, committen und pushen (Repo ist öffentlich, die Bilder sind Massimos eigene Erzeugnisse).
+
+**Zuordnung der Originalnamen:**
+- ChatGPT_Image_Sep_28__2026__01_03_37_PM.png -> app-icon-source.png (Schild mit Umschlag)
+- ChatGPT_Image_Sep_28__2026__01_04_30_PM.png -> lilien-ranke.png (Ranke fuer die Sidebar)
+- ChatGPT_Image_Sep_28__2026__01_05_16_PM.png -> bluete-zustaende-streifen.png (ein Streifen mit drei Zuständen)
+
+**1. App-Icon:** auf exakt 1024x1024 PNG skalieren (quadratisch, ohne Transparenz, KEINE abgerundeten Ecken, iOS/macOS runden selbst). AppIcon.appiconset ersetzen (iOS und, falls vorhanden, Mac) inklusive aller von Xcode benötigten Größen, dazu Web-Favicon/PWA-Icon falls vorhanden. Das Bild ist die fertige Ausführung des Motivs aus dem Auftrag "APP-ICON - Entscheidung: Motiv B2 Schild mit Umschlag" und ersetzt dessen selbstgezeichnete Skizze. Es ist eine externe Grafik, kein Export von SF-Symbolen.
+
+**2. Lilien-Ranke:** in der Sidebar unten links einbauen; ersetzt den botanischen Zweig aus dem Auftrag "NEUE DESIGN-RICHTUNG - Frisches Grün" (falls der schon umgesetzt ist, sonst direkt die Ranke einbauen). Hintergrund transparent machen: NUR das Weiß vom Bildrand her entfernen (Flood-Fill von den Rändern mit kleiner Toleranz, KEIN Farbschlüssel), weil die Blütenblätter innen fast weiß sind und sonst mit verschwinden würden; die dünnen grünen Umrisse halten sie zusammen. Format 3:2, Anzeige etwa in Sidebar-Breite (ca. 190 px, also 2x/3x-Varianten aus dem Original ableiten; für Web reichen ca. 600 px Breite), unten links verankert, dezent. Auf der hellen Sidebar (#fafaf7) UND im Dunkelmodus prüfen: wirken die weißen Blüten auf hellem Grund zu blass, bitte in SYNC.md vermerken (Massimo entscheidet dann, z.B. ein leichter Grünstich hinter der Ranke).
+
+**3. Blüten-Zustände:** der Streifen zeigt drei Zustände derselben Lilie (Knospe, halb offen, offen) mit identischem Stängel und Blättern. In drei einzelne PNGs GLEICHER Größe schneiden, so dass der Stängelfuß in allen drei Bildern exakt am selben Pixel liegt. NICHT einfach in drei gleiche Drittel teilen: die Stängel sitzen im Streifen nicht in gleichen Abständen, der Stängel würde beim Aufblühen springen. Hintergrund wie bei 2 transparent. Verwendung: Leerer-Eingang-Moment (Auftrag "VIER FEATURES NACH SUPERHUMAN-VORBILD ... Punkt 4"): sanftes Überblenden Knospe -> halb offen -> offen; bei "Bewegung reduzieren" direkt der offene Zustand. Ersetzt die dort vorgesehene selbstgezeichnete Blüte.
+
+Bei Unklarheiten kurz in SYNC.md fragen. Kein Contract-Bruch.
