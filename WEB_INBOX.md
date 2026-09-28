@@ -1451,7 +1451,7 @@ Falls dafuer eine Contract-Ergaenzung noetig ist (z.B. Weiterleiten mit vorhande
 Hinweis: Eine Ergaenzung der Datenschutzerklaerung (Speicherung auf dem Geraet, verschluesselt, jederzeit loeschbar) ist vorgemerkt, aber NICHT Teil dieses Auftrags (driftware-Repo, wird separat entschieden). Kein Contract-Bruch erwartet; falls der Cache ein Aenderungs-Kennzeichen vom Backend braucht (z.B. updatedAt/ETag pro Mail), bitte kurz im Contract vermerken.
 
 
-[2026-09-28] [offen] [WILLKOMMENSBILDSCHIRM - wechselnde Schutz-Tipps] [Web + iOS, überall wo dieser Bildschirm existiert] — Massimo hat den Willkommens-/Anmeldebildschirm gezeigt (dunkelgrün, Blätter, Überschrift "Deine Mails. Ruhig sortiert, gut geschützt." mit Untertext "Verdächtiges landet in der Quarantäne, Zusammenfassungen entstehen auf deinem Gerät, wenn es das unterstützt."). Wunsch: "Hier immer wechselnde Tipps zum Schutz einbauen."
+[2026-09-28] [erledigt: siehe SYNC.md 28.09. "[terminal] [C+F] Schutz-Tipps"] [WILLKOMMENSBILDSCHIRM - wechselnde Schutz-Tipps] [Web + iOS, überall wo dieser Bildschirm existiert] — Massimo hat den Willkommens-/Anmeldebildschirm gezeigt (dunkelgrün, Blätter, Überschrift "Deine Mails. Ruhig sortiert, gut geschützt." mit Untertext "Verdächtiges landet in der Quarantäne, Zusammenfassungen entstehen auf deinem Gerät, wenn es das unterstützt."). Wunsch: "Hier immer wechselnde Tipps zum Schutz einbauen."
 
 **Umsetzung:**
 - Überschrift und Untertext bleiben unverändert. Darunter ein kleiner Tipp-Bereich mit dezentem Label "Schutz-Tipp" (Akzentfarbe) und dem Tipp-Text (sekundäre Textfarbe, 1-2 Sätze). Nur auf diesem Bildschirm.

@@ -1,0 +1,72 @@
+.protection-tip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 360px;
+}
+
+.protection-tip-label {
+  font-size: var(--font-size-small, 13px);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.2px;
+  color: var(--color-accent);
+}
+
+/* Feste Höhe: mindestens zwei Zeilen, sonst so hoch wie der längste Tipp
+   (unsichtbare .protection-tip-sizer in derselben Rasterzelle). */
+.protection-tip-stage {
+  align-self: stretch;
+  display: grid;
+  min-height: calc(2 * 1.5em);
+}
+
+.protection-tip-sizer,
+.protection-tip-text {
+  grid-area: 1 / 1;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.protection-tip-sizer {
+  visibility: hidden;
+}
+
+.protection-tip-text {
+  color: var(--color-text-secondary);
+  opacity: 1;
+  transition: opacity 300ms ease;
+}
+
+.protection-tip-text.fading {
+  opacity: 0;
+}
+
+.protection-tip-next {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--font-size-small, 13px);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.protection-tip-next:hover {
+  color: var(--color-text-primary);
+}
+
+.protection-tip-next:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .protection-tip-text {
+    transition: none;
+  }
+}

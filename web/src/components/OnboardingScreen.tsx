@@ -54,6 +54,7 @@ import "./OnboardingScreen.css";
 import { BrandMark } from "../icons";
 import { seasonFor } from "../season";
 import { SeasonalTwig } from "../seasonalTwig";
+import { ProtectionTip } from "./ProtectionTip";
 
 const ERROR_MESSAGES: Record<string, string> = {
   oauth_not_configured: "Google-Anmeldung ist auf diesem Server noch nicht konfiguriert.",
@@ -802,15 +803,18 @@ function ConnectionCheck({
 // Leitsatz und dem saisonalen Zweig; auf schmalen Bildschirmen ausgeblendet.
 function OnboardingHero() {
   return (
-    <aside className="onboarding-hero" aria-hidden="true">
-      <div className="onboarding-hero-brand">
+    <aside className="onboarding-hero">
+      <div className="onboarding-hero-brand" aria-hidden="true">
         <BrandMark width={34} height={34} />
         <span>driftmail</span>
       </div>
       <SeasonalTwig season={seasonFor(new Date())} className="onboarding-hero-twig" />
       <div className="onboarding-hero-text">
-        <p className="onboarding-hero-claim">Deine Mails. Ruhig sortiert, gut geschützt.</p>
-        <p className="onboarding-hero-sub">Verdächtiges landet in der Quarantäne, Zusammenfassungen entstehen auf deinem Gerät, wenn es das unterstützt.</p>
+        <div className="onboarding-hero-copy" aria-hidden="true">
+          <p className="onboarding-hero-claim">Deine Mails. Ruhig sortiert, gut geschützt.</p>
+          <p className="onboarding-hero-sub">Verdächtiges landet in der Quarantäne, Zusammenfassungen entstehen auf deinem Gerät, wenn es das unterstützt.</p>
+        </div>
+        <ProtectionTip />
       </div>
     </aside>
   );

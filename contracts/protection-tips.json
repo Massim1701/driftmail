@@ -1,0 +1,19 @@
+{
+  "_comment": "Schutz-Tipps fuer den Willkommensbildschirm (WEB_INBOX.md 28.09.). Gemeinsame Quelle fuer Web (web/src/components/ProtectionTip.tsx) und iOS (ProtectionTipView.swift, als Bundle-Ressource eingebunden). Ton: ruhig, sachlich, Du-Form, keine Alarmwoerter. Neue Tipps einfach hinten anhaengen.",
+  "tips": [
+    "Seriöse Firmen fragen per Mail nie nach deinem Passwort oder deiner PIN.",
+    "Deine Bank fragt nie per Mail nach einer TAN.",
+    "Zeitdruck ist die häufigste Betrugsmasche. „Sofort handeln“ heißt meist: erst recht in Ruhe prüfen.",
+    "Bankverbindung geändert? Ruf den Absender unter einer Nummer an, die du selbst kennst, nicht unter der aus der Mail.",
+    "Prüfe die Adresse hinter dem angezeigten Namen. Der Name lässt sich leicht fälschen.",
+    "Bevor du klickst: Halte den Link gedrückt (Handy) oder fahre mit der Maus darüber (Computer), dann siehst du das echte Ziel.",
+    "„Zustellung fehlgeschlagen“, aber du erwartest kein Paket? Tippe nicht auf den Link, sondern sieh in der App des Paketdienstes nach.",
+    "Unerwartete Rechnung im Anhang? Nicht öffnen, sondern beim Absender nachfragen.",
+    "Einen QR-Code in einer Mail scannst du besser nicht. Gib die Adresse lieber selbst im Browser ein.",
+    "Aktiviere die Zwei-Faktor-Anmeldung bei deinem Mail-Anbieter. Sie schützt auch, wenn dein Passwort einmal bekannt wird.",
+    "Nutze für jedes Konto ein eigenes Passwort, am besten mit einem Passwortmanager.",
+    "Halte Handy und Computer aktuell. Viele Sicherheitslücken werden nur durch Updates geschlossen.",
+    "Ein Gewinn, obwohl du nie mitgespielt hast? Dann hat dich niemand ausgewählt.",
+    "Unsicher? Frag jemanden, dem du vertraust, bevor du klickst."
+  ]
+}

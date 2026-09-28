@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D1CA5E0000000000000000C1 /* ProtectionTipView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1CA5E0000000000000000C2 /* ProtectionTipView.swift */; };
+		D1CA5E0000000000000000C3 /* protection-tips.json in Resources */ = {isa = PBXBuildFile; fileRef = D1CA5E0000000000000000C4 /* protection-tips.json */; };
 		DB50EA2E59D16095C2861C33 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33857EC54CCC1D72FEBD5496 /* Assets.xcassets */; };
 		03EC2AAC33D0475E244538CE /* OnDeviceAiAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C71D7712BABCA5340A13D7CD /* OnDeviceAiAdapter.swift */; };
 		10F4B8755688A675B9F670D6 /* RemoteAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E04FC8B982502B4009BD5E99 /* RemoteAPIClient.swift */; };
@@ -56,6 +58,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		D1CA5E0000000000000000C2 /* ProtectionTipView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ProtectionTipView.swift; sourceTree = "<group>"; };
+		D1CA5E0000000000000000C4 /* protection-tips.json */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.json; name = "protection-tips.json"; path = "../contracts/protection-tips.json"; sourceTree = SOURCE_ROOT; };
 		33857EC54CCC1D72FEBD5496 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		09F1D97854BA9AAB832DF815 /* MailAccount.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MailAccount.swift; sourceTree = "<group>"; };
 		0CB465B688F6688D8153A4F2 /* InboxListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InboxListView.swift; sourceTree = "<group>"; };
@@ -207,6 +211,7 @@
 			isa = PBXGroup;
 			children = (
 				36C27E754C88445BFFF5A05A /* MockDatabase.json */,
+				D1CA5E0000000000000000C4 /* protection-tips.json */,
 			);
 			path = MockData;
 			sourceTree = "<group>";
@@ -257,6 +262,7 @@
 				61B316CEEB06B495EE114590 /* RootView.swift */,
 				EF0C1B44A8174871A27378CE /* AppLockGateView.swift */,
 				B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */,
+				D1CA5E0000000000000000C2 /* ProtectionTipView.swift */,
 				2F6A0A6DD232DDE1F2F93EBE /* ComposeView.swift */,
 				53514C334BC04B918574560A /* AiSettingsView.swift */,
 				44A0E0445B8D4857BFB972D3 /* AbsenceResponderView.swift */,
@@ -335,6 +341,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C13642EFBD8639A325242844 /* MockDatabase.json in Resources */,
+				D1CA5E0000000000000000C3 /* protection-tips.json in Resources */,
 				DB50EA2E59D16095C2861C33 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -379,6 +386,7 @@
 				AF7B28B5DC85681902EA027D /* SessionStore.swift in Sources */,
 				D1CA5E0000000000000000B1 /* MailCache.swift in Sources */,
 				B7F7E4294BE911E327E403DC /* OnboardingAccountConnectView.swift in Sources */,
+				D1CA5E0000000000000000C1 /* ProtectionTipView.swift in Sources */,
 				7149640EA5C046CDF2D0DDF1 /* ComposeView.swift in Sources */,
 				56AC218751824B9F83E4422F /* AiSettings.swift in Sources */,
 				BAE621DDA45815CE8CBDBF7B /* UserSettings.swift in Sources */,

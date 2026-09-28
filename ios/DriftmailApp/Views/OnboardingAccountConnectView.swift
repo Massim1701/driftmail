@@ -124,6 +124,10 @@ struct OnboardingAccountConnectView: View {
                     .padding(.horizontal, DesignTokens.Spacing.xl)
             }
 
+            if mode != .addAccount {
+                ProtectionTipView()
+            }
+
             if providersLoadFailed {
                 Text("Anbieterliste konnte nicht live geladen werden — Erkennung nutzt die zuletzt bekannten Anbieter.")
                     .font(.system(size: DesignTokens.Typography.Size.small))

@@ -44,8 +44,14 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 28px;
   max-width: 360px;
+}
+
+.onboarding-hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .onboarding-hero-claim {
