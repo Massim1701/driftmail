@@ -1500,3 +1500,26 @@ Bei Unklarheiten kurz in SYNC.md fragen. Kein Contract-Bruch.
 Die 4 Warnungen react(set-state-in-effect) (src/App.tsx:235, :290, :448 und src/components/MessageDetailPane.tsx:131) bleiben vorerst UNVERAENDERT. Grund: Sie liegen voraussichtlich in genau den Dateien, die die offenen UI-Auftraege noch umbauen (Split Inbox, Befehlspalette, Weiterleiten, Theme-Auswahl, Willkommens-Tipps), und ein Umbau kann das Verhalten der Oberflaeche aendern (z.B. Zuruecksetzen der Auswahl beim Ordnerwechsel). Bitte diese 4 nach Abschluss der UI-Auftraege erneut vorlegen, dann wird neu entschieden.
 
 Kein Vorrang vor den UI-Auftraegen, kann nebenbei erledigt werden. Nach dem Aufraeumen web-Build und tsc kurz gegenpruefen und in SYNC.md vermerken.
+
+
+[2026-09-28] [offen] [HOHE PRIORITÄT - Mailanbieter-Anbindung muss zuverlässig funktionieren] [alle Tracks: Backend, Web, iOS, Mac] [VORRANG vor allen anderen offenen UI-/Design-Aufträgen] — Massimo: "Mailanbieter-Anbindung zur App muss funktionieren, das muss sitzen." Ohne verlässliche Anbindung ist alles andere wertlos. Bitte VOR den UI-Aufträgen (App-Icon, Farben, Split Inbox, Tipps usw.) einen systematischen Durchlauf machen und Lücken beheben.
+
+**Umfang:** Anbieter: Gmail (OAuth), iCloud (IMAP + App-Passwort), GMX (IMAP), web.de (POP3), generisches IMAP inkl. Autoerkennung aus der E-Mail-Adresse. Plattformen: Web, iOS, Mac.
+
+**Prüfmatrix je Anbieter x Plattform** (Ergebnis als Tabelle in SYNC.md: funktioniert / funktioniert nicht / nicht testbar + Grund):
+1. Konto verbinden: richtige Voreinstellung durch die Adress-Endung, klare Hinweise zu App-Passwort bzw. IMAP/POP3-Freischaltung im Formular.
+2. Erster Abruf: Eingang lädt, Anzahl plausibel, kein Abbruch bei großen Postfächern (Paging/Limits, Timeouts).
+3. Neue Mail kommt automatisch an (Hintergrundabruf) ohne App-Neustart; Abrufintervall dokumentieren.
+4. Senden: Mail geht raus (SMTP), erscheint im Gesendet-Ordner, Antwort landet im selben Thread.
+5. Aktionen (gelesen/ungelesen, verschieben, löschen, Quarantäne, Spam): werden beim Anbieter gespiegelt, wo das Protokoll es kann. Bei POP3 nur lokal und so dokumentiert; beim automatischen Abruf kein DELE (bestehende Regel).
+6. Neustart/Neuanmeldung: Konto bleibt verbunden, Token-Erneuerung funktioniert (Gmail-Tokenablauf), Zugangsdaten bleiben verschlüsselt gespeichert (bestehende Regel).
+7. Fehlerfälle mit verständlicher deutscher Meldung UND Handlungshinweis: falsches Passwort, App-Passwort fehlt, IMAP/POP3 beim Anbieter nicht aktiviert, Netzwerk weg, Server nicht erreichbar, Zertifikatsfehler, Rate-Limit. Keine stillen Fehler, kein endloses Laden.
+8. Mehrere Konten gleichzeitig (auch derselbe Anbieter zweimal) ohne Vermischung; Konto entfernen löscht alle zugehörigen Daten (auch den lokalen Cache auf iOS).
+
+**Gmail auf iOS:** den offenen Punkt (Callback-Ziel serverseitig fest auf den Web-Client, ASWebAuthenticationSession braucht einen eigenen Callback) neu bewerten und eine Lösung umsetzen, sobald der Google-Cloud-Teil bereitsteht; sonst als Blocker mit genauem Bedarf melden. Zwischenlösung: Gmail per IMAP mit App-Passwort (Preset laut SYNC.md 27.09. vorhanden): prüfen, dass das durchgängig funktioniert und im UI verständlich erklärt ist.
+
+**Absicherung:** Automatisierte Tests/Smoketests für die Adapter (Gmail, IMAP, POP3), wo möglich gegen Mock-Server, damit die Anbindung bei späteren Änderungen (z.B. Design-Umbauten) nicht unbemerkt kaputtgeht. Ergebnis in SYNC.md.
+
+**SICHERHEIT (wichtig):** Tests mit echten Konten NUR lokal mit App-Passwörtern in backend/.env (niemals committen, nicht in SYNC/INBOX-Dateien, nicht in Logs). Massimo stellt dafür Testkonten bereit; bitte Test-/Wegwerfkonten statt des Hauptpostfachs empfehlen. Zugangsdaten NICHT im Chat oder Terminal-Verlauf abfragen, sondern die nötigen Umgebungsvariablen (nur die Namen) in SYNC.md nennen. Nicht testbare Anbieter ehrlich als "nicht getestet" ausweisen, nicht raten.
+
+Kein Contract-Bruch erwartet; falls für die Fehlermeldungen neue Fehlercodes im API-Vertrag nötig sind, bitte kurz in SYNC.md vermerken.
