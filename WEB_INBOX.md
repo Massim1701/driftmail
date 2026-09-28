@@ -1493,3 +1493,10 @@ Ergänzungen später jederzeit möglich. Kein Contract-Bruch, reine UI- und Inha
 **3. Blüten-Zustände:** der Streifen zeigt drei Zustände derselben Lilie (Knospe, halb offen, offen) mit identischem Stängel und Blättern. In drei einzelne PNGs GLEICHER Größe schneiden, so dass der Stängelfuß in allen drei Bildern exakt am selben Pixel liegt. NICHT einfach in drei gleiche Drittel teilen: die Stängel sitzen im Streifen nicht in gleichen Abständen, der Stängel würde beim Aufblühen springen. Hintergrund wie bei 2 transparent. Verwendung: Leerer-Eingang-Moment (Auftrag "VIER FEATURES NACH SUPERHUMAN-VORBILD ... Punkt 4"): sanftes Überblenden Knospe -> halb offen -> offen; bei "Bewegung reduzieren" direkt der offene Zustand. Ersetzt die dort vorgesehene selbstgezeichnete Blüte.
 
 Bei Unklarheiten kurz in SYNC.md fragen. Kein Contract-Bruch.
+
+
+[2026-09-28] [offen] [ANTWORT AUF LINT-FRAGE - Option (b)] [Track F / web/] [beantwortet die Frage in TERMINAL_INBOX.md "Ergebnis Fehler-Durchlauf, eine Entscheidung fuer Web"] — Entscheidung: (b). Nur die 3 Warnungen react(only-export-components) bereinigen (src/components/SecurityBadge.tsx:18 und :86, src/icons.tsx:127): die Nicht-Komponenten-Exporte (Konstanten/Funktionen) in eigene Dateien auslagern, Verhalten unveraendert.
+
+Die 4 Warnungen react(set-state-in-effect) (src/App.tsx:235, :290, :448 und src/components/MessageDetailPane.tsx:131) bleiben vorerst UNVERAENDERT. Grund: Sie liegen voraussichtlich in genau den Dateien, die die offenen UI-Auftraege noch umbauen (Split Inbox, Befehlspalette, Weiterleiten, Theme-Auswahl, Willkommens-Tipps), und ein Umbau kann das Verhalten der Oberflaeche aendern (z.B. Zuruecksetzen der Auswahl beim Ordnerwechsel). Bitte diese 4 nach Abschluss der UI-Auftraege erneut vorlegen, dann wird neu entschieden.
+
+Kein Vorrang vor den UI-Auftraegen, kann nebenbei erledigt werden. Nach dem Aufraeumen web-Build und tsc kurz gegenpruefen und in SYNC.md vermerken.
