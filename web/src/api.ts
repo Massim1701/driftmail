@@ -18,6 +18,7 @@ import type {
   Contract,
   DataBreachFinding,
   DiscoveredMailSettings,
+  MailServerProbe,
   Draft,
   DraftPhishingCheckResult,
   Folder,
@@ -142,6 +143,15 @@ export const api = {
   listMailProviders: () => request<MailProvider[]>("/mail-providers"),
   // [2026-09-28] Servereinstellungen für unbekannte Domains ermitteln, nur
   // die Domain wird übertragen.
+  // [2026-09-28] Testverbindung (nur Begrüßung lesen, keine Anmeldung).
+  probeMailServers: (data: {
+    incoming: { host: string; port: number; secure: boolean };
+    outgoing?: { host: string; port: number; secure: boolean } | null;
+  }) =>
+    request<{ incoming: MailServerProbe; outgoing: MailServerProbe | null }>("/mail-providers/probe", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   discoverMailSettings: (domain: string) =>
     request<DiscoveredMailSettings>(`/mail-providers/discover?domain=${encodeURIComponent(domain)}`),
 

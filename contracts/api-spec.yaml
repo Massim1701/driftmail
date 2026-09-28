@@ -126,6 +126,40 @@ paths:
         "400": { description: Ungueltige Domain }
         "429": { description: Zu viele Anfragen }
 
+  /mail-providers/probe:
+    post:
+      summary: >
+        [2026-09-28] Testverbindung fuer den Einrichtungsassistenten: baut
+        OHNE Anmeldung eine Verbindung zum Eingangs- (und optional
+        Postausgangs-)Server auf und liefert dessen Begruessung. Nur Mail-
+        Ports (25, 110, 143, 465, 587, 993, 995, 2525), keine privaten/
+        lokalen Adressen. Vor dem Login erreichbar, 30 Anfragen/Minute je IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [incoming]
+              properties:
+                incoming: { $ref: "#/components/schemas/MailServerEndpoint" }
+                outgoing: { $ref: "#/components/schemas/MailServerEndpoint" }
+      responses:
+        "200":
+          description: Ergebnis je Server
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  incoming: { $ref: "#/components/schemas/MailServerProbe" }
+                  outgoing:
+                    allOf: [{ $ref: "#/components/schemas/MailServerProbe" }]
+                    nullable: true
+        "400": { description: Ungueltiger Host oder Port }
+        "429": { description: Zu viele Anfragen }
+
   /link-check:
     get:
       summary: >
@@ -1526,6 +1560,24 @@ components:
             eingerichtet ist (Gmail: Google-Client + Redirect-URI). Bei
             false nutzen Clients fuer einen oauth-Provider mit imapHost den
             IMAP-Weg mit App-Passwort.
+
+    MailServerEndpoint:
+      type: object
+      required: [host, port]
+      properties:
+        host: { type: string }
+        port: { type: integer }
+        secure: { type: boolean, description: "true = TLS ab Verbindungsbeginn (Default)" }
+
+    MailServerProbe:
+      type: object
+      properties:
+        host: { type: string }
+        port: { type: integer }
+        ok: { type: boolean }
+        greeting: { type: string, nullable: true, description: "Erste Zeile des Servers, z.B. '* OK Gimap ready'" }
+        error: { type: string, nullable: true, description: "Grund auf Deutsch, falls nicht erreichbar" }
+        latencyMs: { type: integer, nullable: true }
 
     DiscoveredMailSettings:
       type: object

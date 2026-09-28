@@ -288,3 +288,71 @@
   outline: 2px solid var(--color-brand);
   outline-offset: 2px;
 }
+
+/* [2026-09-28] Verbindungstest im Assistenten */
+.connection-check {
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-subtle);
+  font-size: var(--font-size-small);
+}
+
+.connection-check-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
+
+.connection-check ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.connection-check li {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.check-icon {
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+  font-weight: var(--font-weight-semibold);
+}
+
+.check-ok .check-icon {
+  color: var(--color-success);
+}
+
+.check-fail .check-icon {
+  color: var(--color-danger);
+}
+
+.check-pending .check-icon,
+.check-idle .check-icon,
+.check-idle {
+  color: var(--color-text-muted);
+}
+
+.check-detail {
+  display: block;
+  margin-top: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--font-size-caption);
+  color: var(--color-text-secondary);
+}
+
+.check-fail .check-detail {
+  color: var(--color-danger-text);
+}

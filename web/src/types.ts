@@ -275,6 +275,16 @@ export interface MailProvider {
   oauthAvailable?: boolean;
 }
 
+// [2026-09-28] POST /mail-providers/probe: Testverbindung ohne Anmeldung.
+export interface MailServerProbe {
+  host: string;
+  port: number;
+  ok: boolean;
+  greeting: string | null;
+  error: string | null;
+  latencyMs: number | null;
+}
+
 // [2026-09-28] GET /mail-providers/discover (api-spec.yaml).
 export interface DiscoveredMailSettings {
   found: boolean;

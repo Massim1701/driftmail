@@ -11,6 +11,7 @@ import { Router } from "express";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { discoverMailSettings, isValidDomain } from "../mail/autodiscover";
+import { MAIL_PORTS, probeMailServer } from "../mail/probe";
 import { googleOAuthConfigured } from "./auth";
 
 export const mailProvidersRouter = Router();
@@ -46,14 +47,19 @@ mailProvidersRouter.get("/mail-providers", (_req, res) => {
 const DISCOVER_LIMIT_PER_MINUTE = 30;
 const discoverHits = new Map<string, { count: number; windowStart: number }>();
 
-mailProvidersRouter.get("/mail-providers/discover", async (req, res) => {
-  const ip = req.ip ?? "unknown";
+function overLimit(ip: string): boolean {
   const now = Date.now();
   const entry = discoverHits.get(ip);
   if (!entry || now - entry.windowStart > 60_000) {
     if (discoverHits.size > 10_000) discoverHits.clear();
     discoverHits.set(ip, { count: 1, windowStart: now });
-  } else if (++entry.count > DISCOVER_LIMIT_PER_MINUTE) {
+    return false;
+  }
+  return ++entry.count > DISCOVER_LIMIT_PER_MINUTE;
+}
+
+mailProvidersRouter.get("/mail-providers/discover", async (req, res) => {
+  if (overLimit(req.ip ?? "unknown")) {
     return res.status(429).json({ error: "Zu viele Anfragen, bitte kurz warten." });
   }
 
@@ -62,4 +68,33 @@ mailProvidersRouter.get("/mail-providers/discover", async (req, res) => {
     return res.status(400).json({ error: "ungültige Domain" });
   }
   res.json(await discoverMailSettings(domain));
+});
+
+// [2026-09-28] POST /mail-providers/probe -- Testverbindung ohne Anmeldung
+// (siehe mail/probe.ts): antwortet der Eingangs- und ggf. der
+// Postausgangsserver ueberhaupt? Gleiche Bremse wie discover.
+function parseEndpoint(v: unknown): { host: string; port: number; secure: boolean } | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const host = typeof o.host === "string" ? o.host.trim().toLowerCase() : "";
+  const port = typeof o.port === "number" ? o.port : NaN;
+  if (!isValidDomain(host) || !MAIL_PORTS.has(port)) return null;
+  return { host, port, secure: o.secure !== false };
+}
+
+mailProvidersRouter.post("/mail-providers/probe", async (req, res) => {
+  if (overLimit(req.ip ?? "unknown")) {
+    return res.status(429).json({ error: "Zu viele Anfragen, bitte kurz warten." });
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const incoming = parseEndpoint(body.incoming);
+  if (!incoming) {
+    return res.status(400).json({ error: "incoming braucht host (Domain) und einen Mail-Port (993, 143, 995, 110 ...)" });
+  }
+  const outgoing = body.outgoing === undefined || body.outgoing === null ? null : parseEndpoint(body.outgoing);
+  const [incomingResult, outgoingResult] = await Promise.all([
+    probeMailServer(incoming.host, incoming.port, incoming.secure),
+    outgoing ? probeMailServer(outgoing.host, outgoing.port, outgoing.secure) : Promise.resolve(null),
+  ]);
+  res.json({ incoming: incomingResult, outgoing: outgoingResult });
 });

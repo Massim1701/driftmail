@@ -49,7 +49,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { api, ApiError, googleLoginUrl, setStoredToken } from "../api";
-import type { DiscoveredMailSettings, MailAccount, MailProvider } from "../types";
+import type { DiscoveredMailSettings, MailAccount, MailProvider, MailServerProbe } from "../types";
 import "./OnboardingScreen.css";
 import { BrandMark } from "../icons";
 import { seasonFor } from "../season";
@@ -461,6 +461,42 @@ function ImapConnectForm({
   const [smtpSecure, setSmtpSecure] = useState(provider.smtpSecure ?? false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  // [2026-09-28] Testverbindung im Assistenten (Massimo: "ob der Maildienst
+  // überhaupt antwortet"): sobald Servereinstellungen feststehen, Eingang
+  // und Postausgang ohne Anmeldung anfragen und die Begrüßung zeigen.
+  // Der dritte Schritt "Anmeldung" kommt aus POST /accounts.
+  const [probe, setProbe] = useState<{ incoming: MailServerProbe; outgoing: MailServerProbe | null } | null>(null);
+  const [probing, setProbing] = useState(false);
+  const [probeRun, setProbeRun] = useState(0);
+  const [login, setLogin] = useState<{ ok: boolean; message: string } | null>(null);
+  useEffect(() => {
+    const host = imapHost.trim();
+    if (!host.includes(".")) return;
+    let cancelled = false;
+    const handle = setTimeout(() => {
+      setProbing(true);
+      const out = smtpHost.trim();
+      api
+        .probeMailServers({
+          incoming: { host, port: imapPort, secure: imapSecure },
+          outgoing: out.includes(".") ? { host: out, port: smtpPort, secure: smtpSecure } : null,
+        })
+        .then((r) => {
+          if (!cancelled) setProbe(r);
+        })
+        .catch(() => {
+          if (!cancelled) setProbe(null);
+        })
+        .finally(() => {
+          if (!cancelled) setProbing(false);
+        });
+    }, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [imapHost, imapPort, imapSecure, smtpHost, smtpPort, smtpSecure, probeRun]);
   const isPop3 = provider.authType === "pop3";
 
   // Passt die Adresse zu einem anderen bekannten Anbieter mit Passwort-Weg,
@@ -495,6 +531,8 @@ function ImapConnectForm({
     }
     setSubmitting(true);
     setSubmitError(null);
+    setLogin(null);
+    setProbeRun((n) => n + 1);
     try {
       // [2026-09-27] pop3-Provider (web.de) wurden bisher als provider="imap"
       // gesendet -> Backend sprach IMAP gegen pop3.web.de (Timeout).
@@ -522,6 +560,7 @@ function ImapConnectForm({
             imapPassword: password,
             ...smtp,
           });
+      setLogin({ ok: true, message: "Anmeldung erfolgreich." });
       setStoredToken(res.token);
       if (onAccountAdded) {
         onAccountAdded(res.account);
@@ -535,11 +574,11 @@ function ImapConnectForm({
         const b = (err.body ?? {}) as { reason?: string; host?: string; serverMessage?: string | null };
         const answer = b.serverMessage ? ` Antwort des Servers: „${b.serverMessage}“.` : "";
         if (b.reason === "auth_rejected") {
-          setSubmitError(`Verbunden mit ${b.host} – ${provider.label} hat die Anmeldung aber abgelehnt.${answer}`);
+          setLogin({ ok: false, message: `${provider.label} hat die Anmeldung abgelehnt.${answer}` });
         } else if (b.reason === "unreachable") {
-          setSubmitError(`Der Mailserver ${b.host} war nicht erreichbar.${answer}`);
+          setLogin({ ok: false, message: `Der Mailserver ${b.host} war nicht erreichbar.${answer}` });
         } else {
-          setSubmitError(`Verbindung zu ${b.host ?? "dem Mailserver"} fehlgeschlagen.${answer}`);
+          setLogin({ ok: false, message: `Anmeldung bei ${b.host ?? "dem Mailserver"} fehlgeschlagen.${answer}` });
         }
       } else if (err instanceof ApiError && err.status === 403) {
         setSubmitError("Diese E-Mail-Adresse ist für driftmail (noch) nicht freigeschaltet.");
@@ -650,6 +689,15 @@ function ImapConnectForm({
             </div>
           )}
 
+          <ConnectionCheck
+            protocolLabel={protocolLabel}
+            probe={probe}
+            probing={probing}
+            submitting={submitting}
+            login={login}
+            onRetry={() => setProbeRun((n) => n + 1)}
+          />
+
           {submitError && <div className="onboarding-error">{submitError}</div>}
 
           <button type="submit" className="onboarding-button" disabled={submitting}>
@@ -657,6 +705,81 @@ function ImapConnectForm({
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+// [2026-09-28] Testverbindung als drei sichtbare Schritte: Eingangsserver
+// antwortet, Postausgang antwortet, Anmeldung. Jeweils mit der echten
+// Antwort des Servers, damit klar ist, woran es liegt.
+function ConnectionCheck({
+  protocolLabel,
+  probe,
+  probing,
+  submitting,
+  login,
+  onRetry,
+}: {
+  protocolLabel: string;
+  probe: { incoming: MailServerProbe; outgoing: MailServerProbe | null } | null;
+  probing: boolean;
+  submitting: boolean;
+  login: { ok: boolean; message: string } | null;
+  onRetry: () => void;
+}) {
+  if (!probe && !probing) return null;
+  const serverRow = (label: string, p: MailServerProbe | null | undefined) =>
+    p ? (
+      <li className={p.ok ? "check-ok" : "check-fail"}>
+        <span className="check-icon" aria-hidden="true">{p.ok ? "✓" : "✗"}</span>
+        <span>
+          <strong>{label}</strong> {p.host}:{p.port} {p.ok ? `antwortet${p.latencyMs !== null ? ` (${p.latencyMs} ms)` : ""}` : "antwortet nicht"}
+          <span className="check-detail">{p.ok ? p.greeting : p.error}</span>
+        </span>
+      </li>
+    ) : (
+      <li className="check-pending">
+        <span className="check-icon" aria-hidden="true">…</span>
+        <span>
+          <strong>{label}</strong> wird geprüft
+        </span>
+      </li>
+    );
+  return (
+    <div className="connection-check" aria-live="polite">
+      <div className="connection-check-head">
+        <span>Verbindungstest</span>
+        <button type="button" className="link-button" onClick={onRetry} disabled={probing}>
+          {probing ? "prüft…" : "Erneut testen"}
+        </button>
+      </div>
+      <ul>
+        {serverRow(`${protocolLabel}-Eingang`, probing ? undefined : probe?.incoming)}
+        {(probing || probe?.outgoing) && serverRow("Postausgang (SMTP)", probing ? undefined : probe?.outgoing)}
+        {submitting ? (
+          <li className="check-pending">
+            <span className="check-icon" aria-hidden="true">…</span>
+            <span>
+              <strong>Anmeldung</strong> läuft
+            </span>
+          </li>
+        ) : login ? (
+          <li className={login.ok ? "check-ok" : "check-fail"}>
+            <span className="check-icon" aria-hidden="true">{login.ok ? "✓" : "✗"}</span>
+            <span>
+              <strong>Anmeldung</strong>
+              <span className="check-detail">{login.message}</span>
+            </span>
+          </li>
+        ) : (
+          <li className="check-idle">
+            <span className="check-icon" aria-hidden="true">○</span>
+            <span>
+              <strong>Anmeldung</strong> nach „Verbinden“
+            </span>
+          </li>
+        )}
+      </ul>
     </div>
   );
 }
