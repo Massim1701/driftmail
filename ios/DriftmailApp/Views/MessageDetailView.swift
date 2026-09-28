@@ -21,6 +21,10 @@ struct MessageDetailView: View {
     @State private var isPermanentlyDeleting = false
     @State private var showPermanentDeleteConfirm = false
     @State private var errorMessage: String?
+    /// [2026-09-28] Lokaler Mail-Cache: gesetzt, wenn `detail` aus dem Cache
+    /// kommt, weil der Server nicht erreichbar war. Sicherheitsstatus ist
+    /// dann nur der zuletzt bekannte Stand (siehe Hinweistext).
+    @State private var offlineSince: Date?
     @State private var isUnsubscribing = false
     @State private var unsubscribeStatus: UnsubscribeStatus?
     // [2026-09-21] Antworten/Weiterleiten öffnen jetzt den gemeinsamen
@@ -43,6 +47,14 @@ struct MessageDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DesignTokens.Spacing.lg) {
+                if let offlineSince, detail != nil {
+                    OfflineNoticeView(
+                        savedAt: offlineSince,
+                        detail: "Die Sicherheitsprüfung zeigt den letzten bekannten Stand und wird aktualisiert, sobald du wieder online bist."
+                    )
+                    .padding(.horizontal, -DesignTokens.Spacing.lg)
+                }
+
                 if let detail {
                     header(for: detail)
 
@@ -446,11 +458,23 @@ struct MessageDetailView: View {
 
     // MARK: - Loading
 
+    /// [2026-09-28] Lokaler Mail-Cache: online IMMER frisch vom Server
+    /// (Sicherheitsstatus darf nie aus dem Cache kommen, solange der Server
+    /// erreichbar ist) und danach den Cache aktualisieren. Nur wenn der
+    /// Abruf scheitert, den gespeicherten Stand zeigen -- mit Hinweis.
     private func loadDetail() async {
         do {
-            detail = try await environment.apiClient.fetchMessageDetail(id: messageId)
+            let fresh = try await environment.apiClient.fetchMessageDetail(id: messageId)
+            detail = fresh
+            offlineSince = nil
+            await MailCache.shared.store(detail: fresh)
         } catch {
-            errorMessage = "Nachricht konnte nicht geladen werden."
+            if let cached = await MailCache.shared.detail(messageId: messageId) {
+                detail = cached.value
+                offlineSince = cached.savedAt
+            } else {
+                errorMessage = "Nachricht konnte nicht geladen werden."
+            }
         }
     }
 
@@ -487,6 +511,7 @@ struct MessageDetailView: View {
         defer { isQuarantining = false }
         do {
             try await environment.apiClient.quarantineMessage(id: messageId)
+            await MailCache.shared.remove(messageId: messageId)
             await loadDetail()
         } catch {
             errorMessage = "In Quarantäne verschieben fehlgeschlagen."
@@ -498,6 +523,7 @@ struct MessageDetailView: View {
         defer { isMoving = false }
         do {
             _ = try await environment.apiClient.moveMessage(id: messageId, toFolderId: target.id)
+            await MailCache.shared.remove(messageId: messageId)
             await loadDetail()
         } catch {
             errorMessage = "Verschieben nach \"\(target.name)\" fehlgeschlagen."
@@ -513,6 +539,7 @@ struct MessageDetailView: View {
         defer { isDeleting = false }
         do {
             try await environment.apiClient.deleteMessage(id: messageId)
+            await MailCache.shared.remove(messageId: messageId)
             await loadDetail()
         } catch {
             errorMessage = "Löschen fehlgeschlagen."
@@ -528,6 +555,7 @@ struct MessageDetailView: View {
         defer { isSnoozing = false }
         do {
             _ = try await environment.apiClient.snoozeMessage(id: messageId, until: until)
+            await MailCache.shared.remove(messageId: messageId)
             dismiss()
         } catch {
             errorMessage = "Zurückstellen fehlgeschlagen."
@@ -556,6 +584,7 @@ struct MessageDetailView: View {
         defer { isPermanentlyDeleting = false }
         do {
             try await environment.apiClient.permanentlyDeleteMessage(id: messageId)
+            await MailCache.shared.remove(messageId: messageId)
             dismiss()
         } catch {
             errorMessage = "Endgültiges Löschen fehlgeschlagen."

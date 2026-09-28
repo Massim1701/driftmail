@@ -116,6 +116,8 @@ final class AppEnvironment: ObservableObject {
         self.folders = []
         self.trustedSenderAddresses = []
         self.contacts = []
+        // [2026-09-28] Lokaler Mail-Cache: neues Konto -> alte Offline-Kopie weg.
+        Task { await MailCache.shared.clearAll() }
     }
 
     /// [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2): ein
@@ -145,6 +147,9 @@ final class AppEnvironment: ObservableObject {
     /// Konto-Daten in der Hauptansicht hängen zu bleiben.
     func logOut() {
         SessionStore.clear()
+        // [2026-09-28] Lokaler Mail-Cache: beim Abmelden vollständig löschen
+        // (WEB_INBOX.md 27.09. "ENTSCHEIDUNG - Lokaler Mail-Cache").
+        Task { await MailCache.shared.clearAll() }
         apiClient = MockAPIClient()
         isAuthenticated = false
         accounts = []
@@ -400,6 +405,10 @@ final class AppEnvironment: ObservableObject {
     func removeAccount(_ accountId: String) async throws {
         let wasActive = accountId == activeAccountId
         try await apiClient.deleteAccount(id: accountId)
+        // [2026-09-28] Lokaler Mail-Cache: beim Konto-Entfernen komplett
+        // löschen. Der Cache ist nicht nach Konto getrennt; ein Neuaufbau
+        // für die übrigen Konten geschieht beim nächsten Öffnen von selbst.
+        await MailCache.shared.clearAll()
         await loadAccounts(forceRefresh: true)
         if wasActive {
             folders = []

@@ -40,6 +40,7 @@
 		CDF260CB83A8BB9239ADF905 /* MailProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 485DBFDAC04173358373894B /* MailProvider.swift */; };
 		689E46E1971421446498BF2F /* TrustedSender.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9FCDE9892BAE90D849D0DD8 /* TrustedSender.swift */; };
 		AF7B28B5DC85681902EA027D /* SessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C80514C76AD43F6907485DFF /* SessionStore.swift */; };
+		D1CA5E0000000000000000B1 /* MailCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1CA5E0000000000000000F1 /* MailCache.swift */; };
 		B7F7E4294BE911E327E403DC /* OnboardingAccountConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */; };
 		7149640EA5C046CDF2D0DDF1 /* ComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6A0A6DD232DDE1F2F93EBE /* ComposeView.swift */; };
 		56AC218751824B9F83E4422F /* AiSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2037AFF4FE348ACBC8DDF99 /* AiSettings.swift */; };
@@ -88,6 +89,7 @@
 		485DBFDAC04173358373894B /* MailProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MailProvider.swift; sourceTree = "<group>"; };
 		C9FCDE9892BAE90D849D0DD8 /* TrustedSender.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TrustedSender.swift; sourceTree = "<group>"; };
 		C80514C76AD43F6907485DFF /* SessionStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStore.swift; sourceTree = "<group>"; };
+		D1CA5E0000000000000000F1 /* MailCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MailCache.swift; sourceTree = "<group>"; };
 		B4951590129F4F695CEB7029 /* OnboardingAccountConnectView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingAccountConnectView.swift; sourceTree = "<group>"; };
 		2F6A0A6DD232DDE1F2F93EBE /* ComposeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ComposeView.swift; sourceTree = "<group>"; };
 		F2037AFF4FE348ACBC8DDF99 /* AiSettings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AiSettings.swift; sourceTree = "<group>"; };
@@ -266,6 +268,7 @@
 			children = (
 				500C4ABF4AE3401184F25191 /* BiometricLock.swift */,
 				C80514C76AD43F6907485DFF /* SessionStore.swift */,
+				D1CA5E0000000000000000F1 /* MailCache.swift */,
 			);
 			path = Security;
 			sourceTree = "<group>";
@@ -370,6 +373,7 @@
 				CDF260CB83A8BB9239ADF905 /* MailProvider.swift in Sources */,
 				689E46E1971421446498BF2F /* TrustedSender.swift in Sources */,
 				AF7B28B5DC85681902EA027D /* SessionStore.swift in Sources */,
+				D1CA5E0000000000000000B1 /* MailCache.swift in Sources */,
 				B7F7E4294BE911E327E403DC /* OnboardingAccountConnectView.swift in Sources */,
 				7149640EA5C046CDF2D0DDF1 /* ComposeView.swift in Sources */,
 				56AC218751824B9F83E4422F /* AiSettings.swift in Sources */,

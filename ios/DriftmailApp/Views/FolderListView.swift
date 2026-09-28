@@ -472,6 +472,7 @@ private struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var environment: AppEnvironment
     private let biometricKind = BiometricLock.availableKind()
+    @State private var offlineCacheCleared = false
     @State private var showLogoutConfirm = false
     // [2026-09-21] Mehrfach-Konten (WEB_INBOX.md 21.09. Punkt 2,
     // Übergabe von Track A): "Konto hinzufügen" öffnet denselben
@@ -673,6 +674,22 @@ private struct SettingsView: View {
                     Text(Self.securityOverviewText)
                         .font(.system(size: DesignTokens.Typography.Size.small))
                         .foregroundStyle(DesignTokens.Color.textSecondary)
+                }
+
+                // [2026-09-28] Lokaler Mail-Cache (WEB_INBOX.md 27.09.
+                // "ENTSCHEIDUNG - Lokaler Mail-Cache"): jederzeit loeschbar.
+                Section {
+                    Button(offlineCacheCleared ? "Offline-Kopie gelöscht" : "Offline-Kopie löschen", role: .destructive) {
+                        Task {
+                            await MailCache.shared.clearAll()
+                            offlineCacheCleared = true
+                        }
+                    }
+                    .disabled(offlineCacheCleared)
+                } header: {
+                    Text("Auf diesem Gerät")
+                } footer: {
+                    Text("driftmail speichert die zuletzt gesehenen Mails verschlüsselt auf diesem iPhone, damit sie sofort und auch ohne Netz lesbar sind. Anhänge werden nicht gespeichert, und nichts davon landet im iCloud-Backup.")
                 }
 
                 // Platzhalter-URL: die eigentliche Info-Seite auf

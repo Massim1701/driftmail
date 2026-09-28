@@ -65,11 +65,22 @@ struct InboxListView: View {
     /// Thread-IDs (= `MessageThread.id`, die ID der neuesten Nachricht),
     /// deren "+N ältere" gerade aufgeklappt ist.
     @State private var expandedThreadIds: Set<String> = []
+    /// [2026-09-28] Lokaler Mail-Cache (WEB_INBOX.md 27.09.): gesetzt, wenn
+    /// die Liste gerade aus dem Cache statt frisch vom Server kommt, weil
+    /// der Abruf fehlgeschlagen ist -- dann zeigt die Liste "Stand vom ...".
+    @State private var offlineSince: Date?
 
     private var threads: [MessageThread] { groupIntoThreads(messages) }
 
     var body: some View {
         List {
+            if let offlineSince {
+                OfflineNoticeView(savedAt: offlineSince)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+
             if folder.systemKey == .quarantaene && !messages.isEmpty {
                 QuarantineWarningView(count: messages.count)
                     .listRowInsets(EdgeInsets())
@@ -258,18 +269,36 @@ struct InboxListView: View {
         do {
             _ = try await environment.apiClient.snoozeMessage(id: message.id, until: until)
             messages.removeAll { $0.id == message.id }
+            await MailCache.shared.remove(messageId: message.id)
         } catch {
             await load()
         }
     }
 
+    /// [2026-09-28] Lokaler Mail-Cache: zuerst sofort den gespeicherten
+    /// Stand zeigen, dann frisch vom Server holen und den Cache damit
+    /// ersetzen (Backend ist die Wahrheit -- was dort verschoben oder
+    /// gelöscht wurde, verschwindet damit auch lokal). Scheitert der
+    /// Abruf, bleibt der gespeicherte Stand mit "Stand vom ..." sichtbar.
     private func load() async {
         isLoading = true
         defer { isLoading = false }
+        let cached = await MailCache.shared.messages(folderId: folder.id)
+        if messages.isEmpty, let cached {
+            messages = cached.value
+        }
         do {
-            messages = try await environment.apiClient.fetchMessages(folderId: folder.id, accountId: nil, query: nil)
+            let fresh = try await environment.apiClient.fetchMessages(folderId: folder.id, accountId: nil, query: nil)
+            messages = fresh
+            offlineSince = nil
+            await MailCache.shared.store(messages: fresh, folderId: folder.id)
         } catch {
-            messages = []
+            if let cached {
+                messages = cached.value
+                offlineSince = cached.savedAt
+            } else {
+                messages = []
+            }
         }
     }
 
@@ -278,6 +307,7 @@ struct InboxListView: View {
         do {
             try await environment.apiClient.deleteMessage(id: message.id)
             messages.removeAll { $0.id == message.id }
+            await MailCache.shared.remove(messageId: message.id)
         } catch {
             await load()
         }
@@ -290,6 +320,7 @@ struct InboxListView: View {
         do {
             try await environment.apiClient.permanentlyDeleteMessage(id: message.id)
             messages.removeAll { $0.id == message.id }
+            await MailCache.shared.remove(messageId: message.id)
         } catch {
             await load()
         }
@@ -356,4 +387,38 @@ struct ContentUnavailableCompat: View {
         ))
     }
     .environmentObject(AppEnvironment())
+}
+
+/// [2026-09-28] Lokaler Mail-Cache: Hinweis, dass gerade der gespeicherte
+/// Stand gezeigt wird (kein Netz / Server nicht erreichbar). Laut
+/// Entscheidung nie als aktuelle Gewissheit darstellen.
+struct OfflineNoticeView: View {
+    let savedAt: Date
+    var detail: String? = nil
+
+    var body: some View {
+        HStack(alignment: .top, spacing: DesignTokens.Spacing.sm) {
+            Image(systemName: "wifi.slash")
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Offline · Stand vom \(savedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
+                    .foregroundStyle(DesignTokens.Color.textPrimary)
+                if let detail {
+                    Text(detail)
+                        .font(.system(size: DesignTokens.Typography.Size.caption))
+                        .foregroundStyle(DesignTokens.Color.textSecondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(DesignTokens.Spacing.md)
+        .background(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.card)
+                .fill(DesignTokens.Color.surfaceCard)
+        )
+        .padding(.horizontal, DesignTokens.Spacing.lg)
+        .padding(.vertical, DesignTokens.Spacing.sm)
+        .accessibilityElement(children: .combine)
+    }
 }
