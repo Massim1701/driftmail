@@ -66,7 +66,7 @@ async function mirrorToProvider(message: MessageRecord, action: "trash" | "perma
   try {
     const adapter = adapterForAccount(account);
     if (action === "trash") await adapter.trashMessage(message.providerMessageId);
-    else await adapter.permanentlyDeleteMessage(message.providerMessageId);
+    else await adapter.permanentlyDeleteMessage(message.providerMessageId, message.messageIdHeader);
   } catch (err) {
     console.warn(`Provider-Spiegelung (${action}) für Nachricht ${message.id} fehlgeschlagen:`, err);
   }

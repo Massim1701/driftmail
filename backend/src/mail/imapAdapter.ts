@@ -5,7 +5,10 @@
 
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
+import { randomUUID } from "node:crypto";
 import nodemailer from "nodemailer";
+import type Mail from "nodemailer/lib/mailer";
+import MailComposer from "nodemailer/lib/mail-composer";
 import type { FetchedAttachment, FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
 
 export interface ImapCredentials {
@@ -126,21 +129,32 @@ export class ImapAdapter implements MailAdapter {
     return results.reverse(); // neueste zuerst
   }
 
+  // [2026-09-28] Sonderordner des Anbieters (Papierkorb, Gesendet) finden,
+  // ohne eigene Namensliste: imapflow wertet die Special-Use-Kennzeichen
+  // (RFC 6154) aus und erkennt sonst uebliche Namen in vielen Sprachen samt
+  // Namensraum-Praefix ("INBOX.Sent", "Gesendete Elemente", "Papierkorb",
+  // "Deleted Items" ...).
+  private async specialFolder(client: ImapFlow, use: "\\Trash" | "\\Sent"): Promise<string | null> {
+    const boxes = await client.list();
+    return boxes.find((b) => b.specialUse === use && b.path.toUpperCase() !== "INBOX")?.path ?? null;
+  }
+
   // Provider-Spiegelung (WEB_INBOX.md 08.09. Punkt 3, umgesetzt 09.09.):
-  // `uid` kommt aus `FetchedMail.providerMessageId`. Öffnet dieselbe
-  // Mailbox ("INBOX"), aus der auch gelesen wird -- siehe Kommentar bei
-  // `FetchedMail.providerMessageId` (types.ts) zur UID/Mailbox-Grenze.
+  // `uid` kommt aus `FetchedMail.providerMessageId` (UID in "INBOX").
+  // [2026-09-28] Vorher wurde hier nur das \Deleted-Flag gesetzt: Gmail
+  // hat die Mail dadurch nur archiviert, GMX/web.de/Firmenserver zeigten sie
+  // im Webmailer weiter durchgestrichen an. Jetzt wie jedes Mailprogramm:
+  // in den Papierkorb des Anbieters verschieben; nur wenn es keinen
+  // erkennbaren Papierkorb gibt, bleibt es beim Flag.
   async trashMessage(uid: string): Promise<void> {
     const client = this.client();
     await client.connect();
     try {
+      const trash = await this.specialFolder(client, "\\Trash");
       const lock = await client.getMailboxLock("INBOX");
       try {
-        // Nur das \Deleted-Flag setzen, noch NICHT expungen -- das
-        // entspricht "in den Papierkorb verschieben" (soft delete,
-        // umkehrbar durch Entfernen des Flags), nicht dem endgültigen
-        // Löschen (siehe permanentlyDeleteMessage).
-        await client.messageFlagsAdd(uid, ["\\Deleted"], { uid: true });
+        if (trash) await client.messageMove(uid, trash, { uid: true });
+        else await client.messageFlagsAdd(uid, ["\\Deleted"], { uid: true });
       } finally {
         lock.release();
       }
@@ -149,18 +163,31 @@ export class ImapAdapter implements MailAdapter {
     }
   }
 
-  async permanentlyDeleteMessage(uid: string): Promise<void> {
+  async permanentlyDeleteMessage(uid: string, messageIdHeader?: string): Promise<void> {
     const client = this.client();
     await client.connect();
     try {
+      // Noch im Posteingang (nur geflaggt oder nie verschoben)?
       const lock = await client.getMailboxLock("INBOX");
       try {
-        // messageDelete() setzt \Deleted und expunged in einem Schritt --
-        // funktioniert unabhängig davon, ob trashMessage() das Flag vorher
-        // schon gesetzt hatte.
-        await client.messageDelete(uid, { uid: true });
+        if (await client.fetchOne(uid, { uid: true }, { uid: true })) {
+          // messageDelete() setzt \Deleted und expunged in einem Schritt.
+          await client.messageDelete(uid, { uid: true });
+          return;
+        }
       } finally {
         lock.release();
+      }
+      // Sonst liegt sie im Papierkorb des Anbieters -- dort per Message-ID
+      // suchen, weil sie beim Verschieben eine neue UID bekommen hat.
+      const trash = await this.specialFolder(client, "\\Trash");
+      if (!trash || !messageIdHeader) return;
+      const trashLock = await client.getMailboxLock(trash);
+      try {
+        const uids = await client.search({ header: { "message-id": messageIdHeader } }, { uid: true });
+        if (uids && uids.length > 0) await client.messageDelete(uids, { uid: true });
+      } finally {
+        trashLock.release();
       }
     } finally {
       await client.logout();
@@ -180,8 +207,9 @@ export class ImapAdapter implements MailAdapter {
       requireTLS: this.creds.smtpRequireTls ?? false,
       auth: { user: this.creds.user, pass: this.creds.password },
     });
-    const info = await transport.sendMail({
-      from: this.creds.emailAddress ?? this.creds.user,
+    const from = this.creds.emailAddress ?? this.creds.user;
+    const mail: Mail.Options = {
+      from,
       to: input.to,
       cc: input.cc.length > 0 ? input.cc : undefined,
       // nodemailer setzt bcc korrekt nur im SMTP-Envelope (RCPT TO), nie in
@@ -198,8 +226,42 @@ export class ImapAdapter implements MailAdapter {
         content: a.content,
         contentType: a.mimeType ?? undefined,
       })),
+      // Feste Message-ID, damit die Kopie im Gesendet-Ordner (unten) und die
+      // verschickte Mail dieselbe ist.
+      messageId: `<${randomUUID()}@${from.includes("@") ? from.split("@")[1] : "driftmail.local"}>`,
+    };
+    const info = await transport.sendMail(mail);
+    await this.saveToSentFolder(mail).catch((err: Error) => {
+      console.warn(`[imap] Kopie im Gesendet-Ordner fehlgeschlagen (${this.creds.host}): ${err.message}`);
     });
     return { providerMessageId: info.messageId };
+  }
+
+  // [2026-09-28] Ueber SMTP verschickte Mails legen viele Anbieter NICHT
+  // selbst im Gesendet-Ordner ab (GMX, web.de, iCloud, eigene Server) --
+  // in anderen Mailprogrammen fehlte die Mail dann. Wie Thunderbird: Kopie
+  // per IMAP APPEND ablegen. Ausnahmen, die selbst ablegen (sonst doppelt):
+  // Gmail und Microsoft, sowie jeder Server, bei dem die Mail schon drin ist.
+  // Best effort: ein Fehler hier macht den Versand nicht rueckgaengig.
+  private async saveToSentFolder(mail: Mail.Options): Promise<void> {
+    if (/(^|\.)(gmail\.com|googlemail\.com|office365\.com|outlook\.com)$/i.test(this.creds.host)) return;
+    const raw = await new MailComposer(mail).compile().build();
+    const client = this.client();
+    await client.connect();
+    try {
+      const sent = await this.specialFolder(client, "\\Sent");
+      if (!sent) return;
+      const lock = await client.getMailboxLock(sent);
+      try {
+        const already = await client.search({ header: { "message-id": String(mail.messageId) } }, { uid: true });
+        if (already && already.length > 0) return;
+      } finally {
+        lock.release();
+      }
+      await client.append(sent, raw, ["\\Seen"]);
+    } finally {
+      await client.logout();
+    }
   }
 
   // [2026-09-28] Weiterleiten mit Original-Anhaengen: dieselbe Nachricht

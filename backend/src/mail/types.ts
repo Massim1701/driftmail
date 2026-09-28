@@ -93,8 +93,9 @@ export interface MailAdapter {
 
   /**
    * Verschiebt eine Nachricht beim Provider in den Papierkorb (soft
-   * delete) -- Gmail: `users.messages.trash`; IMAP: `\Deleted`-Flag setzen
-   * (KEIN Expunge, siehe permanentlyDeleteMessage). `providerMessageId`
+   * delete) -- Gmail: `users.messages.trash`; IMAP: [2026-09-28] echtes
+   * Verschieben in den Papierkorb-Ordner des Anbieters, nur ohne
+   * erkennbaren Papierkorb `\Deleted`-Flag setzen (KEIN Expunge). `providerMessageId`
    * ist der Wert aus `FetchedMail.providerMessageId` der ursprünglich
    * importierten Nachricht.
    */
@@ -103,8 +104,10 @@ export interface MailAdapter {
   /**
    * Löscht eine Nachricht beim Provider endgültig -- Gmail:
    * `users.messages.delete`; IMAP: `\Deleted`-Flag setzen + Expunge.
+   * `messageIdHeader` (optional): damit IMAP die Nachricht auch nach dem
+   * Verschieben in den Papierkorb wiederfindet (dort hat sie eine neue UID).
    */
-  permanentlyDeleteMessage(providerMessageId: string): Promise<void>;
+  permanentlyDeleteMessage(providerMessageId: string, messageIdHeader?: string): Promise<void>;
 
   /**
    * [2026-09-28] Weiterleiten mit Original-Anhaengen: holt die Anhaenge
