@@ -49,6 +49,23 @@ const GOOGLE_OAUTH_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
 ];
 
+// [2026-09-28] Beim fehlgeschlagenen Verbindungstest unterscheiden, ob der
+// Mailserver ERREICHT wurde und die Anmeldung abgelehnt hat oder gar nicht
+// erreichbar war -- vorher sah der User in beiden Faellen nur "Verbindung
+// fehlgeschlagen". `serverMessage` ist die Antwort des Mailservers (ohne
+// Passwort; node-pop3 maskiert "PASS ***" selbst).
+function describeConnectError(err: unknown, host: string) {
+  const e = (err ?? {}) as { authenticationFailed?: boolean; responseText?: string; message?: string; code?: string };
+  const text = (e.responseText || e.message || "").toString().slice(0, 200);
+  const unreachable = ["ENOTFOUND", "ECONNREFUSED", "ETIMEDOUT", "ETIMEOUT", "EHOSTUNREACH", "ECONNRESET"].includes(e.code ?? "");
+  const authRejected = e.authenticationFailed === true || /authentication failed|invalid credentials|login failed|AUTHENTICATIONFAILED/i.test(text);
+  return {
+    reason: unreachable ? "unreachable" : authRejected ? "auth_rejected" : "failed",
+    host,
+    serverMessage: text || null,
+  };
+}
+
 export function googleOAuthConfigured(): boolean {
   return Boolean(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET && process.env.GOOGLE_OAUTH_REDIRECT_URI);
 }
@@ -246,6 +263,7 @@ authRouter.post("/accounts", async (req, res) => {
         console.error(`[auth] IMAP-Verbindungstest fehlgeschlagen fuer ${imapHost}:`, err);
         return res.status(422).json({
           error: "IMAP-Zugangsdaten konnten nicht verifiziert werden -- bitte Host, Adresse und (App-)Passwort prüfen.",
+          ...describeConnectError(err, imapHost),
         });
       }
 
@@ -285,6 +303,7 @@ authRouter.post("/accounts", async (req, res) => {
         console.error(`[auth] POP3-Verbindungstest fehlgeschlagen fuer ${pop3Host}:`, err);
         return res.status(422).json({
           error: "POP3-Zugangsdaten konnten nicht verifiziert werden -- bitte Host, Adresse und (App-)Passwort prüfen.",
+          ...describeConnectError(err, pop3Host),
         });
       }
 
@@ -337,6 +356,7 @@ authRouter.post("/accounts", async (req, res) => {
         console.error(`[auth] IMAP-Verbindungstest (Update) fehlgeschlagen fuer ${imapHost}:`, err);
         return res.status(422).json({
           error: "IMAP-Zugangsdaten konnten nicht verifiziert werden -- bitte Host, Adresse und (App-)Passwort prüfen.",
+          ...describeConnectError(err, imapHost),
         });
       }
       encryptedImapCredentials = encryptCredentials(JSON.stringify(credentials));
@@ -362,6 +382,7 @@ authRouter.post("/accounts", async (req, res) => {
         console.error(`[auth] POP3-Verbindungstest (Update) fehlgeschlagen fuer ${pop3Host}:`, err);
         return res.status(422).json({
           error: "POP3-Zugangsdaten konnten nicht verifiziert werden -- bitte Host, Adresse und (App-)Passwort prüfen.",
+          ...describeConnectError(err, pop3Host),
         });
       }
       encryptedImapCredentials = encryptCredentials(JSON.stringify(credentials));

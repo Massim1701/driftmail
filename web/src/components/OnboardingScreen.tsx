@@ -530,7 +530,17 @@ function ImapConnectForm({
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 422) {
-        setSubmitError("Verbindung fehlgeschlagen. Bitte E-Mail-Adresse, App-Passwort und Servereinstellungen prüfen.");
+        // [2026-09-28] Zeigen, ob der Mailserver erreicht wurde und was er
+        // geantwortet hat (siehe backend routes/auth.ts describeConnectError).
+        const b = (err.body ?? {}) as { reason?: string; host?: string; serverMessage?: string | null };
+        const answer = b.serverMessage ? ` Antwort des Servers: „${b.serverMessage}“.` : "";
+        if (b.reason === "auth_rejected") {
+          setSubmitError(`Verbunden mit ${b.host} – ${provider.label} hat die Anmeldung aber abgelehnt.${answer}`);
+        } else if (b.reason === "unreachable") {
+          setSubmitError(`Der Mailserver ${b.host} war nicht erreichbar.${answer}`);
+        } else {
+          setSubmitError(`Verbindung zu ${b.host ?? "dem Mailserver"} fehlgeschlagen.${answer}`);
+        }
       } else if (err instanceof ApiError && err.status === 403) {
         setSubmitError("Diese E-Mail-Adresse ist für driftmail (noch) nicht freigeschaltet.");
       } else if (err instanceof ApiError && err.status === 400) {
