@@ -19,7 +19,15 @@ struct RootView: View {
         case appLockRecommendation
     }
 
+    /// [2026-09-28] Redesign: Akzentfarbe einmal zentral fuer alle Links/
+    /// Buttons (vorher System-Blau ausserhalb einzelner `.tint`-Stellen).
     var body: some View {
+        content
+            .tint(DesignTokens.Color.accent)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         // [2026-09-21] WEB_INBOX.md 19.09. "Onboarding: Provider-
         // Auswahlbildschirm" ("voll verdrahten"): Konto-Verbindung ist ein
         // eigenes, VORGESCHALTETES Gate -- unabhängig von

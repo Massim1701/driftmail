@@ -169,15 +169,34 @@ struct MessageDetailView: View {
     }
 
     private func header(for detail: MessageDetail) -> some View {
-        VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
+        // [2026-09-28] Redesign "ruhig & warm": Betreff in Serif, Absender
+        // mit Avatar, An/Cc falls vorhanden.
+        VStack(alignment: .leading, spacing: DesignTokens.Spacing.md) {
             Text(detail.subject ?? "(kein Betreff)")
-                .font(.system(size: DesignTokens.Typography.Size.heading, weight: .medium))
-            Text("\(detail.fromDisplayName ?? detail.fromAddress) <\(detail.fromAddress)>")
-                .font(.system(size: DesignTokens.Typography.Size.small))
-                .foregroundStyle(DesignTokens.Color.textSecondary)
-            Text(detail.receivedAt, style: .date)
-                .font(.system(size: DesignTokens.Typography.Size.caption))
-                .foregroundStyle(DesignTokens.Color.textMuted)
+                .font(DesignTokens.Typography.display(25))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: DesignTokens.Spacing.md) {
+                AvatarView(name: detail.fromDisplayName ?? detail.fromAddress, key: detail.fromAddress, size: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(detail.fromDisplayName ?? detail.fromAddress)
+                        .font(.system(size: DesignTokens.Typography.Size.body, weight: .semibold))
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                    Text(detail.fromDisplayName != nil ? detail.fromAddress : detail.receivedAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.system(size: DesignTokens.Typography.Size.caption))
+                        .foregroundStyle(DesignTokens.Color.textMuted)
+                    if detail.fromDisplayName != nil {
+                        Text(detail.receivedAt.formatted(date: .abbreviated, time: .shortened))
+                            .font(.system(size: DesignTokens.Typography.Size.caption))
+                            .foregroundStyle(DesignTokens.Color.textMuted)
+                    }
+                }
+            }
+            if !detail.to.isEmpty {
+                Text("An: \(detail.to.joined(separator: ", "))" + (detail.cc.isEmpty ? "" : "   Cc: \(detail.cc.joined(separator: ", "))"))
+                    .font(.system(size: DesignTokens.Typography.Size.caption))
+                    .foregroundStyle(DesignTokens.Color.textSecondary)
+            }
         }
         .padding(isStrictlyFlagged(detail) ? DesignTokens.Spacing.md : 0)
         .frame(maxWidth: .infinity, alignment: .leading)

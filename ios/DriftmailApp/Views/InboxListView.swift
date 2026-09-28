@@ -89,12 +89,21 @@ struct InboxListView: View {
             }
 
             if messages.isEmpty && !isLoading {
-                ContentUnavailableCompat(
-                    title: "Keine Nachrichten",
-                    systemImage: folder.systemImage
-                )
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
+                // [2026-09-28] WEB_INBOX.md 27.09. Punkt 4: leerer Eingang
+                // mit dem saisonalen Zweig (sanft animiert, "Bewegung
+                // reduzieren" -> statisch). Andere Ordner bleiben schlicht.
+                if folder.systemKey == .eingang {
+                    InboxEmptyStateView()
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                } else {
+                    ContentUnavailableCompat(
+                        title: "Keine Nachrichten",
+                        systemImage: folder.systemImage
+                    )
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
             }
 
             ForEach(threads) { thread in
@@ -420,5 +429,25 @@ struct OfflineNoticeView: View {
         .padding(.horizontal, DesignTokens.Spacing.lg)
         .padding(.vertical, DesignTokens.Spacing.sm)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// [2026-09-28] Leerer Eingang: Zweig der Jahreszeit + "Alles erledigt."
+struct InboxEmptyStateView: View {
+    private let season = Season.current()
+
+    var body: some View {
+        VStack(spacing: DesignTokens.Spacing.md) {
+            SeasonalTwigView(season: season, animated: true)
+                .frame(width: 200)
+            Text("Alles erledigt.")
+                .font(DesignTokens.Typography.display(24))
+                .foregroundStyle(DesignTokens.Color.textPrimary)
+            Text(season.emptyInboxLine)
+                .font(.system(size: DesignTokens.Typography.Size.body))
+                .foregroundStyle(DesignTokens.Color.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
     }
 }

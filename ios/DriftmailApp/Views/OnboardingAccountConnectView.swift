@@ -92,16 +92,25 @@ struct OnboardingAccountConnectView: View {
                 Spacer()
             }
 
-            Image(systemName: "envelope.badge.shield.half.filled")
-                .font(.system(size: 40))
-                .foregroundStyle(DesignTokens.Color.accent)
+            // [2026-09-28] Redesign "ruhig & warm": Logo + Serif-Wortmarke,
+            // saisonaler Zweig, Leitsatz (wie die Web-Anmeldung).
+            if mode != .addAccount {
+                SeasonalTwigView()
+                    .frame(width: 180)
+            }
 
-            VStack(spacing: DesignTokens.Spacing.xs) {
-                Text("driftmail")
-                    .font(.system(size: DesignTokens.Typography.Size.heading, weight: .medium))
-                Text(mode == .addAccount ? "Welches weitere Konto möchtest du verbinden?" : "Wähle dein E-Mail-Konto, um loszulegen.")
-                    .font(.system(size: DesignTokens.Typography.Size.body))
+            VStack(spacing: DesignTokens.Spacing.sm) {
+                HStack(spacing: DesignTokens.Spacing.sm) {
+                    BrandMarkView().frame(width: 30, height: 30)
+                    Text("driftmail")
+                        .font(DesignTokens.Typography.display(26))
+                        .foregroundStyle(DesignTokens.Color.textPrimary)
+                }
+                Text(mode == .addAccount ? "Welches weitere Konto möchtest du verbinden?" : "Deine Mails. Ruhig sortiert, gut geschützt.")
+                    .font(DesignTokens.Typography.display(mode == .addAccount ? DesignTokens.Typography.Size.bodyLarge : 20, weight: .regular))
                     .foregroundStyle(DesignTokens.Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, DesignTokens.Spacing.xl)
             }
 
             if providersLoadFailed {

@@ -58,48 +58,38 @@ struct Folder: Codable, Identifiable, Hashable {
     /// `customFolder.defaultIcon` ("folder") for user-created folders.
     /// Falls back to the folder glyph for any icon key this build doesn't
     /// know yet (e.g. a newer icon added server-side).
+    /// [2026-09-28] Redesign "ruhig & warm": einheitliche Linien-Symbole
+    /// (wie die Web-Sidebar) statt der Facetten-Grafiken und des blauen
+    /// Gesendet-Fliegers -- Spam bekommt ein Verbots-Symbol, damit Spam und
+    /// Papierkorb nicht gleich aussehen. System-Ordner nach `systemKey`,
+    /// eigene Ordner nach ihrem Icon-Schlüssel.
     var systemImage: String {
-        switch icon {
-        case "star": return "star.fill"
-        case "inbox": return "tray.fill"
-        case "receipt": return "doc.text.fill"
-        case "shield-exclamation": return "exclamationmark.shield.fill"
-        case "trash": return "trash.fill"
-        case "trash-2": return "trash.slash.fill"
-        case "file-pencil": return "doc.text.fill"
-        case "send": return "paperplane.fill"
-        default: return "folder.fill"
+        switch systemKey {
+        case .eingang: return "tray"
+        case .entwuerfe: return "doc.text"
+        case .gesendet: return "paperplane"
+        case .sonstiges: return "folder"
+        case .quarantaene: return "exclamationmark.shield"
+        case .spam: return "nosign"
+        case .papierkorb: return "trash"
+        case nil: break
         }
-    }
-
-    /// [2026-09-25] WEB_INBOX.md 24.09. "ORDNER-ICONS - 3D/Facetten-Stil" +
-    /// 25.09. "GESENDET-ICON": vier Ordner-Icons (Eingang/Gesendet/
-    /// Quarantäne/Papierkorb) sind jetzt fest eingefärbte 3D-Facetten-
-    /// Grafiken (`contracts/design-tokens.json` `systemFolders.
-    /// facetIconStyle`) statt einfarbiger SF Symbols -- Asset-Name im
-    /// Katalog `Assets.xcassets`. Alle anderen Icon-Keys (Entwürfe/
-    /// Sonstiges/Spam/eigene Ordner) behalten bewusst das bisherige
-    /// neutrale SF-Symbol-Verhalten, dafuer gibt es hier keine Vorgabe.
-    var facetIconAssetName: String? {
         switch icon {
-        case "inbox": return "FolderIconEingang"
-        case "shield-exclamation": return "FolderIconQuarantaene"
-        case "trash-2": return "FolderIconPapierkorb"
-        default: return nil
+        case "star": return "star"
+        case "inbox": return "tray"
+        case "receipt": return "doc.text"
+        case "shield-exclamation": return "exclamationmark.shield"
+        case "trash": return "nosign"
+        case "trash-2": return "trash"
+        case "file-pencil": return "doc.text"
+        case "send": return "paperplane"
+        default: return "folder"
         }
-    }
-
-    /// [2026-09-27] WEB_INBOX.md 25.09. "APP-ICON/GESENDET-ICON - LOESUNG
-    /// GEFUNDEN": Gesendet nutzt das SF Symbol `paperplane.fill` (siehe
-    /// `systemImage`) in Hellblau statt der handgezeichneten Facetten-Grafik
-    /// FolderIconGesendet -- das Asset ist entfernt. Nur fuer In-App-UI; fuers
-    /// App-Icon verbietet Apples SF-Symbols-Lizenz die Verwendung (SYNC.md 27.09.).
-    var symbolTint: SwiftUI.Color? {
-        icon == "send" ? SwiftUI.Color(hex: "#5EB1EC") : nil
     }
 
     /// design-tokens.json `systemFolders.defaults` marks quarantaene with
-    /// colorRole "danger".
+    /// colorRole "danger". [2026-09-28] Redesign: dargestellt in der festen
+    /// Warnfarbe (Bernstein), wie auf Web.
     var usesDangerColor: Bool { systemKey == .quarantaene }
 
     /// design-tokens.json `systemFolders.defaults` marks spam as "muted".

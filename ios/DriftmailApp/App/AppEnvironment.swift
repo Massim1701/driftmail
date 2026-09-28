@@ -74,6 +74,16 @@ final class AppEnvironment: ObservableObject {
     /// ein Token in der Keychain liegt (vorherige Verbindung), sonst wie
     /// bisher `MockAPIClient` -- siehe Typ-Kommentar oben.
     init() {
+        #if DEBUG
+        // [2026-09-28] Nur Entwicklungs-Builds: `-demoMode` als Startparameter
+        // oeffnet die App direkt mit den Mock-Daten (fuer Simulator-
+        // Screenshots ohne echtes Konto). In Release-Builds nicht vorhanden.
+        if ProcessInfo.processInfo.arguments.contains("-demoMode") {
+            self.apiClient = MockAPIClient()
+            self.isAuthenticated = true
+            return
+        }
+        #endif
         if let token = SessionStore.loadToken() {
             self.apiClient = RemoteAPIClient(token: token)
             self.isAuthenticated = true

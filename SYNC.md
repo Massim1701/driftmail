@@ -16,7 +16,7 @@ Format pro Eintrag: [Datum] [Quelle: web/terminal] [Track] — Text
 | 0 — Contracts | contracts/ | fertig | 2026-09-08 |
 | A — Backend | backend/ | fertig (inkl. echter Track-B-Integration) | 2026-09-19 |
 | B — Sicherheits-Klassifikation | security-classification/ | fertig | 2026-09-19 |
-| C — iOS App | ios/ | fertig (Redesign "ruhig & warm" steht noch aus) | 2026-09-28 |
+| C — iOS App | ios/ | fertig (Redesign "ruhig & warm" umgesetzt, Liste/Detail noch per Hand prüfen) | 2026-09-28 |
 | D — Vertrag & Reminder | contracts-logic/ | fertig | 2026-09-08 |
 | E — Antwort & Signatur | mail-actions/ | fertig | 2026-09-09 |
 | F — Web-Fallback-UI | web/ | fertig (Redesign "ruhig & warm" umgesetzt) | 2026-09-28 |
@@ -1300,3 +1300,13 @@ Umgebung dieses Macs (fuer die naechste Terminal-Sitzung): lokales Backend ohne 
 - **Web + iOS:** beim Weiterleiten erscheinen die Original-Anhänge (standardmäßig ausgewählt, einzeln abwählbar, gesperrte nur als Hinweis "wird nicht mitgeschickt"); Fehler 409/410 zeigen den Server-Text.
 - **Verifiziert:** kompletter Backend-Smoketest grün (erstmals auf diesem Mac, mit echtem ClamAV), inkl. neuer Fälle; `tsc`/`oxlint` Web ohne neue Warnungen, Web-Dialog per Screenshot geprüft; iOS BUILD SUCCEEDED. **Nicht geprüft:** echter Versand gegen Gmail/IMAP/POP3 (keine Testkonten hier) -- bitte einmal mit echtem Konto eine Mail mit Anhang schicken und eine mit Anhang weiterleiten.
 - **Umgebung dieses Macs:** ClamAV per Homebrew installiert, Signaturen geladen, `clamd` läuft lokal auf `/tmp/clamd.sock` (nach einem Neustart neu starten: `/opt/homebrew/opt/clamav/sbin/clamd --config-file=/opt/homebrew/etc/clamav/clamd.conf`).
+
+[2026-09-28] [terminal] [C] — **iOS-Redesign "ruhig & warm"** (gleiche Richtung wie Web, Commit f41c021).
+- **Tokens** (`DesignTokens.swift`): Palette, Sicherheitsfarben mit Dunkel-Werten, Schriftgrößen, Radien 10/14, `Typography.display()` = Serif (New York); `brand`/`selectedBackground`/`selectedText` folgen dem Akzent-Theme.
+- **Neu `DesignSystem/SeasonalTwig.swift`:** saisonaler Zweig (dieselben Formen/Zeiträume/Farben wie Web, per kleinem SVG-Pfad-Übersetzer in `Canvas` gezeichnet, keine SF Symbols), `BrandMarkView` (Schild-Logo wie App-Icon). Animation nur im leeren Eingang, respektiert "Bewegung reduzieren".
+- **Anmeldung:** Zweig, Logo + Serif-Wortmarke, Leitsatz. **App-weit:** Akzentfarbe als `.tint` in `RootView` (keine System-blauen Links mehr), Navigations-Titel in Serif (`DriftmailApp.init`).
+- **Ordnerliste:** einheitliche Linien-Symbole (Facetten-Grafiken + blauer Gesendet-Flieger entfernt, Assets gelöscht -- Abweichung von den Icon-Aufträgen vom 24./25.09., durch den freigegebenen Redesign-Entwurf ersetzt), Quarantäne in Bernstein mit Zähler-Pille, Zweig unter der Liste.
+- **Nachrichtenliste:** Initialen-Avatare (feste ruhige Töne je Absender, wie Web), ruhigeres Datum, Sicherheits-/Nudge-Hinweise als Chips. **Leerer Eingang:** großer Zweig + "Alles erledigt." + Satz der Jahreszeit (WEB_INBOX.md 27.09. Punkt 4 damit auch auf iOS).
+- **Detailansicht:** Betreff in Serif, Absender mit Avatar, An/Cc.
+- **Entwicklungshilfe:** Startparameter `-demoMode` (nur Debug-Builds) öffnet die App direkt mit Mock-Daten -- für Simulator-Screenshots ohne Konto.
+- **Verifiziert:** BUILD SUCCEEDED; im Simulator per Screenshot geprüft: Anmeldung (hell/dunkel), Ordnerliste (hell/dunkel). **Nicht geprüft:** Nachrichtenliste, Detailansicht, leerer Eingang (Navigation per Tippen im Simulator hier nicht automatisierbar) -- bitte einmal durchklicken.
