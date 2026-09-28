@@ -1430,3 +1430,11 @@ Umfang: AppIcon.appiconset ersetzen (1024px Master plus alle von Xcode benoetigt
 **4. Leerer-Eingang-Moment mit dem botanischen Zweig (Web + iOS):** wenn der Eingang leer ist, freundlicher Leerzustand statt leerer Flaeche: der kleine Zweig aus der Sidebar (siehe Eintrag "NEUE DESIGN-RICHTUNG - Frisches Gruen") wird gross und zart animiert, z.B. eine Knospe/Bluete, die aufgeht, dazu ein kurzer ruhiger Satz ("Alles erledigt."). Dezent, kein Konfetti. prefers-reduced-motion beachten (dann statisch). Die Farben folgen dem gewaehlten Theme-Akzent.
 
 Bitte Reihenfolge selbst einteilen (Empfehlung: 2, 4, 1, 3), pro Punkt in SYNC.md dokumentieren, was umgesetzt ist und was ohne Xcode/Test nicht geprueft werden konnte. Kein Contract-Bruch erwartet; falls Punkt 2 ein neues Feld braucht, bitte kurz im Contract vermerken.
+
+
+[2026-09-27] [offen] [FEHLT - Weiterleiten bei empfangenen Mails] [Web + iOS pruefen, iOS vermutlich betroffen] — Massimo: Bei einer empfangenen Mail kann man nur antworten, eine Weiterleiten-Funktion ist nicht vorhanden. Hinweis: Die Web-Detailansicht zeigt laut Screenshot vom 27.09. einen Knopf "Weiterleiten" neben "Antworten" (ob er funktioniert, ist unklar); die iOS-Detailansicht bietet vermutlich nur "Antworten". Bitte auf BEIDEN Plattformen pruefen, was fehlt bzw. nicht funktioniert, und ergaenzen:
+- Weiterleiten-Aktion in der Detailansicht einer empfangenen Mail, neben Antworten.
+- Der Compose-Bildschirm oeffnet mit Betreff "Fwd: <Betreff>" (Praefix konsistent zum bestehenden "Re:"; Fwd:/WG: werden bei der Thread-Erkennung bereits als Praefix ignoriert), das Original als zitierter Block im Text (Absender, Datum, Betreff, An, Inhalt), leerer Empfaenger, Fokus auf dem An-Feld.
+- Anhaenge der Originalmail werden mitgenommen. Als gesperrt eingestufte Anhaenge (scan_status malicious/blocked_type) NICHT mitschicken.
+- Senden ueber den bestehenden Compose-/Undo-Send-Ablauf, KEIN Auto-Send.
+Falls dafuer eine Contract-Ergaenzung noetig ist (z.B. Weiterleiten mit vorhandenen Anhaengen), bitte kurz in SYNC.md vermerken.
