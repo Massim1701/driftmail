@@ -9,7 +9,7 @@
 // nicht Teil dieses Skeletons — siehe README "Annahmen".
 
 import type { MailAccountRecord, SystemFolderKey } from "../types";
-import type { MailAdapter } from "./types";
+import type { FolderCopies, MailAdapter } from "./types";
 import { decryptCredentials } from "../auth/credentialsEncryption";
 import { FixtureMailAdapter } from "./fixtureAdapter";
 import { GmailAdapter } from "./gmailAdapter";
@@ -450,11 +450,23 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
       imported++;
     }
 
+    // [2026-09-28] Kopien aus den weiteren Ordnern beim Anbieter (eigene
+    // Ordner/Gmail-Labels, Gesendet), siehe importFolderCopies unten. Ein
+    // Fehler hier darf den normalen Abruf nicht als fehlgeschlagen markieren.
+    let copied = 0;
+    if (adapter.fetchFolderCopies) {
+      try {
+        copied = await importFolderCopies(account, adapter, ai);
+      } catch (err) {
+        console.warn(`[sync] ${account.emailAddress}: Ordner-Import fehlgeschlagen: ${(err as Error).message}`);
+      }
+    }
+
     // Eine Zeile pro Abruf statt einer pro Nachricht: reicht, um "laeuft der
     // Abruf ueberhaupt und was kam an" zu beantworten (genau die Frage, die
     // beim Geraete-Test am 22./23.09. offen war), ohne die Konsole zu fluten.
     console.log(
-      `[sync] ${account.emailAddress}: ${fetched.length} vom Server geholt, ${imported} neu importiert, ${skippedKnown} bereits bekannt, ${autoDeleted} automatisch geloescht`,
+      `[sync] ${account.emailAddress}: ${fetched.length} vom Server geholt, ${imported} neu importiert, ${skippedKnown} bereits bekannt, ${autoDeleted} automatisch geloescht${copied ? `, ${copied} aus weiteren Ordnern kopiert` : ""}`,
     );
 
     account.syncStatus = "ok";
@@ -467,4 +479,103 @@ export async function syncAccount(account: MailAccountRecord, ai: AiAdapter, lim
   }
 
   return { imported, autoDeleted };
+}
+
+// [2026-09-28] Massimo: "die Mails, die man schon gespeichert hat und in den
+// Ordnern bei Gmail sind, als Kopien mit importieren". Eigene Ordner beim
+// Anbieter werden zu gleichnamigen eigenen Ordnern in driftmail (einmal
+// angelegt, danach wiederverwendet), der Gesendet-Ordner fuellt den lokalen
+// "gesendet". Grosse Postfaecher schonend: je Ordner die neuesten 200 Mails
+// ansehen, je Abruf hoechstens 50 neue uebernehmen -- der Rest folgt bei
+// den naechsten Abrufen. Kopien werden NICHT in Quarantaene/Spam
+// verschoben, nicht auto-geloescht und loesen keine Abmeldung/
+// Abwesenheitsantwort aus (der User hat sie selbst abgelegt); die
+// Sicherheitspruefung (Kennzeichen) und der Anhang-Scan laufen trotzdem.
+const FOLDER_SCAN_PER_FOLDER = 200;
+const FOLDER_IMPORT_PER_SYNC = 50;
+
+async function importFolderCopies(account: MailAccountRecord, adapter: MailAdapter, ai: AiAdapter): Promise<number> {
+  const isKnown = async (messageIdHeader: string) =>
+    Boolean(
+      (await store.findMessageByHeader(account.id, messageIdHeader)) ??
+        (await store.findMessageByHeader(account.id, `sent-${messageIdHeader}`)) ??
+        (await store.wasAutoDeleted(account.id, messageIdHeader)),
+    );
+  const folders = await adapter.fetchFolderCopies!({
+    scanPerFolder: FOLDER_SCAN_PER_FOLDER,
+    importPerFolder: FOLDER_IMPORT_PER_SYNC,
+    isKnown,
+  });
+
+  let copied = 0;
+  for (const remote of folders) {
+    if (remote.mails.length === 0) continue;
+    const folderId = await targetFolderFor(account.id, remote, accountLabelFor(account.emailAddress));
+    for (const mail of remote.mails) {
+      // Zweite Pruefung: dieselbe Mail kann in mehreren Ordnern liegen
+      // (Gmail-Labels) -- dann nur die erste Kopie behalten.
+      if (await isKnown(mail.messageIdHeader)) continue;
+      // Eigene gesendete Mails bekommen (wie beim Versand aus der App, siehe
+      // sendMessage.ts) keine Sicherheitsbewertung -- sonst stuende bei der
+      // eigenen Post "Unklar".
+      const security = remote.kind === "sent" ? null : await ai.analyzeMail(mail.bodyText ?? "", mail.rawHeaders);
+      const message = await store.insertMessage({
+        mailAccountId: account.id,
+        messageIdHeader: mail.messageIdHeader,
+        providerMessageId: null,
+        fromAddress: mail.fromAddress,
+        fromDisplayName: mail.fromDisplayName,
+        replyToAddress: mail.replyToAddress,
+        subject: mail.subject,
+        bodyText: mail.bodyText,
+        bodyHtml: mail.bodyHtml,
+        receivedAt: mail.receivedAt,
+        folderId,
+        rawHeaders: mail.rawHeaders,
+        inReplyToMessageId: null,
+        confidentialUntil: null,
+        snoozedUntil: null,
+      });
+      if (security) await store.setMessageSecurity({ messageId: message.id, ...security, analyzedAt: new Date().toISOString() });
+      if (mail.attachments.length > 0) await scanAndStoreIncomingAttachments(message.id, mail.attachments);
+      copied++;
+    }
+  }
+  return copied;
+}
+
+// Heisst ein Anbieter-Ordner wie ein driftmail-Systemordner ("Sonstiges",
+// "Papierkorb"), bekommt die Kopie den Anbieter angehaengt -- sonst stuende
+// derselbe Name zweimal in der Seitenleiste.
+export function importedFolderName(name: string, existing: { name: string; isSystem: boolean }[], accountLabel: string): string {
+  const clean = name.slice(0, 90);
+  const clashes = existing.some((f) => f.isSystem && f.name.toLowerCase() === clean.toLowerCase());
+  return clashes ? `${clean} (${accountLabel})` : clean;
+}
+
+// "max@gmail.com" -> "Gmail", sonst die Domain.
+export function accountLabelFor(emailAddress: string): string {
+  const domain = emailAddress.split("@")[1]?.toLowerCase() ?? "";
+  if (domain === "gmail.com" || domain === "googlemail.com") return "Gmail";
+  return domain || "importiert";
+}
+
+async function targetFolderFor(accountId: string, remote: FolderCopies, accountLabel: string): Promise<string> {
+  if (remote.kind === "sent") {
+    const sent = await store.getSystemFolder(accountId, "gesendet");
+    if (sent) return sent.id;
+  }
+  const existing = await store.listFolders(accountId);
+  const name = importedFolderName(remote.name, existing, accountLabel);
+  const same = existing.find((f) => !f.isSystem && f.name.toLowerCase() === name.toLowerCase());
+  if (same) return same.id;
+  const created = await store.createFolder({
+    mailAccountId: accountId,
+    name,
+    icon: "folder",
+    isSystem: false,
+    systemKey: null,
+    sortOrder: existing.length,
+  });
+  return created.id;
 }

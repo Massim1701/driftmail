@@ -45,6 +45,16 @@ export interface FetchedMail {
   attachments: FetchedAttachment[];
 }
 
+// [2026-09-28] Ergebnis von MailAdapter.fetchFolderCopies: ein Ordner beim
+// Anbieter mit seinen (neuen) Mails. `kind: "sent"` landet im lokalen
+// Gesendet-Ordner, `"custom"` in einem gleichnamigen eigenen Ordner.
+export interface FolderCopies {
+  path: string;
+  name: string;
+  kind: "sent" | "custom";
+  mails: FetchedMail[];
+}
+
 // POST /messages/send (WEB_INBOX.md 09.09. "Fehlender Senden-Endpunkt"):
 // Versand laeuft ausschliesslich ueber die Provider-API des verbundenen
 // Kontos (kein eigener Mailserver, gleiches Prinzip wie beim Lesen).
@@ -111,6 +121,20 @@ export interface MailAdapter {
    * Verschieben in den Papierkorb wiederfindet (dort hat sie eine neue UID).
    */
   permanentlyDeleteMessage(providerMessageId: string, messageIdHeader?: string): Promise<void>;
+
+  /**
+   * [2026-09-28] Optional (nur IMAP): Kopien aus den weiteren Ordnern des
+   * Anbieters -- eigene Ordner (z.B. Gmail-Labels) und Gesendet. Nur Mails,
+   * die `isKnown` noch nicht kennt; pro Ordner hoechstens die neuesten
+   * `scanPerFolder`, davon hoechstens `importPerFolder` neue je Aufruf.
+   * Kopien haben `providerMessageId = null`: in driftmail loeschen aendert
+   * beim Anbieter nichts.
+   */
+  fetchFolderCopies?(options: {
+    scanPerFolder: number;
+    importPerFolder: number;
+    isKnown: (messageIdHeader: string) => Promise<boolean>;
+  }): Promise<FolderCopies[]>;
 
   /**
    * [2026-09-28] Weiterleiten mit Original-Anhaengen: holt die Anhaenge

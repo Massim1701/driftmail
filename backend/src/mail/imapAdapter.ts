@@ -9,7 +9,7 @@ import { randomUUID } from "node:crypto";
 import nodemailer from "nodemailer";
 import type Mail from "nodemailer/lib/mailer";
 import MailComposer from "nodemailer/lib/mail-composer";
-import type { FetchedAttachment, FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
+import type { FetchedAttachment, FetchedMail, FolderCopies, MailAdapter, SendMailInput, SendMailResult } from "./types";
 
 export interface ImapCredentials {
   host: string;
@@ -34,6 +34,46 @@ export interface ImapCredentials {
    * weil der Anmeldename auch nur der Teil vor dem "@" sein kann. */
   emailAddress?: string;
 }
+
+// Rohe Mail -> FetchedMail (gemeinsam fuer Posteingang und Ordner-Kopien).
+async function toFetchedMail(source: Buffer, providerMessageId: string | null): Promise<FetchedMail> {
+  const parsed = await simpleParser(source);
+  const rawHeaders: Record<string, string> = {};
+  parsed.headers.forEach((value: unknown, key: string) => {
+    rawHeaders[key] = typeof value === "string" ? value : JSON.stringify(value);
+  });
+  const fromAddr = parsed.from?.value?.[0];
+  // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan":
+  // mailparser liefert Anhaenge (inkl. Bytes) bereits fertig geparst mit.
+  const attachments: FetchedAttachment[] = parsed.attachments.map((a) => ({
+    filename: a.filename ?? "unbenannt",
+    mimeType: a.contentType || null,
+    content: a.content,
+  }));
+  return {
+    messageIdHeader: parsed.messageId ?? `imap-${providerMessageId ?? randomUUID()}`,
+    providerMessageId,
+    fromAddress: fromAddr?.address ?? "unbekannt@unbekannt",
+    fromDisplayName: fromAddr?.name || null,
+    replyToAddress: parsed.replyTo?.value?.[0]?.address ?? null,
+    subject: parsed.subject ?? null,
+    bodyText: parsed.text ?? null,
+    // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies":
+    // mailparser liefert `.html` bereits fertig geparst.
+    bodyHtml: parsed.html || null,
+    receivedAt: (parsed.date ?? new Date()).toISOString(),
+    rawHeaders,
+    attachments,
+  };
+}
+
+// [2026-09-28] Ordner, die NICHT als Kopie importiert werden: Posteingang
+// (laeuft ueber den normalen Abruf), Papierkorb, Spam, Entwuerfe und
+// Gmails Sammel-/Filteransichten (Alle Nachrichten, Markiert, Wichtig) --
+// die enthalten nur Mails, die es anderswo schon gibt. "Archiv" (\\Archive,
+// z.B. iCloud/Outlook) wird dagegen importiert: dort liegen echte,
+// abgelegte Mails.
+const SKIPPED_SPECIAL_USE = new Set(["\\Trash", "\\Junk", "\\Drafts", "\\All", "\\Flagged", "\\Important"]);
 
 export class ImapAdapter implements MailAdapter {
   constructor(private creds: ImapCredentials) {}
@@ -87,38 +127,7 @@ export class ImapAdapter implements MailAdapter {
         const from = Math.max(1, total - limit + 1);
         for await (const message of client.fetch(`${from}:${total}`, { source: true })) {
           if (!message.source) continue;
-          const parsed = await simpleParser(message.source);
-          const rawHeaders: Record<string, string> = {};
-          parsed.headers.forEach((value: unknown, key: string) => {
-            rawHeaders[key] = typeof value === "string" ? value : JSON.stringify(value);
-          });
-
-          const fromAddr = parsed.from?.value?.[0];
-          // [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan":
-          // mailparser liefert Anhaenge (inkl. Bytes) bereits fertig geparst
-          // mit -- kein zusaetzlicher Fetch-Schritt noetig.
-          const attachments: FetchedAttachment[] = parsed.attachments.map((a) => ({
-            filename: a.filename ?? "unbenannt",
-            mimeType: a.contentType || null,
-            content: a.content,
-          }));
-          results.push({
-            messageIdHeader: parsed.messageId ?? `imap-${message.uid}`,
-            providerMessageId: String(message.uid),
-            fromAddress: fromAddr?.address ?? "unbekannt@unbekannt",
-            fromDisplayName: fromAddr?.name || null,
-            replyToAddress: parsed.replyTo?.value?.[0]?.address ?? null,
-            subject: parsed.subject ?? null,
-            bodyText: parsed.text ?? null,
-            // [2026-09-21] "NEUE GRUNDLAGE - HTML-Rendering des Mail-Bodies":
-            // mailparser liefert `.html` bereits fertig geparst (string bei
-            // vorhandenem HTML-Teil, sonst `false`) -- keine eigene
-            // MIME-Auswertung noetig, anders als bei Gmail (siehe dort).
-            bodyHtml: parsed.html || null,
-            receivedAt: (parsed.date ?? new Date()).toISOString(),
-            rawHeaders,
-            attachments,
-          });
+          results.push(await toFetchedMail(message.source, String(message.uid)));
         }
       } finally {
         lock.release();
@@ -288,4 +297,88 @@ export class ImapAdapter implements MailAdapter {
       await client.logout();
     }
   }
+
+  // [2026-09-28] Massimo: "die Mails, die man schon gespeichert hat und in
+  // den Ordnern bei Gmail sind, als Kopien mit importieren". Siehe
+  // MailAdapter.fetchFolderCopies. Nur lesend: am Postfach aendert sich
+  // nichts (kein Flag, kein Verschieben).
+  async fetchFolderCopies(options: {
+    scanPerFolder: number;
+    importPerFolder: number;
+    isKnown: (messageIdHeader: string) => Promise<boolean>;
+  }): Promise<FolderCopies[]> {
+    const client = this.client();
+    await client.connect();
+    const result: FolderCopies[] = [];
+    try {
+      const boxes = await client.list();
+      for (const box of boxes) {
+        if (box.path.toUpperCase() === "INBOX") continue;
+        if (box.flags?.has("\\Noselect") || box.flags?.has("\\NonExistent")) continue;
+        if (box.specialUse && SKIPPED_SPECIAL_USE.has(box.specialUse)) continue;
+        // Gmail meldet "Wichtig"/"Markiert" usw. teils nur als Flag, nicht
+        // als specialUse (z.B. \\Important ist kein RFC-6154-Kennzeichen).
+        if ([...(box.flags ?? [])].some((f) => SKIPPED_SPECIAL_USE.has(f))) continue;
+        const kind = box.specialUse === "\\Sent" ? "sent" : "custom";
+        // Ein einzelner widerspenstiger Ordner darf den Import der anderen
+        // nicht verhindern -- nur protokollieren und weiter.
+        let lock: Awaited<ReturnType<ImapFlow["getMailboxLock"]>>;
+        try {
+          lock = await client.getMailboxLock(box.path, { readOnly: true });
+        } catch (err) {
+          console.warn(`[imap] Ordner "${box.path}" nicht lesbar: ${(err as { responseText?: string }).responseText ?? (err as Error).message}`);
+          continue;
+        }
+        try {
+          const total = client.mailbox && "exists" in client.mailbox ? client.mailbox.exists : 0;
+          if (total === 0) continue;
+          const from = Math.max(1, total - options.scanPerFolder + 1);
+          // Erst nur die Umschlaege (billig), dann nur fuer unbekannte Mails
+          // den ganzen Inhalt -- neueste zuerst.
+          const candidates: { uid: number; messageId: string }[] = [];
+          for await (const m of client.fetch(`${from}:${total}`, { envelope: true, uid: true })) {
+            const messageId = m.envelope?.messageId;
+            if (messageId) candidates.push({ uid: m.uid, messageId });
+          }
+          candidates.reverse();
+          const wanted: number[] = [];
+          for (const c of candidates) {
+            if (wanted.length >= options.importPerFolder) break;
+            if (!(await options.isKnown(c.messageId))) wanted.push(c.uid);
+          }
+          const mails: FetchedMail[] = [];
+          if (wanted.length > 0) {
+            for await (const m of client.fetch(wanted.join(","), { source: true }, { uid: true })) {
+              if (m.source) mails.push(await toFetchedMail(m.source, null));
+            }
+          }
+          result.push({ path: box.path, name: folderDisplayName(box.path, box.delimiter), kind, mails });
+        } catch (err) {
+          console.warn(`[imap] Ordner "${box.path}" uebersprungen: ${(err as { responseText?: string }).responseText ?? (err as Error).message}`);
+        } finally {
+          lock.release();
+        }
+      }
+    } finally {
+      await client.logout();
+    }
+    return result;
+  }
+}
+
+// "INBOX.Rechnungen" -> "Rechnungen", "Arbeit/Projekt" -> "Arbeit / Projekt".
+// [2026-09-28] Gmails Sammelpraefix "[Gmail]"/"[Google Mail]" faellt weg
+// ("[Google Mail]/Amazon" und "[Google Mail]Amazon" -> "Amazon"); allein
+// stehend wird es zu "Google Mail".
+export function folderDisplayName(path: string, delimiter: string | null | undefined): string {
+  const parts = (delimiter ? path.split(delimiter) : [path]).map((p) => p.trim()).filter(Boolean);
+  if (parts.length > 1 && parts[0].toUpperCase() === "INBOX") parts.shift();
+  const gmailPrefix = /^\[(gmail|google mail)\]\s*/i;
+  if (parts.length > 0 && gmailPrefix.test(parts[0])) {
+    const rest = parts[0].replace(gmailPrefix, "");
+    if (rest) parts[0] = rest;
+    else if (parts.length > 1) parts.shift();
+    else parts[0] = "Google Mail";
+  }
+  return parts.join(" / ").trim() || path;
 }
