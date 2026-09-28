@@ -176,7 +176,36 @@ export class Pop3Adapter implements MailAdapter {
       text: input.bodyText,
       inReplyTo: input.inReplyToMessageIdHeader ?? undefined,
       references: input.inReplyToMessageIdHeader ?? undefined,
+      // [2026-09-28] Anhaenge wirklich mitschicken (vorher nie).
+      attachments: input.attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.mimeType ?? undefined,
+      })),
     });
     return { providerMessageId: info.messageId };
+  }
+
+  // [2026-09-28] Weiterleiten mit Original-Anhaengen: Nachricht per UIDL
+  // wiederfinden (wie permanentlyDeleteMessage) und erneut abrufen -- POP3
+  // laesst Mails standardmaessig auf dem Server ("leave a copy"), siehe
+  // Datei-Kopfkommentar. Ist sie dort inzwischen weg, wirft der Aufruf.
+  async fetchAttachments(providerMessageId: string): Promise<FetchedAttachment[]> {
+    const client = await this.client();
+    try {
+      const uidlList = (await client.UIDL()) as string[][];
+      const match = uidlList.find(([, uid]) => uid === providerMessageId);
+      if (!match) throw new Error(`POP3: Nachricht ${providerMessageId} nicht mehr auf dem Server`);
+      const raw = await client.RETR(Number(match[0]));
+      const source = typeof raw === "string" ? raw : await (await loadPop3Command()).stream2String(raw);
+      const parsed = await simpleParser(source);
+      return parsed.attachments.map((a) => ({
+        filename: a.filename ?? "unbenannt",
+        mimeType: a.contentType || null,
+        content: a.content,
+      }));
+    } finally {
+      await client.QUIT().catch(() => {});
+    }
   }
 }

@@ -90,6 +90,7 @@ export async function maybeSendAbsenceResponse(
       subject: responder.subject ?? "Automatische Abwesenheitsantwort",
       bodyText,
       inReplyToMessageIdHeader: null,
+      attachments: [],
     });
     await store.recordAbsenceResponderSent(account.userId, fromAddress, new Date().toISOString());
   } catch (err) {

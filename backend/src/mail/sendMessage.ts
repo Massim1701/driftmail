@@ -9,8 +9,12 @@
 
 import { store } from "../db/store";
 import { checkDraftForPhishing } from "@driftmail/security-classification";
+import { decryptBytes } from "../auth/credentialsEncryption";
+import { attachmentScanner } from "../lookups";
+import type { MessageAttachmentRecord } from "../types";
 import { adapterForAccount } from "./sync";
 import { checkSendAbuse, computeBodyHash } from "./sendAbuseDetection";
+import type { OutgoingAttachment } from "./types";
 
 const SEND_BODY_URL_REGEX = /https?:\/\/[^\s<>"]+/g;
 
@@ -24,6 +28,10 @@ export interface SendMessageInput {
   accountId?: unknown;
   confidentialUntil?: unknown;
   attachmentIds?: unknown;
+  /** [2026-09-28] Weiterleiten: IDs von Anhaengen EMPFANGENER Nachrichten
+   * (MessageAttachment.id aus GET /messages/{id}), die mitgeschickt werden
+   * sollen. Inhalt wird im Moment des Sendens frisch beim Provider geholt. */
+  forwardAttachmentIds?: unknown;
   draftId?: unknown;
   /** [2026-09-25] WEB_INBOX.md 08.09. "Bot/Human-Missbrauchserkennung beim
    * Versand", siehe sendAbuseDetection.ts -- optional, nur bei Antworten
@@ -90,11 +98,21 @@ export async function sendMessageForUser(userId: string, body: SendMessageInput)
     };
   }
 
+  // [2026-09-28] Anhaenge werden jetzt wirklich verschickt (SYNC.md 28.09.).
+  // Vorher wurde hier nur scan_status geprueft und nichts mitgeschickt --
+  // und es fehlte die Pruefung, wem ein Anhang gehoert.
   const attachmentIds = stringArray(body.attachmentIds);
+  const outgoingAttachments: OutgoingAttachment[] = [];
   for (const attachmentId of attachmentIds) {
     const attachment = await store.getAttachment(attachmentId);
     if (!attachment) {
       return { ok: false, status: 400, body: { error: `unbekannte attachmentId: ${attachmentId}` } };
+    }
+    if (attachment.uploadedByUserId !== userId || attachment.messageId !== null) {
+      // Fremder Upload, oder ein Anhang, der schon an einer Nachricht haengt
+      // (empfangen oder bereits verschickt) -- dafuer gibt es
+      // forwardAttachmentIds.
+      return { ok: false, status: 400, body: { error: `attachmentId ${attachmentId} ist kein eigener, noch nicht verschickter Upload` } };
     }
     if (attachment.scanStatus !== "clean") {
       return {
@@ -102,6 +120,80 @@ export async function sendMessageForUser(userId: string, body: SendMessageInput)
         status: 422,
         body: { blocked: true, reason: `Anhang "${attachment.filename}" ist nicht freigegeben (Status: ${attachment.scanStatus})` },
       };
+    }
+    const pending = await store.getPendingAttachmentContent(attachmentId);
+    if (!pending || pending.expiresAt <= new Date().toISOString()) {
+      return {
+        ok: false,
+        status: 410,
+        body: { error: `Anhang "${attachment.filename}" ist abgelaufen (max. 24 Stunden gespeichert) -- bitte erneut anhängen` },
+      };
+    }
+    outgoingAttachments.push({ filename: attachment.filename, mimeType: attachment.mimeType, content: decryptBytes(pending.contentEncrypted) });
+  }
+
+  const forwardAttachmentIds = stringArray(body.forwardAttachmentIds);
+  const forwardedRecords: MessageAttachmentRecord[] = [];
+  const forwardByMessage = new Map<string, MessageAttachmentRecord[]>();
+  for (const attachmentId of forwardAttachmentIds) {
+    const attachment = await store.getAttachment(attachmentId);
+    const sourceMessage = attachment?.messageId ? await store.getMessage(attachment.messageId) : undefined;
+    const sourceAccount = sourceMessage ? await store.getMailAccount(sourceMessage.mailAccountId) : undefined;
+    if (!attachment || !sourceMessage || !sourceAccount || sourceAccount.userId !== userId) {
+      return { ok: false, status: 400, body: { error: `unbekannter Anhang zum Weiterleiten: ${attachmentId}` } };
+    }
+    if (attachment.scanStatus !== "clean" || attachment.isDangerousType) {
+      return {
+        ok: false,
+        status: 422,
+        body: { blocked: true, reason: `Anhang "${attachment.filename}" ist gesperrt und wird nicht weitergeleitet` },
+      };
+    }
+    forwardedRecords.push(attachment);
+    const list = forwardByMessage.get(sourceMessage.id) ?? [];
+    list.push(attachment);
+    forwardByMessage.set(sourceMessage.id, list);
+  }
+  for (const [sourceMessageId, records] of forwardByMessage) {
+    const sourceMessage = (await store.getMessage(sourceMessageId))!;
+    const sourceAccount = (await store.getMailAccount(sourceMessage.mailAccountId))!;
+    const unavailable = {
+      ok: false as const,
+      status: 409,
+      body: { error: "Die Original-Anhänge sind beim Mail-Anbieter nicht mehr verfügbar" },
+    };
+    if (!sourceMessage.providerMessageId) return unavailable;
+    let fetched;
+    try {
+      fetched = await adapterForAccount(sourceAccount).fetchAttachments(sourceMessage.providerMessageId);
+    } catch (err) {
+      console.error("Original-Anhaenge konnten nicht geholt werden:", err);
+      return unavailable;
+    }
+    for (const record of records) {
+      // Zuordnung ueber Dateiname + Groesse (beim Import gespeichert), nicht
+      // ueber die Position -- die Reihenfolge der gespeicherten Datensaetze
+      // ist in Postgres nicht garantiert.
+      const match =
+        fetched.find((f) => f.filename === record.filename && f.content.length === record.sizeBytes) ??
+        fetched.find((f) => f.filename === record.filename);
+      if (!match) return unavailable;
+      // Erneut scannen: der Inhalt kommt frisch vom Provider, nicht aus der
+      // damals geprueften Kopie.
+      const rescan = await attachmentScanner.scan({
+        filename: match.filename,
+        mimeType: match.mimeType,
+        sizeBytes: match.content.length,
+        buffer: match.content,
+      });
+      if (rescan.scanStatus !== "clean" || rescan.isDangerousType) {
+        return {
+          ok: false,
+          status: 422,
+          body: { blocked: true, reason: `Anhang "${record.filename}" ist gesperrt und wird nicht weitergeleitet` },
+        };
+      }
+      outgoingAttachments.push({ filename: match.filename, mimeType: match.mimeType, content: match.content });
     }
   }
 
@@ -122,7 +214,15 @@ export async function sendMessageForUser(userId: string, body: SendMessageInput)
   const adapter = adapterForAccount(account);
   let sentMessageId: string;
   try {
-    const result = await adapter.sendMail({ to, cc, bcc, subject, bodyText, inReplyToMessageIdHeader: inReplyToHeader });
+    const result = await adapter.sendMail({
+      to,
+      cc,
+      bcc,
+      subject,
+      bodyText,
+      inReplyToMessageIdHeader: inReplyToHeader,
+      attachments: outgoingAttachments,
+    });
     sentMessageId = result.providerMessageId;
   } catch (err) {
     console.error("Versand beim Mail-Provider fehlgeschlagen:", err);
@@ -151,7 +251,24 @@ export async function sendMessageForUser(userId: string, body: SendMessageInput)
       snoozedUntil: null,
     });
     if (attachmentIds.length > 0) await store.linkAttachmentsToMessage(attachmentIds, sentMessage.id);
+    // Weitergeleitete Anhaenge bleiben am Original; die Gesendet-Kopie
+    // bekommt eigene Metadaten-Eintraege (ohne Inhalt).
+    for (const record of forwardedRecords) {
+      await store.insertAttachment({
+        messageId: sentMessage.id,
+        uploadedByUserId: userId,
+        filename: record.filename,
+        mimeType: record.mimeType,
+        sizeBytes: record.sizeBytes,
+        scanStatus: record.scanStatus,
+        isDangerousType: record.isDangerousType,
+        scannedAt: new Date().toISOString(),
+        containsSensitiveDocument: record.containsSensitiveDocument,
+      });
+    }
   }
+  // Inhalt hochgeladener Anhaenge wird nach dem Versand sofort geloescht.
+  await store.deletePendingAttachmentContent(attachmentIds);
 
   const draftId = typeof body.draftId === "string" ? body.draftId : null;
   if (draftId) await store.deleteDraft(draftId);

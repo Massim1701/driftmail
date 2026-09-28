@@ -131,6 +131,14 @@ export async function runDueScheduledSends(): Promise<void> {
   );
 }
 
+/** [2026-09-28] Hochgeladene Anhaenge liegen hoechstens 24 h verschluesselt
+ * auf dem Server (siehe routes/attachments.ts) -- danach hier geloescht,
+ * auch wenn nie verschickt wurde. */
+export async function purgeExpiredPendingAttachments(): Promise<void> {
+  const removed = await store.deleteExpiredPendingAttachmentContent(new Date().toISOString());
+  if (removed > 0) console.log(`[attachments] ${removed} abgelaufene(r) Anhang-Inhalt(e) geloescht`);
+}
+
 /** Startet den periodischen Sync (Intervall per `MAIL_SYNC_INTERVAL_MINUTES`
  * konfigurierbar, Default 3 Minuten -- im vom Auftrag vorgeschlagenen
  * 2-5-Minuten-Rahmen). Gibt den Timer zurueck, falls ein Aufrufer ihn je
@@ -144,5 +152,6 @@ export function startPeriodicSync(): ReturnType<typeof setInterval> {
     void runSyncForAllAccounts();
     void runDataBreachChecks();
     void runDueScheduledSends();
+    void purgeExpiredPendingAttachments();
   }, ms);
 }

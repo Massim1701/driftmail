@@ -1,14 +1,15 @@
 import { Router } from "express";
 import multer from "multer";
 import { ocrAdapter, scanForSensitiveDocument } from "../attachments";
+import { encryptBytes } from "../auth/credentialsEncryption";
 import { store } from "../db/store";
 import { attachmentScanner } from "../lookups";
 
 export const attachmentsRouter = Router();
 
 // Reine In-Memory-Zwischenspeicherung des Datei-Uploads für multer (kein
-// eigener Multer-Diskspeicher) -- der Inhalt selbst wird NICHT dauerhaft
-// gespeichert, siehe Kommentar an der Route unten. 15 MB Limit als
+// eigener Multer-Diskspeicher) -- der Inhalt selbst wird nur kurz und
+// verschluesselt aufbewahrt, siehe Kommentar an der Route unten. 15 MB Limit als
 // willkürliche, aber plausible Beispielgrenze (kein Wert aus dem Contract).
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
@@ -23,17 +24,15 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 // ohnehin im Speicher, `file.buffer`), nicht mehr nur gegen Metadaten --
 // siehe attachmentScanClamAv.ts.
 //
-// Grenze (weiterhin bewusst, nicht Teil dieses Schritts): der Dateiinhalt
-// selbst wird nach dem Scan trotzdem NICHT dauerhaft gespeichert (weder im
-// Store noch sonstwo) -- message_attachments hat laut Contract keine
-// content-Spalte (eine echte Implementierung würde Objektspeicher wie S3
-// nutzen, kein DB-Feld). Eine Folge davon: POST /messages/send bettet die
-// Anhänge aktuell NICHT tatsächlich in die ausgehende Mail ein (kein
-// Objektspeicher vorhanden, aus dem die Bytes beim Versand wieder gelesen
-// werden könnten) -- der Endpunkt prüft nur, dass alle mitgegebenen
-// attachmentIds scan_status='clean' haben. Echte Speicherung + Einbettung
-// in die ausgehende Mail ist ein späterer Schritt, siehe backend/README.md
-// "Anhänge".
+// [2026-09-28] Anhaenge werden jetzt wirklich verschickt (Entscheidung
+// Massimo, SYNC.md 28.09.): der Inhalt einer SAUBEREN Datei wird nach dem
+// Scan verschluesselt (AES-256-GCM, siehe auth/credentialsEncryption.ts
+// encryptBytes) in pending_attachment_content abgelegt -- nur bis zum
+// Senden, hoechstens PENDING_ATTACHMENT_TTL_MS (24 h), danach loescht der
+// Scheduler. Nicht-saubere Dateien werden nie aufbewahrt, sie duerfen ohnehin
+// nicht verschickt werden. Kein dauerhafter Objektspeicher.
+export const PENDING_ATTACHMENT_TTL_MS = 24 * 60 * 60 * 1000;
+
 attachmentsRouter.post("/attachments", upload.single("file"), async (req, res) => {
   const file = req.file;
   if (!file) {
@@ -70,6 +69,11 @@ attachmentsRouter.post("/attachments", upload.single("file"), async (req, res) =
     scannedAt: new Date().toISOString(),
     containsSensitiveDocument,
   });
+
+  if (record.scanStatus === "clean") {
+    const expiresAt = new Date(Date.now() + PENDING_ATTACHMENT_TTL_MS).toISOString();
+    await store.savePendingAttachmentContent(record.id, encryptBytes(file.buffer), expiresAt);
+  }
 
   res.status(200).json({
     attachmentId: record.id,

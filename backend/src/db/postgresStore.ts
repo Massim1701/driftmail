@@ -1356,6 +1356,34 @@ export class PostgresStore implements Store {
     return rows.map(rowToMessageAttachment);
   }
 
+  async savePendingAttachmentContent(attachmentId: string, contentEncrypted: string, expiresAt: string): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO pending_attachment_content (attachment_id, content_encrypted, expires_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (attachment_id) DO UPDATE SET content_encrypted = EXCLUDED.content_encrypted, expires_at = EXCLUDED.expires_at`,
+      [attachmentId, contentEncrypted, expiresAt],
+    );
+  }
+
+  async getPendingAttachmentContent(attachmentId: string): Promise<{ contentEncrypted: string; expiresAt: string } | undefined> {
+    const { rows } = await this.pool.query(
+      "SELECT content_encrypted, expires_at FROM pending_attachment_content WHERE attachment_id = $1",
+      [attachmentId],
+    );
+    if (!rows[0]) return undefined;
+    return { contentEncrypted: rows[0].content_encrypted, expiresAt: new Date(rows[0].expires_at).toISOString() };
+  }
+
+  async deletePendingAttachmentContent(attachmentIds: string[]): Promise<void> {
+    if (attachmentIds.length === 0) return;
+    await this.pool.query("DELETE FROM pending_attachment_content WHERE attachment_id = ANY($1::uuid[])", [attachmentIds]);
+  }
+
+  async deleteExpiredPendingAttachmentContent(nowIso: string): Promise<number> {
+    const { rowCount } = await this.pool.query("DELETE FROM pending_attachment_content WHERE expires_at <= $1", [nowIso]);
+    return rowCount ?? 0;
+  }
+
   // ----- Links -----
 
   async insertMessageLink(input: Omit<MessageLinkRecord, "id">): Promise<MessageLinkRecord> {

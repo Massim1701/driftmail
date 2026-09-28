@@ -6,6 +6,7 @@
 // (src/mail/sync.ts fällt dann auf den Fixture-Adapter zurück).
 
 import { google } from "googleapis";
+import MailComposer from "nodemailer/lib/mail-composer";
 import type { FetchedAttachment, FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
 
 export interface GmailCredentials {
@@ -112,21 +113,7 @@ export class GmailAdapter implements MailAdapter {
       // statt Promise.all, um bei vielen Anhaengen nicht das Gmail-API-
       // Rate-Limit fuer dieses Konto zu sprengen (gleiches Vorsichtsprinzip
       // wie beim seriellen Nachrichten-Loop hier oben).
-      const attachmentParts = collectAttachmentParts(payload);
-      const attachments: FetchedAttachment[] = [];
-      for (const part of attachmentParts) {
-        const attachmentData = await this.client.users.messages.attachments.get({
-          userId: "me",
-          messageId: id,
-          id: part.attachmentId,
-        });
-        if (!attachmentData.data.data) continue;
-        attachments.push({
-          filename: part.filename,
-          mimeType: part.mimeType,
-          content: Buffer.from(attachmentData.data.data, "base64url"),
-        });
-      }
+      const attachments = await this.loadAttachments(id, payload);
 
       results.push({
         messageIdHeader: headerValue(headers, "Message-ID") ?? id,
@@ -148,6 +135,34 @@ export class GmailAdapter implements MailAdapter {
     return results;
   }
 
+  private async loadAttachments(
+    messageId: string,
+    payload: Parameters<typeof collectAttachmentParts>[0],
+  ): Promise<FetchedAttachment[]> {
+    const attachments: FetchedAttachment[] = [];
+    for (const part of collectAttachmentParts(payload)) {
+      const attachmentData = await this.client.users.messages.attachments.get({
+        userId: "me",
+        messageId,
+        id: part.attachmentId,
+      });
+      if (!attachmentData.data.data) continue;
+      attachments.push({
+        filename: part.filename,
+        mimeType: part.mimeType,
+        content: Buffer.from(attachmentData.data.data, "base64url"),
+      });
+    }
+    return attachments;
+  }
+
+  // [2026-09-28] Weiterleiten mit Original-Anhaengen: Nachricht erneut
+  // holen, Anhaenge wie beim Import laden (gleiche Reihenfolge).
+  async fetchAttachments(providerMessageId: string): Promise<FetchedAttachment[]> {
+    const full = await this.client.users.messages.get({ userId: "me", id: providerMessageId, format: "full" });
+    return this.loadAttachments(providerMessageId, full.data.payload);
+  }
+
   // Provider-Spiegelung (WEB_INBOX.md 08.09. Punkt 3, umgesetzt 09.09.):
   // `id` ist die Gmail-Message-ID aus `FetchedMail.providerMessageId`
   // (NICHT der RFC822 Message-ID-Header).
@@ -164,22 +179,29 @@ export class GmailAdapter implements MailAdapter {
   // SPF selbst anhand des authentifizierten Kontos, ein eigener From-Header
   // ist dafuer nicht noetig. `raw` muss base64url-kodiert sein (analog zu
   // decodeBase64Url oben, nur die Gegenrichtung).
+  // [2026-09-28] Die rohe Mail baut jetzt nodemailers MailComposer statt
+  // handgeschriebener Header -- noetig fuer Anhaenge (multipart/mixed,
+  // Base64, Dateinamen-Kodierung). `keepBcc` behaelt den Bcc-Header in der
+  // Rohfassung: Gmails Versand braucht ihn dort und entfernt ihn vor der
+  // Zustellung selbst (gleiches Verhalten wie vorher mit dem manuellen
+  // Header, siehe Git-Historie).
   async sendMail(input: SendMailInput): Promise<SendMailResult> {
-    const headers = [`To: ${input.to.join(", ")}`];
-    if (input.cc.length > 0) headers.push(`Cc: ${input.cc.join(", ")}`);
-    // Gmails eigener Versandpfad (auch das Web-Compose-Fenster) baut intern
-    // dieselbe Art rohe MIME-Nachricht mit einem Bcc-Header -- Gmails
-    // ausgehende Zustellung entfernt ihn vor der Auslieferung an
-    // To/Cc-Empfaenger (Standard-Mailserver-Verhalten), die Bcc-Adresse
-    // bekommt die Mail trotzdem. Kein separater API-Parameter dafuer.
-    if (input.bcc.length > 0) headers.push(`Bcc: ${input.bcc.join(", ")}`);
-    headers.push(`Subject: ${input.subject}`);
-    if (input.inReplyToMessageIdHeader) {
-      headers.push(`In-Reply-To: ${input.inReplyToMessageIdHeader}`);
-      headers.push(`References: ${input.inReplyToMessageIdHeader}`);
-    }
-    headers.push("Content-Type: text/plain; charset=UTF-8");
-    const raw = Buffer.from(`${headers.join("\r\n")}\r\n\r\n${input.bodyText}`, "utf-8").toString("base64url");
+    const mail = new MailComposer({
+      to: input.to,
+      cc: input.cc.length > 0 ? input.cc : undefined,
+      bcc: input.bcc.length > 0 ? input.bcc : undefined,
+      subject: input.subject,
+      text: input.bodyText,
+      inReplyTo: input.inReplyToMessageIdHeader ?? undefined,
+      references: input.inReplyToMessageIdHeader ?? undefined,
+      attachments: input.attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.mimeType ?? undefined,
+      })),
+    }).compile();
+    mail.keepBcc = true;
+    const raw = (await mail.build()).toString("base64url");
 
     const result = await this.client.users.messages.send({ userId: "me", requestBody: { raw } });
     if (!result.data.id) throw new Error("Gmail-Versand: Antwort enthielt keine Message-ID");

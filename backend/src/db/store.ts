@@ -223,6 +223,13 @@ export interface Store {
   linkAttachmentsToMessage(ids: string[], messageId: string): Promise<void>;
   /** [2026-09-21] "WICHTIGE LUECKE ENTDECKT - echter Malware-Scan". */
   listAttachmentsForMessage(messageId: string): Promise<MessageAttachmentRecord[]>;
+  /** [2026-09-28] Verschluesselter Inhalt hochgeladener Anhaenge, nur bis
+   * zum Senden (max. 24 h), siehe db-schema.sql pending_attachment_content. */
+  savePendingAttachmentContent(attachmentId: string, contentEncrypted: string, expiresAt: string): Promise<void>;
+  getPendingAttachmentContent(attachmentId: string): Promise<{ contentEncrypted: string; expiresAt: string } | undefined>;
+  deletePendingAttachmentContent(attachmentIds: string[]): Promise<void>;
+  /** Loescht abgelaufene Eintraege, liefert die Anzahl. */
+  deleteExpiredPendingAttachmentContent(nowIso: string): Promise<number>;
 
   // ----- Links (message_links, "NEUE GRUNDLAGE - HTML-Rendering des
   // Mail-Bodies", WEB_INBOX.md 21.09.): echte <a href>-Links aus dem
@@ -375,6 +382,7 @@ export class InMemoryStore implements Store {
   // `message_attachments` (db-schema.sql) -- siehe MessageAttachmentRecord-
   // Kommentar in types.ts.
   messageAttachments: MessageAttachmentRecord[] = [];
+  pendingAttachmentContent = new Map<string, { contentEncrypted: string; expiresAt: string }>();
   // `message_links` (db-schema.sql) -- siehe ApiMessageLink-Kommentar in
   // types.ts.
   messageLinks: MessageLinkRecord[] = [];
@@ -846,7 +854,7 @@ export class InMemoryStore implements Store {
       (f) => f.userId === userId && f.flagReason === reason && !f.resolved && f.triggeredAt >= sinceIso,
     );
     if (matches.length === 0) return null;
-    return matches.reduce((latest, f) => (f.triggeredAt > latest.triggeredAt ? f : latest));
+    return matches.reduce((latest, f) => (f.triggeredAt >= latest.triggeredAt ? f : latest));
   }
 
   async createAbuseFlag(input: { userId: string; reason: AbuseFlagReason; actionTaken: AbuseActionTaken }): Promise<SendAbuseFlagRecord> {
@@ -892,6 +900,29 @@ export class InMemoryStore implements Store {
    * einer Nachricht fuer GET /messages/:id (siehe mappers.ts). */
   async listAttachmentsForMessage(messageId: string): Promise<MessageAttachmentRecord[]> {
     return this.messageAttachments.filter((a) => a.messageId === messageId);
+  }
+
+  async savePendingAttachmentContent(attachmentId: string, contentEncrypted: string, expiresAt: string): Promise<void> {
+    this.pendingAttachmentContent.set(attachmentId, { contentEncrypted, expiresAt });
+  }
+
+  async getPendingAttachmentContent(attachmentId: string): Promise<{ contentEncrypted: string; expiresAt: string } | undefined> {
+    return this.pendingAttachmentContent.get(attachmentId);
+  }
+
+  async deletePendingAttachmentContent(attachmentIds: string[]): Promise<void> {
+    for (const id of attachmentIds) this.pendingAttachmentContent.delete(id);
+  }
+
+  async deleteExpiredPendingAttachmentContent(nowIso: string): Promise<number> {
+    let removed = 0;
+    for (const [id, entry] of this.pendingAttachmentContent) {
+      if (entry.expiresAt <= nowIso) {
+        this.pendingAttachmentContent.delete(id);
+        removed++;
+      }
+    }
+    return removed;
   }
 
   // ----- Links -----

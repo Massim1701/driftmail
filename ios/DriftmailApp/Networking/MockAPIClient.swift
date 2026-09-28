@@ -533,7 +533,7 @@ actor MockAPIClient: APIClient {
     /// speichert es unveraendert auf der "gesendet"-Kopie, loescht aber
     /// (anders als das echte Backend) `bodyText` nie automatisch nach Ablauf
     /// -- kein periodischer Job im Mock-Client, dokumentierte Vereinfachung.
-    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?, confidentialUntil: Date?) async throws -> String {
+    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], forwardAttachmentIds: [String], draftId: String?, confidentialUntil: Date?) async throws -> String {
         await delay()
         if let inReplyToMessageId {
             guard db.messages.contains(where: { $0.id == inReplyToMessageId }) else {

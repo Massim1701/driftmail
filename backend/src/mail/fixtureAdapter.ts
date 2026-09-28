@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
+import type { FetchedAttachment, FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
 
 // [2026-09-21] "ZWEI ENTERPRISE-SICHERHEITS-FEATURES" Punkt 1 ("Quishing"-
 // Schutz): echtes QR-Code-Bild (generiert per `qrcode`-Devdependency, siehe
@@ -396,6 +396,19 @@ const FIXTURES: FetchedMail[] = [
   },
 ];
 
+// [2026-09-28] Test-Hilfen fuer den Anhang-Versand (nur Smoketest/lokale
+// Entwicklung, dieser Adapter ist nie mit einem echten Postfach verbunden):
+// alle FIXTURES-Anhaenge sind absichtlich gefaehrlich (Scanner-Tests), fuer
+// einen sauberen Weiterleiten-Fall kann ein Test hier eigene Anhaenge unter
+// einer providerMessageId hinterlegen. `fixtureSentMails` haelt fest, was
+// "verschickt" wurde, damit Tests pruefen koennen, ob Anhaenge ankommen.
+const registeredAttachments = new Map<string, FetchedAttachment[]>();
+export const fixtureSentMails: SendMailInput[] = [];
+
+export function registerFixtureAttachments(providerMessageId: string, attachments: FetchedAttachment[]): void {
+  registeredAttachments.set(providerMessageId, attachments);
+}
+
 export class FixtureMailAdapter implements MailAdapter {
   async testConnection(): Promise<void> {
     // immer erfolgreich
@@ -415,7 +428,16 @@ export class FixtureMailAdapter implements MailAdapter {
   // -- simuliert einen erfolgreichen Versand mit einer eindeutigen, aber
   // erfundenen providerMessageId, damit der Rest der Pipeline (Smoketest,
   // `npm run dev` ohne jede Konfiguration) end-to-end durchläuft.
-  async sendMail(_input: SendMailInput): Promise<SendMailResult> {
+  async sendMail(input: SendMailInput): Promise<SendMailResult> {
+    fixtureSentMails.push(input);
     return { providerMessageId: `fixture-sent-${randomUUID()}` };
+  }
+
+  async fetchAttachments(providerMessageId: string): Promise<FetchedAttachment[]> {
+    const registered = registeredAttachments.get(providerMessageId);
+    if (registered) return registered;
+    const fixture = FIXTURES.find((f) => f.providerMessageId === providerMessageId);
+    if (!fixture) throw new Error(`Fixture-Nachricht nicht gefunden: ${providerMessageId}`);
+    return fixture.attachments;
   }
 }

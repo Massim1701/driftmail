@@ -34,6 +34,9 @@ struct ComposeView: View {
     @State private var subject = ""
     @State private var bodyText = ""
     @State private var composeAttachments: [ComposeAttachment] = []
+    /// [2026-09-28] Weiterleiten: ausgewaehlte Original-Anhaenge
+    /// (`MessageAttachment.id`), siehe `forwardableAttachments`.
+    @State private var forwardAttachmentIds: Set<String> = []
     @State private var showFileImporter = false
     @State private var isLoadingDraft = false
     @State private var showAiOverwriteConfirm = false
@@ -97,6 +100,16 @@ struct ComposeView: View {
     private var isReply: Bool {
         if case .reply = mode { return true }
         return false
+    }
+
+    private var forwardableAttachments: [MessageAttachment] {
+        guard case .forward(let original) = mode else { return [] }
+        return original.attachments.filter { $0.scanStatus == .clean && !$0.isDangerousType }
+    }
+
+    private var blockedOriginalAttachments: [MessageAttachment] {
+        guard case .forward(let original) = mode else { return [] }
+        return original.attachments.filter { $0.scanStatus != .clean || $0.isDangerousType }
     }
 
     private var title: String {
@@ -182,6 +195,38 @@ struct ComposeView: View {
                     TextEditor(text: $bodyText)
                         .frame(minHeight: 180)
                         .onChange(of: bodyText) { scheduleAutosave() }
+                }
+
+                // [2026-09-28] WEB_INBOX.md 27.09. "Weiterleiten": Original-
+                // Anhaenge standardmaessig mitnehmen, gesperrte nie.
+                if !forwardableAttachments.isEmpty || !blockedOriginalAttachments.isEmpty {
+                    Section("Anhänge der Originalnachricht") {
+                        ForEach(forwardableAttachments) { attachment in
+                            let included = forwardAttachmentIds.contains(attachment.id)
+                            Toggle(isOn: Binding(
+                                get: { included },
+                                set: { on in
+                                    if on { forwardAttachmentIds.insert(attachment.id) } else { forwardAttachmentIds.remove(attachment.id) }
+                                }
+                            )) {
+                                Text(attachment.filename)
+                                    .font(.system(size: DesignTokens.Typography.Size.small))
+                                    .lineLimit(1)
+                            }
+                            .tint(DesignTokens.Color.accent)
+                        }
+                        ForEach(blockedOriginalAttachments) { attachment in
+                            HStack(spacing: DesignTokens.Spacing.sm) {
+                                Text(attachment.filename)
+                                    .font(.system(size: DesignTokens.Typography.Size.small))
+                                    .lineLimit(1)
+                                Spacer()
+                                Text("Gesperrt, wird nicht mitgeschickt")
+                                    .font(.system(size: DesignTokens.Typography.Size.caption, weight: .medium))
+                                    .foregroundStyle(DesignTokens.Color.dangerText)
+                            }
+                        }
+                    }
                 }
 
                 if !composeAttachments.isEmpty {
@@ -379,6 +424,7 @@ struct ComposeView: View {
         case .forward(let original):
             subject = Self.prefixedSubject(original.subject, prefix: "Fwd:")
             bodyText = Self.quotedBody(for: original)
+            forwardAttachmentIds = Set(forwardableAttachments.map(\.id))
             // WEB_INBOX.md 27.09. "Weiterleiten": Fokus direkt auf "An".
             DispatchQueue.main.async { focusedField = .to }
         }
@@ -612,6 +658,7 @@ struct ComposeView: View {
                 subject: subject,
                 bodyText: bodyText,
                 attachmentIds: composeAttachments.compactMap(\.attachmentId),
+                forwardAttachmentIds: Array(forwardAttachmentIds),
                 // [2026-09-21] "FUENF NEUE KOMFORT-FEATURES" Punkt 3: falls
                 // ein Autosave-Entwurf angelegt wurde, verwirft der Server
                 // ihn nach erfolgreichem Versand automatisch.
@@ -623,6 +670,8 @@ struct ComposeView: View {
             dismiss()
         } catch APIError.blocked(let reason) {
             sendBlockedReason = reason ?? "Versand wurde aus Sicherheitsgründen blockiert."
+        } catch APIError.badRequest(let message) {
+            errorMessage = message ?? "Ein Anhang ist nicht mehr verfügbar."
         } catch {
             errorMessage = "Versand fehlgeschlagen. Bitte später erneut versuchen."
         }

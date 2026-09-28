@@ -796,7 +796,23 @@ paths:
                   items: { type: string, format: uuid }
                   description: >
                     IDs aus POST /attachments. Jede muss scan_status='clean'
-                    haben, sonst 422 (keine Ausnahme).
+                    haben, sonst 422 (keine Ausnahme). [2026-09-28] Die
+                    Dateien werden jetzt wirklich mitgeschickt. Nur eigene,
+                    noch nicht verschickte Uploads (sonst 400); der Inhalt
+                    liegt hoechstens 24 Stunden verschluesselt auf dem Server,
+                    danach 410 (erneut anhaengen).
+                forwardAttachmentIds:
+                  type: array
+                  items: { type: string, format: uuid }
+                  description: >
+                    [2026-09-28] Weiterleiten mit Original-Anhaengen:
+                    MessageAttachment.id aus GET /messages/{messageId} einer
+                    eigenen empfangenen Nachricht. Nur scanStatus='clean' und
+                    nicht isDangerousType (sonst 422). Der Inhalt wird im
+                    Moment des Sendens frisch beim Mail-Anbieter geholt und
+                    erneut gescannt -- driftmail speichert empfangene
+                    Anhaenge nicht. Ist die Originalnachricht dort nicht mehr
+                    vorhanden: 409.
                 draftId:
                   type: string
                   format: uuid
@@ -851,6 +867,14 @@ paths:
                 properties:
                   blocked: { type: boolean }
                   reason: { type: string }
+        "409":
+          description: >
+            [2026-09-28] Original-Anhaenge (forwardAttachmentIds) sind beim
+            Mail-Anbieter nicht mehr verfuegbar.
+        "410":
+          description: >
+            [2026-09-28] Ein hochgeladener Anhang ist abgelaufen (Inhalt wird
+            hoechstens 24 Stunden aufbewahrt) -- erneut anhaengen.
         "429":
           description: >
             [2026-09-25] WEB_INBOX.md 08.09. "Bot/Human-Missbrauchserkennung
@@ -883,7 +907,9 @@ paths:
         (Dateiendungs-Blockliste + Magic-Bytes-Pruefung + Signaturabgleich),
         siehe backend/README.md "Malware-Scan". Derselbe Scan laeuft jetzt
         auch fuer EINGEHENDE Mail-Anhaenge (siehe MessageDetail.attachments
-        unten) -- nicht nur beim Senden.
+        unten) -- nicht nur beim Senden. [2026-09-28] Der Inhalt einer
+        sauberen Datei wird verschluesselt nur bis zum Senden aufbewahrt
+        (hoechstens 24 Stunden), nicht-saubere Dateien gar nicht.
       requestBody:
         content:
           multipart/form-data:

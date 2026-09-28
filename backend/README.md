@@ -912,6 +912,38 @@ je) ab.
 
 ## Anhänge (`POST /attachments` + `POST /messages/send` `attachmentIds`)
 
+> **[2026-09-28] Anhänge werden jetzt wirklich verschickt** (vorher wurde nur
+> geprüft, die Mail ging ohne sie raus; Entscheidung Massimo: nur kurz
+> zwischenspeichern). Aktueller Stand, ersetzt die "Grenze"-Hinweise weiter
+> unten:
+>
+> - **Upload:** Inhalt einer sauberen Datei liegt verschlüsselt (AES-256-GCM,
+>   `encryptBytes` in `auth/credentialsEncryption.ts`, gleicher Schlüssel wie
+>   die Zugangsdaten) in `pending_attachment_content`, höchstens 24 Stunden.
+>   Nicht-saubere Dateien werden nie aufbewahrt. Der Scheduler löscht
+>   Abgelaufenes (`purgeExpiredPendingAttachments`), der Versand löscht den
+>   Inhalt sofort danach.
+> - **Versand:** `attachmentIds` = nur eigene, noch nicht verschickte Uploads
+>   (sonst 400), abgelaufen -> 410. Alle drei Adapter hängen die Dateien an
+>   (IMAP/POP3 über nodemailer, Gmail baut die Rohmail jetzt mit
+>   nodemailers `MailComposer`, `keepBcc`).
+> - **Weiterleiten:** neues Feld `forwardAttachmentIds` (Anhänge eigener
+>   empfangener Nachrichten, nur `clean` und nicht `isDangerousType`, sonst
+>   422). Empfangene Anhänge werden weiterhin NICHT gespeichert --
+>   `MailAdapter.fetchAttachments(providerMessageId)` holt sie im Moment des
+>   Sendens frisch beim Anbieter (Gmail `messages.get`/`attachments.get`,
+>   IMAP per UID aus INBOX, POP3 per UIDL), Zuordnung über Dateiname +
+>   Größe, danach erneuter ClamAV-Scan. Original nicht mehr vorhanden -> 409.
+>   Der Original-Anhang bleibt an der Originalnachricht; die Gesendet-Kopie
+>   bekommt eigene Metadaten-Einträge (behebt nebenbei, dass
+>   `linkAttachmentsToMessage` fremde/empfangene IDs hätte umhängen können).
+> - **Tests:** Smoketest Fälle 5-12 im Abschnitt Anhänge (Inhalt kommt beim
+>   Adapter an, Verschlüsselung, 24-h-Ablauf + Aufräumen, Weiterleiten inkl.
+>   gesperrt/nicht mehr verfügbar/falsches Feld).
+> - **Lokale Entwicklung:** der Smoketest braucht einen laufenden `clamd`
+>   auf `/tmp/clamd.sock` (`brew install clamav`, `freshclam`, dann
+>   `clamd` mit `LocalSocket /tmp/clamd.sock`).
+
 Seit `WEB_INBOX.md` 09.09. ("Erweiterung des Send-Endpunkt-Eintrags von
 eben"): Anhänge müssen VOR dem Versand hochgeladen und gescannt werden,
 `POST /messages/send` lehnt ab (422, gleiche Fehlerform wie der

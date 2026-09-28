@@ -62,6 +62,18 @@ export interface SendMailInput {
   // -- wird als In-Reply-To/References gesetzt, damit Mail-Clients die
   // Antwort im selben Thread einsortieren. `null` bei neuen Mails.
   inReplyToMessageIdHeader: string | null;
+  // [2026-09-28] Anhaenge werden jetzt wirklich mitgeschickt (vorher gab es
+  // dieses Feld gar nicht, hochgeladene Dateien gingen nie raus). Bytes
+  // stammen entweder aus dem verschluesselten Kurzzeit-Speicher von
+  // POST /attachments oder werden beim Weiterleiten frisch beim Provider
+  // geholt (siehe fetchAttachments unten).
+  attachments: OutgoingAttachment[];
+}
+
+export interface OutgoingAttachment {
+  filename: string;
+  mimeType: string | null;
+  content: Buffer;
 }
 
 export interface SendMailResult {
@@ -93,4 +105,14 @@ export interface MailAdapter {
    * `users.messages.delete`; IMAP: `\Deleted`-Flag setzen + Expunge.
    */
   permanentlyDeleteMessage(providerMessageId: string): Promise<void>;
+
+  /**
+   * [2026-09-28] Weiterleiten mit Original-Anhaengen: holt die Anhaenge
+   * einer bereits importierten Nachricht frisch beim Provider (driftmail
+   * speichert empfangene Anhaenge bewusst nicht). Reihenfolge wie beim
+   * Import, damit die Zuordnung ueber die Position zum gespeicherten
+   * Metadaten-Eintrag passt. Wirft, wenn die Nachricht beim Provider nicht
+   * mehr existiert.
+   */
+  fetchAttachments(providerMessageId: string): Promise<FetchedAttachment[]>;
 }

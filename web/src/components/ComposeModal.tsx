@@ -173,6 +173,12 @@ export function ComposeModal({
   const [subject, setSubject] = useState(prefill.subject);
   const [bodyText, setBodyText] = useState(prefill.bodyText);
   const [attachments, setAttachments] = useState<ComposeAttachment[]>([]);
+  // [2026-09-28] WEB_INBOX.md 27.09. "Weiterleiten": Original-Anhaenge
+  // standardmaessig mitnehmen, gesperrte (nicht clean bzw. gefaehrlicher
+  // Typ) nie -- die bleiben nur als Hinweis sichtbar.
+  const forwardableAttachments = isForward && original ? original.attachments.filter((a) => a.scanStatus === "clean" && !a.isDangerousType) : [];
+  const blockedOriginalAttachments = isForward && original ? original.attachments.filter((a) => a.scanStatus !== "clean" || a.isDangerousType) : [];
+  const [forwardAttachmentIds, setForwardAttachmentIds] = useState<string[]>(() => forwardableAttachments.map((a) => a.id));
   const [draftLoading, setDraftLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -334,6 +340,7 @@ export function ComposeModal({
         subject,
         bodyText,
         attachmentIds: attachments.map((a) => a.attachmentId).filter((id): id is string => id !== null),
+        forwardAttachmentIds: forwardAttachmentIds.length > 0 ? forwardAttachmentIds : undefined,
         // Autosave (Punkt 3): falls waehrend des Tippens ein Entwurf
         // angelegt wurde, raeumt das Backend ihn nach erfolgreichem Versand
         // automatisch auf (siehe backend/README.md "Versand", draftId-Feld).
@@ -346,6 +353,11 @@ export function ComposeModal({
       if (err instanceof ApiError && err.status === 422) {
         const body = err.body as { reason?: string } | undefined;
         setSendError(body?.reason ?? "Versand wurde aus Sicherheitsgründen blockiert.");
+      } else if (err instanceof ApiError && (err.status === 409 || err.status === 410)) {
+        // [2026-09-28] 409: Original-Anhang beim Anbieter weg; 410: Upload
+        // abgelaufen (max. 24 h) -- die Server-Meldung erklaert es.
+        const body = err.body as { error?: string } | undefined;
+        setSendError(body?.error ?? "Ein Anhang ist nicht mehr verfügbar.");
       } else {
         setSendError("Versand fehlgeschlagen. Bitte später erneut versuchen.");
       }
@@ -564,6 +576,36 @@ export function ComposeModal({
                 Abbrechen
               </button>
             </label>
+          )}
+
+          {(forwardableAttachments.length > 0 || blockedOriginalAttachments.length > 0) && (
+            <ul className="attachment-list" aria-label="Anhänge der Originalnachricht">
+              {forwardableAttachments.map((a) => {
+                const included = forwardAttachmentIds.includes(a.id);
+                return (
+                  <li key={a.id} className={`attachment-item${included ? " attachment-status-clean" : " attachment-excluded"}`}>
+                    <span className="attachment-filename">{a.filename}</span>
+                    <span className="attachment-status">{included ? "Wird mitgeschickt" : "Nicht mitschicken"}</span>
+                    <button
+                      type="button"
+                      className="link-button attachment-remove"
+                      onClick={() =>
+                        setForwardAttachmentIds((prev) => (included ? prev.filter((id) => id !== a.id) : [...prev, a.id]))
+                      }
+                      aria-label={included ? `${a.filename} nicht mitschicken` : `${a.filename} wieder mitschicken`}
+                    >
+                      {included ? "Entfernen" : "Wieder hinzufügen"}
+                    </button>
+                  </li>
+                );
+              })}
+              {blockedOriginalAttachments.map((a) => (
+                <li key={a.id} className="attachment-item attachment-status-blocked_type">
+                  <span className="attachment-filename">{a.filename}</span>
+                  <span className="attachment-status">Gesperrt, wird nicht mitgeschickt</span>
+                </li>
+              ))}
+            </ul>
           )}
 
           {attachments.length > 0 && (

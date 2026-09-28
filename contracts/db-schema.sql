@@ -486,6 +486,20 @@ CREATE TABLE IF NOT EXISTS message_attachments (
     CONSTRAINT message_attachments_owner_check CHECK (message_id IS NOT NULL OR uploaded_by_user_id IS NOT NULL)
   );
 
+-- [2026-09-28] Anhaenge werden jetzt wirklich verschickt (Entscheidung
+-- Massimo, SYNC.md 28.09.): Inhalt einer per POST /attachments
+-- hochgeladenen Datei liegt NUR bis zum Senden hier, verschluesselt
+-- (AES-256-GCM, gleicher Schluessel wie encrypted_credentials), hoechstens
+-- 24 Stunden (expires_at), danach loescht der Scheduler. Empfangene Anhaenge
+-- werden NICHT gespeichert -- beim Weiterleiten holt das Backend sie im
+-- Moment des Sendens frisch beim Mail-Anbieter.
+CREATE TABLE IF NOT EXISTS pending_attachment_content (
+    attachment_id UUID PRIMARY KEY REFERENCES message_attachments(id) ON DELETE CASCADE,
+    content_encrypted TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pending_attachment_content_expires ON pending_attachment_content(expires_at);
+
 -- ===== Sicherheit: Tracking-Schutz (Spionage-Pixel) =====
 
 CREATE TABLE IF NOT EXISTS user_privacy_settings (

@@ -313,7 +313,7 @@ messagesRouter.post("/messages/:messageId/unsubscribe", async (req, res) => {
 
   const adapter = adapterForAccount(account);
   const result = await performUnsubscribe(parsed, (input) =>
-    adapter.sendMail({ ...input, cc: [], bcc: [], inReplyToMessageIdHeader: null }),
+    adapter.sendMail({ ...input, cc: [], bcc: [], inReplyToMessageIdHeader: null, attachments: [] }),
   );
 
   const action = await store.insertUnsubscribeAction({

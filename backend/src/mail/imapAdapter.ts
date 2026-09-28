@@ -162,7 +162,38 @@ export class ImapAdapter implements MailAdapter {
       text: input.bodyText,
       inReplyTo: input.inReplyToMessageIdHeader ?? undefined,
       references: input.inReplyToMessageIdHeader ?? undefined,
+      // [2026-09-28] Anhaenge wirklich mitschicken (vorher nie).
+      attachments: input.attachments.map((a) => ({
+        filename: a.filename,
+        content: a.content,
+        contentType: a.mimeType ?? undefined,
+      })),
     });
     return { providerMessageId: info.messageId };
+  }
+
+  // [2026-09-28] Weiterleiten mit Original-Anhaengen: dieselbe Nachricht
+  // per UID erneut aus INBOX holen (gleiche Mailbox wie beim Import, siehe
+  // FetchedMail.providerMessageId) und die Anhaenge wie dort parsen.
+  async fetchAttachments(providerMessageId: string): Promise<FetchedAttachment[]> {
+    const client = this.client();
+    await client.connect();
+    try {
+      const lock = await client.getMailboxLock("INBOX");
+      try {
+        const message = await client.fetchOne(providerMessageId, { source: true }, { uid: true });
+        if (!message || !message.source) throw new Error(`IMAP: Nachricht ${providerMessageId} nicht mehr vorhanden`);
+        const parsed = await simpleParser(message.source);
+        return parsed.attachments.map((a) => ({
+          filename: a.filename ?? "unbenannt",
+          mimeType: a.contentType || null,
+          content: a.content,
+        }));
+      } finally {
+        lock.release();
+      }
+    } finally {
+      await client.logout();
+    }
   }
 }

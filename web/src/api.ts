@@ -303,6 +303,9 @@ export const api = {
     subject?: string;
     bodyText: string;
     attachmentIds?: string[];
+    // [2026-09-28] Weiterleiten: Anhaenge der Originalnachricht, die das
+    // Backend beim Senden frisch beim Mail-Anbieter holt.
+    forwardAttachmentIds?: string[];
     draftId?: string;
     // [2026-09-21] WEB_INBOX.md "DREI WEITERE FEATURES - Gmail-Recherche"
     // Punkt 3 ("Vertraulicher Modus") -- muss in der Zukunft liegen.

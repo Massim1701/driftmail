@@ -47,6 +47,17 @@ export function encryptCredentials(plaintext: string): string {
  * Neu-Verschlüsselung der Bestandsdaten -- bewusst kein stiller
  * Fallback-Klartext-Versuch, ein Fehler hier ist ein Signal, nicht etwas,
  * das sich verschweigen lässt). */
+/** [2026-09-28] Kurzzeit-Speicher fuer hochgeladene Anhaenge
+ * (pending_attachment_content): gleiches Verfahren/gleicher Schluessel wie
+ * oben, nur fuer Binaerdaten. */
+export function encryptBytes(content: Buffer): string {
+  return encryptCredentials(content.toString("base64"));
+}
+
+export function decryptBytes(stored: string): Buffer {
+  return Buffer.from(decryptCredentials(stored), "base64");
+}
+
 export function decryptCredentials(stored: string): string {
   const parts = stored.split(".");
   if (parts.length !== 3) {

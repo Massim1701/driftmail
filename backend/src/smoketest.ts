@@ -29,7 +29,8 @@ import { runSyncForAllAccounts, runDataBreachChecks, runDueScheduledSends } from
 import { aiAdapter } from "./ai";
 import { domainReputationLookup, extractIbanCandidates, ibanHistoryCheck } from "./lookups";
 import { ocrAdapter } from "./attachments";
-import { decryptCredentials, encryptCredentials } from "./auth/credentialsEncryption";
+import { decryptCredentials, encryptBytes, encryptCredentials } from "./auth/credentialsEncryption";
+import { fixtureSentMails, registerFixtureAttachments } from "./mail/fixtureAdapter";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Server } from "node:http";
@@ -753,6 +754,53 @@ async function main() {
     const noFileRes = await fetch(`${base}/v1/attachments`, { method: "POST", body: new FormData() });
     assert(noFileRes.status === 400, "POST /v1/attachments ohne Datei sollte 400 liefern");
 
+    // [2026-09-28] Vorbereitung Weiterleiten mit Original-Anhang (geprueft
+    // in Fall 5): empfangene Anhaenge werden nicht gespeichert -- der Adapter
+    // liefert sie beim Senden frisch. Bewusst im SELBEN Versand wie Fall 5,
+    // damit die Zahl der Sendungen fuer die spaetere Missbrauchs-Erkennung
+    // (rate_burst, siehe sendAbuseDetection.ts) gleich bleibt.
+    const eingangForForward = await store.getSystemFolder(account.id, "eingang");
+    const forwardSource = await store.insertMessage({
+      mailAccountId: account.id,
+      messageIdHeader: "<weiterleiten-test@example.com>",
+      providerMessageId: "weiterleiten-test-1",
+      fromAddress: "absender@example.com",
+      fromDisplayName: "Absender",
+      replyToAddress: null,
+      subject: "Unterlagen",
+      bodyText: "Anbei die Unterlagen.",
+      bodyHtml: null,
+      receivedAt: new Date().toISOString(),
+      folderId: eingangForForward!.id,
+      rawHeaders: {},
+      inReplyToMessageId: null,
+      confidentialUntil: null,
+      snoozedUntil: null,
+    });
+    const forwardContent = Buffer.from("Inhalt der Originaldatei");
+    const cleanOriginal = await store.insertAttachment({
+      messageId: forwardSource.id,
+      uploadedByUserId: null,
+      filename: "unterlagen.txt",
+      mimeType: "text/plain",
+      sizeBytes: forwardContent.length,
+      scanStatus: "clean",
+      isDangerousType: false,
+      scannedAt: new Date().toISOString(),
+      containsSensitiveDocument: "none",
+    });
+    const blockedOriginal = await store.insertAttachment({
+      messageId: forwardSource.id,
+      uploadedByUserId: null,
+      filename: "setup.exe",
+      mimeType: "application/octet-stream",
+      sizeBytes: 8,
+      scanStatus: "blocked_type",
+      isDangerousType: true,
+      scannedAt: new Date().toISOString(),
+      containsSensitiveDocument: "none",
+    });
+    registerFixtureAttachments("weiterleiten-test-1", [{ filename: "unterlagen.txt", mimeType: "text/plain", content: forwardContent }]);
     // Fall 5: Versand MIT einem 'clean' Anhang -> 200 (Anhang erlaubt).
     const sendWithCleanAttachmentRes = await fetch(`${base}/v1/messages/send`, {
       method: "POST",
@@ -762,6 +810,7 @@ async function main() {
         to: ["kollegin@example.com"],
         bodyText: "Anbei die Rechnung.",
         attachmentIds: [cleanUpload.attachmentId],
+        forwardAttachmentIds: [cleanOriginal.id],
       }),
     });
     assert(sendWithCleanAttachmentRes.status === 200, "POST /v1/messages/send mit 'clean' Anhang sollte 200 liefern");
@@ -794,6 +843,94 @@ async function main() {
       }),
     });
     assert(sendWithUnknownAttachmentRes.status === 400, "POST /v1/messages/send mit unbekannter attachmentId sollte 400 liefern");
+
+    // [2026-09-28] Anhaenge werden jetzt WIRKLICH verschickt (SYNC.md 28.09.
+    // "Anhänge werden nie verschickt"). Fall 5 oben hat den sauberen Upload
+    // bereits verschickt -> der Inhalt muss beim Adapter angekommen sein.
+    const sentWithAttachment = fixtureSentMails.find((m) => m.bodyText === "Anbei die Rechnung.");
+    assert(
+      sentWithAttachment?.attachments.length === 2 &&
+        sentWithAttachment.attachments[0].filename === "rechnung.pdf" &&
+        sentWithAttachment.attachments[0].content.toString("utf8") === "Beispielinhalt, keine echte PDF-Struktur nötig für den Mock-Scan.",
+      "Fall 5: der hochgeladene Anhang sollte mit Originalinhalt beim Mail-Adapter ankommen",
+    );
+    assert(
+      sentWithAttachment!.attachments[1].filename === "unterlagen.txt" && sentWithAttachment!.attachments[1].content.equals(forwardContent),
+      "Fall 5: der weitergeleitete Original-Anhang sollte frisch vom Provider geholt mitgehen",
+    );
+    assert(
+      (await store.getAttachment(cleanOriginal.id))?.messageId === forwardSource.id,
+      "Original-Anhang sollte an der Originalnachricht haengen bleiben (nicht umgehaengt)",
+    );
+    const fall5SentId = ((await sendWithCleanAttachmentRes.json()) as { sentMessageId: string }).sentMessageId;
+    const fall5SentCopy = await store.findMessageByHeader(account.id, `sent-${fall5SentId}`);
+    const fall5SentAttachments = fall5SentCopy ? await store.listAttachmentsForMessage(fall5SentCopy.id) : [];
+    assert(
+      fall5SentAttachments.some((a) => a.filename === "rechnung.pdf") && fall5SentAttachments.some((a) => a.filename === "unterlagen.txt"),
+      "Gesendet-Kopie sollte beide Anhaenge als Metadaten fuehren",
+    );
+    assert(
+      (await store.getPendingAttachmentContent(cleanUpload.attachmentId!)) === undefined,
+      "nach dem Versand sollte der zwischengespeicherte Anhang-Inhalt geloescht sein",
+    );
+
+    // Fall 8: derselbe Upload ein zweites Mal -> 400 (haengt schon an der
+    // gesendeten Nachricht, kein zweites Mal verschickbar).
+    const resendSameAttachmentRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: account.id, to: ["kollegin@example.com"], bodyText: "Nochmal", attachmentIds: [cleanUpload.attachmentId] }),
+    });
+    assert(resendSameAttachmentRes.status === 400, "bereits verschickter Anhang sollte nicht erneut verschickbar sein (400)");
+
+    // Fall 9: Inhalt liegt verschluesselt im Kurzzeitspeicher und laeuft ab.
+    const expiringUpload = await uploadAttachment("notiz.txt", "Kurzlebiger Inhalt");
+    const expiringPending = await store.getPendingAttachmentContent(expiringUpload.attachmentId!);
+    assert(
+      expiringPending !== undefined && !expiringPending.contentEncrypted.includes("Kurzlebiger"),
+      "sauberer Upload sollte verschluesselt (nicht im Klartext) zwischengespeichert werden",
+    );
+    const expiresInMs = new Date(expiringPending!.expiresAt).getTime() - Date.now();
+    assert(expiresInMs > 23 * 3600_000 && expiresInMs <= 24 * 3600_000, "Ablauf sollte nach 24 Stunden liegen");
+    assert(
+      (await store.getPendingAttachmentContent(blockedTypeUpload.attachmentId!)) === undefined,
+      "nicht-saubere Uploads sollten gar nicht zwischengespeichert werden",
+    );
+    await store.savePendingAttachmentContent(expiringUpload.attachmentId!, encryptBytes(Buffer.from("x")), new Date(Date.now() - 1000).toISOString());
+    const sendExpiredRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: account.id, to: ["kollegin@example.com"], bodyText: "Abgelaufen", attachmentIds: [expiringUpload.attachmentId] }),
+    });
+    assert(sendExpiredRes.status === 410, "abgelaufener Anhang sollte 410 liefern");
+    assert((await store.deleteExpiredPendingAttachmentContent(new Date().toISOString())) >= 1, "Aufraeumen sollte abgelaufene Inhalte loeschen");
+    assert((await store.getPendingAttachmentContent(expiringUpload.attachmentId!)) === undefined, "abgelaufener Inhalt sollte nach dem Aufraeumen weg sein");
+
+    // Fall 10: gesperrter Original-Anhang -> 422, kein Versand.
+    const forwardBlockedRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: account.id, to: ["kollegin@example.com"], bodyText: "Gesperrt?", forwardAttachmentIds: [blockedOriginal.id] }),
+    });
+    assert(forwardBlockedRes.status === 422, "gesperrter Original-Anhang sollte nicht weitergeleitet werden (422)");
+
+    // Fall 11: Original beim Anbieter nicht mehr vorhanden -> 409.
+    registerFixtureAttachments("weiterleiten-test-1", []);
+    const forwardGoneRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: account.id, to: ["kollegin@example.com"], bodyText: "Weg?", forwardAttachmentIds: [cleanOriginal.id] }),
+    });
+    assert(forwardGoneRes.status === 409, "nicht mehr verfuegbarer Original-Anhang sollte 409 liefern");
+
+    // Fall 12: empfangener Anhang per attachmentIds statt
+    // forwardAttachmentIds -> 400 (nur eigene Uploads).
+    const misuseRes = await fetch(`${base}/v1/messages/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: account.id, to: ["kollegin@example.com"], bodyText: "Falsches Feld", attachmentIds: [cleanOriginal.id] }),
+    });
+    assert(misuseRes.status === 400, "empfangener Anhang ueber attachmentIds sollte 400 liefern (nur eigene Uploads)");
 
     // Sensible-Dokument-Erkennung (WEB_INBOX.md 15.09. "Sensible-Daten-
     // Erkennung um Fotos von Ausweisen/Kreditkarten erweitern"): echte

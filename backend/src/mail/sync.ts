@@ -154,7 +154,7 @@ async function maybeAutoUnsubscribeFromSpam(
   const parsed = parseListUnsubscribeHeader(rawHeaders);
   if (!parsed) return;
   const result = await performUnsubscribe(parsed, (input) =>
-    adapter.sendMail({ ...input, cc: [], bcc: [], inReplyToMessageIdHeader: null }),
+    adapter.sendMail({ ...input, cc: [], bcc: [], inReplyToMessageIdHeader: null, attachments: [] }),
   );
   await store.insertUnsubscribeAction({
     userId,

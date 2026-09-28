@@ -489,7 +489,7 @@ struct RemoteAPIClient: APIClient {
     /// true`) ein erwarteter, vom Erfolgsfall inhaltlich verschiedener
     /// Ausgang ist (siehe `APIError.blocked`), keine generische
     /// Netzwerk-/Decoding-Fehlerbedingung.
-    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?, confidentialUntil: Date?) async throws -> String {
+    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], forwardAttachmentIds: [String], draftId: String?, confidentialUntil: Date?) async throws -> String {
         struct Body: Encodable {
             let accountId: String?
             let inReplyToMessageId: String?
@@ -499,9 +499,13 @@ struct RemoteAPIClient: APIClient {
             let subject: String?
             let bodyText: String
             let attachmentIds: [String]
+            /// [2026-09-28] Weiterleiten: Original-Anhaenge, die das Backend
+            /// beim Senden frisch beim Mail-Anbieter holt.
+            let forwardAttachmentIds: [String]
             let draftId: String?
             let confidentialUntil: String?
         }
+        struct ErrorResponse: Decodable { let error: String? }
         struct SendResponse: Decodable { let sentMessageId: String }
         struct BlockedResponse: Decodable { let blocked: Bool; let reason: String? }
 
@@ -509,7 +513,7 @@ struct RemoteAPIClient: APIClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         authorize(&request)
-        request.httpBody = try JSONEncoder().encode(Body(accountId: accountId, inReplyToMessageId: inReplyToMessageId, to: to, cc: cc, bcc: bcc, subject: subject, bodyText: bodyText, attachmentIds: attachmentIds, draftId: draftId, confidentialUntil: confidentialUntil.map(Self.iso8601String)))
+        request.httpBody = try JSONEncoder().encode(Body(accountId: accountId, inReplyToMessageId: inReplyToMessageId, to: to, cc: cc, bcc: bcc, subject: subject, bodyText: bodyText, attachmentIds: attachmentIds, forwardAttachmentIds: forwardAttachmentIds, draftId: draftId, confidentialUntil: confidentialUntil.map(Self.iso8601String)))
 
         let data: Data
         let response: URLResponse
@@ -522,6 +526,12 @@ struct RemoteAPIClient: APIClient {
         if statusCode == 422 {
             let blocked = try? decoder.decode(BlockedResponse.self, from: data)
             throw APIError.blocked(reason: blocked?.reason)
+        }
+        // [2026-09-28] 400 (z.B. fremder Anhang), 409 (Original-Anhang beim
+        // Anbieter weg), 410 (Upload abgelaufen): Server-Text weiterreichen.
+        if statusCode == 400 || statusCode == 409 || statusCode == 410 {
+            let body = try? decoder.decode(ErrorResponse.self, from: data)
+            throw APIError.badRequest(message: body?.error)
         }
         do {
             return try decoder.decode(SendResponse.self, from: data).sentMessageId

@@ -198,7 +198,7 @@ protocol APIClient {
     /// Gmail-Recherche" Punkt 3, "Vertraulicher Modus"): muss, falls
     /// gesetzt, in der Zukunft liegen (sonst 400) -- nach Ablauf löscht der
     /// Server `bodyText` der eigenen "gesendet"-Kopie serverseitig.
-    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], draftId: String?, confidentialUntil: Date?) async throws -> String
+    func sendMessage(accountId: String?, inReplyToMessageId: String?, to: [String], cc: [String], bcc: [String], subject: String?, bodyText: String, attachmentIds: [String], forwardAttachmentIds: [String], draftId: String?, confidentialUntil: Date?) async throws -> String
     /// `POST /attachments` — lädt eine Datei hoch und lässt sie sofort
     /// scannen (siehe backend/README.md "Anhänge").
     func uploadAttachment(filename: String, mimeType: String, data: Data) async throws -> AttachmentUploadResult

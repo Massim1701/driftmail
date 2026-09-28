@@ -170,3 +170,9 @@
 .undo-send-bar .compose-modal-actions-spacer {
   flex: 1;
 }
+
+/* [2026-09-28] Weiterleiten: bewusst abgewaehlter Original-Anhang. */
+.attachment-excluded .attachment-filename {
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
