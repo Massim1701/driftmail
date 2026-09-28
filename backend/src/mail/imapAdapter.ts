@@ -26,20 +26,35 @@ export interface ImapCredentials {
 export class ImapAdapter implements MailAdapter {
   constructor(private creds: ImapCredentials) {}
 
+  // [2026-09-28] Ohne 'error'-Listener brachte ein spaeter Socket-Timeout
+  // (z.B. nach einer abgelehnten Anmeldung, die Verbindung blieb offen) den
+  // ganzen Server zum Absturz ("Unhandled 'error' event"). Fehler landen
+  // jetzt nur im Log; die jeweilige Operation meldet ihren Fehler selbst.
   private client() {
-    return new ImapFlow({
+    const client = new ImapFlow({
       host: this.creds.host,
       port: this.creds.port,
       secure: this.creds.secure,
       auth: { user: this.creds.user, pass: this.creds.password },
       logger: false,
     });
+    client.on("error", (err: Error) => {
+      console.warn(`[imap] Verbindungsfehler ${this.creds.host}: ${err.message}`);
+    });
+    return client;
   }
 
   async testConnection(): Promise<void> {
     const client = this.client();
-    await client.connect();
-    await client.logout();
+    try {
+      await client.connect();
+      await client.logout();
+    } catch (err) {
+      // Abgelehnte Anmeldung: Verbindung sofort schliessen statt offen
+      // haengen lassen (sonst spaeter Socket-Timeout).
+      client.close();
+      throw err;
+    }
   }
 
   async fetchRecentMessages(limit: number): Promise<FetchedMail[]> {
