@@ -18,13 +18,72 @@
       "smtpPort": 587,
       "smtpSecure": false,
       "requiresAppPassword": true,
-      "appPasswordHelpUrl": "https://support.google.com/accounts/answer/185833",
+      "appPasswordHelpUrl": "https://myaccount.google.com/apppasswords",
       "domains": [
         "gmail.com",
         "googlemail.com"
       ],
       "_imapNote": "[2026-09-25] Massimo: 'passe die App auf googlemail.com an' -- Gmail-OAuth ist auf iOS nicht funktional (siehe ios/README.md 21.09. 'Bewusste Grenze'), authType bleibt 'oauth' (der Web-Client nutzt weiterhin echten Google-Login), aber diese IMAP/SMTP-Werte dienen iOS als Vorbefuellung fuer den erklaerten IMAP-Fallback (App-Passwort noetig, Gmail-IMAP muss in den Google-Kontoeinstellungen aktiviert sein).",
-      "setupHint": "Gmail braucht ein App-Passwort: In deinem Google-Konto die Bestätigung in zwei Schritten einschalten und dann unter „App-Passwörter“ eines für driftmail erstellen. Dein normales Google-Passwort funktioniert hier nicht."
+      "setupHint": "Gmail braucht ein App-Passwort. Dein normales Google-Passwort funktioniert hier nicht.",
+      "setupSteps": [
+        "Öffne unten „App-Passwort erstellen“ und melde dich bei Google an.",
+        "Sagt Google, die Einstellung sei nicht verfügbar: Schalte zuerst die „Bestätigung in zwei Schritten“ ein und öffne den Link dann noch einmal.",
+        "Gib als Namen „driftmail“ ein und wähle „Erstellen“.",
+        "Kopiere das angezeigte Passwort (16 Buchstaben) und füge es hier ins Feld „App-Passwort“ ein."
+      ],
+      "setupLinkLabel": "App-Passwort erstellen",
+      "i18n": {
+        "en": {
+          "setupHint": "Gmail needs an app password. Your normal Google password won't work here.",
+          "setupLinkLabel": "Create app password",
+          "setupSteps": [
+            "Open “Create app password” below and sign in to Google.",
+            "If Google says the setting isn't available: turn on “2-Step Verification” first, then open the link again.",
+            "Enter “driftmail” as the name and select “Create”.",
+            "Copy the password shown (16 letters) and paste it into the “App-Passwort” field here."
+          ]
+        },
+        "it": {
+          "setupHint": "Gmail richiede una password per le app. La tua normale password di Google qui non funziona.",
+          "setupLinkLabel": "Crea password per le app",
+          "setupSteps": [
+            "Apri qui sotto «Crea password per le app» e accedi a Google.",
+            "Se Google dice che l'impostazione non è disponibile: attiva prima la «Verifica in due passaggi», poi apri di nuovo il link.",
+            "Inserisci «driftmail» come nome e scegli «Crea».",
+            "Copia la password mostrata (16 lettere) e incollala qui nel campo «App-Passwort»."
+          ]
+        },
+        "fr": {
+          "setupHint": "Gmail a besoin d’un mot de passe d’application. Ton mot de passe Google habituel ne fonctionne pas ici.",
+          "setupLinkLabel": "Créer un mot de passe d’application",
+          "setupSteps": [
+            "Ouvre ci-dessous « Créer un mot de passe d’application » et connecte-toi à Google.",
+            "Si Google indique que le paramètre n’est pas disponible : active d’abord la « Validation en deux étapes », puis rouvre le lien.",
+            "Saisis « driftmail » comme nom et choisis « Créer ».",
+            "Copie le mot de passe affiché (16 lettres) et colle-le ici dans le champ « App-Passwort »."
+          ]
+        },
+        "es": {
+          "setupHint": "Gmail necesita una contraseña de aplicación. Tu contraseña normal de Google no funciona aquí.",
+          "setupLinkLabel": "Crear contraseña de aplicación",
+          "setupSteps": [
+            "Abre abajo «Crear contraseña de aplicación» e inicia sesión en Google.",
+            "Si Google dice que el ajuste no está disponible: activa primero la «Verificación en dos pasos» y vuelve a abrir el enlace.",
+            "Escribe «driftmail» como nombre y elige «Crear».",
+            "Copia la contraseña que aparece (16 letras) y pégala aquí en el campo «App-Passwort»."
+          ]
+        },
+        "tr": {
+          "setupHint": "Gmail için bir uygulama şifresi gerekir. Normal Google şifren burada çalışmaz.",
+          "setupLinkLabel": "Uygulama şifresi oluştur",
+          "setupSteps": [
+            "Aşağıdaki “Uygulama şifresi oluştur” bağlantısını aç ve Google hesabına giriş yap.",
+            "Google bu ayarın kullanılamadığını söylerse: önce “2 Adımlı Doğrulama”yı aç, sonra bağlantıyı yeniden aç.",
+            "Ad olarak “driftmail” yaz ve “Oluştur”u seç.",
+            "Gösterilen şifreyi (16 harf) kopyala ve buradaki “App-Passwort” alanına yapıştır."
+          ]
+        }
+      }
     },
     {
       "id": "outlook",

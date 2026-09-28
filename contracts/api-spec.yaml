@@ -89,6 +89,14 @@ paths:
         statt pro-Plattform hartcodierter Presets (gleiches Prinzip wie
         design-tokens.json).
       security: []
+      parameters:
+        - name: lang
+          in: query
+          required: false
+          schema: { type: string, example: it }
+          description: >
+            [2026-09-28] Sprache fuer setupHint/setupSteps/setupLinkLabel.
+            Ohne Angabe gilt der Accept-Language-Header, sonst Deutsch.
       responses:
         "200":
           description: Liste der Provider-Presets
@@ -1552,6 +1560,19 @@ components:
             [2026-09-28] Kurzer Einrichtungshinweis (Du-Form), z.B. "IMAP in
             den Einstellungen erlauben" oder "App-Passwort erstellen". null
             = kein Hinweis.
+        setupSteps:
+          type: array
+          nullable: true
+          items: { type: string }
+          description: >
+            [2026-09-28] Kurze nummerierte Einrichtungsschritte (Du-Form), in
+            der Sprache aus `?lang=`/Accept-Language (de Standard; en, it,
+            fr, es, tr, soweit uebersetzt; sonst en). null = keine Schritte.
+            setupHint kommt in derselben Sprache.
+        setupLinkLabel:
+          type: string
+          nullable: true
+          description: "[2026-09-28] Beschriftung fuer den Link appPasswordHelpUrl, z.B. 'App-Passwort erstellen'. null = Client-Standardtext."
         oauthAvailable:
           type: boolean
           description: >

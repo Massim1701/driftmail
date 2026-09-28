@@ -617,14 +617,30 @@ function ImapConnectForm({
         <h1 className="onboarding-title">{provider.label}</h1>
         <p className="onboarding-subtitle">Verbinde dein Konto per {protocolLabel}.</p>
 
-        {provider.setupHint ? (
+        {/* [2026-09-28] Schritt-fuer-Schritt in der Browsersprache (Server
+            waehlt sie, siehe GET /mail-providers). */}
+        {provider.setupSteps && provider.setupSteps.length > 0 ? (
+          <div className="app-password-hint">
+            {provider.setupHint && <p className="app-password-hint-lead">{provider.setupHint}</p>}
+            <ol className="app-password-steps">
+              {provider.setupSteps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            {provider.appPasswordHelpUrl && (
+              <a className="app-password-link" href={provider.appPasswordHelpUrl} target="_blank" rel="noreferrer">
+                {provider.setupLinkLabel ?? "Anleitung"} ↗
+              </a>
+            )}
+          </div>
+        ) : provider.setupHint ? (
           <div className="app-password-hint">
             {provider.setupHint}
             {provider.appPasswordHelpUrl && (
               <>
                 {" "}
                 <a href={provider.appPasswordHelpUrl} target="_blank" rel="noreferrer">
-                  Anleitung
+                  {provider.setupLinkLabel ?? "Anleitung"}
                 </a>
               </>
             )}

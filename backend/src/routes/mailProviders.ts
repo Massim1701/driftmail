@@ -31,12 +31,52 @@ const mailProviders = JSON.parse(mailProvidersJson);
 // Ohne diese Angabe hing der Gmail-Login auf Servern ohne Google-Projekt an
 // einem 503 -- jetzt schicken die Clients Gmail dann direkt in den IMAP-Weg
 // mit App-Passwort.
-mailProvidersRouter.get("/mail-providers", (_req, res) => {
+//
+// [2026-09-28] Einrichtungsschritte in der Sprache des Geraets: Massimo
+// "die Beschreibung, wie man das mit Gmail macht, auf Deutsch und in
+// anderen Sprachen, einfach". Uebersetzungen stehen je Anbieter unter
+// `i18n.<sprache>` in mail-providers.json (setupHint/setupSteps/
+// setupLinkLabel); Deutsch ist der Standard auf oberster Ebene. Sprache aus
+// `?lang=` oder dem Accept-Language-Header (Browser schicken ihn von
+// selbst, die iOS-App setzt ihn); fehlt die Uebersetzung, Englisch, ohne
+// jede Angabe Deutsch. `i18n` selbst geht nicht
+// an die Clients.
+type ProviderJson = { id: string; authType: string; i18n?: Record<string, Record<string, unknown>> };
+
+export function pickLanguage(query: unknown, acceptLanguage: string | undefined, available: Set<string>): string | null {
+  const wanted = [
+    ...(typeof query === "string" ? [query] : []),
+    ...(acceptLanguage ?? "")
+      .split(",")
+      .map((part) => {
+        const [tag, q] = part.trim().split(";q=");
+        return { tag: tag.toLowerCase(), q: q === undefined ? 1 : Number(q) };
+      })
+      // "*" (z.B. von Node/curl) heisst "egal" -- wie keine Angabe behandeln.
+      .filter((x) => x.tag && x.tag !== "*" && x.q > 0)
+      .sort((a, b) => b.q - a.q)
+      .map((x) => x.tag),
+  ];
+  for (const tag of wanted) {
+    const base = tag.toLowerCase().split("-")[0];
+    if (base === "de") return null; // Deutsch = Standard
+    if (available.has(base)) return base;
+  }
+  // Andere Sprache ohne Uebersetzung (z.B. Polnisch): Englisch versteht
+  // man eher als Deutsch. Ohne jede Angabe bleibt es bei Deutsch.
+  return wanted.length > 0 && available.has("en") ? "en" : null;
+}
+
+mailProvidersRouter.get("/mail-providers", (req, res) => {
   res.json(
-    mailProviders.providers.map((p: { id: string; authType: string }) => ({
-      ...p,
-      oauthAvailable: p.authType === "oauth" && p.id === "gmail" && googleOAuthConfigured(),
-    })),
+    mailProviders.providers.map(({ i18n, ...p }: ProviderJson) => {
+      const lang = i18n ? pickLanguage(req.query.lang, req.header("accept-language"), new Set(Object.keys(i18n))) : null;
+      return {
+        ...p,
+        ...(lang && i18n ? i18n[lang] : {}),
+        oauthAvailable: p.authType === "oauth" && p.id === "gmail" && googleOAuthConfigured(),
+      };
+    }),
   );
 });
 

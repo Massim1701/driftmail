@@ -38,12 +38,17 @@ struct MailProvider: Codable, Identifiable, Hashable {
     /// [2026-09-28] Kurzer Einrichtungshinweis (z.B. "IMAP in den
     /// Einstellungen erlauben"), `nil` = keiner.
     let setupHint: String?
+    /// [2026-09-28] Schritt-fuer-Schritt-Anleitung in der Geraetesprache
+    /// (der Server waehlt sie per Accept-Language, siehe RemoteAPIClient),
+    /// leer = keine. `setupLinkLabel` beschriftet `appPasswordHelpUrl`.
+    let setupSteps: [String]
+    let setupLinkLabel: String?
     /// [2026-09-28] Vom Server gesetzt: OAuth auf diesem Server eingerichtet.
     /// Auf iOS ohne Bedeutung (OAuth-Rücksprung zeigt auf den Web-Client),
     /// hier nur mitgelesen.
     let oauthAvailable: Bool
 
-    init(id: String, label: String, authType: AuthType, comingSoon: Bool, imapHost: String?, imapPort: Int?, imapSecure: Bool?, smtpHost: String?, smtpPort: Int?, smtpSecure: Bool?, requiresAppPassword: Bool, appPasswordHelpUrl: String?, domains: [String] = [], setupHint: String? = nil, oauthAvailable: Bool = false) {
+    init(id: String, label: String, authType: AuthType, comingSoon: Bool, imapHost: String?, imapPort: Int?, imapSecure: Bool?, smtpHost: String?, smtpPort: Int?, smtpSecure: Bool?, requiresAppPassword: Bool, appPasswordHelpUrl: String?, domains: [String] = [], setupHint: String? = nil, setupSteps: [String] = [], setupLinkLabel: String? = nil, oauthAvailable: Bool = false) {
         self.id = id
         self.label = label
         self.authType = authType
@@ -58,6 +63,8 @@ struct MailProvider: Codable, Identifiable, Hashable {
         self.appPasswordHelpUrl = appPasswordHelpUrl
         self.domains = domains
         self.setupHint = setupHint
+        self.setupSteps = setupSteps
+        self.setupLinkLabel = setupLinkLabel
         self.oauthAvailable = oauthAvailable
     }
 
@@ -88,13 +95,15 @@ struct MailProvider: Codable, Identifiable, Hashable {
         appPasswordHelpUrl = try container.decodeIfPresent(String.self, forKey: .appPasswordHelpUrl)
         domains = try container.decodeIfPresent([String].self, forKey: .domains) ?? []
         setupHint = try container.decodeIfPresent(String.self, forKey: .setupHint)
+        setupSteps = try container.decodeIfPresent([String].self, forKey: .setupSteps) ?? []
+        setupLinkLabel = try container.decodeIfPresent(String.self, forKey: .setupLinkLabel)
         oauthAvailable = try container.decodeIfPresent(Bool.self, forKey: .oauthAvailable) ?? false
     }
 
     /// [2026-09-28] OAuth-Anbieter mit IMAP-Presets (Gmail) als IMAP-Anbieter
     /// mit App-Passwort -- auf iOS der einzige Weg für Gmail.
     var asImapFallback: MailProvider {
-        MailProvider(id: id, label: label, authType: authType == .oauth ? .imap : authType, comingSoon: comingSoon, imapHost: imapHost, imapPort: imapPort, imapSecure: imapSecure, smtpHost: smtpHost, smtpPort: smtpPort, smtpSecure: smtpSecure, requiresAppPassword: authType == .oauth ? true : requiresAppPassword, appPasswordHelpUrl: appPasswordHelpUrl, domains: domains, setupHint: setupHint)
+        MailProvider(id: id, label: label, authType: authType == .oauth ? .imap : authType, comingSoon: comingSoon, imapHost: imapHost, imapPort: imapPort, imapSecure: imapSecure, smtpHost: smtpHost, smtpPort: smtpPort, smtpSecure: smtpSecure, requiresAppPassword: authType == .oauth ? true : requiresAppPassword, appPasswordHelpUrl: appPasswordHelpUrl, domains: domains, setupHint: setupHint, setupSteps: setupSteps, setupLinkLabel: setupLinkLabel)
     }
 
     /// Nutzbar ohne OAuth: eigener IMAP/POP3-Weg oder OAuth mit IMAP-Presets.

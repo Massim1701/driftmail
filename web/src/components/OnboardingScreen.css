@@ -194,6 +194,27 @@
   color: var(--color-accent);
 }
 
+.app-password-hint-lead {
+  margin: 0 0 var(--space-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.app-password-steps {
+  margin: 0;
+  padding-left: 1.3em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.45;
+}
+
+.app-password-link {
+  display: inline-block;
+  margin-top: var(--space-sm);
+  font-weight: var(--font-weight-medium);
+}
+
 .imap-form {
   display: flex;
   flex-direction: column;

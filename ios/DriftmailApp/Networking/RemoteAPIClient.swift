@@ -57,7 +57,18 @@ struct RemoteAPIClient: APIClient {
     /// `GET /mail-providers` — unauthenticated (`security: []` im
     /// Contract, läuft vor jedem Login).
     func fetchMailProviders() async throws -> [MailProvider] {
-        try await get("/mail-providers")
+        // [2026-09-28] Einrichtungsschritte in der Sprache des iPhones: der
+        // Server waehlt sie anhand von Accept-Language (sonst Deutsch).
+        var request = URLRequest(url: baseURL.appendingPathComponent("/mail-providers"))
+        request.setValue(Locale.preferredLanguages.prefix(3).joined(separator: ", "), forHTTPHeaderField: "Accept-Language")
+        do {
+            let (data, _) = try await session.data(for: request)
+            return try decoder.decode([MailProvider].self, from: data)
+        } catch let error as DecodingError {
+            throw APIError.decodingFailed(error)
+        } catch {
+            throw APIError.network(error)
+        }
     }
 
     /// [2026-09-28] Google-Anmeldung wie in Apple Mail (siehe

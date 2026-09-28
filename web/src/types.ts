@@ -272,6 +272,10 @@ export interface MailProvider {
   // [2026-09-28] Einrichtungshinweis je Anbieter (null = keiner) und ob der
   // OAuth-Weg auf diesem Server eingerichtet ist (nur vom Server gesetzt).
   setupHint?: string | null;
+  /** [2026-09-28] Einrichtungsschritte in der Browsersprache (Server waehlt). */
+  setupSteps?: string[] | null;
+  /** Beschriftung fuer appPasswordHelpUrl, z.B. "App-Passwort erstellen". */
+  setupLinkLabel?: string | null;
   oauthAvailable?: boolean;
 }
 

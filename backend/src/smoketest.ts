@@ -2402,6 +2402,24 @@ async function main() {
     // (Smoketest-Umgebung) false -> Clients nehmen fuer Gmail den IMAP-Weg.
     assert(gmailProvider?.oauthAvailable === false, "gmail.oauthAvailable sollte ohne Google-Konfiguration false sein");
     assert(gmailProvider?.imapHost === "imap.gmail.com", "gmail sollte IMAP-Presets fuer den App-Passwort-Weg liefern");
+    // [2026-09-28] Gmail-Anleitung in der Geraetesprache (Accept-Language/?lang=).
+    const stepsIn = async (headers: Record<string, string>, query = "") => {
+      const list = (await (await globalThis.fetch(`${base}/v1/mail-providers${query}`, { headers })).json()) as Array<{
+        id: string; setupSteps?: string[]; setupLinkLabel?: string; i18n?: unknown;
+      }>;
+      return list.find((p) => p.id === "gmail");
+    };
+    const gmailDe = await stepsIn({});
+    const gmailIt = await stepsIn({ "Accept-Language": "it-IT,it;q=0.9,en;q=0.8" });
+    const gmailPl = await stepsIn({ "Accept-Language": "pl-PL" });
+    const gmailDeHeader = await stepsIn({ "Accept-Language": "de-CH, en;q=0.5" });
+    const gmailFrQuery = await stepsIn({ "Accept-Language": "it" }, "?lang=fr");
+    assert(gmailDe?.setupLinkLabel === "App-Passwort erstellen" && (gmailDe.setupSteps?.length ?? 0) === 4, "Gmail-Schritte ohne Sprache: Deutsch");
+    assert(gmailIt?.setupLinkLabel === "Crea password per le app", `Gmail-Schritte bei it: Italienisch, bekam ${gmailIt?.setupLinkLabel}`);
+    assert(gmailPl?.setupLinkLabel === "Create app password", "Gmail-Schritte bei fehlender Sprache (pl): Englisch");
+    assert(gmailDeHeader?.setupLinkLabel === "App-Passwort erstellen", "Gmail-Schritte bei de-CH: Deutsch");
+    assert(gmailFrQuery?.setupLinkLabel === "Créer un mot de passe d’application", "?lang=fr geht vor Accept-Language");
+    assert(gmailDe?.i18n === undefined, "i18n-Block darf nicht an die Clients gehen");
     const yahooProvider = providers.find((p) => p.id === "yahoo");
     assert(yahooProvider?.authType === "imap" && yahooProvider?.comingSoon === false, "yahoo sollte jetzt per IMAP nutzbar sein");
     assert(providers.every((p) => "setupHint" in p), "jeder Provider sollte ein setupHint-Feld haben (ggf. null)");

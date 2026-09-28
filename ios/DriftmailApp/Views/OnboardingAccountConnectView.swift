@@ -458,9 +458,20 @@ private struct ImapConnectFormView: View {
                 Section {
                     VStack(alignment: .leading, spacing: DesignTokens.Spacing.xs) {
                         Text(provider.setupHint ?? "\(provider.label) verlangt ein App-spezifisches Passwort statt deines normalen Kontopassworts.")
+                            .font(.system(size: DesignTokens.Typography.Size.small, weight: provider.setupSteps.isEmpty ? .regular : .medium))
+                        // [2026-09-28] Schritt fuer Schritt, in der Geraetesprache.
+                        ForEach(Array(provider.setupSteps.enumerated()), id: \.offset) { index, step in
+                            HStack(alignment: .firstTextBaseline, spacing: DesignTokens.Spacing.sm) {
+                                Text("\(index + 1).")
+                                    .monospacedDigit()
+                                    .foregroundStyle(DesignTokens.Color.textSecondary)
+                                Text(step)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                             .font(.system(size: DesignTokens.Typography.Size.small))
+                        }
                         if let helpUrl = provider.appPasswordHelpUrl, let url = URL(string: helpUrl) {
-                            Link("Anleitung für \(provider.label)", destination: url)
+                            Link(provider.setupLinkLabel ?? "Anleitung für \(provider.label)", destination: url)
                                 .font(.system(size: DesignTokens.Typography.Size.small, weight: .medium))
                         }
                     }
