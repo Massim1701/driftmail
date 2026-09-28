@@ -467,16 +467,6 @@ function ImapConnectForm({
       // Leerzeichen an, die beim Kopieren mitkommen -- sie gehören nicht
       // zum Passwort.
       const password = provider.requiresAppPassword ? imapPassword.replace(/\s+/g, "") : imapPassword;
-      // Google-App-Passwörter haben immer genau 16 Buchstaben. Alles andere
-      // ist fast sicher das normale Google-Passwort (oft vom Browser
-      // automatisch eingesetzt) -- klar sagen statt Googles "Invalid
-      // credentials" abzuwarten.
-      if (provider.id === "gmail" && password.length !== 16) {
-        setSubmitError(
-          `Ein Google-App-Passwort hat genau 16 Buchstaben, eingegeben sind ${password.length} Zeichen. Wahrscheinlich ist das dein normales Google-Passwort (Browser setzen es oft automatisch ein). Bitte das App-Passwort von myaccount.google.com/apppasswords einfügen.`,
-        );
-        return;
-      }
       const res = isPop3
         ? await api.connectPop3Account({
             emailAddress,
@@ -567,16 +557,7 @@ function ImapConnectForm({
           </label>
           <label className="imap-field">
             <span>{provider.requiresAppPassword ? "App-Passwort" : "Passwort"}</span>
-            {/* [2026-09-28] Kein automatisches Ausfüllen: Browser setzten hier
-                das gespeicherte normale Kontopasswort ein (Gmail lehnte es ab). */}
-            <input
-              type="password"
-              required
-              autoComplete={provider.requiresAppPassword ? "one-time-code" : "current-password"}
-              value={imapPassword}
-              onChange={(e) => setImapPassword(e.target.value)}
-              placeholder={provider.id === "gmail" ? "abcd efgh ijkl mnop" : undefined}
-            />
+            <input type="password" required value={imapPassword} onChange={(e) => setImapPassword(e.target.value)} />
           </label>
 
           {!showAdvanced && (
