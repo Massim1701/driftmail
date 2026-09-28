@@ -36,10 +36,18 @@ import nodemailer from "nodemailer";
 import type { FetchedAttachment, FetchedMail, MailAdapter, SendMailInput, SendMailResult } from "./types";
 import type Pop3CommandType from "node-pop3";
 
+// [2026-09-28] Mit "module": "commonjs" macht tsc aus `await import(...)`
+// beim Bauen ein `require(...)` -- im gebauten Server (dist/) landete man
+// so doch wieder im kaputten CJS-Build, nur unter tsx (Smoketest) nicht.
+// Folge: jede POP3-Anmeldung (web.de) scheiterte mit "Cannot use import
+// statement outside a module". Ueber `new Function` bleibt der echte
+// dynamische Import erhalten, weil tsc den String-Inhalt nicht umschreibt.
+const esmImport = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<{ default: typeof Pop3CommandType }>;
+
 let cachedPop3Command: typeof Pop3CommandType | undefined;
 async function loadPop3Command(): Promise<typeof Pop3CommandType> {
   if (!cachedPop3Command) {
-    cachedPop3Command = (await import("node-pop3")).default;
+    cachedPop3Command = (await esmImport("node-pop3")).default;
   }
   return cachedPop3Command;
 }
